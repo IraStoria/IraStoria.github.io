@@ -208,8 +208,15 @@
       }
       return null;
     },
+    /* belt and braces: if a demo is audibly active while the OS music still plays, duck now (the hooks above can miss in some WebViews) */
+    ensureDucked: function () {
+      for (var i = extFrames.length - 1; i >= 0; i--) {
+        var f = extFrames[i]; if (!f.isConnected) continue;
+        try { var a = f.contentWindow && f.contentWindow.sectionPlayer; if (a && a.state().active && player.isPlaying()) { if (f.__win && !f.__win.dataset.duck) f.__win.dataset.duck = '1'; player.duck(true); } } catch (e) {}
+      }
+    },
     register: function (f, win) {
-      extFrames.push(f);
+      f.__win = win; extFrames.push(f);
       try {
         var a = f.contentWindow.sectionPlayer;
         if (a && !a.__hooked) {
@@ -293,6 +300,7 @@
   var caption = (function () {
     var els = [PHONE ? $('#np-phone') : $('#np-desktop')].filter(Boolean), timer = null, last = '', sliding = false;   /* only this shell's caption: the other one would grab the shared `sliding` flag and block the slide */
     function refresh() {
+      ext.ensureDucked();
       var st = ext.state(), key = st.title + '|' + (st.started ? 1 : 0) + '|' + (st.playing ? 1 : 0) + '|' + (st.muted ? 1 : 0);
       if (key === last) return; last = key;
       els.forEach(function (el) {
@@ -526,7 +534,7 @@
   }
   function workItem(w) {
     var m = w.media || {}, acts = [];
-    if (m.demo) acts.push('<a class="btn" href="../' + esc(m.demo) + '">' + esc(U.open_demo) + '</a>');
+    if (m.demo) acts.push('<button class="btn" data-demo="' + esc(m.demo.replace(/\/$/, '')) + '">' + esc(U.open_demo) + '</button>');   /* same in-shell window / panel as the Demos app */
     if (w.type === 'music' && (m.local || m.youtube || m.soundcloud)) acts.push('<button class="btn ghost" data-play="' + esc(w.id) + '">' + esc(U.listen) + '</button>');
     (w.links || []).forEach(function (l) { acts.push('<a class="btn ghost" href="' + esc(l.url) + '" rel="noopener">' + esc(l.label) + '</a>'); });
     return '<li data-type="' + esc(w.type) + '"><span class="badge ' + esc(w.type) + '">' + esc(U['type_' + w.type]) + '</span><div style="flex:1">' +
@@ -543,6 +551,7 @@
       body.addEventListener('click', function (e) {
         var f = e.target.closest('[data-f]'); if (f) { body.querySelectorAll('[data-f]').forEach(function (b) { b.classList.toggle('on', b === f); }); body.querySelectorAll('.list li').forEach(function (li) { li.hidden = !(f.dataset.f === 'all' || li.dataset.type === f.dataset.f); }); }
         var p = e.target.closest('[data-play]'); if (p) { openApp('player'); player.playId(p.dataset.play); }
+        var b = e.target.closest('[data-demo]'); if (b) openDemo(b.dataset.demo);
       });
     },
     demos: function (body) {
