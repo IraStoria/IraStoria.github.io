@@ -289,17 +289,26 @@
 
   // caption: fades in over CONNECT_MS (same as the line), follows the current track
   var caption = (function () {
-    var els = [$('#np-desktop'), $('#np-phone')].filter(Boolean), timer = null, last = '';
+    var els = [$('#np-desktop'), $('#np-phone')].filter(Boolean), timer = null, last = '', sliding = false;
     function refresh() {
       var st = ext.state(), key = st.title + '|' + (st.started ? 1 : 0) + '|' + (st.playing ? 1 : 0) + '|' + (st.muted ? 1 : 0);
       if (key === last) return; last = key;
       els.forEach(function (el) {
         // desktop: visible as soon as a track is loaded (so the transport works even if autoplay was blocked); phone: only once started
         var title = (el.id === 'np-desktop' || st.started) ? st.title : '';
-        var tEl = el.querySelector('.np-title');
-        if (st.parts && title) renderParts(tEl, st.parts);   /* section player: 'V1 - B2 | Full on V6 - by …' — only the tag flips on a section change */
-        else if (tEl.dataset.parts) { delete tEl.dataset.parts; tEl.textContent = title; }   /* back to the OS player: plain text again, no slide */
-        else if (el.id === 'np-desktop' && tEl.textContent && title && tEl.textContent !== title && !swapping) slideTitle(tEl, title);   // track change: old name slides off left, new one in from the right
+        var tEl = el.querySelector('.np-title'), canSlide = el.id === 'np-desktop' && tEl.textContent && title && !swapping && !sliding;
+        if (st.parts && title) {
+          /* section player: 'V1 - B2 | Full on V6 - by …'. Entering it = the whole name slides (left out, right in) like any track change;
+             a section change inside it = only the tag flips */
+          if (tEl.dataset.parts) renderParts(tEl, st.parts);
+          else if (canSlide) slideTitle(tEl, function () { setParts(tEl, st.parts); });
+          else setParts(tEl, st.parts);
+        }
+        else if (tEl.dataset.parts) {   /* back to the OS player: the name slides again, then plain text */
+          if (canSlide) slideTitle(tEl, function () { delete tEl.dataset.parts; tEl.textContent = title; });
+          else { delete tEl.dataset.parts; tEl.textContent = title; }
+        }
+        else if (canSlide && tEl.textContent !== title) slideTitle(tEl, title);   // track change: old name slides off left, new one in from the right
         else tEl.textContent = title;
         el.classList.toggle('show', !!title); el.classList.toggle('playing', st.playing);
         var pp = el.querySelector('.np-pp'); if (pp) pp.textContent = st.playing ? '❚❚' : '▶';
@@ -318,13 +327,14 @@
     });
     function arm() { player.prepare(); els.forEach(function (el) { el.style.transitionDuration = CONNECT_MS + 'ms'; }); if (!timer) timer = setInterval(refresh, 400); refresh(); }
     /* split caption for the section player: <tag> | <rest>; a changed tag flips over its horizontal axis (down, swap, up) */
+    function setParts(tEl, parts) {
+      tEl.dataset.parts = '1';
+      tEl.innerHTML = '<span class="np-tag"></span><span class="np-sep">|</span><span class="np-rest"></span>';
+      tEl.querySelector('.np-tag').textContent = parts.tag; tEl.querySelector('.np-rest').textContent = parts.rest;
+    }
     function renderParts(tEl, parts) {
       var tag = tEl.querySelector('.np-tag'), rest = tEl.querySelector('.np-rest');
-      if (!tEl.dataset.parts || !tag) {
-        tEl.dataset.parts = '1'; tEl.style.transition = ''; tEl.style.transform = ''; tEl.style.opacity = '';
-        tEl.innerHTML = '<span class="np-tag"></span><span class="np-sep">|</span><span class="np-rest"></span>';
-        tag = tEl.querySelector('.np-tag'); rest = tEl.querySelector('.np-rest'); tag.textContent = parts.tag; rest.textContent = parts.rest; return;
-      }
+      if (!tag || !rest) { setParts(tEl, parts); return; }
       rest.textContent = parts.rest;
       if (tag.dataset.flipping) { tag.dataset.next = parts.tag; return; }
       if (tag.textContent === parts.tag) return;
@@ -342,13 +352,14 @@
     }
     function slideTitle(tEl, title) {
       var r = tEl.getBoundingClientRect();
+      sliding = true;
       tEl.style.transition = 'transform .45s cubic-bezier(.4,0,.6,1), opacity .35s ease'; tEl.style.transform = 'translateX(' + (-(r.right + 40)) + 'px)'; tEl.style.opacity = '0';
       setTimeout(function () {
-        tEl.textContent = title;
+        if (typeof title === 'function') title(); else tEl.textContent = title;
         tEl.style.transition = 'none'; tEl.style.transform = 'translateX(' + (window.innerWidth - r.left + 40) + 'px)'; tEl.style.opacity = '1';
         void tEl.offsetWidth;
         tEl.style.transition = 'transform .7s cubic-bezier(.2,.7,.2,1), opacity .3s ease'; tEl.style.transform = '';
-        setTimeout(function () { tEl.style.transition = ''; tEl.style.opacity = ''; }, 750);
+        setTimeout(function () { tEl.style.transition = ''; tEl.style.opacity = ''; sliding = false; last = ''; refresh(); }, 750);   /* re-check after the slide: a change that landed mid-slide is applied now */
       }, 460);
     }
     function reset() { last = ''; refresh(); }
