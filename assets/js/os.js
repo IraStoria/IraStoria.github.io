@@ -206,9 +206,20 @@
       }
       return null;
     },
-    register: function (f) {
+    register: function (f, win) {
       extFrames.push(f);
-      try { var a = f.contentWindow.sectionPlayer; if (a && !a.__hooked) { a.__hooked = true; a.onTrack(function (fromFrac) { wave.sweep(true, fromFrac); phoneWave.sweep(true, fromFrac); caption.reset(); }); } } catch (e) {}
+      try {
+        var a = f.contentWindow.sectionPlayer;
+        if (a && !a.__hooked) {
+          a.__hooked = true;
+          a.onTrack(function (fromFrac) {
+            wave.sweep(true, fromFrac); phoneWave.sweep(true, fromFrac);
+            /* the demo started → silence the background music at once (its position is kept); it only comes back when the demo window is closed */
+            if (a.state().active && player.isPlaying()) { if (win) win.dataset.duck = '1'; player.duck(true); }
+            caption.reset();
+          });
+        }
+      } catch (e) {}
     },
     analyser: function () { var a = ext.api(); return a ? a.analyser() : player.analyser(); },
     state: function () { var a = ext.api(); return a ? a.state() : player.state(); }
@@ -385,7 +396,7 @@
       w = createWindow(key, { title: d.title, glyph: '🎛️', size: [900, 640], page: '../' + d.path + '/', render: function (body, win) {
         body.classList.add('frame');
         var f = document.createElement('iframe'); f.className = 'demo-frame'; f.src = '../' + d.path + '/'; f.title = d.title; f.setAttribute('allow', 'autoplay; fullscreen'); f.allowFullscreen = true;
-        f.addEventListener('load', function () { watchAudio(f, win); setTimeout(function () { ext.register(f); }, 300); });   /* the demo script sets window.sectionPlayer right after load */
+        f.addEventListener('load', function () { watchAudio(f, win); setTimeout(function () { ext.register(f, win); }, 300); });   /* the demo script sets window.sectionPlayer right after load */
         body.appendChild(f);
       } });
       wins[key] = w;
@@ -396,7 +407,7 @@
   function watchAudio(f, win) {
     try {
       var cw = f.contentWindow, Orig = cw.AudioContext || cw.webkitAudioContext; if (!Orig || Orig.__wrapped) return;
-      var Wrapped = function () { var c = new Orig(); var check = function () { if (c.state === 'running' && !win.dataset.duck && player.isPlaying()) { win.dataset.duck = '1'; player.duck(); } }; c.addEventListener('statechange', check); setTimeout(check, 0); return c; };
+      var Wrapped = function () { var c = new Orig(); var check = function () { if (c.state === 'running' && !win.dataset.duck && player.isPlaying()) { win.dataset.duck = '1'; player.duck(true); } }; c.addEventListener('statechange', check); setTimeout(check, 0); return c; };
       Wrapped.__wrapped = true; Wrapped.prototype = Orig.prototype; cw.AudioContext = Wrapped; cw.webkitAudioContext = Wrapped;
     } catch (e) {}
   }
@@ -596,7 +607,7 @@
     function toggle() { if (playing) stopAll(); else play(); }
     // duck: another window started making sound -> pause (fade, position kept); unduck: that window closed -> resume from where we stopped
     var ducked = false;
-    function duck() { if (playing) { ducked = true; stopAll(); } }
+    function duck(immediate) { if (playing) { ducked = true; stopAll(!!immediate); } }   /* immediate: a demo just started making sound — no 3 s fade, no overlap */
     function unduck() { if (ducked) { ducked = false; if (!playing) play(); } }
     function playId(id) { var i = list.findIndex(function (t) { return t.id === id; }); if (i >= 0) { remember(i); load(i, true); } }
     // Placeholder: a gentle generative pad so the player is demonstrable before real tracks exist.
