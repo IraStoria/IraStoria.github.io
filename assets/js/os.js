@@ -285,18 +285,18 @@
       $('#pl-prev', body).addEventListener('click', prev);
       $('#pl-next', body).addEventListener('click', next);
       ui.list.addEventListener('click', function (e) { var li = e.target.closest('li[data-i]'); if (li) load(+li.dataset.i, true); });
-      ui.seek.addEventListener('click', function (e) { var r = ui.seek.getBoundingClientRect(), f = (e.clientX - r.left) / r.width; if (audio && audio.duration) audio.currentTime = f * audio.duration; });
+      ui.seek.addEventListener('click', function (e) { var r = ui.seek.getBoundingClientRect(), f = (e.clientX - r.left) / r.width; if (audio && audio.duration) { audio.currentTime = f * audio.duration; if (pausedAt !== null) pausedAt = audio.currentTime; } });
       if (cur < 0) load(0, false); else refresh();
       draw(); if (!timeTimer) timeTimer = setInterval(tickTime, 250); tickTime();
     }
     function ensureCtx() { if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); analyser = actx.createAnalyser(); analyser.fftSize = 512; analyser.connect(actx.destination); master = actx.createGain(); master.connect(analyser); } if (actx.state === 'suspended') actx.resume(); }
-    var fadeTimer = null;
+    var fadeTimer = null, pausedAt = null;   // position at the moment pause was pressed (the fade tail must not count as progress)
     function rampDown(g) { g.gain.cancelScheduledValues(0); g.gain.setValueAtTime(Math.max(g.gain.value, 0.0001), actx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + FADE_SEC); }
     function stopAll(immediate) {
       if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = null; }
       if (audio && !audio.paused) {
-        if (immediate || !master) audio.pause();
-        else { rampDown(master); var a = audio; fadeTimer = setTimeout(function () { a.pause(); fadeTimer = null; }, FADE_SEC * 1000 + 50); }   // pause after the fade so the bars follow the sound down
+        if (immediate || !master) { audio.pause(); pausedAt = null; }
+        else { pausedAt = audio.currentTime; rampDown(master); var a = audio; fadeTimer = setTimeout(function () { a.pause(); fadeTimer = null; }, FADE_SEC * 1000 + 50); }   // pause after the fade so the bars follow the sound down
       }
       if (synth) {
         var sg = synth.gain, nodes = synth.nodes; synth = null;
@@ -324,6 +324,7 @@
       else if (t.media && t.media.local) {
         if (!audio._wired) { var s = actx.createMediaElementSource(audio); s.connect(master); audio._wired = true; }
         if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = null; }
+        if (pausedAt !== null) { try { audio.currentTime = pausedAt; } catch (e) {} pausedAt = null; }   // resume from where pause was pressed, not where the fade ended
         master.gain.cancelScheduledValues(0); master.gain.setValueAtTime(1, actx.currentTime);
         var pr = audio.play(); if (pr && pr.catch) pr.catch(function () { playing = false; refresh(); caption.refresh(); });   // autoplay blocked → show ▶ again
       } else return;
@@ -370,13 +371,13 @@
       if (!body || !document.contains(body)) { clearInterval(timeTimer); timeTimer = null; return; }
       var pos = 0, dur = 0;
       if (list[cur] && list[cur].synth && playing) { pos = (actx.currentTime - synthStart) % SYNTH_LEN; dur = SYNTH_LEN; }
-      else if (audio && list[cur] && !list[cur].synth) { pos = audio.currentTime; dur = audio.duration || 0; }
+      else if (audio && list[cur] && !list[cur].synth) { pos = pausedAt !== null ? pausedAt : audio.currentTime; dur = audio.duration || 0; }
       ui.bar.style.width = dur ? (pos / dur * 100) + '%' : '0'; ui.time.textContent = fmt(pos) + ' / ' + fmt(dur);
     }
     function state() {
       var t = list[cur] || {}; var pos = 0, dur = 0;
       if (t.synth && playing && actx) { pos = (actx.currentTime - synthStart) % SYNTH_LEN; dur = SYNTH_LEN; }
-      else if (audio && !t.synth) { pos = audio.currentTime; dur = audio.duration || 0; }
+      else if (audio && !t.synth) { pos = pausedAt !== null ? pausedAt : audio.currentTime; dur = audio.duration || 0; }
       return { title: t.title || '', playing: playing, started: cur >= 0 && (started || playing || pos > 0), frac: dur ? pos / dur : 0 };
     }
     function autoplay() { ensureCtx(); if (cur < 0) load(0, false); if (!playing) play(); }
