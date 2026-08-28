@@ -380,11 +380,15 @@
      "G2",
      "H1",
      "H2",
-     "I_loop",
-     "I"
+     "I_loop"
     ]
    },
-   "rules_note": "user 2026-08-29: pre-zone {B,C,D} -> E1 -> E2 -> post-zone {F,G,H,I_loop} -> I. E1 only to E2; pre may jump to E2; post never returns to E1/E2 or pre. Bans: B1!C2, C2!B1B2, D1!B1C1, D2!C1C2, F1!H2, F2 only from F1. Unnamed = allowed (incl. self-repeat)."
+   "rules_note": "user 2026-08-29: pre-zone {B,C,D} -> E1 -> E2 -> post-zone {F,G,H,I_loop} -> I. E1 only to E2; pre may jump to E2; post never returns to E1/E2 or pre. Bans: B1!C2, C2!B1B2, D1!B1C1, D2!C1C2, F1!H2, F2 only from F1. Unnamed = allowed (incl. self-repeat).",
+   "version": "V1"
   }
- ]
+ ],
+ "song": {
+  "title": "Full on V6",
+  "artist": "Shiou Hsu"
+ }
 }

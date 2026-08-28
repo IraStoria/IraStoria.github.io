@@ -62,6 +62,20 @@
   var queued = null;     /* user's choice for the next decision (segment id) */
   var later = null;      /* user's choice after a lock (applies to the decision after next) */
   var randomAuto = false, lastId = null, history = [], ending = false;
+  var trackListeners = [];   /* fired on every section change with the outgoing progress fraction (the OS shell sweeps its progress bar from there) */
+  function fireTrack(fromFrac) { trackListeners.forEach(function (fn) { try { fn(fromFrac); } catch (e) {} }); }
+  /* "now playing" title shared with the OS shell: V1.B2 Full on V6 - by Shiou Hsu (V = theme version, XX = section) */
+  function trackTitle(seg) { var song = (CFG && CFG.song) || {}; return (TH.version || 'V1') + '.' + seg.id.replace('_loop', ' loop') + ' ' + (song.title || '') + (song.artist ? ' - by ' + song.artist : ''); }
+  /* public API for the host page (same-origin iframe): progress / spectrum / title of the current section */
+  window.sectionPlayer = {
+    state: function () {
+      if (!running || !cur || !ctx) return { active: false, started: false, playing: false, title: '', pos: 0, dur: 0, frac: 0, muted: false };
+      var pos = Math.max(0, Math.min(cur.end - cur.start, ctx.currentTime - cur.start)), dur = cur.end - cur.start;
+      return { active: true, started: true, playing: true, title: trackTitle(cur.seg), id: cur.seg.id, pos: pos, dur: dur, frac: dur ? pos / dur : 0, muted: false };
+    },
+    analyser: function () { return running ? analyser : null; },
+    onTrack: function (fn) { trackListeners.push(fn); }
+  };
 
   function useTheme(th) {
     TH = th; INTRO = th.intro || null; OUTRO = th.outro || null;
@@ -144,7 +158,7 @@
     }
     if (!nxt && now >= cur.end - decisionLead()) decide();
     if (nxt && now >= cur.end) {           /* hand-over */
-      lastId = cur.seg.id; cur = nxt; nxt = null;
+      lastId = cur.seg.id; cur = nxt; nxt = null; fireTrack(1);
       if (later) { queued = later; later = null; }
       history.push(cur.seg.id);
       render();
@@ -161,14 +175,14 @@
       running = true; queued = later = null; randomAuto = false; lastId = null; history = [];
       var first = INTRO || SEG[0];
       cur = schedule(first, ctx.currentTime + 0.05 + preSec(first)); nxt = null;   /* first entry sits after its own pick-up: start times can't be negative */
-      history.push(first.id);
+      history.push(first.id); fireTrack(0);
       timer = setInterval(tick, TICK); startBtn.disabled = false; render();
     }).catch(function (err) { running = false; clearInterval(timer); cur = nxt = null; startBtn.disabled = false; var s = document.createElement('span'); s.className = 'bad'; s.textContent = 'start error: ' + (err && err.stack || err) + '\n'; histEl.appendChild(s); render(); });
   }
   function stop() {
     running = false; clearInterval(timer);
     [cur, nxt].forEach(function (it) { if (it) { try { it.gain.gain.cancelScheduledValues(0); it.gain.gain.setValueAtTime(it.gain.gain.value, ctx.currentTime); it.gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1); it.src.stop(ctx.currentTime + 0.12); } catch (e) {} } });
-    cur = nxt = null; queued = later = null; randomAuto = false; render();
+    cur = nxt = null; queued = later = null; randomAuto = false; render(); fireTrack(0);
   }
   function choose(id) {
     if (!running) return;

@@ -195,6 +195,24 @@
     return out;
   }
   function decayFactor(dtMs) { return Math.pow(DECAY_PER_SEC, dtMs / 1000); }   // frame-rate independent (real elapsed time, so a throttled tab catches up)
+  /* external "now playing" source: a demo window (same-origin iframe) that exposes window.sectionPlayer.
+     While it is active, the desktop spectrum/progress line and the caption follow it instead of the OS player. */
+  var extFrames = [];
+  var ext = {
+    api: function () {
+      for (var i = extFrames.length - 1; i >= 0; i--) {
+        var f = extFrames[i]; if (!f.isConnected) { extFrames.splice(i, 1); continue; }
+        try { var a = f.contentWindow && f.contentWindow.sectionPlayer; if (a && a.state().active) return a; } catch (e) {}
+      }
+      return null;
+    },
+    register: function (f) {
+      extFrames.push(f);
+      try { var a = f.contentWindow.sectionPlayer; if (a && !a.__hooked) { a.__hooked = true; a.onTrack(function (fromFrac) { wave.sweep(true, fromFrac); phoneWave.sweep(true, fromFrac); caption.reset(); }); } } catch (e) {}
+    },
+    analyser: function () { var a = ext.api(); return a ? a.analyser() : player.analyser(); },
+    state: function () { var a = ext.api(); return a ? a.state() : player.state(); }
+  };
   function makeWave(cv, yRatio) {
     var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000;   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
     function grad(y0, y1, rgb, a0, a1) { var g = g2.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + rgb + ',' + a0 + ')'); g.addColorStop(1, 'rgba(' + rgb + ',' + a1 + ')'); return g; }
@@ -211,7 +229,7 @@
         if (p >= 1) { mode = 'live'; sweep(false); if (onConnected) { var cb = onConnected; onConnected = null; cb(); } }
         return;
       }
-      var an = player.analyser();
+      var an = ext.analyser();
       if (mode === 'live' && an) {
         // spectrum bars (same log-frequency mapping as the player). On pause the bars fall gradually instead of vanishing.
         var n = Math.max(48, Math.min(128, Math.floor(W / 12))), bw = W / n, maxH = H * 0.28, any = false;
@@ -219,7 +237,7 @@
         if (levels.length !== n) levels = new Array(n).fill(0);
         g2.shadowBlur = 0;
         // the whole spectrum doubles as the progress bar: bars/baseline left of the play head are amber, the unplayed part is a quiet grey (frac frozen while paused)
-        var st = player.state(), px = W * Math.max(0, Math.min(1, st.frac || 0));
+        var st = ext.state(), px = W * Math.max(0, Math.min(1, st.frac || 0));
         // right after the line joins, a grey sweep runs right→left over the amber line ("clearing" the progress bar) before real progress takes over
         // unplayed bars are a solid cool slate (not translucent white — that reads as fog on the dark wallpaper); gradients only dim the foot near the line
         var gAmb = grad(y, y - maxH, '224,176,74', 0.35, 0.95), gGrey = grad(y, y - maxH, '96,104,122', 0.45, 0.95),
@@ -262,7 +280,7 @@
   var caption = (function () {
     var els = [$('#np-desktop'), $('#np-phone')].filter(Boolean), timer = null, last = '';
     function refresh() {
-      var st = player.state(), key = st.title + '|' + (st.started ? 1 : 0) + '|' + (st.playing ? 1 : 0) + '|' + (st.muted ? 1 : 0);
+      var st = ext.state(), key = st.title + '|' + (st.started ? 1 : 0) + '|' + (st.playing ? 1 : 0) + '|' + (st.muted ? 1 : 0);
       if (key === last) return; last = key;
       els.forEach(function (el) {
         // desktop: visible as soon as a track is loaded (so the transport works even if autoplay was blocked); phone: only once started
@@ -367,7 +385,7 @@
       w = createWindow(key, { title: d.title, glyph: '🎛️', size: [900, 640], page: '../' + d.path + '/', render: function (body, win) {
         body.classList.add('frame');
         var f = document.createElement('iframe'); f.className = 'demo-frame'; f.src = '../' + d.path + '/'; f.title = d.title; f.setAttribute('allow', 'autoplay; fullscreen'); f.allowFullscreen = true;
-        f.addEventListener('load', function () { watchAudio(f, win); });
+        f.addEventListener('load', function () { watchAudio(f, win); setTimeout(function () { ext.register(f); }, 300); });   /* the demo script sets window.sectionPlayer right after load */
         body.appendChild(f);
       } });
       wins[key] = w;
