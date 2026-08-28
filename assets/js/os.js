@@ -55,9 +55,9 @@
   }
 
   // ============================================================ background wave + now-playing caption
-  var CONNECT_MS = 1100;
+  var CONNECT_MS = 1100, DECAY = 0.955;   // bar fall-off per frame when paused (~1 s to silence)
   function makeWave(cv, yRatio) {
-    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null;
+    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [];
     function size() { if (cv.width !== cv.clientWidth || cv.height !== cv.clientHeight) { cv.width = cv.clientWidth; cv.height = cv.clientHeight; } }
     function ease(x) { return 1 - Math.pow(1 - x, 3); }
     function draw() {
@@ -71,19 +71,22 @@
         return;
       }
       var an = player.analyser();
-      if (mode === 'live' && an && player.isPlaying()) {
-        // spectrum bars (same log-frequency mapping as the player), growing up from the baseline with a soft mirror below
+      if (mode === 'live' && an) {
+        // spectrum bars (same log-frequency mapping as the player). On pause the bars fall gradually instead of vanishing.
+        var n = Math.max(48, Math.min(128, Math.floor(W / 12))), bw = W / n, maxH = H * 0.28, any = false;
         var data = new Uint8Array(an.frequencyBinCount); an.getByteFrequencyData(data);
-        var n = Math.max(48, Math.min(128, Math.floor(W / 12))), bw = W / n, maxH = H * 0.28;
+        if (levels.length !== n) levels = new Array(n).fill(0);
         g2.shadowBlur = 0;
         for (var i = 0; i < n; i++) {
           var lo = Math.floor(Math.pow(data.length, i / n)), hi = Math.max(lo + 1, Math.floor(Math.pow(data.length, (i + 1) / n))), m = 0;
           for (var b = lo; b < hi && b < data.length; b++) m = Math.max(m, data[b]);
-          var h = m / 255 * maxH, x = i * bw + 1;
+          var target = player.isPlaying() ? m / 255 : 0;
+          levels[i] = target > levels[i] ? target : Math.max(target, levels[i] * DECAY);
+          var h = levels[i] * maxH, x = i * bw + 1; if (h > 0.5) any = true;
           g2.fillStyle = 'rgba(224,176,74,.75)'; g2.fillRect(x, y - h, bw - 2, h);
           g2.fillStyle = 'rgba(224,176,74,.18)'; g2.fillRect(x, y, bw - 2, h * 0.45);
         }
-        g2.strokeStyle = 'rgba(224,176,74,.9)'; g2.shadowBlur = 10; g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
+        g2.strokeStyle = any ? 'rgba(224,176,74,.9)' : 'rgba(224,176,74,.28)'; g2.shadowBlur = any ? 10 : 0; g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
       } else {
         g2.strokeStyle = 'rgba(224,176,74,.28)'; g2.shadowBlur = 0;
         g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
@@ -253,7 +256,7 @@
     var placeholder = { id: '_synth', title: U.player_placeholder, desc: '', synth: true };
     var list = tracks.length ? tracks : [placeholder];
     var cur = -1, playing = false, audio = null, actx = null, analyser = null, synth = null, synthStart = 0, SYNTH_LEN = 24;
-    var body, ui = {}, raf, timeTimer = null;
+    var body, ui = {}, raf, timeTimer = null, vizLevels = [];
 
     function mount(b) {
       body = b;
@@ -330,10 +333,13 @@
       raf = requestAnimationFrame(draw);
       var c = ui.viz, g2 = c.getContext('2d'); if (c.width !== c.clientWidth) { c.width = c.clientWidth; c.height = c.clientHeight; }
       g2.clearRect(0, 0, c.width, c.height);
-      if (analyser && playing) {
+      if (analyser) {
         var data = new Uint8Array(analyser.frequencyBinCount); analyser.getByteFrequencyData(data);
         var n = 64, bw = c.width / n; g2.fillStyle = 'rgba(224,176,74,.55)';
-        for (var i = 0; i < n; i++) { var lo = Math.floor(Math.pow(data.length, i / n)), hi = Math.max(lo + 1, Math.floor(Math.pow(data.length, (i + 1) / n))), m = 0; for (var b = lo; b < hi && b < data.length; b++) m = Math.max(m, data[b]); var h = m / 255 * c.height; g2.fillRect(i * bw, c.height - h, bw - 1, h); }
+        if (vizLevels.length !== n) vizLevels = new Array(n).fill(0);
+        for (var i = 0; i < n; i++) { var lo = Math.floor(Math.pow(data.length, i / n)), hi = Math.max(lo + 1, Math.floor(Math.pow(data.length, (i + 1) / n))), m = 0; for (var b = lo; b < hi && b < data.length; b++) m = Math.max(m, data[b]);
+          var tg = playing ? m / 255 : 0; vizLevels[i] = tg > vizLevels[i] ? tg : Math.max(tg, vizLevels[i] * DECAY);
+          var h = vizLevels[i] * c.height; g2.fillRect(i * bw, c.height - h, bw - 1, h); }
       }
     }
     function tickTime() {
