@@ -196,7 +196,7 @@
   }
   function decayFactor(dtMs) { return Math.pow(DECAY_PER_SEC, dtMs / 1000); }   // frame-rate independent (real elapsed time, so a throttled tab catches up)
   function makeWave(cv, yRatio) {
-    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, CLEAR_MS = 600;
+    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, CLEAR_MS = 1000;
     function grad(y0, y1, rgb, a0, a1) { var g = g2.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + rgb + ',' + a0 + ')'); g.addColorStop(1, 'rgba(' + rgb + ',' + a1 + ')'); return g; }
     function size() { if (cv.width !== cv.clientWidth || cv.height !== cv.clientHeight) { cv.width = cv.clientWidth; cv.height = cv.clientHeight; } }
     function ease(x) { return 1 - Math.pow(1 - x, 3); }
@@ -208,7 +208,7 @@
       if (mode === 'connect') {
         var p = Math.min(1, (performance.now() - connectT0) / CONNECT_MS), e = ease(p), half = W / 2 * e;
         g2.beginPath(); g2.moveTo(0, y); g2.lineTo(half, y); g2.moveTo(W, y); g2.lineTo(W - half, y); g2.stroke();
-        if (p >= 1) { mode = 'live'; clearT0 = performance.now(); if (onConnected) { var cb = onConnected; onConnected = null; cb(); } }
+        if (p >= 1) { mode = 'live'; sweep(false); if (onConnected) { var cb = onConnected; onConnected = null; cb(); } }
         return;
       }
       var an = player.analyser();
@@ -224,8 +224,9 @@
         // unplayed bars are a solid cool slate (not translucent white — that reads as fog on the dark wallpaper); gradients only dim the foot near the line
         var gAmb = grad(y, y - maxH, '224,176,74', 0.35, 0.95), gGrey = grad(y, y - maxH, '96,104,122', 0.45, 0.95),
             gAmbR = grad(y, y + maxH * 0.45, '224,176,74', 0.16, 0), gGreyR = grad(y, y + maxH * 0.45, '96,104,122', 0.18, 0);
-        var lpx = px;   // the sweep only touches the baseline; the bars follow real progress
-        if (clearT0) { var cp = (now - clearT0) / CLEAR_MS; if (cp >= 1) clearT0 = 0; else lpx = Math.max(px, W * (1 - ease(cp))); }
+        // clearing sweep (right→left): after the line joins it touches the baseline only; on a track change it takes the bars with it
+        var lpx = px;
+        if (clearT0) { var cp = (now - clearT0) / CLEAR_MS; if (cp >= 1) clearT0 = 0; else { var sx = W * (1 - ease(cp)); lpx = Math.max(px, sx); if (clearBars) px = Math.max(px, sx); } }
         for (var i = 0; i < n; i++) {
           var target = lv[i];   // follows the real signal, so the fade-out and the bars fall together
           levels[i] = target > levels[i] ? target : Math.max(target, levels[i] * dk);
@@ -252,7 +253,8 @@
     }
     function start(m) { if (!cv) return; mode = m || 'idle'; if (!raf) draw(); }
     function connect(cb) { if (!cv) { cb(); return; } onConnected = cb; connectT0 = performance.now(); start('connect'); }
-    return { start: start, connect: connect };
+    function sweep(bars) { clearT0 = performance.now(); clearBars = !!bars; }
+    return { start: start, connect: connect, sweep: sweep };
   }
   var wave = makeWave($('#wave'), 0.58), phoneWave = makeWave($('#ph-wave'), 0.47);  // phone: slightly above centre
 
@@ -450,6 +452,7 @@
     var tracks = D.works.filter(function (w) { return w.type === 'music' && w.media && (w.media.local || w.media.youtube || w.media.soundcloud); });
     var placeholder = { id: '_synth', title: U.player_placeholder, desc: '', synth: true };
     var list = tracks.length ? tracks : [placeholder];
+    var trackListeners = [];   // fired on every track change (the wave uses it to sweep the progress colour off)
     var cur = -1, playing = false, started = false, audio = null, actx = null, analyser = null, synth = null, synthStart = 0, SYNTH_LEN = 24;
     var body, ui = {}, raf, timeTimer = null, vizLevels = [], vizLastT = 0, master = null, out = null;
     var vol = 1, muted = false;   // persisted in localStorage — the only thing remembered between visits
@@ -493,7 +496,8 @@
       playing = false; refresh();
     }
     function load(i, autoplay) {
-      stopAll(true); cur = i; var t = list[i];
+      stopAll(true); var changed = cur !== i; cur = i; var t = list[i];
+      if (changed) trackListeners.forEach(function (fn) { try { fn(); } catch (e) {} });
       if (ui.ext) ui.ext.innerHTML = '';
       if (t.synth || (t.media && t.media.local)) {
         if (!t.synth) { if (!audio) { audio = new Audio(); audio.addEventListener('ended', function () { next(); }); } audio.src = '../' + t.media.local; }
@@ -591,9 +595,10 @@
     function remember(i) { history.push(i); if (history.length > 8) history.shift(); }
     function prev() { var i = pickRandom(); remember(i); load(i, true); }
     function next() { var i = pickRandom(); remember(i); load(i, true); }
-    return { mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state, autoplay: autoplay, prepare: prepare, restore: restore, prev: prev, next: next, toggleMute: toggleMute, setVolume: setVolume,
+    return { onTrack: function (fn) { trackListeners.push(fn); }, mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state, autoplay: autoplay, prepare: prepare, restore: restore, prev: prev, next: next, toggleMute: toggleMute, setVolume: setVolume,
              analyser: function () { return analyser; }, isPlaying: function () { return playing; } };
   })();
+  player.onTrack(function () { wave.sweep(true); phoneWave.sweep(true); });   // new track: sweep the amber off the line and the bars
 
   // ============================================================ terminal app (playful nav)
   var terminal = (function () {
