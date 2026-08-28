@@ -278,14 +278,14 @@
     "click": {
       "video": "assets/fx/click.mp4",
       "sound": "assets/fx/click.ogg",
-      "sound_at": 0.46,
+      "sound_at": 0.36,
       "sound_onset": 0.062,
       "width": 240,
       "opacity": 0.55,
-      "x": "84%",
-      "y": "48%",
-      "_note": "click-to-enter easter egg (right of the boot laptop). click.mp4 = source trimmed by 0.10 s at the head (user: sound felt early). clip plays, fades, waits after_ms, THEN the desktop loads; sound onset lands at video t=sound_at",
-      "after_ms": 600
+      "_note": "click-to-enter easter egg. anchor=screen-right: clip sits inside the boot laptop's terminal screen, flush to its right edge (inset px); x/y only used when anchor is absent. click.mp4 = source head-trimmed 0.10 s, sound_at shifted accordingly (0.46→0.36). clip plays → fades → after_ms → desktop loads.",
+      "after_ms": 600,
+      "anchor": "screen-right",
+      "inset": 16
     }
   }
 }

@@ -38,7 +38,12 @@
       var doneCb = false, sndDone = false, raf = null;
       var sndAt = Math.max(0, (cfg.sound_at || 0) - (cfg.sound_onset || 0));
       function finish() { if (doneCb) return; doneCb = true; if (raf) cancelAnimationFrame(raf); if (!sndDone) { sndDone = true; playSnd(); } cb(); }
-      vid.style.width = (cfg.width || 240) + 'px'; vid.style.opacity = cfg.opacity == null ? 0.55 : cfg.opacity; vid.style.left = cfg.x || '50%'; vid.style.top = cfg.y || '50%';
+      var w = cfg.width || 240; vid.style.width = w + 'px'; vid.style.opacity = cfg.opacity == null ? 0.55 : cfg.opacity;
+      var scr = cfg.anchor === 'screen-right' ? document.querySelector('#boot .screen, #ph-lock') : null;
+      if (scr) {   // inside the boot laptop's terminal screen, flush to its right edge
+        var r = scr.getBoundingClientRect(), ins = cfg.inset == null ? 16 : cfg.inset;
+        vid.style.left = Math.round(r.right - ins - w / 2) + 'px'; vid.style.top = Math.round(r.top + r.height / 2) + 'px';
+      } else { vid.style.left = cfg.x || '50%'; vid.style.top = cfg.y || '50%'; }
       document.body.appendChild(vid); vid.currentTime = 0;
       // drive everything off the clip's own clock (immune to timer drift / throttling): sound at t = sound_at − onset, hand-over at the end
       (function tick() {
@@ -63,11 +68,13 @@
     if (done) return; done = true;
     fx.click(function () {   // easter egg plays out over the boot screen; only then does the desktop load
     boot.classList.add('out');
+    desktop.classList.add('dark');   // stage 1: black background, only the line is visible
     desktop.hidden = false;
     setTimeout(function () { boot.remove(); }, reduced ? 0 : 500);
     initDesktop();
-    // two lines grow from the edges and meet in the middle; music starts the instant they connect (user gesture = this click)
-    wave.connect(function () { try { player.autoplay(); } catch (e) {} caption.arm(); });
+    // stage 2: two lines grow from the edges and meet in the middle; the instant they connect: music starts,
+    // stage 3: wallpaper colours, now-playing caption, icons and dock fade in together
+    wave.connect(function () { try { player.autoplay(); } catch (e) {} caption.arm(); desktop.classList.remove('dark'); });
     });
   }
   function typeLine(text, cb) {
