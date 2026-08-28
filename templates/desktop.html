@@ -14,14 +14,14 @@
 
 <div id="boot" class="boot" role="dialog" aria-label="boot">
   <div class="laptop">
-    <div class="screen">
+    <div class="screen off" id="boot-screen">
       <div class="term-bar"><span class="dots"><i></i><i></i><i></i></span><span class="term-title">irastoria@studio — zsh</span></div>
       <pre id="boot-log" class="term-log"></pre>
+      <div id="boot-continue" class="boot-continue" hidden>{{ui_boot_continue}}</div>
     </div>
     <div class="base"></div>
   </div>
-  <button id="boot-btn" class="boot-btn" hidden>{{ui_boot_enter}}</button>
-  <p class="boot-hint" id="boot-hint" hidden>{{ui_boot_hint}}</p>
+  <button id="boot-btn" class="boot-btn power">{{ui_boot_power}}</button>
 </div>
 
 <div id="desktop" class="desktop" hidden>

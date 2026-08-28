@@ -26,6 +26,12 @@ button{font:inherit;color:inherit}
 .boot-btn{background:var(--fg);color:#111;border:0;border-radius:999px;padding:.7rem 1.6rem;font-weight:700;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.4)}
 .boot-btn:hover{transform:translateY(-1px)}
 .boot-hint{color:var(--dim);font:12px var(--mono);margin:0}
+.boot-btn.power{font-family:var(--mono);letter-spacing:.04em}
+/* screen is dark until the power button is pressed */
+.screen.off .term-bar,.screen.off .term-log{visibility:hidden}
+.screen.off{background:#05060a}
+.boot-continue{margin-top:auto;padding:.6rem .9rem;font:13px var(--mono);color:var(--dim);animation:blink 1.1s steps(1) infinite}
+.boot-continue[hidden]{display:none}
 .boot.out{animation:bootout .5s forwards}
 @keyframes bootout{to{opacity:0;transform:scale(1.04);visibility:hidden}}
 

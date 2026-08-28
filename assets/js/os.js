@@ -65,7 +65,7 @@
   }
 
   // ============================================================ boot sequence
-  var boot = $('#boot'), log = $('#boot-log'), bootBtn = $('#boot-btn'), bootHint = $('#boot-hint'), desktop = $('#desktop');
+  var boot = $('#boot'), log = $('#boot-log'), bootBtn = $('#boot-btn'), bootScreen = $('#boot-screen'), bootContinue = $('#boot-continue'), desktop = $('#desktop');
   var skipBoot = false;
   var langSwap = false;
   var navType = ''; try { navType = (performance.getEntriesByType('navigation')[0] || {}).type || ''; } catch (e) {}
@@ -126,9 +126,17 @@
     return { click: click, boot: boot };
   })();
 
-  var done = false;
+  var done = false, powered = false, ready = false;
+  // power button: the click is the user gesture the browser needs → boot sound plays right here, then the terminal starts typing
+  function powerOn() {
+    if (powered) return; powered = true;
+    fx.boot();
+    if (bootBtn) bootBtn.hidden = true;
+    if (bootScreen) bootScreen.classList.remove('off');
+    runBoot(0);
+  }
   function enterDesktop() {
-    if (done) return; done = true;
+    if (done || !ready) return; done = true;
     try { sessionStorage.setItem('booted', '1'); } catch (e) {}
     fx.click(function () {   // easter egg plays out over the boot screen; only then does the desktop load
     boot.classList.add('out');
@@ -156,7 +164,7 @@
     setTimeout(cb, reduced ? 0 : 350);
   }
   function runBoot(k) {
-    if (k >= script.length) { bootBtn.hidden = false; bootHint.hidden = false; return; }
+    if (k >= script.length) { ready = true; if (bootContinue) bootContinue.hidden = false; return; }
     typeLine(script[k][0], function () { printOut(script[k][1], function () { runBoot(k + 1); }); });
   }
 
@@ -676,10 +684,8 @@
     if (langSwap) { var settle = function () { if (!desktop.classList.contains('swap-in')) return; desktop.classList.remove('swap-in'); setTimeout(function () { desktop.classList.remove('swap'); }, 900); }; requestAnimationFrame(function () { requestAnimationFrame(settle); }); setTimeout(settle, 80); }   // settle on the next frame (timer fallback for throttled tabs)
   }
   else {
-    fx.boot();   // boot-screen sound (falls back to the boot click if the browser blocks it)
-    runBoot(0);
-    bootBtn.addEventListener('click', enterDesktop);
-    boot.addEventListener('click', function (e) { if (e.target !== bootBtn) enterDesktop(); });
-    document.addEventListener('keydown', function (e) { if (!done && (e.key === 'Enter' || e.key === ' ')) enterDesktop(); });
+    bootBtn.addEventListener('click', function (e) { e.stopPropagation(); powerOn(); });
+    boot.addEventListener('click', function () { if (ready) enterDesktop(); });                 // "press any key to continue": any click…
+    document.addEventListener('keydown', function (e) { if (done) return; if (!powered) { if (e.key === 'Enter' || e.key === ' ') powerOn(); } else if (ready) enterDesktop(); });   // …or any key
   }
 })();

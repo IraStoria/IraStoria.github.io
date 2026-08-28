@@ -274,6 +274,14 @@
     "updates_hide": {
       "zh": "隱藏",
       "en": "Hide"
+    },
+    "boot_power": {
+      "zh": "⏻ 按下電源",
+      "en": "⏻ Power on"
+    },
+    "boot_continue": {
+      "zh": "點選任意按鍵繼續 _",
+      "en": "Press any key to continue _"
     }
   },
   "about_body": {
