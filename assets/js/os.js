@@ -25,16 +25,17 @@
     desktop.classList.add('swap', 'swap-out');
     setTimeout(function () {
       applyLang(ALT);
-      var np = $('#np-desktop');
-      if (np) { var r = np.getBoundingClientRect(); np.style.transition = 'none'; np.style.transform = 'translateX(' + (-(r.right + 40)) + 'px)'; }
+      // now-playing label + title (not the buttons) enter from the right edge of the window
+      var npEls = Array.prototype.slice.call(document.querySelectorAll('#np-desktop .np-lbl, #np-desktop .np-title'));
+      npEls.forEach(function (el) { var r = el.getBoundingClientRect(); el.style.transition = 'none'; el.style.transform = 'translateX(' + (window.innerWidth - r.left + 40) + 'px)'; el.style.opacity = '1'; });
       desktop.classList.remove('swap-out'); desktop.classList.add('swap-in');
       void desktop.offsetWidth;   // flush styles so the entrance actually transitions
       var released = false;
       var release = function () {
         if (released) return; released = true;
         desktop.classList.remove('swap-in');
-        if (np) { np.style.transition = 'transform .9s cubic-bezier(.2,.7,.2,1), opacity .4s ease'; np.style.transform = ''; }
-        setTimeout(function () { desktop.classList.remove('swap'); if (np) { np.style.transition = ''; np.style.transitionDuration = CONNECT_MS + 'ms'; } swapping = false; }, 950);
+        npEls.forEach(function (el) { el.style.transition = 'transform .9s cubic-bezier(.2,.7,.2,1), opacity .4s ease'; el.style.transform = ''; });
+        setTimeout(function () { desktop.classList.remove('swap'); npEls.forEach(function (el) { el.style.transition = ''; el.style.opacity = ''; }); swapping = false; }, 950);
       };
       requestAnimationFrame(release); setTimeout(release, 80);   // timer fallback for throttled / background tabs
     }, SWAP_MS);

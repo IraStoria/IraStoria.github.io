@@ -73,15 +73,19 @@ button{font:inherit;color:inherit}
 .upd-log .msg time{display:inline;margin-right:.5em}.upd-log .msg p{display:inline}
 .upd-log .msg time{font:11px var(--mono);color:var(--dim)}.upd-log .msg p{margin:0}
 @media(max-width:699px){.updates{display:none}}
-/* language swap choreography (in place, no reload): out = apps slide left / tagline flips / now-playing slides left & fades (name stays);
-   in = apps slide in from the left, tagline flips back, now-playing travels in from the far left (inline transform set by JS) */
+/* language swap choreography (in place, no reload):
+   out = apps + updates panel slide left & fade, tagline flips, sticky fades, now-playing label/title slide left & fade (name + buttons stay);
+   in  = apps + updates panel slide in from the left, tagline flips back, sticky fades in, now-playing label/title travel in from the RIGHT edge (inline transform set by JS) */
 .desktop.swap>:not(.wave):not(.veil){transition:opacity .6s ease,transform .6s cubic-bezier(.4,0,.6,1)!important}
-.desktop.swap .hero-text p{transition:opacity .6s ease,transform .6s cubic-bezier(.4,0,.6,1)}
+.desktop.swap .hero-text p,.desktop.swap #np-desktop .np-lbl,.desktop.swap #np-desktop .np-title{transition:opacity .6s ease,transform .6s cubic-bezier(.4,0,.6,1)}
+#np-desktop .np-lbl{display:inline-block}
 .hero-text{perspective:600px}
-.desktop.swap-out>.icons{transform:translateX(-140px);opacity:0}
+.desktop.swap-out>.icons,.desktop.swap-out>.updates{transform:translateX(-140px);opacity:0}
 .desktop.swap-out .hero-text p{transform:rotateX(90deg);opacity:0}
-.desktop.swap-out>#np-desktop{transform:translateX(-140px);opacity:0!important}
-.desktop.swap-in>.icons{transform:translateX(-140px);opacity:0;transition:none!important}
+.desktop.swap-out>.sticky{opacity:0}
+.desktop.swap-out #np-desktop .np-lbl,.desktop.swap-out #np-desktop .np-title{transform:translateX(-140px);opacity:0}
+.desktop.swap-in>.icons,.desktop.swap-in>.updates{transform:translateX(-140px);opacity:0;transition:none!important}
+.desktop.swap-in>.sticky{opacity:0;transition:none!important}
 .desktop.swap-in .hero-text p{transform:rotateX(-90deg);opacity:0;transition:none}
 
 /* ---------- windows ---------- */
