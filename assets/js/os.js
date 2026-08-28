@@ -12,12 +12,22 @@
   var PHONE = shellOverride ? shellOverride === 'phone' : (window.matchMedia('(max-width: 699px)').matches || (window.matchMedia('(pointer: coarse)').matches && window.innerWidth < 900));
   try { localStorage.setItem('lang', lang); } catch (e) {}
   var sw = $('[data-lang-switch]');
-  if (sw) sw.addEventListener('click', function () { try { localStorage.setItem('lang', sw.getAttribute('data-lang-switch')); } catch (e) {} });
+  if (sw) sw.addEventListener('click', function (e) { try { localStorage.setItem('lang', sw.getAttribute('data-lang-switch')); } catch (e2) {} if (!PHONE && desktop && !desktop.hidden) { e.preventDefault(); switchLang(); } });
+  // desktop language switch: apps slide out left, tagline flips, name + now-playing slide left and fade → load the other language
+  // (which enters from the right, see langSwap below). The current track + position ride along in sessionStorage.
+  var SWAP_MS = 650;
+  function switchLang() {
+    var other = lang === 'zh' ? 'en' : 'zh';
+    try { localStorage.setItem('lang', other); sessionStorage.setItem('langswap', '1'); sessionStorage.setItem('booted', '1'); var st = player.state(); if (st.id) sessionStorage.setItem('track', JSON.stringify({ id: st.id, pos: st.pos, playing: st.playing })); } catch (e) {}
+    desktop.classList.add('swap', 'swap-out');
+    setTimeout(function () { location.href = '../' + other + '/#desktop'; }, SWAP_MS);
+  }
 
   // ============================================================ boot sequence
   var boot = $('#boot'), log = $('#boot-log'), bootBtn = $('#boot-btn'), bootHint = $('#boot-hint'), desktop = $('#desktop');
   var skipBoot = false;
-  try { skipBoot = location.hash === '#desktop' || /[?&]app=/.test(location.search); } catch (e) {}   // every visit boots; only explicit deep links skip
+  var langSwap = false;
+  try { skipBoot = sessionStorage.getItem('booted') === '1' || location.hash === '#desktop' || /[?&]app=/.test(location.search); langSwap = sessionStorage.getItem('langswap') === '1'; if (langSwap) sessionStorage.removeItem('langswap'); } catch (e) {}   // boot only on the first entry of a visit; sub-pages / language switch come straight back to the desktop
   var script = [
     ['$ whoami', '> ' + D.author],
     ['$ cat about.md', '> ' + D.tagline + '\n  ' + D.hero_intro],
@@ -77,6 +87,7 @@
   var done = false;
   function enterDesktop() {
     if (done) return; done = true;
+    try { sessionStorage.setItem('booted', '1'); } catch (e) {}
     fx.click(function () {   // easter egg plays out over the boot screen; only then does the desktop load
     boot.classList.add('out');
     desktop.classList.add('dark');   // stage 1: black background, only the line is visible
@@ -459,9 +470,19 @@
       var mutedNow = muted || vol === 0;
       if (t.synth && playing && actx) { pos = (actx.currentTime - synthStart) % SYNTH_LEN; dur = SYNTH_LEN; }
       else if (audio && !t.synth) { pos = pausedAt !== null ? pausedAt : audio.currentTime; dur = audio.duration || 0; }
-      return { title: t.title || '', playing: playing, started: cur >= 0 && (started || playing || pos > 0), frac: dur ? pos / dur : 0, muted: mutedNow, vol: vol };
+      return { title: t.title || '', id: t.id || '', pos: pos, playing: playing, started: cur >= 0 && (started || playing || pos > 0), frac: dur ? pos / dur : 0, muted: mutedNow, vol: vol };
     }
     function autoplay() { ensureCtx(); prepare(); if (!playing) play(); }
+    // continue the same track after a language switch (page reload): seek to the saved position, try to keep playing
+    function restore(sv) {
+      var i = list.findIndex(function (t) { return t.id === sv.id; }); if (i < 0) return;
+      remember(i); load(i, false);
+      if (audio && !list[i].synth) {
+        var seek = function () { try { audio.currentTime = sv.pos || 0; } catch (e) {} };
+        if (audio.readyState >= 1) seek(); else audio.addEventListener('loadedmetadata', seek, { once: true });
+        if (sv.playing) { ensureCtx(); play(); }   // may be refused without a gesture → the transport shows ▶
+      }
+    }
     function prepare() { if (cur < 0) { var i = pickRandom(); remember(i); load(i, false); } }   // load first track silently so the desktop transport has something to show
     // shuffle mode: every hand-over (track end, ⏮, ⏭, first play) draws a random track, never one of the last NO_REPEAT picks
     var NO_REPEAT = 2, history = [];
@@ -474,7 +495,7 @@
     function remember(i) { history.push(i); if (history.length > 8) history.shift(); }
     function prev() { var i = pickRandom(); remember(i); load(i, true); }
     function next() { var i = pickRandom(); remember(i); load(i, true); }
-    return { mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state, autoplay: autoplay, prepare: prepare, prev: prev, next: next, toggleMute: toggleMute, setVolume: setVolume,
+    return { mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state, autoplay: autoplay, prepare: prepare, restore: restore, prev: prev, next: next, toggleMute: toggleMute, setVolume: setVolume,
              analyser: function () { return analyser; }, isPlaying: function () { return playing; } };
   })();
 
@@ -498,7 +519,7 @@
       else if (a === 'demos') openApp('demos');
       else if (a === 'about' || a === 'whoami') { print('> ' + D.author + ' — ' + D.tagline); openApp('about'); }
       else if (a === 'play') { openApp('player'); player.toggle(); }
-      else if (a === 'lang') { location.href = '../' + (lang === 'zh' ? 'en' : 'zh') + '/#desktop'; }
+      else if (a === 'lang') { switchLang(); }
       else print(U.term_unknown + a);
     }
     return { mount: mount };
@@ -533,7 +554,7 @@
       var y0 = null;
       lock.addEventListener('pointerdown', function (e) { y0 = e.clientY; });
       lock.addEventListener('pointerup', function (e) { if (y0 === null || y0 - e.clientY > 40 || Math.abs(y0 - e.clientY) < 8) unlock(); y0 = null; });
-      var skip = false; try { skip = /[?&]app=/.test(location.search); } catch (e) {}   // every visit starts at the lock screen
+      var skip = false; try { skip = sessionStorage.getItem('unlocked') === '1' || /[?&]app=/.test(location.search); } catch (e) {}   // lock screen only on the first entry of a visit
       if (skip) unlock(true);
       window.addEventListener('popstate', function () { if (stack.length) close(true); });
       var m = /[?&]app=([a-z]+)/.exec(location.search);
@@ -541,6 +562,7 @@
     }
     function unlock(instant) {
       if (unlocked) return; unlocked = true;
+      try { sessionStorage.setItem('unlocked', '1'); } catch (e) {}
       function go() {
         lock.classList.add('up'); home.hidden = false;
         setTimeout(function () { lock.remove(); }, (instant || reduced) ? 0 : 400);
@@ -588,7 +610,14 @@
 
   // ============================================================ kick-off (after all apps are defined)
   if (PHONE) { boot.remove(); desktop.remove(); phone.init(); }
-  else if (skipBoot) { boot.remove(); desktop.hidden = false; initDesktop(); wave.start('live'); caption.arm(); }
+  else if (skipBoot) {
+    boot.remove();
+    if (langSwap) desktop.classList.add('swap', 'swap-in');   // start off-screen right / flipped, then settle
+    desktop.hidden = false; initDesktop(); wave.start('live');
+    var saved = null; try { saved = JSON.parse(sessionStorage.getItem('track') || 'null'); sessionStorage.removeItem('track'); } catch (e) {}
+    if (saved && saved.id) player.restore(saved); caption.arm();
+    if (langSwap) { var settle = function () { if (!desktop.classList.contains('swap-in')) return; desktop.classList.remove('swap-in'); setTimeout(function () { desktop.classList.remove('swap'); }, 900); }; requestAnimationFrame(function () { requestAnimationFrame(settle); }); setTimeout(settle, 80); }   // settle on the next frame (timer fallback for throttled tabs)
+  }
   else {
     fx.boot();   // boot-screen sound (falls back to the boot click if the browser blocks it)
     runBoot(0);
