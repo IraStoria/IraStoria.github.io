@@ -88,7 +88,7 @@
     function connect(cb) { if (!cv) { cb(); return; } onConnected = cb; connectT0 = performance.now(); start('connect'); }
     return { start: start, connect: connect };
   }
-  var wave = makeWave($('#wave'), 0.58), phoneWave = makeWave($('#ph-wave'), 0.5);   // phone: dead centre
+  var wave = makeWave($('#wave'), 0.58), phoneWave = makeWave($('#ph-wave'), 0.44);  // phone: slightly above centre
 
   // caption: fades in over CONNECT_MS (same as the line), follows the current track
   var caption = (function () {
