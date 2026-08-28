@@ -196,7 +196,7 @@
   }
   function decayFactor(dtMs) { return Math.pow(DECAY_PER_SEC, dtMs / 1000); }   // frame-rate independent (real elapsed time, so a throttled tab catches up)
   function makeWave(cv, yRatio) {
-    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, CLEAR_MS = 1000;
+    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000;   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
     function grad(y0, y1, rgb, a0, a1) { var g = g2.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + rgb + ',' + a0 + ')'); g.addColorStop(1, 'rgba(' + rgb + ',' + a1 + ')'); return g; }
     function size() { if (cv.width !== cv.clientWidth || cv.height !== cv.clientHeight) { cv.width = cv.clientWidth; cv.height = cv.clientHeight; } }
     function ease(x) { return 1 - Math.pow(1 - x, 3); }
@@ -226,7 +226,7 @@
             gAmbR = grad(y, y + maxH * 0.45, '224,176,74', 0.16, 0), gGreyR = grad(y, y + maxH * 0.45, '96,104,122', 0.18, 0);
         // clearing sweep (right→left): after the line joins it touches the baseline only; on a track change it takes the bars with it
         var lpx = px;
-        if (clearT0) { var cp = (now - clearT0) / CLEAR_MS; if (cp >= 1) clearT0 = 0; else { var sx = W * (1 - ease(cp)); lpx = Math.max(px, sx); if (clearBars) px = Math.max(px, sx); } }
+        if (clearT0) { var cp = (now - clearT0) / CLEAR_MS; if (cp >= 1) clearT0 = 0; else { var sx = W * clearFrom * (1 - ease(cp)); lpx = Math.max(px, sx); if (clearBars) px = Math.max(px, sx); } }
         for (var i = 0; i < n; i++) {
           var target = lv[i];   // follows the real signal, so the fade-out and the bars fall together
           levels[i] = target > levels[i] ? target : Math.max(target, levels[i] * dk);
@@ -253,7 +253,7 @@
     }
     function start(m) { if (!cv) return; mode = m || 'idle'; if (!raf) draw(); }
     function connect(cb) { if (!cv) { cb(); return; } onConnected = cb; connectT0 = performance.now(); start('connect'); }
-    function sweep(bars) { clearT0 = performance.now(); clearBars = !!bars; }
+    function sweep(bars, fromFrac) { clearT0 = performance.now(); clearBars = !!bars; clearFrom = (fromFrac == null) ? 1 : Math.max(0, Math.min(1, fromFrac)); }
     return { start: start, connect: connect, sweep: sweep };
   }
   var wave = makeWave($('#wave'), 0.58), phoneWave = makeWave($('#ph-wave'), 0.47);  // phone: slightly above centre
@@ -524,8 +524,9 @@
       playing = false; refresh();
     }
     function load(i, autoplay) {
-      stopAll(true); var changed = cur >= 0 && cur !== i; cur = i; var t = list[i];   /* first load (boot) is not a track change: the boot sweep must stay line-only */
-      if (changed) trackListeners.forEach(function (fn) { try { fn(); } catch (e) {} });
+      var changed = cur >= 0 && cur !== i, fromFrac = changed ? (state().frac || 0) : 0;   /* capture the old play head before stopAll resets it: the sweep retracts from there */
+      stopAll(true); cur = i; var t = list[i];   /* first load (boot) is not a track change: the boot sweep must stay line-only */
+      if (changed) trackListeners.forEach(function (fn) { try { fn(fromFrac); } catch (e) {} });
       if (ui.ext) ui.ext.innerHTML = '';
       if (t.synth || (t.media && t.media.local)) {
         if (!t.synth) { if (!audio) { audio = new Audio(); audio.addEventListener('ended', function () { next(); }); } audio.src = '../' + t.media.local; }
@@ -630,7 +631,7 @@
     return { onTrack: function (fn) { trackListeners.push(fn); }, duck: duck, unduck: unduck, mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state, autoplay: autoplay, prepare: prepare, restore: restore, prev: prev, next: next, toggleMute: toggleMute, setVolume: setVolume,
              analyser: function () { return analyser; }, isPlaying: function () { return playing; } };
   })();
-  player.onTrack(function () { wave.sweep(true); phoneWave.sweep(true); });   // new track: sweep the amber off the line and the bars
+  player.onTrack(function (fromFrac) { wave.sweep(true, fromFrac); phoneWave.sweep(true, fromFrac); });   // new track: sweep the amber off the line and the bars
 
   // ============================================================ terminal app (playful nav)
   var terminal = (function () {
