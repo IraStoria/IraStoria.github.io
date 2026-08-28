@@ -56,13 +56,13 @@
 
   // ============================================================ background wave + now-playing caption
   var CONNECT_MS = 1100;
-  function makeWave(cv) {
+  function makeWave(cv, yRatio) {
     var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null;
     function size() { if (cv.width !== cv.clientWidth || cv.height !== cv.clientHeight) { cv.width = cv.clientWidth; cv.height = cv.clientHeight; } }
     function ease(x) { return 1 - Math.pow(1 - x, 3); }
     function draw() {
       raf = requestAnimationFrame(draw); size();
-      var W = cv.width, H = cv.height, y = H * 0.58; g2.clearRect(0, 0, W, H);
+      var W = cv.width, H = cv.height, y = H * yRatio; g2.clearRect(0, 0, W, H);
       g2.lineWidth = 2; g2.strokeStyle = 'rgba(224,176,74,.85)'; g2.shadowColor = 'rgba(224,176,74,.6)'; g2.shadowBlur = 12;
       if (mode === 'connect') {
         var p = Math.min(1, (performance.now() - connectT0) / CONNECT_MS), e = ease(p), half = W / 2 * e;
@@ -88,7 +88,7 @@
     function connect(cb) { if (!cv) { cb(); return; } onConnected = cb; connectT0 = performance.now(); start('connect'); }
     return { start: start, connect: connect };
   }
-  var wave = makeWave($('#wave')), phoneWave = makeWave($('#ph-wave'));
+  var wave = makeWave($('#wave'), 0.58), phoneWave = makeWave($('#ph-wave'), 0.5);   // phone: dead centre
 
   // caption: fades in over CONNECT_MS (same as the line), follows the current track
   var caption = (function () {
