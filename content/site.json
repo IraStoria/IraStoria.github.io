@@ -290,7 +290,7 @@
     "click": {
       "video": "assets/fx/click.mp4",
       "sound": "assets/fx/click.ogg",
-      "sound_at": 0.23,
+      "sound_at": 0.18,
       "sound_onset": 0.062,
       "width": 240,
       "opacity": 0.55,
