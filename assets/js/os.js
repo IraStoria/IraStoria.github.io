@@ -48,8 +48,9 @@
     var other = lang === 'zh' ? 'en' : 'zh';
     document.documentElement.lang = lang === 'zh' ? 'zh-Hant' : 'en'; document.body.setAttribute('data-lang', lang);
     document.title = D.site_name + ' · ' + D.tagline;
-    try { history.replaceState(null, '', location.pathname.replace(/\/(zh|en)\//, '/' + lang + '/') + '#desktop'); } catch (e) {}
+    try { history.replaceState(null, '', location.pathname.replace(/\/(zh|en)\//, '/' + lang + '/') + location.search + ((desktop && !desktop.hidden) ? '#desktop' : '')); } catch (e) {}   // keep #desktop only once the desktop is up (a refresh from the boot screen must boot again)
     var mid = $('.menubar-mid'); if (mid) mid.textContent = D.tagline;
+    if (bootContinue) bootContinue.textContent = U.boot_continue;
     if (sw) { sw.textContent = U.lang_switch; sw.setAttribute('href', '../' + other + '/'); sw.setAttribute('data-lang-switch', other); }
     TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, terminal: U.app_terminal };
     document.querySelectorAll('.icon[data-app]').forEach(function (b) { var t = b.querySelector('span:last-child'); if (t) t.textContent = TITLES[b.getAttribute('data-app')]; });
@@ -69,13 +70,14 @@
   var skipBoot = false;
   var langSwap = false;
   var navType = ''; try { navType = (performance.getEntriesByType('navigation')[0] || {}).type || ''; } catch (e) {}
-  try { skipBoot = (navType !== 'reload' && sessionStorage.getItem('booted') === '1') || location.hash === '#desktop' || /[?&]app=/.test(location.search); langSwap = sessionStorage.getItem('langswap') === '1'; if (langSwap) sessionStorage.removeItem('langswap'); } catch (e) {}   // a refresh always boots; coming back from a sub-page inside the same visit does not
-  var script = [
+  try { skipBoot = navType !== 'reload' && (sessionStorage.getItem('booted') === '1' || location.hash === '#desktop' || /[?&]app=/.test(location.search)); langSwap = sessionStorage.getItem('langswap') === '1'; if (langSwap) sessionStorage.removeItem('langswap'); } catch (e) {}   // a refresh always boots; coming back from a sub-page inside the same visit does not
+  function bootScript() { return [
     ['$ whoami', '> ' + D.author],
     ['$ cat about.md', '> ' + D.tagline + '\n  ' + D.hero_intro],
     ['$ ' + (lang === 'zh' ? 'echo "作曲 × 遊戲音訊 × 互動音樂"' : 'echo "music × game audio × interactive"'), '> <hl>' + (lang === 'zh' ? '讓音樂跟著玩家一起動' : 'make music move with the player') + '</hl>'],
     ['$ boot irastoria-os', '> ' + U.boot_1 + '\n> ' + U.boot_2 + '\n> ' + U.boot_3 + '\n> ' + U.boot_ready]
-  ];
+  ]; }
+  var script = [];
   // ============================================================ fx: click-to-enter video overlay + synced sound (IDEA-001 / feat.fx)
   var fx = (function () {
     var cfg = (D.fx && D.fx.click) || null, vid = null, snd = null, bootCfg = (D.fx && D.fx.boot) || null, bootSnd = null, bootPending = false;
@@ -127,13 +129,21 @@
   })();
 
   var done = false, powered = false, ready = false;
+  // language picker on the boot screen: switch in place (no animation); the boot text and the desktop then follow that language
+  (function () {
+    var bl = $('#boot-lang'); if (!bl) return;
+    function mark() { bl.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-l') === lang); }); }
+    mark();
+    bl.addEventListener('click', function (e) { var b = e.target.closest('button[data-l]'); if (!b || b.getAttribute('data-l') === lang || !ALT) return; applyLang(ALT); mark(); });
+  })();
   // power button: the click is the user gesture the browser needs → boot sound plays right here, then the terminal starts typing
   function powerOn() {
     if (powered) return; powered = true;
     fx.boot();
     if (bootBtn) bootBtn.hidden = true;
+    var bl = $('#boot-lang'); if (bl) bl.hidden = true;
     if (bootScreen) bootScreen.classList.remove('off');
-    runBoot(0);
+    script = bootScript(); runBoot(0);
   }
   function enterDesktop() {
     if (done || !ready) return; done = true;
