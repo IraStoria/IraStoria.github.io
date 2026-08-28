@@ -196,7 +196,9 @@
   }
   function decayFactor(dtMs) { return Math.pow(DECAY_PER_SEC, dtMs / 1000); }   // frame-rate independent (real elapsed time, so a throttled tab catches up)
   function makeWave(cv, yRatio) {
-    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1;
+    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, lastT0 = 0, glow = 1, tint = [], TINT_SEC = 1.6;
+    // grey (255,255,255,aG) → amber (224,176,74,aA) by t∈[0,1]
+    function mix(t, aG, aA) { return 'rgba(' + Math.round(255 + (224 - 255) * t) + ',' + Math.round(255 + (176 - 255) * t) + ',' + Math.round(255 + (74 - 255) * t) + ',' + (aG + (aA - aG) * t).toFixed(3) + ')'; }
     function size() { if (cv.width !== cv.clientWidth || cv.height !== cv.clientHeight) { cv.width = cv.clientWidth; cv.height = cv.clientHeight; } }
     function ease(x) { return 1 - Math.pow(1 - x, 3); }
     function draw() {
@@ -219,13 +221,17 @@
         g2.shadowBlur = 0;
         // the whole spectrum doubles as the progress bar: bars/baseline left of the play head are amber, the unplayed part is a quiet grey (frac frozen while paused)
         var st = player.state(), px = Math.round(W * Math.max(0, Math.min(1, st.frac || 0)));
+        if (tint.length !== n) tint = new Array(n).fill(0);
+        var tstep = (now - (lastT0 || now)) / 1000 / TINT_SEC; lastT0 = now;
         for (var i = 0; i < n; i++) {
           var target = lv[i];   // follows the real signal, so the fade-out and the bars fall together
           levels[i] = target > levels[i] ? target : Math.max(target, levels[i] * dk);
           var h = levels[i] * maxH, x = i * bw + 1; if (h > 0.5) any = true;
+          // each bar warms from grey to amber over TINT_SEC once the play head passes it (and cools back on seek/track change)
           var played = x + (bw - 2) / 2 <= px;
-          g2.fillStyle = played ? 'rgba(224,176,74,.75)' : 'rgba(255,255,255,.28)'; g2.fillRect(x, y - h, bw - 2, h);
-          g2.fillStyle = played ? 'rgba(224,176,74,.18)' : 'rgba(255,255,255,.07)'; g2.fillRect(x, y, bw - 2, h * 0.45);
+          tint[i] = played ? Math.min(1, tint[i] + tstep) : Math.max(0, tint[i] - tstep);
+          g2.fillStyle = mix(tint[i], 0.28, 0.75); g2.fillRect(x, y - h, bw - 2, h);
+          g2.fillStyle = mix(tint[i], 0.07, 0.18); g2.fillRect(x, y, bw - 2, h * 0.45);
         }
         // baseline glow eases between 'sound' (1) and 'silence' (.55) instead of snapping — no more glow dropping out when a track starts quietly
         glow += ((any ? 1 : 0.55) - glow) * 0.05;
