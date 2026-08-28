@@ -177,4 +177,8 @@ button{font:inherit;color:inherit}
 .np-ctl button{background:rgba(20,23,32,.75);border:1px solid var(--border);border-radius:999px;color:var(--fg);font-size:16px;line-height:1;padding:.4rem .75rem;cursor:pointer;backdrop-filter:blur(8px)}
 .np-ctl button:hover{background:rgba(255,255,255,.12)}
 .np-ctl .np-pp{color:var(--accent);min-width:2.6em}
+.np-ctl .np-mute{margin-left:6px;font-size:14px}.np-ctl .np-mute.on{color:var(--dim)}
+.player .ctl .mute{background:none;border:0;color:var(--fg);font-size:15px;cursor:pointer;padding:.2rem .3rem;margin-left:auto}
+.player .ctl .vol{width:80px;accent-color:var(--accent)}
+.ph-mini .mu{font-size:16px}
 @media(max-width:699px){.np-cap:not(.np-phone){top:auto;right:auto;text-align:left;bottom:70px;left:16px}.np-ctl{justify-content:flex-start}}

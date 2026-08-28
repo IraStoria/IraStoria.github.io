@@ -17,7 +17,7 @@
   // ============================================================ boot sequence
   var boot = $('#boot'), log = $('#boot-log'), bootBtn = $('#boot-btn'), bootHint = $('#boot-hint'), desktop = $('#desktop');
   var skipBoot = false;
-  try { skipBoot = sessionStorage.getItem('booted') === '1' || location.hash === '#desktop' || /[?&]app=/.test(location.search); } catch (e) {}
+  try { skipBoot = location.hash === '#desktop' || /[?&]app=/.test(location.search); } catch (e) {}   // every visit boots; only explicit deep links skip
   var script = [
     ['$ whoami', '> ' + D.author],
     ['$ cat about.md', '> ' + D.tagline + '\n  ' + D.hero_intro],
@@ -27,7 +27,6 @@
   var done = false;
   function enterDesktop() {
     if (done) return; done = true;
-    try { sessionStorage.setItem('booted', '1'); } catch (e) {}
     boot.classList.add('out');
     desktop.hidden = false;
     setTimeout(function () { boot.remove(); }, reduced ? 0 : 500);
@@ -104,7 +103,7 @@
   var caption = (function () {
     var els = [$('#np-desktop'), $('#np-phone')].filter(Boolean), timer = null, last = '';
     function refresh() {
-      var st = player.state(), key = st.title + '|' + (st.started ? 1 : 0) + '|' + (st.playing ? 1 : 0);
+      var st = player.state(), key = st.title + '|' + (st.started ? 1 : 0) + '|' + (st.playing ? 1 : 0) + '|' + (st.muted ? 1 : 0);
       if (key === last) return; last = key;
       els.forEach(function (el) {
         // desktop: visible as soon as a track is loaded (so the transport works even if autoplay was blocked); phone: only once started
@@ -112,6 +111,7 @@
         el.querySelector('.np-title').textContent = title; el.classList.toggle('show', !!title); el.classList.toggle('playing', st.playing);
         var pp = el.querySelector('.np-pp'); if (pp) pp.textContent = st.playing ? '❚❚' : '▶';
         var stt = el.querySelector('.np-state'); if (stt) stt.textContent = st.playing ? U.ph_now : U.ph_paused;
+        var mu = el.querySelector('.np-mute'); if (mu) { mu.textContent = st.muted ? '🔇' : '🔊'; mu.classList.toggle('on', st.muted); }
       });
     }
     // desktop caption doubles as a mini transport: pause / previous / next without opening the player window
@@ -120,6 +120,7 @@
       if (pp) pp.addEventListener('click', function () { player.toggle(); refresh(); });
       if (pv) pv.addEventListener('click', function () { player.prev(); refresh(); });
       if (nx) nx.addEventListener('click', function () { player.next(); refresh(); });
+      var mu = el.querySelector('.np-mute'); if (mu) mu.addEventListener('click', function () { player.toggleMute(); refresh(); });
       var t = el.querySelector('.np-title'); if (t && el.id === 'np-desktop') t.addEventListener('click', function () { openApp('player'); });
     });
     function arm() { player.prepare(); els.forEach(function (el) { el.style.transitionDuration = CONNECT_MS + 'ms'; }); if (!timer) timer = setInterval(refresh, 400); refresh(); }
@@ -272,15 +273,23 @@
     var placeholder = { id: '_synth', title: U.player_placeholder, desc: '', synth: true };
     var list = tracks.length ? tracks : [placeholder];
     var cur = -1, playing = false, started = false, audio = null, actx = null, analyser = null, synth = null, synthStart = 0, SYNTH_LEN = 24;
-    var body, ui = {}, raf, timeTimer = null, vizLevels = [], vizLastT = 0, master = null;
+    var body, ui = {}, raf, timeTimer = null, vizLevels = [], vizLastT = 0, master = null, out = null;
+    var vol = 1, muted = false;   // persisted in localStorage — the only thing remembered between visits
+    try { var lv = parseFloat(localStorage.getItem('vol')); if (lv >= 0 && lv <= 1) vol = lv; muted = localStorage.getItem('muted') === '1'; } catch (e) {}
+    function applyOut() { if (out) out.gain.setTargetAtTime(muted ? 0 : vol, actx.currentTime, 0.02); }
+    function setVolume(v) { vol = Math.max(0, Math.min(1, +v || 0)); if (vol > 0) muted = false; try { localStorage.setItem('vol', String(vol)); localStorage.setItem('muted', muted ? '1' : '0'); } catch (e) {} applyOut(); refresh(); }
+    function setMuted(m) { muted = !!m; try { localStorage.setItem('muted', muted ? '1' : '0'); } catch (e) {} applyOut(); refresh(); }
+    function toggleMute() { setMuted(!muted); }
 
     function mount(b) {
       body = b;
       body.innerHTML = '<div class="player"><div class="art"><canvas id="pl-viz"></canvas><div class="np">' + esc(U.player_now) + '<b id="pl-title">—</b><span id="pl-sub"></span></div></div>' +
-        '<div class="ctl"><button id="pl-prev">⏮</button><button class="play" id="pl-play">▶</button><button id="pl-next">⏭</button><div class="seek" id="pl-seek"><i></i></div><span class="time" id="pl-time">0:00 / 0:00</span></div>' +
+        '<div class="ctl"><button id="pl-prev">⏮</button><button class="play" id="pl-play">▶</button><button id="pl-next">⏭</button><div class="seek" id="pl-seek"><i></i></div><span class="time" id="pl-time">0:00 / 0:00</span><button class="mute" id="pl-mute" aria-label="mute"></button><input type="range" class="vol" id="pl-vol" min="0" max="1" step="0.01" aria-label="volume"></div>' +
         '<div id="pl-ext"></div><ul class="list pl" id="pl-list">' + list.map(function (t, i) { return '<li data-i="' + i + '"><span class="meta">' + ('0' + (i + 1)).slice(-2) + '</span><div><div class="t">' + esc(t.title) + '</div><div class="d">' + esc(t.desc || '') + '</div></div></li>'; }).join('') + '</ul>' +
         (tracks.length ? '' : '<p class="note">' + esc(U.player_empty) + '</p>') + '</div>';
-      ui = { title: $('#pl-title', body), sub: $('#pl-sub', body), play: $('#pl-play', body), seek: $('#pl-seek', body), bar: $('#pl-seek i', body), time: $('#pl-time', body), ext: $('#pl-ext', body), list: $('#pl-list', body), viz: $('#pl-viz', body) };
+      ui = { title: $('#pl-title', body), sub: $('#pl-sub', body), play: $('#pl-play', body), seek: $('#pl-seek', body), bar: $('#pl-seek i', body), time: $('#pl-time', body), ext: $('#pl-ext', body), list: $('#pl-list', body), viz: $('#pl-viz', body), mute: $('#pl-mute', body), vol: $('#pl-vol', body) };
+      ui.mute.addEventListener('click', toggleMute);
+      ui.vol.addEventListener('input', function () { setVolume(ui.vol.value); });
       ui.play.addEventListener('click', toggle);
       $('#pl-prev', body).addEventListener('click', prev);
       $('#pl-next', body).addEventListener('click', next);
@@ -289,7 +298,7 @@
       if (cur < 0) load(0, false); else refresh();
       draw(); if (!timeTimer) timeTimer = setInterval(tickTime, 250); tickTime();
     }
-    function ensureCtx() { if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); analyser = actx.createAnalyser(); analyser.fftSize = 512; analyser.connect(actx.destination); master = actx.createGain(); master.connect(analyser); } if (actx.state === 'suspended') actx.resume(); }
+    function ensureCtx() { if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); analyser = actx.createAnalyser(); analyser.fftSize = 512; out = actx.createGain(); out.gain.value = muted ? 0 : vol; analyser.connect(out); out.connect(actx.destination); master = actx.createGain(); master.connect(analyser); } /* analyser sits before the volume stage so the bars keep moving while muted */ if (actx.state === 'suspended') actx.resume(); }
     var fadeTimer = null, pausedAt = null;   // position at the moment pause was pressed (the fade tail must not count as progress)
     function rampDown(g) { g.gain.cancelScheduledValues(0); g.gain.setValueAtTime(Math.max(g.gain.value, 0.0001), actx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + FADE_SEC); }
     function stopAll(immediate) {
@@ -350,6 +359,7 @@
       if (!body) return; var t = list[cur] || {};
       ui.title.textContent = t.title || '—'; ui.sub.textContent = t.synth ? 'Web Audio · generative' : (t.year || '');
       ui.play.textContent = playing ? '❚❚' : '▶';
+      if (ui.mute) { ui.mute.textContent = (muted || vol === 0) ? '🔇' : (vol < 0.5 ? '🔉' : '🔊'); ui.vol.value = muted ? 0 : vol; }
       ui.list.querySelectorAll('li').forEach(function (li) { li.classList.toggle('on', +li.dataset.i === cur); });
     }
     function draw() {
@@ -376,15 +386,16 @@
     }
     function state() {
       var t = list[cur] || {}; var pos = 0, dur = 0;
+      var mutedNow = muted || vol === 0;
       if (t.synth && playing && actx) { pos = (actx.currentTime - synthStart) % SYNTH_LEN; dur = SYNTH_LEN; }
       else if (audio && !t.synth) { pos = pausedAt !== null ? pausedAt : audio.currentTime; dur = audio.duration || 0; }
-      return { title: t.title || '', playing: playing, started: cur >= 0 && (started || playing || pos > 0), frac: dur ? pos / dur : 0 };
+      return { title: t.title || '', playing: playing, started: cur >= 0 && (started || playing || pos > 0), frac: dur ? pos / dur : 0, muted: mutedNow, vol: vol };
     }
     function autoplay() { ensureCtx(); if (cur < 0) load(0, false); if (!playing) play(); }
     function prepare() { if (cur < 0) load(0, false); }   // load first track silently so the desktop transport has something to show
     function prev() { load((cur - 1 + list.length) % list.length, true); }
     function next() { load((cur + 1) % list.length, true); }
-    return { mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state, autoplay: autoplay, prepare: prepare, prev: prev, next: next,
+    return { mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state, autoplay: autoplay, prepare: prepare, prev: prev, next: next, toggleMute: toggleMute, setVolume: setVolume,
              analyser: function () { return analyser; }, isPlaying: function () { return playing; } };
   })();
 
@@ -443,7 +454,7 @@
       var y0 = null;
       lock.addEventListener('pointerdown', function (e) { y0 = e.clientY; });
       lock.addEventListener('pointerup', function (e) { if (y0 === null || y0 - e.clientY > 40 || Math.abs(y0 - e.clientY) < 8) unlock(); y0 = null; });
-      var skip = false; try { skip = sessionStorage.getItem('unlocked') === '1' || /[?&]app=/.test(location.search); } catch (e) {}
+      var skip = false; try { skip = /[?&]app=/.test(location.search); } catch (e) {}   // every visit starts at the lock screen
       if (skip) unlock(true);
       window.addEventListener('popstate', function () { if (stack.length) close(true); });
       var m = /[?&]app=([a-z]+)/.exec(location.search);
@@ -451,7 +462,6 @@
     }
     function unlock(instant) {
       if (unlocked) return; unlocked = true;
-      try { sessionStorage.setItem('unlocked', '1'); } catch (e) {}
       lock.classList.add('up'); home.hidden = false;
       setTimeout(function () { lock.remove(); }, (instant || reduced) ? 0 : 400);
       if (instant) { phoneWave.start('live'); caption.arm(); }
@@ -481,12 +491,13 @@
       mini.hidden = !showing;
       if (showing) {
         if (!mini.firstChild) {
-          mini.innerHTML = '<div class="art">♪</div><div class="info"><b></b><span></span></div><button class="pp"></button><button class="up">⌃</button><div class="prog"><i></i></div>';
+          mini.innerHTML = '<div class="art">♪</div><div class="info"><b></b><span></span></div><button class="pp"></button><button class="mu"></button><button class="up">⌃</button><div class="prog"><i></i></div>';
           $('.pp', mini).addEventListener('click', function () { player.toggle(); updateMini(); });
           $('.up', mini).addEventListener('click', function () { open('player'); });
+          $('.mu', mini).addEventListener('click', function () { player.toggleMute(); updateMini(); });
         }
         $('.info b', mini).textContent = st.title; $('.info span', mini).textContent = st.playing ? U.ph_now : U.ph_paused;
-        $('.pp', mini).textContent = st.playing ? '❚❚' : '▶'; $('.prog i', mini).style.width = (st.frac * 100) + '%';
+        $('.pp', mini).textContent = st.playing ? '❚❚' : '▶'; $('.mu', mini).textContent = st.muted ? '🔇' : '🔊'; $('.prog i', mini).style.width = (st.frac * 100) + '%';
         if (!miniTimer) miniTimer = setInterval(updateMini, 500);
       } else if (miniTimer) { clearInterval(miniTimer); miniTimer = null; }
     }
