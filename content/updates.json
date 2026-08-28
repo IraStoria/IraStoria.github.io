@@ -6,16 +6,6 @@
   },
   {
     "date": "2026-08-28",
-    "zh": "開機彩蛋上線（黑貓＋音效），桌面改成黑底→音量線→慢慢亮起。",
-    "en": "Boot easter egg is live (black cat + sound); the desktop now reveals black → line → slow fade-in."
-  },
-  {
-    "date": "2026-08-28",
-    "zh": "桌面右下新增迷你播放控制：暫停／切曲／靜音，不用開播放器。",
-    "en": "Mini transport at the lower right: pause, skip, mute — no need to open the player."
-  },
-  {
-    "date": "2026-08-28",
     "zh": "互動式段落播放器（測試版）與 Transition 概念展示可在「互動展示」試玩。",
     "en": "The Interactive Section Player (test build) and the Transition demo are playable under Demos."
   }

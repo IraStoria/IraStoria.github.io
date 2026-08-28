@@ -217,16 +217,20 @@
         var lv = barLevels(an, n);
         if (levels.length !== n) levels = new Array(n).fill(0);
         g2.shadowBlur = 0;
+        // the whole spectrum doubles as the progress bar: bars/baseline left of the play head are amber, the unplayed part is a quiet grey (frac frozen while paused)
+        var st = player.state(), px = Math.round(W * Math.max(0, Math.min(1, st.frac || 0)));
         for (var i = 0; i < n; i++) {
           var target = lv[i];   // follows the real signal, so the fade-out and the bars fall together
           levels[i] = target > levels[i] ? target : Math.max(target, levels[i] * dk);
           var h = levels[i] * maxH, x = i * bw + 1; if (h > 0.5) any = true;
-          g2.fillStyle = 'rgba(224,176,74,.75)'; g2.fillRect(x, y - h, bw - 2, h);
-          g2.fillStyle = 'rgba(224,176,74,.18)'; g2.fillRect(x, y, bw - 2, h * 0.45);
+          var played = x + (bw - 2) / 2 <= px;
+          g2.fillStyle = played ? 'rgba(224,176,74,.75)' : 'rgba(255,255,255,.28)'; g2.fillRect(x, y - h, bw - 2, h);
+          g2.fillStyle = played ? 'rgba(224,176,74,.18)' : 'rgba(255,255,255,.07)'; g2.fillRect(x, y, bw - 2, h * 0.45);
         }
         // baseline glow eases between 'sound' (1) and 'silence' (.55) instead of snapping — no more glow dropping out when a track starts quietly
         glow += ((any ? 1 : 0.55) - glow) * 0.05;
-        g2.strokeStyle = 'rgba(224,176,74,' + (0.28 + 0.62 * glow).toFixed(3) + ')'; g2.shadowColor = 'rgba(224,176,74,.6)'; g2.shadowBlur = 12 * glow; g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
+        g2.strokeStyle = 'rgba(224,176,74,' + (0.28 + 0.62 * glow).toFixed(3) + ')'; g2.shadowColor = 'rgba(224,176,74,.6)'; g2.shadowBlur = 12 * glow; g2.beginPath(); g2.moveTo(0, y); g2.lineTo(px, y); g2.stroke();
+        if (px < W) { g2.strokeStyle = 'rgba(255,255,255,.22)'; g2.shadowBlur = 0; g2.beginPath(); g2.moveTo(px, y); g2.lineTo(W, y); g2.stroke(); }
       } else {
         g2.strokeStyle = 'rgba(224,176,74,.28)'; g2.shadowBlur = 0;
         g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
