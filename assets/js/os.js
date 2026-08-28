@@ -55,13 +55,15 @@
   }
 
   // ============================================================ background wave + now-playing caption
-  var CONNECT_MS = 1100, DECAY = 0.955;   // bar fall-off per frame when paused (~1 s to silence)
+  var CONNECT_MS = 1100, DECAY_PER_SEC = 0.3, FADE_SEC = 1.5;   // bars keep 30%/s when paused (~3.5 s to silence); audio fades out over FADE_SEC on pause
+  function decayFactor(dtMs) { return Math.pow(DECAY_PER_SEC, dtMs / 1000); }   // frame-rate independent (real elapsed time, so a throttled tab catches up)
   function makeWave(cv, yRatio) {
-    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [];
+    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0;
     function size() { if (cv.width !== cv.clientWidth || cv.height !== cv.clientHeight) { cv.width = cv.clientWidth; cv.height = cv.clientHeight; } }
     function ease(x) { return 1 - Math.pow(1 - x, 3); }
     function draw() {
       raf = requestAnimationFrame(draw); size();
+      var now = performance.now(), dk = decayFactor(lastT ? now - lastT : 16); lastT = now;
       var W = cv.width, H = cv.height, y = H * yRatio; g2.clearRect(0, 0, W, H);
       g2.lineWidth = 2; g2.strokeStyle = 'rgba(224,176,74,.85)'; g2.shadowColor = 'rgba(224,176,74,.6)'; g2.shadowBlur = 12;
       if (mode === 'connect') {
@@ -80,8 +82,8 @@
         for (var i = 0; i < n; i++) {
           var lo = Math.floor(Math.pow(data.length, i / n)), hi = Math.max(lo + 1, Math.floor(Math.pow(data.length, (i + 1) / n))), m = 0;
           for (var b = lo; b < hi && b < data.length; b++) m = Math.max(m, data[b]);
-          var target = player.isPlaying() ? m / 255 : 0;
-          levels[i] = target > levels[i] ? target : Math.max(target, levels[i] * DECAY);
+          var target = m / 255;   // follows the real signal, so the fade-out and the bars fall together
+          levels[i] = target > levels[i] ? target : Math.max(target, levels[i] * dk);
           var h = levels[i] * maxH, x = i * bw + 1; if (h > 0.5) any = true;
           g2.fillStyle = 'rgba(224,176,74,.75)'; g2.fillRect(x, y - h, bw - 2, h);
           g2.fillStyle = 'rgba(224,176,74,.18)'; g2.fillRect(x, y, bw - 2, h * 0.45);
@@ -161,7 +163,7 @@
     updateDock();
   }
   function minimize(app) { var w = wins[app]; if (w) { w.classList.add('minimized'); w.classList.remove('focus'); } updateDock(); }
-  function closeApp(app) { var w = wins[app]; if (!w) return; if (app === 'player' && player) player.stop(); w.remove(); delete wins[app]; updateDock(); }
+  function closeApp(app) { var w = wins[app]; if (!w) return; if (app === 'player' && player) player.stop(true); w.remove(); delete wins[app]; updateDock(); }
   function focus(w) {
     Object.keys(wins).forEach(function (k) { wins[k].classList.remove('focus'); });
     w.classList.add('focus'); w.style.zIndex = ++z;
@@ -270,7 +272,7 @@
     var placeholder = { id: '_synth', title: U.player_placeholder, desc: '', synth: true };
     var list = tracks.length ? tracks : [placeholder];
     var cur = -1, playing = false, started = false, audio = null, actx = null, analyser = null, synth = null, synthStart = 0, SYNTH_LEN = 24;
-    var body, ui = {}, raf, timeTimer = null, vizLevels = [];
+    var body, ui = {}, raf, timeTimer = null, vizLevels = [], vizLastT = 0, master = null;
 
     function mount(b) {
       body = b;
@@ -287,19 +289,24 @@
       if (cur < 0) load(0, false); else refresh();
       draw(); if (!timeTimer) timeTimer = setInterval(tickTime, 250); tickTime();
     }
-    function ensureCtx() { if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); analyser = actx.createAnalyser(); analyser.fftSize = 512; analyser.connect(actx.destination); } if (actx.state === 'suspended') actx.resume(); }
-    function stopAll() {
-      if (audio) { audio.pause(); }
+    function ensureCtx() { if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); analyser = actx.createAnalyser(); analyser.fftSize = 512; analyser.connect(actx.destination); master = actx.createGain(); master.connect(analyser); } if (actx.state === 'suspended') actx.resume(); }
+    var fadeTimer = null;
+    function rampDown(g) { g.gain.cancelScheduledValues(0); g.gain.setValueAtTime(Math.max(g.gain.value, 0.0001), actx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + FADE_SEC); }
+    function stopAll(immediate) {
+      if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = null; }
+      if (audio && !audio.paused) {
+        if (immediate || !master) audio.pause();
+        else { rampDown(master); var a = audio; fadeTimer = setTimeout(function () { a.pause(); fadeTimer = null; }, FADE_SEC * 1000 + 50); }   // pause after the fade so the bars follow the sound down
+      }
       if (synth) {
         var sg = synth.gain, nodes = synth.nodes; synth = null;
-        sg.gain.cancelScheduledValues(0); sg.gain.setValueAtTime(Math.max(sg.gain.value, 0.0001), actx.currentTime);
-        sg.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + 0.4);
-        setTimeout(function () { nodes.forEach(function (n) { try { n.stop(); } catch (e) {} }); }, 450);
+        if (immediate) sg.gain.setValueAtTime(0.0001, actx.currentTime); else rampDown(sg);
+        setTimeout(function () { nodes.forEach(function (n) { try { n.stop(); } catch (e) {} }); }, immediate ? 0 : FADE_SEC * 1000 + 50);
       }
       playing = false; refresh();
     }
     function load(i, autoplay) {
-      stopAll(); cur = i; var t = list[i];
+      stopAll(true); cur = i; var t = list[i];
       if (ui.ext) ui.ext.innerHTML = '';
       if (t.synth || (t.media && t.media.local)) {
         if (!t.synth) { if (!audio) { audio = new Audio(); audio.addEventListener('ended', function () { load((cur + 1) % list.length, true); }); } audio.src = '../' + t.media.local; }
@@ -315,7 +322,9 @@
       ensureCtx();
       if (t.synth) { startSynth(); }
       else if (t.media && t.media.local) {
-        if (!audio._wired) { var s = actx.createMediaElementSource(audio); s.connect(analyser); audio._wired = true; }
+        if (!audio._wired) { var s = actx.createMediaElementSource(audio); s.connect(master); audio._wired = true; }
+        if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = null; }
+        master.gain.cancelScheduledValues(0); master.gain.setValueAtTime(1, actx.currentTime);
         audio.play();
       } else return;
       playing = true; started = true; refresh();
@@ -345,6 +354,7 @@
     function draw() {
       if (!body || !document.contains(body)) return;
       raf = requestAnimationFrame(draw);
+      var nowT = performance.now(), dk = decayFactor(vizLastT ? nowT - vizLastT : 16); vizLastT = nowT;
       var c = ui.viz, g2 = c.getContext('2d'); if (c.width !== c.clientWidth) { c.width = c.clientWidth; c.height = c.clientHeight; }
       g2.clearRect(0, 0, c.width, c.height);
       if (analyser) {
@@ -352,7 +362,7 @@
         var n = 64, bw = c.width / n; g2.fillStyle = 'rgba(224,176,74,.55)';
         if (vizLevels.length !== n) vizLevels = new Array(n).fill(0);
         for (var i = 0; i < n; i++) { var lo = Math.floor(Math.pow(data.length, i / n)), hi = Math.max(lo + 1, Math.floor(Math.pow(data.length, (i + 1) / n))), m = 0; for (var b = lo; b < hi && b < data.length; b++) m = Math.max(m, data[b]);
-          var tg = playing ? m / 255 : 0; vizLevels[i] = tg > vizLevels[i] ? tg : Math.max(tg, vizLevels[i] * DECAY);
+          var tg = m / 255; vizLevels[i] = tg > vizLevels[i] ? tg : Math.max(tg, vizLevels[i] * dk);
           var h = vizLevels[i] * c.height; g2.fillRect(i * bw, c.height - h, bw - 1, h); }
       }
     }
