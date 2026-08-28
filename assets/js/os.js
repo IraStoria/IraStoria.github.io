@@ -26,14 +26,24 @@
   ];
   // ============================================================ fx: click-to-enter video overlay + synced sound (IDEA-001 / feat.fx)
   var fx = (function () {
-    var cfg = (D.fx && D.fx.click) || null, vid = null, snd = null;
+    var cfg = (D.fx && D.fx.click) || null, vid = null, snd = null, bootCfg = (D.fx && D.fx.boot) || null, bootSnd = null, bootPending = false;
     if (cfg && cfg.video && !reduced) { vid = document.createElement('video'); vid.src = '../' + cfg.video; vid.muted = true; vid.playsInline = true; vid.preload = 'auto'; vid.className = 'fx-clip'; vid.setAttribute('aria-hidden', 'true'); vid.load(); }
     if (cfg && cfg.sound) { snd = new Audio('../' + cfg.sound); snd.preload = 'auto'; snd.load(); }
+    if (bootCfg && bootCfg.sound) { bootSnd = new Audio('../' + bootCfg.sound); bootSnd.preload = 'auto'; bootSnd.load(); }
+    // boot sound: try the moment the boot screen appears; browsers block sound before the first gesture, so if refused we play it on the boot click instead
+    function boot() {
+      if (!bootSnd || muted()) return;
+      bootSnd.volume = volume(); bootSnd.currentTime = 0;
+      var p = bootSnd.play(); if (p && p.catch) p.catch(function () { bootPending = true; });
+    }
+    function bootOnGesture() { if (bootPending && bootSnd && !muted()) { bootPending = false; try { bootSnd.volume = volume(); bootSnd.currentTime = 0; bootSnd.play().catch(function () {}); } catch (e) {} } }
     function muted() { try { return localStorage.getItem('muted') === '1'; } catch (e) { return false; } }
     function volume() { try { var v = parseFloat(localStorage.getItem('vol')); return (v >= 0 && v <= 1) ? v : 1; } catch (e) { return 1; } }
     function playSnd() { if (snd && !muted()) { try { snd.volume = volume(); snd.currentTime = 0; snd.play().catch(function () {}); } catch (e) {} } }
     function click(cb) {
       cb = cb || function () {};
+      bootOnGesture();
+      if (cfg && cfg.chance != null && Math.random() >= cfg.chance) { cb(); return; }   // easter egg only fires with probability `chance`
       if (!cfg || !vid) { playSnd(); cb(); return; }
       var doneCb = false, sndDone = false, raf = null;
       var sndAt = Math.max(0, (cfg.sound_at || 0) - (cfg.sound_onset || 0));
@@ -61,7 +71,7 @@
         else { vid.remove(); setTimeout(origCb, hold); }
       };
     }
-    return { click: click };
+    return { click: click, boot: boot };
   })();
 
   var done = false;
@@ -173,13 +183,20 @@
 
   // ============================================================ desktop
   var wins = {}, z = 20, dock = $('#dock'), windowsEl = $('#windows');
-  var APPS = ['works', 'demos', 'player', 'articles', 'about', 'terminal', 'updates'];
-  var TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, terminal: U.app_terminal, updates: U.app_updates };
+  var APPS = ['works', 'demos', 'player', 'articles', 'about', 'terminal'];
+  var TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, terminal: U.app_terminal };
   var PAGES = { works: 'works/', demos: 'demos/', articles: 'articles/', about: 'about/' };
-  var GLYPH = { works: '🎼', demos: '🎛️', player: '▶️', articles: '📝', about: '👤', terminal: '⌨️', updates: '💬' };
+  var GLYPH = { works: '🎼', demos: '🎛️', player: '▶️', articles: '📝', about: '👤', terminal: '⌨️' };
 
   function initDesktop() {
     if (initDesktop.did) return; initDesktop.did = true;
+    // recent-updates panel (fixed, translucent, lower-left): hover darkens it, × hides it for this visit
+    var upd = $('#updates'), updLog = $('#upd-log');
+    if (upd && updLog) {
+      var list = D.updates || [];
+      updLog.innerHTML = list.length ? list.map(function (u) { return '<div class="msg"><time>' + esc(u.date) + '</time><p>' + esc(u.text) + '</p></div>'; }).join('') : '<p class="note">' + esc(U.updates_empty) + '</p>';
+      $('#upd-hide').addEventListener('click', function () { upd.hidden = true; });
+    }
     // clock
     var clock = $('#clock');
     (function tick() { var d = new Date(); clock.textContent = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); setTimeout(tick, 15000); })();
@@ -195,7 +212,6 @@
     // deep link ?app=works
     var m = /[?&]app=([a-z]+)/.exec(location.search);
     if (m && APPS.indexOf(m[1]) >= 0) openApp(m[1]);
-    else if (!isMobile()) setTimeout(function () { openApp('updates'); }, reduced ? 0 : 400);   // default: the little 'recent updates' chat window
     updateDock();
   }
 
@@ -225,11 +241,10 @@
   var spawn = 0;
   function createWindow(app) {
     var w = document.createElement('section'); w.className = 'win'; w.setAttribute('data-app', app); w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', TITLES[app]);
-    var size = { works: [560, 520], demos: [520, 420], player: [400, 520], articles: [480, 380], about: [520, 460], terminal: [560, 380], updates: [330, 300] }[app];
+    var size = { works: [560, 520], demos: [520, 420], player: [400, 520], articles: [480, 380], about: [520, 460], terminal: [560, 380] }[app];
     var vw = window.innerWidth, vh = window.innerHeight - 30;
     var W = Math.min(size[0], vw - 24), H = Math.min(size[1], vh - 100);
     var x = Math.max(110, Math.min(vw - W - 20, 140 + (spawn % 5) * 40)), y = Math.max(8, Math.min(vh - H - 90, 30 + (spawn % 5) * 32)); spawn++;
-    if (app === 'updates') { x = vw - W - 16; y = vh - H - 70; w.classList.add('chat'); }   // sits in the lower-right corner like a chat widget
     w.style.cssText = 'left:' + x + 'px;top:' + y + 'px;width:' + W + 'px;height:' + H + 'px;z-index:' + (++z);
     w.innerHTML = '<div class="win-bar"><span class="dots"><button class="close" title="' + esc(U.win_close) + '"></button><button class="min" title="' + esc(U.win_min) + '"></button><button class="max"></button></span>' +
       '<span class="win-title">' + GLYPH[app] + ' ' + esc(TITLES[app]) + '</span></div><div class="win-body"></div>' +
@@ -283,12 +298,6 @@
   }
 
   var RENDER = {
-    updates: function (body) {
-      var list = D.updates || [];
-      body.innerHTML = '<div class="chat-log">' + (list.length ? list.map(function (u) {
-        return '<div class="msg"><time>' + esc(u.date) + '</time><p>' + esc(u.text) + '</p></div>';
-      }).join('') : '<p class="note">' + esc(U.updates_empty) + '</p>') + '</div>';
-    },
     works: function (body) {
       var types = ['music', 'game', 'tool', 'demo'].filter(function (t) { return D.works.some(function (w) { return w.type === t; }); });
       body.innerHTML = '<div class="filter"><button class="on" data-f="all">' + esc(U.filter_all) + '</button>' + types.map(function (t) { return '<button data-f="' + t + '">' + esc(U['type_' + t]) + '</button>'; }).join('') + '</div>' +
@@ -571,6 +580,7 @@
   if (PHONE) { boot.remove(); desktop.remove(); phone.init(); }
   else if (skipBoot) { boot.remove(); desktop.hidden = false; initDesktop(); wave.start('live'); caption.arm(); }
   else {
+    fx.boot();   // boot-screen sound (falls back to the boot click if the browser blocks it)
     runBoot(0);
     bootBtn.addEventListener('click', enterDesktop);
     boot.addEventListener('click', function (e) { if (e.target !== bootBtn) enterDesktop(); });

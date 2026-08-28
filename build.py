@@ -446,7 +446,7 @@ def build_pages(site, works, demos, articles):
                     "meta_desc": esc(site["hero_intro"][lang]), "author": esc(site["author"][lang]), "hero_intro": esc(site["hero_intro"][lang]),
                     "lang_switch": L("lang_switch"), "sticky": L("sticky"), "site_data": site_json}
         home_ctx.update(asset_versions())
-        for k in ("boot_enter", "boot_hint", "os_name", "app_works", "app_demos", "app_articles", "app_about", "app_player", "app_terminal", "desk_hint", "ph_unlock", "ph_lock_line", "player_now"):
+        for k in ("boot_enter", "boot_hint", "os_name", "app_works", "app_demos", "app_articles", "app_about", "app_player", "app_terminal", "desk_hint", "ph_unlock", "ph_lock_line", "player_now", "app_updates", "updates_hide"):
             home_ctx["ui_" + k] = L(k)
         out[f"{lang}/index.html"] = render(tpl("desktop"), home_ctx)
 

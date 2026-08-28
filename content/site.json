@@ -270,6 +270,10 @@
     "updates_empty": {
       "zh": "目前沒有更新。",
       "en": "No updates yet."
+    },
+    "updates_hide": {
+      "zh": "隱藏",
+      "en": "Hide"
     }
   },
   "about_body": {
@@ -286,16 +290,21 @@
     "click": {
       "video": "assets/fx/click.mp4",
       "sound": "assets/fx/click.ogg",
-      "sound_at": 0.28,
+      "sound_at": 0.23,
       "sound_onset": 0.062,
       "width": 240,
       "opacity": 0.55,
-      "_note": "click-to-enter easter egg. anchor=screen-right: inside the boot laptop's terminal screen, inset px from its right edge, anchor_y = vertical position as a fraction of the screen height. sound_at = video time where the sound's onset lands. clip plays → vanishes instantly (vanish:cut) → after_ms → desktop loads.",
+      "_note": "click-to-enter easter egg (fires with probability `chance`). anchor=screen-right: inside the boot laptop's terminal screen, inset px from its right edge, anchor_y = vertical position as a fraction of the screen height. sound_at = video time where the sound's onset lands. clip plays → vanishes instantly (vanish:cut) → after_ms → desktop loads.",
       "after_ms": 600,
       "anchor": "screen-right",
       "inset": 140,
       "anchor_y": 0.7,
-      "vanish": "cut"
+      "vanish": "cut",
+      "chance": 0.3
+    },
+    "boot": {
+      "sound": "assets/fx/open.ogg",
+      "_note": "plays when the boot screen appears IF the browser allows sound without a gesture (returning visitors / engaged origins); otherwise it plays on the boot click instead"
     }
   }
 }
