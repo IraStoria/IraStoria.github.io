@@ -297,7 +297,7 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .ph-ls{position:absolute;right:16px;bottom:calc(128px + env(safe-area-inset-bottom));z-index:3;font:13px var(--mono);gap:.5rem}
 .ph-ls .ls-track{width:58px;height:32px}.ph-ls .ls-knob{width:26px;height:26px;top:2px;left:2px}
 body[data-lang="zh"] .ph-ls .ls-knob{transform:translateX(26px)}
-.ph-hero{padding-bottom:96px}
+.ph-hero{padding-bottom:150px;text-align:center}.ph-hero span{display:block;text-align:center}
 /* transport icons: inline SVG pairs (no emoji / dingbats); play<->pause follows .np-cap.playing, sound<->muted follows .np-mute.on */
 .np-ctl button{display:inline-flex;align-items:center;justify-content:center;min-width:2.6em}
 .np-ctl svg{width:1.05em;height:1.05em;fill:currentColor;display:block}

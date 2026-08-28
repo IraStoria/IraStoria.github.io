@@ -291,14 +291,14 @@
 
   // caption: fades in over CONNECT_MS (same as the line), follows the current track
   var caption = (function () {
-    var els = [$('#np-desktop'), $('#np-phone')].filter(Boolean), timer = null, last = '', sliding = false;
+    var els = [PHONE ? $('#np-phone') : $('#np-desktop')].filter(Boolean), timer = null, last = '', sliding = false;   /* only this shell's caption: the other one would grab the shared `sliding` flag and block the slide */
     function refresh() {
       var st = ext.state(), key = st.title + '|' + (st.started ? 1 : 0) + '|' + (st.playing ? 1 : 0) + '|' + (st.muted ? 1 : 0);
       if (key === last) return; last = key;
       els.forEach(function (el) {
         // desktop: visible as soon as a track is loaded (so the transport works even if autoplay was blocked); phone: only once started
         var title = (el.id === 'np-desktop' || st.started) ? st.title : '';
-        var tEl = el.querySelector('.np-title'), canSlide = el.id === 'np-desktop' && tEl.textContent && title && !swapping && !sliding;
+        var tEl = el.querySelector('.np-title'), canSlide = tEl.textContent && title && !swapping && !sliding;   /* desktop and phone alike: old name slides off left, new one in from the right */
         if (st.parts && title) {
           /* section player: 'V1 - B2 | Full on V6 - by …'. Entering it = the whole name slides (left out, right in) like any track change;
              a section change inside it = only the tag flips */
@@ -601,7 +601,7 @@
       draw(); if (!timeTimer) timeTimer = setInterval(tickTime, 250); tickTime();
     }
     function ensureCtx() { if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); analyser = actx.createAnalyser(); analyser.fftSize = 2048; analyser.minDecibels = -96; analyser.maxDecibels = 6; analyser.smoothingTimeConstant = 0.8; /* +6 dB headroom: mastered bass no longer clips to a flat top */ out = actx.createGain(); out.gain.value = muted ? 0 : vol; analyser.connect(out); out.connect(actx.destination); master = actx.createGain(); master.connect(analyser); } /* analyser sits before the volume stage so the bars keep moving while muted */ if (actx.state === 'suspended') actx.resume(); }
-    var fadeTimer = null, pausedAt = null;   // position at the moment pause was pressed (the fade tail must not count as progress)
+    var fadeTimer = null, pausedAt = null, playSeq = 0;   /* playSeq: a play() promise that loses (track changed underneath it) must not flip the new track back to ▶ */   // position at the moment pause was pressed (the fade tail must not count as progress)
     function rampDown(g) { g.gain.cancelScheduledValues(0); g.gain.setValueAtTime(Math.max(g.gain.value, 0.0001), actx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + FADE_SEC); }
     function stopAll(immediate) {
       if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = null; }
@@ -639,7 +639,7 @@
         if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = null; }
         if (pausedAt !== null) { try { audio.currentTime = pausedAt; } catch (e) {} pausedAt = null; }   // resume from where pause was pressed, not where the fade ended
         master.gain.cancelScheduledValues(0); master.gain.setValueAtTime(1, actx.currentTime);
-        var pr = audio.play(); if (pr && pr.catch) pr.catch(function () { playing = false; refresh(); caption.refresh(); });   // autoplay blocked → show ▶ again
+        var tok = ++playSeq, pr = audio.play(); if (pr && pr.catch) pr.catch(function () { if (tok !== playSeq) return; playing = false; refresh(); caption.refresh(); });   // autoplay blocked → show ▶ again (only if this is still the current play request)
       } else return;
       playing = true; started = true; ducked = false; refresh();
     }
