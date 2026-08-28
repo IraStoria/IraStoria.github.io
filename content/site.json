@@ -238,6 +238,30 @@
     "term_unknown": {
       "zh": "找不到指令：",
       "en": "command not found: "
+    },
+    "ph_unlock": {
+      "zh": "上滑或點擊解鎖",
+      "en": "Swipe up or tap to unlock"
+    },
+    "ph_back": {
+      "zh": "返回",
+      "en": "Back"
+    },
+    "ph_home": {
+      "zh": "主畫面",
+      "en": "Home"
+    },
+    "ph_now": {
+      "zh": "播放中",
+      "en": "Playing"
+    },
+    "ph_paused": {
+      "zh": "已暫停",
+      "en": "Paused"
+    },
+    "ph_lock_line": {
+      "zh": "IraStoria · 作曲 × 遊戲音訊",
+      "en": "IraStoria · music × game audio"
     }
   },
   "about_body": {

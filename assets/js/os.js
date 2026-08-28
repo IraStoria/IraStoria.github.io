@@ -7,6 +7,9 @@
   var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   var isMobile = function () { return window.matchMedia('(max-width: 699px)').matches; };
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // shell: phone (iOS-like) vs desktop. Width is the primary signal; ?shell= overrides for previews.
+  var shellOverride = (/[?&]shell=(phone|desktop)/.exec(location.search) || [])[1];
+  var PHONE = shellOverride ? shellOverride === 'phone' : (window.matchMedia('(max-width: 699px)').matches || (window.matchMedia('(pointer: coarse)').matches && window.innerWidth < 900));
   try { localStorage.setItem('lang', lang); } catch (e) {}
   var sw = $('[data-lang-switch]');
   if (sw) sw.addEventListener('click', function () { try { localStorage.setItem('lang', sw.getAttribute('data-lang-switch')); } catch (e) {} });
@@ -78,6 +81,7 @@
   }
 
   function openApp(app) {
+    if (PHONE) return phone.open(app);
     var w = wins[app];
     if (!w) { w = createWindow(app); wins[app] = w; }
     w.classList.remove('minimized');
@@ -284,7 +288,13 @@
       else if (audio && list[cur] && !list[cur].synth) { pos = audio.currentTime; dur = audio.duration || 0; }
       ui.bar.style.width = dur ? (pos / dur * 100) + '%' : '0'; ui.time.textContent = fmt(pos) + ' / ' + fmt(dur);
     }
-    return { mount: mount, playId: playId, stop: stopAll, toggle: toggle };
+    function state() {
+      var t = list[cur] || {}; var pos = 0, dur = 0;
+      if (t.synth && playing && actx) { pos = (actx.currentTime - synthStart) % SYNTH_LEN; dur = SYNTH_LEN; }
+      else if (audio && !t.synth) { pos = audio.currentTime; dur = audio.duration || 0; }
+      return { title: t.title || '', playing: playing, started: cur >= 0 && (playing || pos > 0), frac: dur ? pos / dur : 0 };
+    }
+    return { mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state };
   })();
 
   // ============================================================ terminal app (playful nav)
@@ -313,8 +323,86 @@
     return { mount: mount };
   })();
 
+  // ============================================================ phone shell (iOS-like)
+  var phone = (function () {
+    var root = $('#phone'), lock = $('#ph-lock'), home = $('#ph-home'), grid = $('#ph-grid'), dockEl = $('#ph-dock'), appsEl = $('#ph-apps'), mini = $('#ph-mini');
+    var stack = [], miniTimer = null, unlocked = false;
+    var HOME_APPS = ['works', 'demos', 'player', 'articles', 'about', 'terminal', 'lang'];
+    var DOCK_APPS = ['works', 'demos', 'player', 'about'];
+    function label(a) { return a === 'lang' ? U.lang_switch : TITLES[a]; }
+    function glyph(a) { return a === 'lang' ? (lang === 'zh' ? 'EN' : '中') : GLYPH[a]; }
+    function appBtn(a) {
+      var b = document.createElement('button'); b.className = 'ph-app'; b.setAttribute('data-app', a);
+      b.innerHTML = '<span class="ic ' + a + '">' + glyph(a) + '</span><span>' + esc(label(a)) + '</span>';
+      b.addEventListener('click', function () {
+        if (a === 'lang') { try { localStorage.setItem('lang', lang === 'zh' ? 'en' : 'zh'); } catch (e) {} location.href = '../' + (lang === 'zh' ? 'en' : 'zh') + '/#desktop'; }
+        else open(a);
+      });
+      return b;
+    }
+    function clock() {
+      var d = new Date(), t = d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2);
+      $('#ph-time').textContent = t; $('#ph-lock-time').textContent = t;
+      $('#ph-lock-date').textContent = d.toLocaleDateString(lang === 'zh' ? 'zh-TW' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    }
+    function init() {
+      root.hidden = false; clock(); setInterval(clock, 15000);
+      HOME_APPS.forEach(function (a) { grid.appendChild(appBtn(a)); });
+      DOCK_APPS.forEach(function (a) { dockEl.appendChild(appBtn(a)); });
+      var y0 = null;
+      lock.addEventListener('pointerdown', function (e) { y0 = e.clientY; });
+      lock.addEventListener('pointerup', function (e) { if (y0 === null || y0 - e.clientY > 40 || Math.abs(y0 - e.clientY) < 8) unlock(); y0 = null; });
+      var skip = false; try { skip = sessionStorage.getItem('unlocked') === '1' || /[?&]app=/.test(location.search); } catch (e) {}
+      if (skip) unlock(true);
+      window.addEventListener('popstate', function () { if (stack.length) close(true); });
+      var m = /[?&]app=([a-z]+)/.exec(location.search);
+      if (m && APPS.indexOf(m[1]) >= 0) open(m[1]);
+    }
+    function unlock(instant) {
+      if (unlocked) return; unlocked = true;
+      try { sessionStorage.setItem('unlocked', '1'); } catch (e) {}
+      lock.classList.add('up'); home.hidden = false;
+      setTimeout(function () { lock.remove(); }, (instant || reduced) ? 0 : 400);
+    }
+    function open(app) {
+      if (!unlocked) unlock(true);
+      var top = stack[stack.length - 1];
+      if (top && top.dataset.app === app) return;
+      var pnl = document.createElement('section'); pnl.className = 'papp'; pnl.dataset.app = app; pnl.setAttribute('role', 'dialog');
+      pnl.innerHTML = '<div class="papp-nav"><button class="back">‹ ' + esc(stack.length ? label(stack[stack.length - 1].dataset.app) : U.ph_home) + '</button><span class="ttl">' + esc(TITLES[app]) + '</span>' +
+        (PAGES[app] ? '<a class="more" href="' + PAGES[app] + '">' + esc(U.open_page) + '</a>' : '<span class="more"></span>') + '</div><div class="papp-body"></div>';
+      $('.back', pnl).addEventListener('click', function () { history.back(); });
+      appsEl.appendChild(pnl); stack.push(pnl);
+      history.pushState({ app: app }, '', location.pathname + location.search + '#' + app);
+      RENDER[app]($('.papp-body', pnl), pnl);
+      updateMini();
+    }
+    function close(fromHistory) {
+      var pnl = stack.pop(); if (!pnl) return;
+      pnl.classList.add('out'); setTimeout(function () { pnl.remove(); }, reduced ? 0 : 220);
+      if (!fromHistory) history.back();
+      updateMini();
+    }
+    function updateMini() {
+      var st = player.state(), showing = st.started && !(stack.length && stack[stack.length - 1].dataset.app === 'player');
+      mini.hidden = !showing;
+      if (showing) {
+        if (!mini.firstChild) {
+          mini.innerHTML = '<div class="art">♪</div><div class="info"><b></b><span></span></div><button class="pp"></button><button class="up">⌃</button><div class="prog"><i></i></div>';
+          $('.pp', mini).addEventListener('click', function () { player.toggle(); updateMini(); });
+          $('.up', mini).addEventListener('click', function () { open('player'); });
+        }
+        $('.info b', mini).textContent = st.title; $('.info span', mini).textContent = st.playing ? U.ph_now : U.ph_paused;
+        $('.pp', mini).textContent = st.playing ? '❚❚' : '▶'; $('.prog i', mini).style.width = (st.frac * 100) + '%';
+        if (!miniTimer) miniTimer = setInterval(updateMini, 500);
+      } else if (miniTimer) { clearInterval(miniTimer); miniTimer = null; }
+    }
+    return { init: init, open: open };
+  })();
+
   // ============================================================ kick-off (after all apps are defined)
-  if (skipBoot) { boot.remove(); desktop.hidden = false; initDesktop(); }
+  if (PHONE) { boot.remove(); desktop.remove(); phone.init(); }
+  else if (skipBoot) { boot.remove(); desktop.hidden = false; initDesktop(); }
   else {
     runBoot(0);
     bootBtn.addEventListener('click', enterDesktop);

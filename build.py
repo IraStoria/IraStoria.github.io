@@ -397,7 +397,7 @@ def build_pages(site, works, demos, articles):
                     "site_name": esc(site["site_name"]), "base_url": site["base_url"], "tagline": esc(site["tagline"][lang]),
                     "meta_desc": esc(site["hero_intro"][lang]), "author": esc(site["author"][lang]), "hero_intro": esc(site["hero_intro"][lang]),
                     "lang_switch": L("lang_switch"), "sticky": L("sticky"), "site_data": site_json}
-        for k in ("boot_enter", "boot_hint", "os_name", "app_works", "app_demos", "app_articles", "app_about", "app_player", "app_terminal", "desk_hint"):
+        for k in ("boot_enter", "boot_hint", "os_name", "app_works", "app_demos", "app_articles", "app_about", "app_player", "app_terminal", "desk_hint", "ph_unlock", "ph_lock_line"):
             home_ctx["ui_" + k] = L(k)
         out[f"{lang}/index.html"] = render(tpl("desktop"), home_ctx)
 
