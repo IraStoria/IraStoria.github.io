@@ -2,6 +2,7 @@
 (function () {
   'use strict';
   var D = JSON.parse(document.getElementById('site-data').textContent);
+  var ALT = D.alt || null; delete D.alt;   // the other language's data (for in-place switching)
   var U = D.ui, lang = D.lang;
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
@@ -13,21 +14,59 @@
   try { localStorage.setItem('lang', lang); } catch (e) {}
   var sw = $('[data-lang-switch]');
   if (sw) sw.addEventListener('click', function (e) { try { localStorage.setItem('lang', sw.getAttribute('data-lang-switch')); } catch (e2) {} if (!PHONE && desktop && !desktop.hidden) { e.preventDefault(); switchLang(); } });
-  // desktop language switch: apps slide out left, tagline flips, name + now-playing slide left and fade → load the other language
-  // (which enters from the right, see langSwap below). The current track + position ride along in sessionStorage.
-  var SWAP_MS = 650;
+  // desktop language switch WITHOUT reloading (music keeps playing, no boot flash): apps slide out left, tagline flips,
+  // now-playing slides left and fades (the name stays put); then the texts are swapped in place and everything comes back:
+  // apps slide in from the left, tagline flips back, now-playing travels in from the far left edge. URL is updated via replaceState.
+  var SWAP_MS = 600, swapping = false;
   function switchLang() {
-    var other = lang === 'zh' ? 'en' : 'zh';
-    try { localStorage.setItem('lang', other); sessionStorage.setItem('langswap', '1'); sessionStorage.setItem('booted', '1'); var st = player.state(); if (st.id) sessionStorage.setItem('track', JSON.stringify({ id: st.id, pos: st.pos, playing: st.playing })); } catch (e) {}
+    if (!ALT) { location.href = '../' + (lang === 'zh' ? 'en' : 'zh') + '/#desktop'; return; }
+    if (swapping) return;
+    swapping = true;
     desktop.classList.add('swap', 'swap-out');
-    setTimeout(function () { location.href = '../' + other + '/#desktop'; }, SWAP_MS);
+    setTimeout(function () {
+      applyLang(ALT);
+      var np = $('#np-desktop');
+      if (np) { var r = np.getBoundingClientRect(); np.style.transition = 'none'; np.style.transform = 'translateX(' + (-(r.right + 40)) + 'px)'; }
+      desktop.classList.remove('swap-out'); desktop.classList.add('swap-in');
+      void desktop.offsetWidth;   // flush styles so the entrance actually transitions
+      var released = false;
+      var release = function () {
+        if (released) return; released = true;
+        desktop.classList.remove('swap-in');
+        if (np) { np.style.transition = 'transform .9s cubic-bezier(.2,.7,.2,1), opacity .4s ease'; np.style.transform = ''; }
+        setTimeout(function () { desktop.classList.remove('swap'); if (np) { np.style.transition = ''; np.style.transitionDuration = CONNECT_MS + 'ms'; } swapping = false; }, 950);
+      };
+      requestAnimationFrame(release); setTimeout(release, 80);   // timer fallback for throttled / background tabs
+    }, SWAP_MS);
+  }
+  function applyLang(nd) {
+    var od = D; D = nd; ALT = od; U = D.ui; lang = D.lang;
+    try { localStorage.setItem('lang', lang); } catch (e) {}
+    var other = lang === 'zh' ? 'en' : 'zh';
+    document.documentElement.lang = lang === 'zh' ? 'zh-Hant' : 'en'; document.body.setAttribute('data-lang', lang);
+    document.title = D.site_name + ' · ' + D.tagline;
+    try { history.replaceState(null, '', location.pathname.replace(/\/(zh|en)\//, '/' + lang + '/') + '#desktop'); } catch (e) {}
+    var mid = $('.menubar-mid'); if (mid) mid.textContent = D.tagline;
+    if (sw) { sw.textContent = U.lang_switch; sw.setAttribute('href', '../' + other + '/'); sw.setAttribute('data-lang-switch', other); }
+    TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, terminal: U.app_terminal };
+    document.querySelectorAll('.icon[data-app]').forEach(function (b) { var t = b.querySelector('span:last-child'); if (t) t.textContent = TITLES[b.getAttribute('data-app')]; });
+    document.querySelectorAll('#dock button[data-app]').forEach(function (b) { var a = b.getAttribute('data-app'); b.innerHTML = '<span>' + GLYPH[a] + '</span>' + esc(TITLES[a]); });
+    var hp = document.querySelectorAll('.hero-text p'); if (hp[0]) hp[0].textContent = D.hero_intro; if (hp[1]) hp[1].textContent = '// ' + U.desk_hint;
+    var st = $('#sticky'); if (st) st.textContent = U.sticky;
+    var uh = $('#updates .upd-head span'); if (uh) uh.textContent = '💬 ' + U.app_updates;
+    var ub = $('#upd-hide'); if (ub) { ub.title = U.updates_hide; ub.setAttribute('aria-label', U.updates_hide); }
+    var ul = $('#upd-log'); if (ul) ul.innerHTML = (D.updates || []).length ? D.updates.map(function (u) { return '<div class="msg"><time>' + esc(u.date) + '</time><p>' + esc(u.text) + '</p></div>'; }).join('') : '<p class="note">' + esc(U.updates_empty) + '</p>';
+    document.querySelectorAll('.np-cap .np-lbl').forEach(function (l) { var stt = l.querySelector('.np-state'); l.textContent = U.player_now + (stt ? ' · ' : ''); if (stt) l.appendChild(stt); });
+    caption.reset();
+    Object.keys(wins).forEach(function (a) { var w = wins[a]; w.setAttribute('aria-label', TITLES[a]); var tt = w.querySelector('.win-title'); if (tt) tt.innerHTML = GLYPH[a] + ' ' + esc(TITLES[a]); var ft = w.querySelector('.win-foot a'); if (ft) ft.textContent = U.open_page; if (RENDER[a]) RENDER[a](w.querySelector('.win-body'), w); });
   }
 
   // ============================================================ boot sequence
   var boot = $('#boot'), log = $('#boot-log'), bootBtn = $('#boot-btn'), bootHint = $('#boot-hint'), desktop = $('#desktop');
   var skipBoot = false;
   var langSwap = false;
-  try { skipBoot = sessionStorage.getItem('booted') === '1' || location.hash === '#desktop' || /[?&]app=/.test(location.search); langSwap = sessionStorage.getItem('langswap') === '1'; if (langSwap) sessionStorage.removeItem('langswap'); } catch (e) {}   // boot only on the first entry of a visit; sub-pages / language switch come straight back to the desktop
+  var navType = ''; try { navType = (performance.getEntriesByType('navigation')[0] || {}).type || ''; } catch (e) {}
+  try { skipBoot = (navType !== 'reload' && sessionStorage.getItem('booted') === '1') || location.hash === '#desktop' || /[?&]app=/.test(location.search); langSwap = sessionStorage.getItem('langswap') === '1'; if (langSwap) sessionStorage.removeItem('langswap'); } catch (e) {}   // a refresh always boots; coming back from a sub-page inside the same visit does not
   var script = [
     ['$ whoami', '> ' + D.author],
     ['$ cat about.md', '> ' + D.tagline + '\n  ' + D.hero_intro],
@@ -200,7 +239,8 @@
       var t = el.querySelector('.np-title'); if (t && el.id === 'np-desktop') t.addEventListener('click', function () { openApp('player'); });
     });
     function arm() { player.prepare(); els.forEach(function (el) { el.style.transitionDuration = CONNECT_MS + 'ms'; }); if (!timer) timer = setInterval(refresh, 400); refresh(); }
-    return { arm: arm, refresh: refresh };
+    function reset() { last = ''; refresh(); }
+    return { arm: arm, refresh: refresh, reset: reset };
   })();
 
   // ============================================================ desktop
@@ -554,7 +594,7 @@
       var y0 = null;
       lock.addEventListener('pointerdown', function (e) { y0 = e.clientY; });
       lock.addEventListener('pointerup', function (e) { if (y0 === null || y0 - e.clientY > 40 || Math.abs(y0 - e.clientY) < 8) unlock(); y0 = null; });
-      var skip = false; try { skip = sessionStorage.getItem('unlocked') === '1' || /[?&]app=/.test(location.search); } catch (e) {}   // lock screen only on the first entry of a visit
+      var skip = false; try { skip = (navType !== 'reload' && sessionStorage.getItem('unlocked') === '1') || /[?&]app=/.test(location.search); } catch (e) {}   // refresh -> lock screen; returning from a sub-page -> straight to home
       if (skip) unlock(true);
       window.addEventListener('popstate', function () { if (stack.length) close(true); });
       var m = /[?&]app=([a-z]+)/.exec(location.search);

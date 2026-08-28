@@ -430,8 +430,9 @@ def build_pages(site, works, demos, articles):
             return {"id": w["id"], "type": w["type"], "year": w["year"], "featured": bool(w.get("featured")),
                     "title": w["title"][lang], "desc": w["desc"][lang], "media": loc_media(w.get("media") or {}),
                     "platform": w["platform"], "links": [{"label": l["label"][lang], "url": l["url"]} for l in w.get("links", [])]}
-        data = {
-            "lang": lang, "author": site["author"][lang], "tagline": site["tagline"][lang], "hero_intro": site["hero_intro"][lang],
+        def home_data(lang):
+          return {
+            "lang": lang, "site_name": site["site_name"], "author": site["author"][lang], "tagline": site["tagline"][lang], "hero_intro": site["hero_intro"][lang],
             "about": site["about_body"][lang], "contact": site["contact"],
             "ui": {k: v[lang] for k, v in site["ui"].items()},
             "fx": {name: {k: (local_versioned(v) if k in ("video", "sound") and v else v) for k, v in f.items() if not k.startswith("_")} for name, f in (site.get("fx") or {}).items()},
@@ -439,8 +440,11 @@ def build_pages(site, works, demos, articles):
             "updates": [{"date": u["date"], "text": u[lang]} for u in load_updates()],
             "demos": [{"path": rel, "title": m["title"][lang], "desc": m["desc"][lang], "platform": m["platform"], "year": m.get("year", "")} for rel, m in demos.items()],
             "articles": [{"slug": a["slug"], "title": a[lang]["meta"]["title"], "date": a[lang]["meta"]["date"]} for a in articles],
-        }
-        site_json = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
+          }
+        other = "en" if lang == "zh" else "zh"
+        data = home_data(lang)
+        data["alt"] = home_data(other)   # the other language rides along so the desktop can switch in place (no reload -> no boot flash, music keeps playing)
+        site_json = json.dumps(data, ensure_ascii=False).replace("</", "<" + "\\/")
         home_ctx = {"html_lang": HTML_LANG[lang], "lang": lang, "other_lang": "en" if lang == "zh" else "zh",
                     "site_name": esc(site["site_name"]), "base_url": site["base_url"], "tagline": esc(site["tagline"][lang]),
                     "meta_desc": esc(site["hero_intro"][lang]), "author": esc(site["author"][lang]), "hero_intro": esc(site["hero_intro"][lang]),
