@@ -1,0 +1,13 @@
+{
+  "id": "interactive-player",
+  "year": 2026,
+  "title": { "zh": "互動式段落播放器（測試版）", "en": "Interactive Section Player (test build)" },
+  "desc": {
+    "zh": "多個段落按鈕：A 段自動開始；播放中點選段落，會在目前段落結束時無縫接續；沒選的話「隨機」鈕會自動亮起接手。目前段落為瀏覽器合成，之後可直接換成音檔。",
+    "en": "Section buttons: A starts automatically; pick a section while playing and it joins seamlessly when the current one ends; if you don't, the Random button lights up and takes over. Sections are synthesized for now and can be swapped for audio files."
+  },
+  "platform": "all",
+  "concept_level_checked": true,
+  "concept_level_note": "ADR-004 self-check 2026-08-28: generic queued-section playback with random fallback; all audio synthesized in-browser; no project code, assets, or gameplay details. Asset policy for real audio pending user decision (IDEA-002).",
+  "dependencies": "none (Web Audio API only)"
+}

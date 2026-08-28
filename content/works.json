@@ -1,17 +1,52 @@
 [
-  {
-    "id": "demo-transition",
-    "type": "demo",
-    "year": 2026,
-    "featured": true,
-    "title": { "zh": "音樂 Transition 概念展示", "en": "Music Transition Concept Demo" },
-    "desc": {
-      "zh": "互動音樂在段落之間怎麼切才不會斷？這個展示讓你在兩段循環之間切換，比較「立即切」「等下一拍」「等下一小節」與「淡入淡出」四種轉場策略的聽感差異。純瀏覽器合成音，從零寫。",
-      "en": "How does interactive music move between sections without breaking? Switch between two loops and compare four transition strategies — immediate, next beat, next bar, and crossfade — by ear. Pure in-browser synthesis, written from scratch."
+    {
+        "id":  "demo-interactive-player",
+        "type":  "demo",
+        "year":  2026,
+        "featured":  true,
+        "title":  {
+                      "zh":  "互動式段落播放器（測試版）",
+                      "en":  "Interactive Section Player (test build)"
+                  },
+        "desc":  {
+                     "zh":  "多段落按鈕：A 段自動開始，播放中點選段落會在目前段落結束時無縫接續；沒選則「隨機」鈕自動亮起接手。合成段落，換音檔不改邏輯。",
+                     "en":  "Section buttons: A auto-starts; a pick joins seamlessly when the current section ends; otherwise Random lights up and takes over. Synthesized sections, file swap needs no logic change."
+                 },
+        "media":  {
+                      "demo":  "demos/interactive-player/"
+                  },
+        "platform":  "all",
+        "links":  [
+
+                  ],
+        "tags":  [
+                     "interactive-music",
+                     "web-audio"
+                 ]
     },
-    "media": { "demo": "demos/transition/" },
-    "platform": "desktop",
-    "links": [],
-    "tags": ["interactive-music", "web-audio"]
-  }
+    {
+        "id":  "demo-transition",
+        "type":  "demo",
+        "year":  2026,
+        "featured":  true,
+        "title":  {
+                      "zh":  "音樂 Transition 概念展示",
+                      "en":  "Music Transition Concept Demo"
+                  },
+        "desc":  {
+                     "zh":  "互動音樂在段落之間怎麼切才不會斷？這個展示讓你在兩段循環之間切換，比較「立即切」「等下一拍」「等下一小節」與「淡入淡出」四種轉場策略的聽感差異。純瀏覽器合成音，從零寫。",
+                     "en":  "How does interactive music move between sections without breaking? Switch between two loops and compare four transition strategies — immediate, next beat, next bar, and crossfade — by ear. Pure in-browser synthesis, written from scratch."
+                 },
+        "media":  {
+                      "demo":  "demos/transition/"
+                  },
+        "platform":  "desktop",
+        "links":  [
+
+                  ],
+        "tags":  [
+                     "interactive-music",
+                     "web-audio"
+                 ]
+    }
 ]
