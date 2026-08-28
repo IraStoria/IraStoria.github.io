@@ -392,17 +392,42 @@
     var x = Math.max(110, Math.min(vw - W - 20, 140 + (spawn % 5) * 40)), y = Math.max(8, Math.min(vh - H - 90, 30 + (spawn % 5) * 32)); spawn++;
     w.style.cssText = 'left:' + x + 'px;top:' + y + 'px;width:' + W + 'px;height:' + H + 'px;z-index:' + (++z);
     w.innerHTML = '<div class="win-bar"><span class="dots"><button class="close" title="' + esc(U.win_close) + '"></button><button class="min" title="' + esc(U.win_min) + '"></button><button class="max"></button></span>' +
-      '<span class="win-title">' + glyph + ' ' + esc(title) + '</span>' + (opts.render ? '<button class="fs" title="' + esc(U.win_fullscreen) + '">⛶</button>' : '') + '</div><div class="win-body"></div>' +
+      '<span class="win-title">' + glyph + ' ' + esc(title) + '</span></div><div class="win-body"></div>' +
       ((opts.page || PAGES[app]) ? '<div class="win-foot"><span></span><a href="' + esc(opts.page || PAGES[app]) + '">' + esc(U.open_page) + '</a></div>' : '');
-    var fsb = $('.fs', w); if (fsb) fsb.addEventListener('click', function () { if (document.fullscreenElement === w) document.exitFullscreen(); else if (w.requestFullscreen) w.requestFullscreen(); });
     $('.close', w).addEventListener('click', function () { closeApp(app); });
     $('.min', w).addEventListener('click', function () { minimize(app); });
     $('.max', w).addEventListener('click', function () { w.classList.toggle('maxed'); if (w.classList.contains('maxed')) { w.dataset.prev = w.style.cssText; w.style.cssText = 'left:8px;top:8px;width:' + (vw - 16) + 'px;height:' + (vh - 90) + 'px;z-index:' + (++z); } else { w.style.cssText = w.dataset.prev; } });
     w.addEventListener('pointerdown', function () { focus(w); });
     makeDraggable(w, $('.win-bar', w));
+    makeResizable(w);
     windowsEl.appendChild(w);
     (opts.render || RENDER[app])($('.win-body', w), w);
     return w;
+  }
+
+  /* eight resize grips on every window edge/corner; pointer capture keeps the drag alive over iframes */
+  function makeResizable(el) {
+    var MIN_W = 320, MIN_H = 220;
+    ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'].forEach(function (dir) {
+      var g = document.createElement('i'); g.className = 'grip ' + dir; el.appendChild(g);
+      var sx, sy, ox, oy, ow, oh, on = false;
+      g.addEventListener('pointerdown', function (e) {
+        if (isMobile() || el.classList.contains('maxed')) return;
+        on = true; sx = e.clientX; sy = e.clientY; ox = el.offsetLeft; oy = el.offsetTop; ow = el.offsetWidth; oh = el.offsetHeight;
+        g.setPointerCapture(e.pointerId); e.preventDefault(); e.stopPropagation(); focus(el); el.classList.add('resizing');
+      });
+      g.addEventListener('pointermove', function (e) {
+        if (!on) return;
+        var dx = e.clientX - sx, dy = e.clientY - sy, x = ox, y = oy, w = ow, h = oh;
+        if (dir.indexOf('e') >= 0) w = Math.max(MIN_W, ow + dx);
+        if (dir.indexOf('s') >= 0) h = Math.max(MIN_H, oh + dy);
+        if (dir.indexOf('w') >= 0) { w = Math.max(MIN_W, ow - dx); x = ox + (ow - w); }
+        if (dir.indexOf('n') >= 0) { h = Math.max(MIN_H, oh - dy); y = Math.max(0, oy + (oh - h)); h = oh + (oy - y); }
+        el.style.left = x + 'px'; el.style.top = y + 'px'; el.style.width = w + 'px'; el.style.height = h + 'px';
+      });
+      var end = function () { on = false; el.classList.remove('resizing'); };
+      g.addEventListener('pointerup', end); g.addEventListener('pointercancel', end); g.addEventListener('lostpointercapture', end);
+    });
   }
 
   function makeDraggable(el, handle) {

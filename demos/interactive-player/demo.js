@@ -1,47 +1,46 @@
-/* Interactive Section Player — Theme A. Written from scratch (ADR-004), Web Audio only.
+/* Interactive Section Player. Written from scratch (ADR-004), Web Audio only.
    Every section is a decoded AudioBuffer; playback = sample-accurate AudioBufferSourceNode.start(t).
    File model (from the file name Theme_Section_pickupBars_tailBars_Info):
      [pick-up bars @ bpmIn][logical section][tail bars @ bpmOut]
    The entry cue of the next section lands exactly on the logical end of the current one; the pick-up
-   starts earlier and overlaps the previous tail. Logical length = decoded duration − pick-up − tail. */
+   starts earlier and overlaps the previous tail. Logical length = decoded duration − pick-up − tail.
+   A theme = fixed intro + free middle sections (grouped by letter, several versions each) + fixed outro. */
 (function () {
   'use strict';
 
   /* ------------------------------------------------------------ i18n */
   var I18N = {
     zh: {
-      title: '互動式段落播放器 · Theme A',
-      lead: '按「開始」後從第一段播放。播放中點任一段落，會在目前段落結束的瞬間無縫接上；若什麼都不點，「隨機」鈕會自動亮起、替你挑下一段。每段自帶 pick-up（前導）與 tail（尾音），接縫永遠落在小節線上。',
+      title: '互動式段落播放器',
+      lead: '按「開始」後從前奏播放。播放中點任一段落，會在目前段落結束的瞬間無縫接上；若什麼都不點，「隨機」會替你挑下一段。點「尾奏」收尾。',
       start: '▶ 開始', stop: '■ 停止', now: '播放中：', random: '隨機', random_auto: '自動接手中', loading: '載入音檔…',
-      st_playing: '播放中', st_queued: '已排隊', st_next_next: '排到下下段', st_blocked: '規則不允許', st_loop: '循環中',
-      next_none: '下一段：尚未決定（{s} 秒後隨機接手）', next_queued: '下一段：<em>{n}</em>（你的選擇）', next_auto: '下一段：<em>{n}</em>（隨機自動接手）', next_locked: '已鎖定 → <em>{n}</em>', next_loop: '下一段：<em>{n}</em>（自我循環，點其他段可離開）',
-      opt_exclude: '隨機不重複上一段', opt_xfade: '接縫 15ms 等功率淡接（僅無 pick-up 時）', opt_rules: '啟用接續規則', opt_pre: '啟用 pick-up／tail（關掉可比較）',
-      pick: 'pick-up', tail: 'tail',
+      intro: '前奏', outro: '尾奏', loop: '循環',
+      st_playing: '播放中', st_queued: '已排隊', st_next_next: '排到下下段', st_blocked: '不可接', st_loop: '循環中',
+      next_none: '下一段：尚未決定（{s} 秒後隨機接手）', next_queued: '下一段：<em>{n}</em>（你的選擇）', next_auto: '下一段：<em>{n}</em>（隨機自動接手）', next_locked: '已鎖定 → <em>{n}</em>', next_loop: '下一段：<em>{n}</em>（自我循環，點其他段可離開）', next_end: '尾奏播完即結束',
+      opt_exclude: '隨機不重複上一段', opt_rules: '啟用接續規則',
       how: '這個播放器怎麼運作',
-      e1: '無縫：每一段都是預先解碼的 AudioBuffer，下一段以「上一段邏輯結束的取樣點」起播，誤差 <1ms（下方紀錄會列出實際接縫誤差）。',
+      e1: '無縫：每一段都是預先解碼的 AudioBuffer，下一段以「上一段結束的取樣點」起播（下方紀錄列出實際接縫誤差）。',
       e2: '佇列：播放中點段落＝排到下一段；在決策鎖定之後才點，會自動排到下下段。',
-      e3: '隨機後備：到決策點若沒有選擇，隨機鈕亮起並接手，且可設定不重複上一段。I（尾奏循環）沒被指定下一段時會自我循環。',
-      e4: '接續規則：segments.json 的 allow 定義每段允許接哪些段；不允許的按鈕會變灰。',
-      e5: 'Pick-up／tail：檔名「段落_pick-up小節_tail小節」直接決定時間模型。下一段在「exit − pick-up」就起播、與上一段 tail 重疊；決策點（進度條白線）依候選段最大 pick-up 自動提前。',
-      e6: '速度：B–D 為 145 BPM；E 段在段內加速；E 之後（F–I）為 172 BPM。每段各自帶 bpm，小節換算依段落而定。',
-      note: '素材為 IraStoria 原創曲 Theme A 的段落切片（mp3）。'
+      e3: '隨機後備：到決策點若沒有選擇，隨機接手，且可設定不重複上一段。I 沒被指定下一段時會自我循環。',
+      e4: '接續規則：每段允許接哪些段由設定檔定義；不允許的按鈕會變灰。',
+      e5: '每段自帶前導與尾音：下一段的前導與上一段的尾音重疊，接縫仍落在小節線上；決策點（進度條白線）依候選段的前導自動提前。',
+      note: '素材為 IraStoria 原創曲的段落切片。'
     },
     en: {
-      title: 'Interactive Section Player · Theme A',
-      lead: 'Press Start and the first section plays. Pick any section while playing and it joins the instant the current one ends; pick nothing and the Random button lights up and chooses for you. Every section carries its own pick-up and tail; seams always land on the barline.',
+      title: 'Interactive Section Player',
+      lead: 'Press Start and the intro plays. Pick any section while playing and it joins the instant the current one ends; pick nothing and Random chooses for you. Pick Outro to finish.',
       start: '▶ Start', stop: '■ Stop', now: 'Now playing:', random: 'Random', random_auto: 'auto-picking', loading: 'Loading audio…',
+      intro: 'Intro', outro: 'Outro', loop: 'loop',
       st_playing: 'playing', st_queued: 'queued', st_next_next: 'queued after next', st_blocked: 'not allowed', st_loop: 'looping',
-      next_none: 'Next: undecided (random takes over in {s}s)', next_queued: 'Next: <em>{n}</em> (your pick)', next_auto: 'Next: <em>{n}</em> (random, automatic)', next_locked: 'Locked → <em>{n}</em>', next_loop: 'Next: <em>{n}</em> (self-loop; pick another section to leave)',
-      opt_exclude: 'Random avoids repeating last', opt_xfade: '15 ms equal-power seam (only without pick-up)', opt_rules: 'Enable transition rules', opt_pre: 'Enable pick-up / tail (toggle to compare)',
-      pick: 'pick-up', tail: 'tail',
+      next_none: 'Next: undecided (random takes over in {s}s)', next_queued: 'Next: <em>{n}</em> (your pick)', next_auto: 'Next: <em>{n}</em> (random, automatic)', next_locked: 'Locked → <em>{n}</em>', next_loop: 'Next: <em>{n}</em> (self-loop; pick another section to leave)', next_end: 'Ends after the outro',
+      opt_exclude: 'Random avoids repeating last', opt_rules: 'Enable transition rules',
       how: 'How it works',
-      e1: 'Seamless: every section is a decoded AudioBuffer; the next starts at the exact sample where the previous logically ends (<1 ms; the log shows measured seam error).',
+      e1: 'Seamless: every section is a decoded AudioBuffer; the next starts at the exact sample where the previous ends (the log shows measured seam error).',
       e2: 'Queue: tapping a section while playing queues it next; tapping after the decision lock queues it after the next one.',
-      e3: 'Random fallback: with nothing queued at the decision point, Random lights up and takes over, optionally never repeating the last section. I (outro loop) loops itself when nothing else is queued.',
-      e4: 'Rules: the allow map in segments.json restricts which sections may follow which; disallowed buttons grey out.',
-      e5: 'Pick-up / tail: the file name "Section_pickupBars_tailBars" defines the timing model. The next section starts at exit − pick-up and overlaps the previous tail; the decision point (white marker) moves earlier by the largest candidate pick-up.',
-      e6: 'Tempo: B–D run at 145 BPM; E accelerates inside the section; everything after E (F–I) runs at 172 BPM. Each section carries its own bpm for bar maths.',
-      note: 'Material: section slices (mp3) of the original IraStoria track Theme A.'
+      e3: 'Random fallback: with nothing queued at the decision point, Random takes over, optionally never repeating the last section. I loops itself when nothing else is queued.',
+      e4: 'Rules: the config restricts which sections may follow which; disallowed buttons grey out.',
+      e5: 'Every section carries its own lead-in and tail: the next lead-in overlaps the previous tail while the seam stays on the barline; the decision point (white marker) moves earlier by the candidates\' lead-ins.',
+      note: 'Material: section slices of original IraStoria tracks.'
     }
   };
   var lang = 'zh';
@@ -50,7 +49,8 @@
   var T = function (k) { return I18N[lang][k]; };
 
   /* ------------------------------------------------------------ data */
-  var CFG = null, SEG = [], byId = {}, GROUPS = [], byGroup = {};
+  var CFG = null, THEMES = [], TH = null;          /* TH = active theme */
+  var SEG = [], byId = {}, GROUPS = [], byGroup = {}, INTRO = null, OUTRO = null;
   var ctx = null, master = null, buffers = {}, analyser = null;
   var LOOKAHEAD = 0.25;  /* decision lock window (s) */
   var TICK = 25;
@@ -61,15 +61,25 @@
   var nxt = null;        /* scheduled next: same shape */
   var queued = null;     /* user's choice for the next decision (segment id) */
   var later = null;      /* user's choice after a lock (applies to the decision after next) */
-  var randomAuto = false, lastId = null, history = [];
+  var randomAuto = false, lastId = null, history = [], ending = false;
+
+  function useTheme(th) {
+    TH = th; INTRO = th.intro || null; OUTRO = th.outro || null;
+    SEG = th.segments; GROUPS = th.groups || []; byId = {}; byGroup = {};
+    SEG.forEach(function (s) { byId[s.id] = s; }); GROUPS.forEach(function (g) { byGroup[g.id] = g; });
+    if (INTRO) byId[INTRO.id] = INTRO; if (OUTRO) byId[OUTRO.id] = OUTRO;
+  }
+  function isBookend(seg) { return seg === INTRO || seg === OUTRO; }
+  function bufKey(seg) { return TH.id + ':' + seg.id; }
+  function allSegs() { var a = SEG.slice(); if (INTRO) a.unshift(INTRO); if (OUTRO) a.push(OUTRO); return a; }
 
   /* ------------------------------------------------------------ timing model (per segment) */
   function barSec(bpm) { return 60 / bpm * CFG.beatsPerBar; }
   function preSec(seg) { return (seg.preBars || 0) * barSec(seg.bpmIn); }      /* pick-up runs at the incoming tempo */
   function postSec(seg) { return (seg.tailBars || 0) * barSec(seg.bpmOut); }   /* tail rings at the outgoing tempo */
-  function logicalSec(seg) { var b = buffers[seg.id]; return b ? Math.max(0.1, b.duration - preSec(seg) - postSec(seg)) : 0; }
+  function logicalSec(seg) { var b = buffers[bufKey(seg)]; return b ? Math.max(0.1, (seg.durationSec || b.duration) - preSec(seg) - postSec(seg)) : 0; }   /* durationSec: true length for files whose mp3 has no gapless tag */
   function colorOf(seg) { return (byGroup[seg.group] || {}).color || '#e0b04a'; }
-  function labelOf(seg) { return seg.id.split('_')[0]; }
+  function nameOf(seg) { return seg === INTRO ? T('intro') : seg === OUTRO ? T('outro') : seg.id; }
 
   /* ------------------------------------------------------------ audio loading */
   function loadBuffer(seg) {
@@ -78,34 +88,35 @@
   }
 
   /* ------------------------------------------------------------ scheduler */
-  function usePre() { return optPre.checked; }
   function schedule(seg, entry) {
     var src = ctx.createBufferSource(), g = ctx.createGain();
-    src.buffer = buffers[seg.id]; src.connect(g); g.connect(master);
-    var pre = preSec(seg), xf = (optXfade.checked && !(usePre() && pre > 0)) ? CFG.crossfadeMs / 1000 : 0;
-    if (xf > 0 && cur) { g.gain.setValueAtTime(0, entry); g.gain.linearRampToValueAtTime(1, entry + xf); }
-    /* entry cue is always on the barline; with pick-up enabled the file starts earlier, otherwise we skip the lead-in */
-    if (usePre() && pre > 0) src.start(entry - pre); else src.start(entry, pre);
-    return { seg: seg, start: entry, end: entry + logicalSec(seg), audioStart: usePre() ? entry - pre : entry, src: src, gain: g };
+    src.buffer = buffers[bufKey(seg)]; src.connect(g); g.connect(master);
+    var pre = preSec(seg), xf = (cur && pre <= 0 && !postSec(cur.seg)) ? CFG.crossfadeMs / 1000 : 0;   /* tiny equal-power seam only when nothing overlaps */
+    if (xf > 0) { g.gain.setValueAtTime(0, entry); g.gain.linearRampToValueAtTime(1, entry + xf); }
+    src.start(entry - pre, seg.trimStart || 0);   /* trimStart skips an mp3 encoder delay when the file carries no gapless tag */
+    return { seg: seg, start: entry, end: entry + logicalSec(seg), audioStart: entry - pre, src: src, gain: g };
   }
   function fadeOut(item) {
-    var xf = (optXfade.checked && !(usePre() && nxt && preSec(nxt.seg) > 0)) ? CFG.crossfadeMs / 1000 : 0;
-    var post = usePre() ? postSec(item.seg) : 0;
+    var post = postSec(item.seg), xf = (!post && nxt && preSec(nxt.seg) <= 0) ? CFG.crossfadeMs / 1000 : 0;
     if (post > 0) { item.src.stop(item.end + post); }            /* let the tail ring out over the next section */
     else if (xf > 0) { item.gain.gain.setValueAtTime(1, item.end); item.gain.gain.linearRampToValueAtTime(0, item.end + xf); item.src.stop(item.end + xf); }
     else item.src.stop(item.end);
   }
+  function candidates(fromId) { return allSegs().filter(function (s) { return s !== INTRO && allowed(fromId, s.id); }); }
   function decisionLead() {
     /* how far before cur.end the next section must be decided: global lead (at the outgoing tempo) OR the largest pick-up among candidates */
     var lead = (CFG.decisionLeadBeats || 0) * (60 / cur.seg.bpmOut);
-    if (usePre()) SEG.forEach(function (s) { if (allowed(cur.seg.id, s.id)) lead = Math.max(lead, preSec(s)); });
+    candidates(cur.seg.id).forEach(function (s) { lead = Math.max(lead, preSec(s)); });
     return lead + LOOKAHEAD;
   }
   function allowed(fromId, toId) {
+    var to = byId[toId], from = byId[fromId];
+    if (!to || !from || to === INTRO) return false;
+    if (from === OUTRO) return false;
     if (!optRules.checked) return true;
-    var a = CFG.allow && CFG.allow[fromId]; if (!a) a = CFG.allow && CFG.allow[byId[fromId].group];   /* per-segment first, then per-group */
+    var A = TH.allow || {}, a = A[fromId] || A[from.group];   /* per-segment first, then per-group */
     if (!a) return true;
-    return a.indexOf(toId) >= 0 || a.indexOf(byId[toId].group) >= 0;
+    return a.indexOf(toId) >= 0 || a.indexOf(to.group) >= 0 || (to === OUTRO && a.indexOf('OUTRO') >= 0);
   }
   function pickRandom(fromId) {
     var from = byId[fromId];
@@ -127,6 +138,10 @@
   }
   function tick() {
     var now = ctx.currentTime;
+    if (cur.seg === OUTRO) {                /* terminal: let it finish, then stop */
+      if (now >= cur.end + postSec(cur.seg) + 0.05) { stop(); return; }
+      renderProgress(); return;
+    }
     if (!nxt && now >= cur.end - decisionLead()) decide();
     if (nxt && now >= cur.end) {           /* hand-over */
       lastId = cur.seg.id; cur = nxt; nxt = null;
@@ -139,12 +154,14 @@
   function start() {
     if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = 0.9; analyser = ctx.createAnalyser(); analyser.fftSize = 2048; analyser.minDecibels = -96; analyser.maxDecibels = 6; master.connect(analyser); analyser.connect(ctx.destination); }
     if (ctx.state === 'suspended') ctx.resume();
-    var pending = SEG.filter(function (s) { return !buffers[s.id]; }), done = 0;
+    var pending = allSegs().filter(function (s) { return !buffers[bufKey(s)]; }), done = 0;
     startBtn.disabled = true; if (pending.length) startBtn.textContent = T('loading') + ' 0/' + pending.length;
-    Promise.all(pending.map(function (s) { return loadBuffer(s).then(function (b) { buffers[s.id] = b; done++; startBtn.textContent = T('loading') + ' ' + done + '/' + pending.length; }); })).then(function () {
+    Promise.all(pending.map(function (s) { return loadBuffer(s).then(function (b) { buffers[bufKey(s)] = b; done++; startBtn.textContent = T('loading') + ' ' + done + '/' + pending.length; }); })).then(function () {
       if (pending.length) logLoad(pending);
       running = true; queued = later = null; randomAuto = false; lastId = null; history = [];
-      cur = schedule(SEG[0], ctx.currentTime + 0.05 + (usePre() ? preSec(SEG[0]) : 0)); nxt = null;   /* first entry sits after its own pick-up: start times can't be negative */ history.push(SEG[0].id);
+      var first = INTRO || SEG[0];
+      cur = schedule(first, ctx.currentTime + 0.05 + preSec(first)); nxt = null;   /* first entry sits after its own pick-up: start times can't be negative */
+      history.push(first.id);
       timer = setInterval(tick, TICK); startBtn.disabled = false; render();
     }).catch(function (err) { running = false; clearInterval(timer); cur = nxt = null; startBtn.disabled = false; var s = document.createElement('span'); s.className = 'bad'; s.textContent = 'start error: ' + (err && err.stack || err) + '\n'; histEl.appendChild(s); render(); });
   }
@@ -162,56 +179,65 @@
   function logSeam(a, b) {
     var err = (b.start - a.end) * 1000, pre = (b.start - b.audioStart) * 1000;
     var how = (b.seg.loop && a.seg.id === b.seg.id) ? '(loop)' : randomAuto ? '(random)' : '(queued)';
-    var line = a.seg.id + ' → ' + b.seg.id + '  ' + how + '   seam ' + err.toFixed(3) + ' ms' + (pre > 0 ? '   pick-up ' + pre.toFixed(0) + ' ms overlapped' : '');
+    var line = a.seg.id + ' → ' + b.seg.id + '  ' + how + '   seam ' + err.toFixed(3) + ' ms' + (pre > 0 ? '   lead-in ' + pre.toFixed(0) + ' ms overlapped' : '');
     var span = document.createElement('span'); span.className = Math.abs(err) < 1 ? 'gap' : 'bad'; span.textContent = line + '\n';
     histEl.appendChild(span); histEl.scrollTop = histEl.scrollHeight;
   }
   function logLoad(list) {
     /* decoded length vs. the bar maths from the file name — a quick check that the mp3 decoded gaplessly */
-    var lines = list.map(function (s) { var b = buffers[s.id], lg = logicalSec(s), bars = lg / barSec(s.bpmOut); return s.id + '  ' + b.duration.toFixed(3) + 's  logical ' + lg.toFixed(3) + 's ≈ ' + bars.toFixed(2) + ' bars@' + s.bpmOut; });
+    var lines = list.map(function (s) { var b = buffers[bufKey(s)], lg = logicalSec(s), bars = lg / barSec(s.bpmOut); return s.id + '  ' + b.duration.toFixed(3) + 's' + (s.durationSec ? ' (true ' + s.durationSec.toFixed(3) + 's)' : '') + '  logical ' + lg.toFixed(3) + 's ≈ ' + bars.toFixed(2) + ' bars'; });
     var span = document.createElement('span'); span.className = 'dim'; span.textContent = lines.join('\n') + '\n'; histEl.appendChild(span);
   }
 
   /* ------------------------------------------------------------ UI */
   var startBtn = document.getElementById('start'), segsEl = document.getElementById('segs'), nowEl = document.getElementById('now'),
       progEl = document.getElementById('prog'), nextEl = document.getElementById('next'), histEl = document.getElementById('hist'),
-      optExclude = document.getElementById('optExclude'), optXfade = document.getElementById('optXfade'), optRules = document.getElementById('optRules'), optPre = document.getElementById('optPre'), dmark = document.getElementById('dmark');
-  var segBtns = {}, randomBtn, groupEls = {};
+      optExclude = document.getElementById('optExclude'), optRules = document.getElementById('optRules'), dmark = document.getElementById('dmark'),
+      themesEl = document.getElementById('themes');
+  var segBtns = {}, randomBtn, outroBtn, colEls = {};
 
+  function buildThemes() {
+    themesEl.innerHTML = '';
+    THEMES.forEach(function (th) {
+      var b = document.createElement('button'); b.className = 'theme' + (th === TH ? ' active' : ''); b.textContent = th.name[lang] || th.id;
+      b.addEventListener('click', function () { if (th === TH || running) return; useTheme(th); buildThemes(); buildButtons(); render(); });
+      themesEl.appendChild(b);
+    });
+    themesEl.style.display = THEMES.length > 1 ? '' : 'none';
+  }
+  /* compact grid: one column per letter (header = letter), versions stacked under it; Outro + Random as the last columns */
   function buildButtons() {
-    segsEl.innerHTML = ''; segBtns = {}; groupEls = {};
+    segsEl.innerHTML = ''; segBtns = {}; colEls = {};
     GROUPS.forEach(function (g) {
-      var row = document.createElement('div'); row.className = 'grp'; row.style.setProperty('--c', g.color);
-      var head = document.createElement('div'); head.className = 'ghead'; head.innerHTML = '<b></b><i></i>';
-      var list = document.createElement('div'); list.className = 'gsegs';
-      row.appendChild(head); row.appendChild(list); segsEl.appendChild(row); groupEls[g.id] = { row: row, head: head, list: list };
+      var col = document.createElement('div'); col.className = 'col'; col.style.setProperty('--c', g.color);
+      var head = document.createElement('div'); head.className = 'chead'; head.textContent = g.name[lang] || g.id; col.appendChild(head);
       SEG.filter(function (s) { return s.group === g.id; }).forEach(function (s) {
         var b = document.createElement('button'); b.className = 'seg'; b.style.setProperty('--c', g.color);
-        b.innerHTML = '<span class="nm"></span><span class="meta"></span><span class="st"></span>';
+        b.innerHTML = '<span class="nm"></span><span class="st"></span>';
         b.addEventListener('click', function () { choose(s.id); });
-        list.appendChild(b); segBtns[s.id] = b;
+        col.appendChild(b); segBtns[s.id] = b;
       });
+      segsEl.appendChild(col); colEls[g.id] = col;
     });
-    var rrow = document.createElement('div'); rrow.className = 'grp rnd';
-    randomBtn = document.createElement('button'); randomBtn.className = 'seg random'; randomBtn.innerHTML = '<span class="nm"></span><span class="meta"></span><span class="st"></span>';
+    var tail = document.createElement('div'); tail.className = 'col ctrl';
+    var th = document.createElement('div'); th.className = 'chead'; th.textContent = ' '; tail.appendChild(th);
+    if (OUTRO) {
+      outroBtn = document.createElement('button'); outroBtn.className = 'seg outro'; outroBtn.innerHTML = '<span class="nm"></span><span class="st"></span>';
+      outroBtn.addEventListener('click', function () { choose(OUTRO.id); }); tail.appendChild(outroBtn); segBtns[OUTRO.id] = outroBtn;
+    }
+    randomBtn = document.createElement('button'); randomBtn.className = 'seg random'; randomBtn.innerHTML = '<span class="nm"></span><span class="st"></span>';
     randomBtn.addEventListener('click', function () { queued = null; later = null; randomAuto = false; render(); });
-    rrow.appendChild(randomBtn); segsEl.appendChild(rrow);
+    tail.appendChild(randomBtn); segsEl.appendChild(tail);
   }
-  function tempoText(seg) { return seg.bpmIn === seg.bpmOut ? seg.bpmIn + ' BPM' : seg.bpmIn + '→' + seg.bpmOut + ' BPM'; }
   function render() {
     document.documentElement.lang = lang === 'zh' ? 'zh-Hant' : 'en';
     document.querySelectorAll('[data-i18n]').forEach(function (el) { var k = el.getAttribute('data-i18n'); el.textContent = k === 'start' ? (running ? T('stop') : T('start')) : T(k); });
     document.querySelectorAll('[data-lang]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-lang') === lang); });
-    GROUPS.forEach(function (g) {
-      var ge = groupEls[g.id], segs = SEG.filter(function (s) { return s.group === g.id; });
-      ge.head.querySelector('b').textContent = g.name[lang];
-      ge.head.querySelector('i').textContent = segs.length ? tempoText(segs[0]) : '';
-      ge.row.classList.toggle('active', !!cur && cur.seg.group === g.id);
-    });
-    SEG.forEach(function (s) {
+    GROUPS.forEach(function (g) { colEls[g.id].classList.toggle('active', !!cur && cur.seg.group === g.id); });
+    var list = SEG.slice(); if (OUTRO) list.push(OUTRO);
+    list.forEach(function (s) {
       var b = segBtns[s.id], st = '';
-      b.querySelector('.nm').textContent = labelOf(s);
-      b.querySelector('.meta').textContent = (s.loop ? 'loop' : T('pick') + ' ' + s.preBars + ' · ' + T('tail') + ' ' + s.tailBars) + (s.info && s.info !== 'loop' ? ' · ' + s.info : '');
+      b.querySelector('.nm').textContent = nameOf(s);
       var isCur = !!cur && cur.seg.id === s.id;
       b.classList.toggle('playing', isCur);
       var isQ = (nxt && nxt.seg.id === s.id) || (!nxt && queued === s.id);
@@ -227,21 +253,24 @@
     randomBtn.querySelector('.nm').textContent = T('random');
     randomBtn.classList.toggle('auto', randomAuto && running);
     randomBtn.querySelector('.st').textContent = randomAuto && running ? T('random_auto') : '';
-    randomBtn.disabled = !running;
-    nowEl.textContent = cur ? cur.seg.id : '—'; nowEl.style.color = cur ? colorOf(cur.seg) : '';
+    randomBtn.disabled = !running || (cur && cur.seg === OUTRO);
+    nowEl.textContent = cur ? nameOf(cur.seg) : '—'; nowEl.style.color = cur ? colorOf(cur.seg) : '';
     progEl.style.setProperty('--c', cur ? colorOf(cur.seg) : '');
     if (!running) nextEl.innerHTML = '';
-    else if (nxt) nextEl.innerHTML = (nxt.seg.loop && nxt.seg.id === cur.seg.id ? T('next_loop') : randomAuto ? T('next_auto') : T('next_locked')).replace('{n}', nxt.seg.id);
-    else if (queued) nextEl.innerHTML = T('next_queued').replace('{n}', queued);
-    else if (cur.seg.loop) nextEl.innerHTML = T('next_loop').replace('{n}', cur.seg.id);
+    else if (cur.seg === OUTRO) nextEl.innerHTML = T('next_end');
+    else if (nxt) nextEl.innerHTML = (nxt.seg.loop && nxt.seg.id === cur.seg.id ? T('next_loop') : randomAuto ? T('next_auto') : T('next_locked')).replace('{n}', nameOf(nxt.seg));
+    else if (queued) nextEl.innerHTML = T('next_queued').replace('{n}', nameOf(byId[queued]));
+    else if (cur.seg.loop) nextEl.innerHTML = T('next_loop').replace('{n}', nameOf(cur.seg));
     else nextEl.innerHTML = T('next_none').replace('{s}', Math.max(0, cur.end - decisionLead() - ctx.currentTime).toFixed(1));
   }
   function renderProgress() {
     if (!cur) { progEl.firstElementChild.style.width = '0'; return; }
     var f = Math.min(1, Math.max(0, (ctx.currentTime - cur.start) / (cur.end - cur.start)));
     progEl.firstElementChild.style.width = (f * 100) + '%';
-    dmark.style.left = (Math.max(0, 1 - decisionLead() / (cur.end - cur.start)) * 100) + '%';
-    if (!nxt && !queued && !cur.seg.loop) nextEl.innerHTML = T('next_none').replace('{s}', Math.max(0, cur.end - decisionLead() - ctx.currentTime).toFixed(1));
+    var showMark = cur.seg !== OUTRO;
+    dmark.style.display = showMark ? '' : 'none';
+    if (showMark) dmark.style.left = (Math.max(0, 1 - decisionLead() / (cur.end - cur.start)) * 100) + '%';
+    if (!nxt && !queued && !cur.seg.loop && showMark) nextEl.innerHTML = T('next_none').replace('{s}', Math.max(0, cur.end - decisionLead() - ctx.currentTime).toFixed(1));
   }
 
   /* spectrum display (same style as the OS player) + segment colour */
@@ -270,19 +299,22 @@
   })();
 
   startBtn.addEventListener('click', function () { running ? stop() : start(); });
-  document.querySelectorAll('[data-lang]').forEach(function (b) { b.addEventListener('click', function () { lang = b.getAttribute('data-lang'); try { localStorage.setItem('lang', lang); } catch (e) {} render(); }); });
-  [optExclude, optXfade, optRules, optPre].forEach(function (o) { o.addEventListener('change', render); });
-  /* keyboard: a group letter queues that group's first version; the same letter again cycles through its versions */
+  document.querySelectorAll('[data-lang]').forEach(function (b) { b.addEventListener('click', function () { lang = b.getAttribute('data-lang'); try { localStorage.setItem('lang', lang); } catch (e) {} buildThemes(); buildButtons(); render(); }); });
+  [optExclude, optRules].forEach(function (o) { o.addEventListener('change', render); });
+  /* keyboard: a letter queues that group's first version; the same letter again cycles through its versions; O = outro */
   document.addEventListener('keydown', function (e) {
-    var g = e.key.toUpperCase(); if (!byGroup[g] || !running) return;
+    if (!running) return;
+    var g = e.key.toUpperCase();
+    if (g === 'O' && OUTRO) { choose(OUTRO.id); return; }
+    if (!byGroup[g]) return;
     var segs = SEG.filter(function (s) { return s.group === g; }), i = 0;
     var curPick = nxt ? later : queued;
-    if (curPick && byId[curPick].group === g) i = (segs.findIndex(function (s) { return s.id === curPick; }) + 1) % segs.length;
+    if (curPick && byId[curPick] && byId[curPick].group === g) i = (segs.findIndex(function (s) { return s.id === curPick; }) + 1) % segs.length;
     choose(segs[i].id);
   });
 
   fetch('segments.json').then(function (r) { return r.json(); }).then(function (cfg) {
-    CFG = cfg; SEG = cfg.segments; GROUPS = cfg.groups || []; SEG.forEach(function (s) { byId[s.id] = s; }); GROUPS.forEach(function (g) { byGroup[g.id] = g; });
-    optExclude.checked = !!cfg.excludeLast; buildButtons(); render();
+    CFG = cfg; THEMES = cfg.themes || []; useTheme(THEMES[0]);
+    optExclude.checked = !!cfg.excludeLast; buildThemes(); buildButtons(); render();
   });
 })();

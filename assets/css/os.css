@@ -203,6 +203,15 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .ph-hero b{display:block;font-size:22px;letter-spacing:.04em}.ph-hero span{font-size:12px;opacity:.8}
 .ph-dock{margin:0 0 calc(12px + env(safe-area-inset-bottom));background:rgba(255,255,255,.14);backdrop-filter:blur(20px);border-radius:28px;padding:12px 10px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .ph-dock .ph-app{font-size:0}
+/* window resize grips (desktop only) */
+.win .grip{position:absolute;z-index:5;pointer-events:auto}
+.win .grip.n,.win .grip.s{left:8px;right:8px;height:6px;cursor:ns-resize}.win .grip.n{top:0}.win .grip.s{bottom:0}
+.win .grip.e,.win .grip.w{top:8px;bottom:8px;width:6px;cursor:ew-resize}.win .grip.e{right:0}.win .grip.w{left:0}
+.win .grip.ne,.win .grip.nw,.win .grip.se,.win .grip.sw{width:12px;height:12px}
+.win .grip.ne{top:0;right:0;cursor:nesw-resize}.win .grip.sw{bottom:0;left:0;cursor:nesw-resize}
+.win .grip.nw{top:0;left:0;cursor:nwse-resize}.win .grip.se{bottom:0;right:0;cursor:nwse-resize}
+.win.resizing iframe{pointer-events:none}
+@media(max-width:699px){.win .grip{display:none}}
 /* fullscreen app panel */
 .ph-apps{position:absolute;inset:0;z-index:6;pointer-events:none}
 .papp{position:absolute;inset:0;background:#0f1218;display:flex;flex-direction:column;pointer-events:auto;animation:pin .28s cubic-bezier(.2,.8,.2,1)}

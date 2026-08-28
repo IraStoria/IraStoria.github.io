@@ -2,12 +2,12 @@
   "id": "interactive-player",
   "year": 2026,
   "title": {
-    "zh": "互動式段落播放器 · Theme A",
-    "en": "Interactive Section Player · Theme A"
+    "zh": "互動式段落播放器",
+    "en": "Interactive Section Player"
   },
   "desc": {
-    "zh": "IraStoria 原創曲 Theme A 的段落切片：播放中點選段落，會在目前段落結束時無縫接續（含 pick-up／tail 重疊）；沒選的話「隨機」鈕自動接手；I 段可自我循環。接續白名單待定。",
-    "en": "Section slices of the original IraStoria track Theme A: pick a section while playing and it joins seamlessly when the current one ends (pick-up/tail overlap); otherwise Random takes over; section I loops itself. Transition whitelist pending."
+    "zh": "IraStoria 原創曲的段落切片：前奏後，播放中點選段落會在目前段落結束時無縫接續；沒選的話隨機接手；點尾奏收尾。",
+    "en": "Section slices of original IraStoria tracks: after the intro, pick a section while playing and it joins seamlessly when the current one ends; otherwise Random takes over; pick Outro to finish."
   },
   "platform": "all",
   "concept_level_checked": true,
