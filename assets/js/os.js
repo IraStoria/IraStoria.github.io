@@ -221,8 +221,9 @@
         // the whole spectrum doubles as the progress bar: bars/baseline left of the play head are amber, the unplayed part is a quiet grey (frac frozen while paused)
         var st = player.state(), px = W * Math.max(0, Math.min(1, st.frac || 0));
         // right after the line joins, a grey sweep runs right→left over the amber line ("clearing" the progress bar) before real progress takes over
-        var gAmb = grad(y, y - maxH, '224,176,74', 0.22, 0.85), gGrey = grad(y, y - maxH, '255,255,255', 0.06, 0.32),
-            gAmbR = grad(y, y + maxH * 0.45, '224,176,74', 0.16, 0), gGreyR = grad(y, y + maxH * 0.45, '255,255,255', 0.06, 0);
+        // unplayed bars are a solid cool slate (not translucent white — that reads as fog on the dark wallpaper); gradients only dim the foot near the line
+        var gAmb = grad(y, y - maxH, '224,176,74', 0.35, 0.95), gGrey = grad(y, y - maxH, '96,104,122', 0.45, 0.95),
+            gAmbR = grad(y, y + maxH * 0.45, '224,176,74', 0.16, 0), gGreyR = grad(y, y + maxH * 0.45, '96,104,122', 0.18, 0);
         var lpx = px;   // the sweep only touches the baseline; the bars follow real progress
         if (clearT0) { var cp = (now - clearT0) / CLEAR_MS; if (cp >= 1) clearT0 = 0; else lpx = Math.max(px, W * (1 - ease(cp))); }
         for (var i = 0; i < n; i++) {
