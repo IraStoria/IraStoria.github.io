@@ -24,9 +24,34 @@
     ['$ ' + (lang === 'zh' ? 'echo "作曲 × 遊戲音訊 × 互動音樂"' : 'echo "music × game audio × interactive"'), '> <hl>' + (lang === 'zh' ? '讓音樂跟著玩家一起動' : 'make music move with the player') + '</hl>'],
     ['$ boot irastoria-os', '> ' + U.boot_1 + '\n> ' + U.boot_2 + '\n> ' + U.boot_3 + '\n> ' + U.boot_ready]
   ];
+  // ============================================================ fx: click-to-enter video overlay + synced sound (IDEA-001 / feat.fx)
+  var fx = (function () {
+    var cfg = (D.fx && D.fx.click) || null, vid = null, snd = null;
+    if (cfg && cfg.video && !reduced) { vid = document.createElement('video'); vid.src = '../' + cfg.video; vid.muted = true; vid.playsInline = true; vid.preload = 'auto'; vid.className = 'fx-clip'; vid.setAttribute('aria-hidden', 'true'); vid.load(); }
+    if (cfg && cfg.sound) { snd = new Audio('../' + cfg.sound); snd.preload = 'auto'; snd.load(); }
+    function muted() { try { return localStorage.getItem('muted') === '1'; } catch (e) { return false; } }
+    function volume() { try { var v = parseFloat(localStorage.getItem('vol')); return (v >= 0 && v <= 1) ? v : 1; } catch (e) { return 1; } }
+    function click() {
+      if (!cfg) return;
+      // sound: its onset (cfg.sound_onset s into the file) must land at video time cfg.sound_at
+      if (snd && !muted()) {
+        var delay = Math.max(0, ((cfg.sound_at || 0) - (cfg.sound_onset || 0)) * 1000);
+        setTimeout(function () { try { snd.volume = volume(); snd.currentTime = 0; snd.play().catch(function () {}); } catch (e) {} }, delay);
+      }
+      if (vid) {
+        vid.style.width = (cfg.width || 240) + 'px'; vid.style.opacity = cfg.opacity == null ? 0.55 : cfg.opacity; vid.style.left = cfg.x || '50%'; vid.style.top = cfg.y || '50%';
+        document.body.appendChild(vid); vid.currentTime = 0;
+        var p = vid.play(); if (p && p.catch) p.catch(function () { vid.remove(); });
+        vid.onended = function () { vid.classList.add('fade'); setTimeout(function () { vid.remove(); vid.classList.remove('fade'); }, 320); };
+      }
+    }
+    return { click: click };
+  })();
+
   var done = false;
   function enterDesktop() {
     if (done) return; done = true;
+    fx.click();
     boot.classList.add('out');
     desktop.hidden = false;
     setTimeout(function () { boot.remove(); }, reduced ? 0 : 500);
@@ -461,6 +486,7 @@
       if (m && APPS.indexOf(m[1]) >= 0) open(m[1]);
     }
     function unlock(instant) {
+      if (!instant) fx.click();
       if (unlocked) return; unlocked = true;
       lock.classList.add('up'); home.hidden = false;
       setTimeout(function () { lock.remove(); }, (instant || reduced) ? 0 : 400);

@@ -273,5 +273,18 @@
       "IraStoria — composer and game audio designer. My long-running interest is how music responds to interaction: not pasting music onto a screen, but letting the music itself follow the player's rhythm in a structured way.",
       "I am currently working on a rhythm game and a home-grown DAW / notation tool. This site collects works, hands-on concept demos, and scattered notes."
     ]
+  },
+  "fx": {
+    "click": {
+      "video": "assets/fx/click.mp4",
+      "sound": "assets/fx/click.ogg",
+      "sound_at": 0.46,
+      "sound_onset": 0.062,
+      "width": 240,
+      "opacity": 0.55,
+      "x": "50%",
+      "y": "50%",
+      "_note": "click-to-enter effect: video overlay (pointer-events none) + sound whose onset lands at video t=sound_at"
+    }
   }
 }

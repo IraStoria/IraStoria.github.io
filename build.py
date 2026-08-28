@@ -104,6 +104,20 @@ def load_site():
     for k in ("site_name", "base_url", "default_language"):
         if not site.get(k):
             raise BuildError(f"site.json: '{k}' is required")
+    fx = site.get("fx") or {}
+    for name, f in fx.items():
+        if not isinstance(f, dict):
+            raise BuildError(f"site.json: fx.{name} must be an object")
+        for key, exts, cap in (("video", (".mp4", ".webm"), 3_000_000), ("sound", (".ogg", ".mp3"), 1_000_000)):
+            rel = f.get(key)
+            if rel:
+                fp = ROOT / rel
+                if not fp.exists():
+                    raise BuildError(f"site.json: fx.{name}.{key} not found: {rel}")
+                if fp.suffix.lower() not in exts:
+                    raise BuildError(f"site.json: fx.{name}.{key} must be {'/'.join(exts)}")
+                if fp.stat().st_size > cap:
+                    raise BuildError(f"site.json: fx.{name}.{key} exceeds {cap // 1_000_000} MB (feat.fx)")
     c = site.get("contact", {})
     if not c.get("email_user") or not c.get("email_domain"):
         raise BuildError("site.json: contact.email_user / email_domain required")
@@ -406,6 +420,7 @@ def build_pages(site, works, demos, articles):
             "lang": lang, "author": site["author"][lang], "tagline": site["tagline"][lang], "hero_intro": site["hero_intro"][lang],
             "about": site["about_body"][lang], "contact": site["contact"],
             "ui": {k: v[lang] for k, v in site["ui"].items()},
+            "fx": {name: {k: (local_versioned(v) if k in ("video", "sound") and v else v) for k, v in f.items() if not k.startswith("_")} for name, f in (site.get("fx") or {}).items()},
             "works": [loc(w) for w in works],
             "demos": [{"path": rel, "title": m["title"][lang], "desc": m["desc"][lang], "platform": m["platform"], "year": m.get("year", "")} for rel, m in demos.items()],
             "articles": [{"slug": a["slug"], "title": a[lang]["meta"]["title"], "date": a[lang]["meta"]["date"]} for a in articles],
