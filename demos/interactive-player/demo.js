@@ -99,9 +99,25 @@
   function nameOf(seg) { return seg.id.replace('_', ' '); }
 
   /* ------------------------------------------------------------ audio loading */
-  function loadBuffer(seg) {
+  /* decode with a concurrency cap: decoding twenty mp3s at once stalls mobile Safari (and peaks memory); Safari < 15 also only knows the callback form */
+  var DECODE_AT_ONCE = 2, decodeQueue = [], decoding = 0;
+  function decode(ab) {
+    return new Promise(function (res, rej) {
+      decodeQueue.push(function () {
+        decoding++;
+        var done = function (fn) { return function (v) { decoding--; pump(); fn(v); }; };
+        try {
+          var p = ctx.decodeAudioData(ab, done(res), done(function (e) { rej(e || new Error('decode failed')); }));
+          if (p && p.then) p.then(function () {}, function () {});   /* promise form resolves through the callbacks above; swallow the duplicate rejection */
+        } catch (e) { done(rej)(e); }
+      });
+      pump();
+    });
+  }
+  function pump() { while (decoding < DECODE_AT_ONCE && decodeQueue.length) decodeQueue.shift()(); }
+  function loadBuffer(seg, onFetched) {
     return fetch(seg.file).then(function (r) { if (!r.ok) throw new Error(seg.file + ' ' + r.status); return r.arrayBuffer(); })
-      .then(function (ab) { return ctx.decodeAudioData(ab); });
+      .then(function (ab) { if (onFetched) onFetched(); return decode(ab); });
   }
 
   /* ------------------------------------------------------------ scheduler */
@@ -179,9 +195,10 @@
   function start() {
     if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = 0.9; analyser = ctx.createAnalyser(); analyser.fftSize = 2048; analyser.minDecibels = -96; analyser.maxDecibels = 6; master.connect(analyser); analyser.connect(ctx.destination); }
     if (ctx.state === 'suspended') ctx.resume();
-    var pending = allSegs().filter(function (s) { return !buffers[bufKey(s)]; }), done = 0;
-    startBtn.disabled = true; if (pending.length) startBtn.textContent = T('loading') + ' 0/' + pending.length;
-    Promise.all(pending.map(function (s) { return loadBuffer(s).then(function (b) { buffers[bufKey(s)] = b; done++; startBtn.textContent = T('loading') + ' ' + done + '/' + pending.length; }); })).then(function () {
+    var pending = allSegs().filter(function (s) { return !buffers[bufKey(s)]; }), done = 0, fetched = 0;
+    var prog = function () { startBtn.textContent = T('loading') + ' ' + fetched + '↓ ' + done + '/' + pending.length; };   /* downloaded↓ decoded/total — so a stall is visible as one or the other */
+    startBtn.disabled = true; if (pending.length) prog();
+    Promise.all(pending.map(function (s) { return loadBuffer(s, function () { fetched++; prog(); }).then(function (b) { buffers[bufKey(s)] = b; done++; prog(); }); })).then(function () {
       if (pending.length && /[?&]debug/.test(location.search)) logLoad(pending);   /* decode check only with ?debug */
       running = true; queued = later = null; randomAuto = false; lastId = null; history = [];
       var first = INTRO || SEG[0];
