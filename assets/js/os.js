@@ -524,7 +524,7 @@
       playing = false; refresh();
     }
     function load(i, autoplay) {
-      stopAll(true); var changed = cur >= 0 && cur !== i; cur = i;   // first load (boot) is not a track change — the boot sweep must stay line-only var t = list[i];
+      stopAll(true); var changed = cur >= 0 && cur !== i; cur = i; var t = list[i];   /* first load (boot) is not a track change: the boot sweep must stay line-only */
       if (changed) trackListeners.forEach(function (fn) { try { fn(); } catch (e) {} });
       if (ui.ext) ui.ext.innerHTML = '';
       if (t.synth || (t.media && t.media.local)) {

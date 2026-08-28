@@ -162,6 +162,13 @@ for _js in sorted(list((B.ROOT / "assets" / "js").glob("*.js")) + list((B.ROOT /
     else:
         ok(f"js syntax {_js.name}", False, "node not found")
 
+# Swallowed-code guard: a `//` comment that itself contains a statement (e.g. "... line-only var t = list[i];") silently
+# eats the code after it and still passes node --check. Flag comment tails that look like code.
+_swallow = re.compile(r'//.*(var|let|const|return|function).*;\s*$')
+for _js in sorted(list((B.ROOT / "assets" / "js").glob("*.js")) + list((B.ROOT / "demos").glob("*/demo.js"))):
+    _bad = [i + 1 for i, ln in enumerate(_js.read_text(encoding="utf-8").splitlines()) if "://" not in ln and _swallow.search(ln)]
+    ok(f"no code swallowed by // comment in {_js.relative_to(B.ROOT).as_posix()}", not _bad, f"lines {_bad}")
+
 # ---- report
 fails = [r for r in results if not r[0]]
 for okk, name, msg in results:
