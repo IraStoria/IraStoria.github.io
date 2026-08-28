@@ -109,6 +109,19 @@
 
   // ============================================================ background wave + now-playing caption
   var CONNECT_MS = 1100, DECAY_PER_SEC = 0.55, FADE_SEC = 3;   // bars keep 55%/s when paused (~7 s to silence); audio fades out over FADE_SEC on pause
+  // log-frequency bar levels with sub-bin interpolation: bars never share one FFT bin (no flat plateau in the bass),
+  // and the analyser's dB window is widened so loud lows do not clip to a flat top
+  function barLevels(an, n) {
+    var data = new Uint8Array(an.frequencyBinCount); an.getByteFrequencyData(data);
+    var out = new Array(n), lo = 1, hi = data.length - 1, ratio = hi / lo;
+    for (var i = 0; i < n; i++) {
+      var a = lo * Math.pow(ratio, i / n), b = lo * Math.pow(ratio, (i + 1) / n), v;
+      if (b - a < 1) { var k = Math.floor(a), f = a - k; v = data[k] * (1 - f) + (data[Math.min(k + 1, hi)] || 0) * f; }   // narrower than a bin → interpolate
+      else { v = 0; for (var j = Math.floor(a); j < b && j <= hi; j++) v = Math.max(v, data[j]); }                          // wider → peak
+      out[i] = v / 255;
+    }
+    return out;
+  }
   function decayFactor(dtMs) { return Math.pow(DECAY_PER_SEC, dtMs / 1000); }   // frame-rate independent (real elapsed time, so a throttled tab catches up)
   function makeWave(cv, yRatio) {
     var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0;
@@ -129,13 +142,11 @@
       if (mode === 'live' && an) {
         // spectrum bars (same log-frequency mapping as the player). On pause the bars fall gradually instead of vanishing.
         var n = Math.max(48, Math.min(128, Math.floor(W / 12))), bw = W / n, maxH = H * 0.28, any = false;
-        var data = new Uint8Array(an.frequencyBinCount); an.getByteFrequencyData(data);
+        var lv = barLevels(an, n);
         if (levels.length !== n) levels = new Array(n).fill(0);
         g2.shadowBlur = 0;
         for (var i = 0; i < n; i++) {
-          var lo = Math.floor(Math.pow(data.length, i / n)), hi = Math.max(lo + 1, Math.floor(Math.pow(data.length, (i + 1) / n))), m = 0;
-          for (var b = lo; b < hi && b < data.length; b++) m = Math.max(m, data[b]);
-          var target = m / 255;   // follows the real signal, so the fade-out and the bars fall together
+          var target = lv[i];   // follows the real signal, so the fade-out and the bars fall together
           levels[i] = target > levels[i] ? target : Math.max(target, levels[i] * dk);
           var h = levels[i] * maxH, x = i * bw + 1; if (h > 0.5) any = true;
           g2.fillStyle = 'rgba(224,176,74,.75)'; g2.fillRect(x, y - h, bw - 2, h);
@@ -358,7 +369,7 @@
       if (cur < 0) prepare(); else refresh();
       draw(); if (!timeTimer) timeTimer = setInterval(tickTime, 250); tickTime();
     }
-    function ensureCtx() { if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); analyser = actx.createAnalyser(); analyser.fftSize = 512; out = actx.createGain(); out.gain.value = muted ? 0 : vol; analyser.connect(out); out.connect(actx.destination); master = actx.createGain(); master.connect(analyser); } /* analyser sits before the volume stage so the bars keep moving while muted */ if (actx.state === 'suspended') actx.resume(); }
+    function ensureCtx() { if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); analyser = actx.createAnalyser(); analyser.fftSize = 2048; analyser.minDecibels = -90; analyser.maxDecibels = -10; analyser.smoothingTimeConstant = 0.8; out = actx.createGain(); out.gain.value = muted ? 0 : vol; analyser.connect(out); out.connect(actx.destination); master = actx.createGain(); master.connect(analyser); } /* analyser sits before the volume stage so the bars keep moving while muted */ if (actx.state === 'suspended') actx.resume(); }
     var fadeTimer = null, pausedAt = null;   // position at the moment pause was pressed (the fade tail must not count as progress)
     function rampDown(g) { g.gain.cancelScheduledValues(0); g.gain.setValueAtTime(Math.max(g.gain.value, 0.0001), actx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + FADE_SEC); }
     function stopAll(immediate) {
@@ -429,11 +440,10 @@
       var c = ui.viz, g2 = c.getContext('2d'); if (c.width !== c.clientWidth) { c.width = c.clientWidth; c.height = c.clientHeight; }
       g2.clearRect(0, 0, c.width, c.height);
       if (analyser) {
-        var data = new Uint8Array(analyser.frequencyBinCount); analyser.getByteFrequencyData(data);
         var n = 64, bw = c.width / n; g2.fillStyle = 'rgba(224,176,74,.55)';
+        var lv = barLevels(analyser, n);
         if (vizLevels.length !== n) vizLevels = new Array(n).fill(0);
-        for (var i = 0; i < n; i++) { var lo = Math.floor(Math.pow(data.length, i / n)), hi = Math.max(lo + 1, Math.floor(Math.pow(data.length, (i + 1) / n))), m = 0; for (var b = lo; b < hi && b < data.length; b++) m = Math.max(m, data[b]);
-          var tg = m / 255; vizLevels[i] = tg > vizLevels[i] ? tg : Math.max(tg, vizLevels[i] * dk);
+        for (var i = 0; i < n; i++) { var tg = lv[i]; vizLevels[i] = tg > vizLevels[i] ? tg : Math.max(tg, vizLevels[i] * dk);
           var h = vizLevels[i] * c.height; g2.fillRect(i * bw, c.height - h, bw - 1, h); }
       }
     }

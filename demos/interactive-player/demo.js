@@ -164,7 +164,7 @@
     renderProgress();
   }
   function start() {
-    if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = 0.8; analyser = ctx.createAnalyser(); analyser.fftSize = 512; master.connect(analyser); analyser.connect(ctx.destination); }
+    if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = 0.8; analyser = ctx.createAnalyser(); analyser.fftSize = 2048; analyser.minDecibels = -90; analyser.maxDecibels = -10; master.connect(analyser); analyser.connect(ctx.destination); }
     if (ctx.state === 'suspended') ctx.resume();
     var pending = SEG.filter(function (s) { return !buffers[s.id]; });
     startBtn.disabled = true;
@@ -257,7 +257,14 @@
     var data = new Uint8Array(analyser.frequencyBinCount); analyser.getByteFrequencyData(data);
     var n = 64, bw = W / n, col = cur ? cur.seg.color : '#e0b04a';
     vg.fillStyle = col + '99';
-    for (var i = 0; i < n; i++) { var lo = Math.floor(Math.pow(data.length, i / n)), hi = Math.max(lo + 1, Math.floor(Math.pow(data.length, (i + 1) / n))), m = 0; for (var b = lo; b < hi && b < data.length; b++) m = Math.max(m, data[b]); var h = m / 255 * H; vg.fillRect(i * bw, H - h, bw - 1, h); }
+    // log-frequency bars from bin 1 with sub-bin interpolation (same as the OS shell): no flat plateau in the bass
+    var lo0 = 1, hi0 = data.length - 1, ratio = hi0 / lo0;
+    for (var i = 0; i < n; i++) {
+      var a = lo0 * Math.pow(ratio, i / n), b2 = lo0 * Math.pow(ratio, (i + 1) / n), m;
+      if (b2 - a < 1) { var k = Math.floor(a), f = a - k; m = data[k] * (1 - f) + (data[Math.min(k + 1, hi0)] || 0) * f; }
+      else { m = 0; for (var b = Math.floor(a); b < b2 && b <= hi0; b++) m = Math.max(m, data[b]); }
+      var h = m / 255 * H; vg.fillRect(i * bw, H - h, bw - 1, h);
+    }
     var td = new Uint8Array(analyser.fftSize); analyser.getByteTimeDomainData(td);
     var peak = 0.02; for (var q = 0; q < td.length; q++) peak = Math.max(peak, Math.abs((td[q] - 128) / 128));
     vg.strokeStyle = 'rgba(255,255,255,.7)'; vg.lineWidth = 1.5; vg.beginPath();
