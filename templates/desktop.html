@@ -54,11 +54,14 @@
 
   <div id="windows" class="windows"></div>
 
+  <div class="np-cap" id="np-desktop" aria-live="polite"><span class="np-lbl">{{ui_player_now}}</span><b class="np-title"></b></div>
   <nav class="dock" id="dock" aria-label="dock"></nav>
 </div>
 
 
 <div id="phone" class="phone" hidden>
+  <canvas id="ph-wave" class="wave" aria-hidden="true"></canvas>
+  <div class="np-cap np-phone" id="np-phone" aria-live="polite"><span class="np-lbl">{{ui_player_now}}</span><b class="np-title"></b></div>
   <div class="ph-status"><span id="ph-time">9:41</span><span class="ph-sig">●●●● ᯤ ▮▮▮</span></div>
   <div id="ph-lock" class="ph-lock">
     <div class="ph-lock-time" id="ph-lock-time">9:41</div>

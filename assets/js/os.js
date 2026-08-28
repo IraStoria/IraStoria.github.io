@@ -33,7 +33,7 @@
     setTimeout(function () { boot.remove(); }, reduced ? 0 : 500);
     initDesktop();
     // two lines grow from the edges and meet in the middle; music starts the instant they connect (user gesture = this click)
-    wave.connect(function () { try { player.autoplay(); } catch (e) {} });
+    wave.connect(function () { try { player.autoplay(); } catch (e) {} caption.arm(); });
   }
   function typeLine(text, cb) {
     var i = 0, span = document.createElement('span'); span.className = 'p'; log.appendChild(span);
@@ -54,9 +54,10 @@
     typeLine(script[k][0], function () { printOut(script[k][1], function () { runBoot(k + 1); }); });
   }
 
-  // ============================================================ desktop wave (background waveform; "connect" transition on boot)
-  var wave = (function () {
-    var cv = $('#wave'), g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, CONNECT_MS = 1100, mode = 'idle', raf = null, onConnected = null;
+  // ============================================================ background wave + now-playing caption
+  var CONNECT_MS = 1100;
+  function makeWave(cv) {
+    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null;
     function size() { if (cv.width !== cv.clientWidth || cv.height !== cv.clientHeight) { cv.width = cv.clientWidth; cv.height = cv.clientHeight; } }
     function ease(x) { return 1 - Math.pow(1 - x, 3); }
     function draw() {
@@ -86,6 +87,19 @@
     function start(m) { if (!cv) return; mode = m || 'idle'; if (!raf) draw(); }
     function connect(cb) { if (!cv) { cb(); return; } onConnected = cb; connectT0 = performance.now(); start('connect'); }
     return { start: start, connect: connect };
+  }
+  var wave = makeWave($('#wave')), phoneWave = makeWave($('#ph-wave'));
+
+  // caption: fades in over CONNECT_MS (same as the line), follows the current track
+  var caption = (function () {
+    var els = [$('#np-desktop'), $('#np-phone')].filter(Boolean), timer = null, last = '';
+    function refresh() {
+      var st = player.state(), title = st.started ? st.title : '';
+      if (title === last) return; last = title;
+      els.forEach(function (el) { el.querySelector('.np-title').textContent = title; el.classList.toggle('show', !!title); });
+    }
+    function arm() { els.forEach(function (el) { el.style.transitionDuration = CONNECT_MS + 'ms'; }); if (!timer) timer = setInterval(refresh, 400); refresh(); }
+    return { arm: arm, refresh: refresh };
   })();
 
   // ============================================================ desktop
@@ -401,6 +415,8 @@
       try { sessionStorage.setItem('unlocked', '1'); } catch (e) {}
       lock.classList.add('up'); home.hidden = false;
       setTimeout(function () { lock.remove(); }, (instant || reduced) ? 0 : 400);
+      if (instant) { phoneWave.start('live'); caption.arm(); }
+      else phoneWave.connect(function () { try { player.autoplay(); } catch (e) {} caption.arm(); updateMini(); });
     }
     function open(app) {
       if (!unlocked) unlock(true);
@@ -440,7 +456,7 @@
 
   // ============================================================ kick-off (after all apps are defined)
   if (PHONE) { boot.remove(); desktop.remove(); phone.init(); }
-  else if (skipBoot) { boot.remove(); desktop.hidden = false; initDesktop(); wave.start('live'); }
+  else if (skipBoot) { boot.remove(); desktop.hidden = false; initDesktop(); wave.start('live'); caption.arm(); }
   else {
     runBoot(0);
     bootBtn.addEventListener('click', enterDesktop);
