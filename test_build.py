@@ -136,7 +136,9 @@ ok("no broken internal links", not broken, str(broken))
 # email anti-scrape (V2): raw address must not appear in any page
 addr = site["contact"]["email_user"] + "@" + site["contact"]["email_domain"]
 ok("email never appears verbatim (V2)", not any(addr in h for h in pages.values()))
-ok("email assembled on click present", all('data-email' in pages[f"{l}/index.html"] for l in ("zh", "en")))
+ok("email assembled on click present", all('data-email' in pages[f"{l}/about/index.html"] for l in ("zh", "en")))
+ok("desktop shell embeds site data", all('id="site-data"' in pages[f"{l}/index.html"] and '"works"' in pages[f"{l}/index.html"] for l in ("zh", "en")))
+ok("no </script> breakout in embedded JSON", all(pages[f"{l}/index.html"].count("</script>") == 2 for l in ("zh", "en")))
 
 # lang switch on every page points to the mirrored path
 mis = [p for p in pages if p.startswith("zh/") and f'href="{"../" * (p.count("/"))}en/{p[3:-len("index.html")]}"' not in pages[p]]

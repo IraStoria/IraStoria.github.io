@@ -1,9 +1,15 @@
 {
   "site_name": "IraStoria",
   "base_url": "https://irastoria.github.io",
-  "languages": ["zh", "en"],
+  "languages": [
+    "zh",
+    "en"
+  ],
   "default_language": "zh",
-  "author": { "zh": "IraStoria", "en": "IraStoria" },
+  "author": {
+    "zh": "IraStoria",
+    "en": "IraStoria"
+  },
   "tagline": {
     "zh": "作曲・遊戲音訊・互動音樂設計",
     "en": "Composer · Game Audio · Interactive Music Design"
@@ -16,40 +22,223 @@
     "email_user": "irastoriatw",
     "email_domain": "gmail.com",
     "links": [
-      { "label": "GitHub", "url": "https://github.com/IraStoria" }
+      {
+        "label": "GitHub",
+        "url": "https://github.com/IraStoria"
+      }
     ]
   },
   "nav": {
-    "home":     { "zh": "首頁",     "en": "Home" },
-    "works":    { "zh": "作品",     "en": "Works" },
-    "demos":    { "zh": "互動展示", "en": "Demos" },
-    "articles": { "zh": "文章",     "en": "Articles" },
-    "about":    { "zh": "關於",     "en": "About" }
+    "home": {
+      "zh": "首頁",
+      "en": "Home"
+    },
+    "works": {
+      "zh": "作品",
+      "en": "Works"
+    },
+    "demos": {
+      "zh": "互動展示",
+      "en": "Demos"
+    },
+    "articles": {
+      "zh": "文章",
+      "en": "Articles"
+    },
+    "about": {
+      "zh": "關於",
+      "en": "About"
+    }
   },
   "ui": {
-    "featured":        { "zh": "精選作品",             "en": "Featured Works" },
-    "all_works":       { "zh": "所有作品",             "en": "All Works" },
-    "view_all":        { "zh": "看全部作品 →",         "en": "View all works →" },
-    "open_demo":       { "zh": "開啟展示",             "en": "Open demo" },
-    "listen":          { "zh": "試聽",                 "en": "Listen" },
-    "read_more":       { "zh": "閱讀",                 "en": "Read" },
-    "contact_title":   { "zh": "聯絡",                 "en": "Contact" },
-    "email_label":     { "zh": "Email",                "en": "Email" },
-    "email_hint":      { "zh": "（點擊顯示）",          "en": "(click to reveal)" },
-    "about_title":     { "zh": "關於我",               "en": "About" },
-    "demos_title":     { "zh": "互動展示",             "en": "Interactive Demos" },
-    "demos_intro":     { "zh": "把設計想法做成可以親手操作的小東西。每個展示都是獨立頁面，可能只支援桌面瀏覽器。", "en": "Design ideas turned into small things you can play with. Each demo is a standalone page and may be desktop-only." },
-    "articles_title":  { "zh": "文章",                 "en": "Articles" },
-    "articles_empty":  { "zh": "文章整理中，敬請期待。", "en": "Articles are on their way." },
-    "platform_desktop":{ "zh": "桌面瀏覽器限定",       "en": "Desktop only" },
-    "platform_all":    { "zh": "桌面／手機皆可",        "en": "Desktop & mobile" },
-    "type_music":      { "zh": "音樂",                 "en": "Music" },
-    "type_game":       { "zh": "遊戲",                 "en": "Game" },
-    "type_tool":       { "zh": "工具",                 "en": "Tool" },
-    "type_demo":       { "zh": "展示",                 "en": "Demo" },
-    "filter_all":      { "zh": "全部",                 "en": "All" },
-    "lang_switch":     { "zh": "English",              "en": "中文" },
-    "footer":          { "zh": "© {year} IraStoria",   "en": "© {year} IraStoria" }
+    "featured": {
+      "zh": "精選作品",
+      "en": "Featured Works"
+    },
+    "all_works": {
+      "zh": "所有作品",
+      "en": "All Works"
+    },
+    "view_all": {
+      "zh": "看全部作品 →",
+      "en": "View all works →"
+    },
+    "open_demo": {
+      "zh": "開啟展示",
+      "en": "Open demo"
+    },
+    "listen": {
+      "zh": "試聽",
+      "en": "Listen"
+    },
+    "read_more": {
+      "zh": "閱讀",
+      "en": "Read"
+    },
+    "contact_title": {
+      "zh": "聯絡",
+      "en": "Contact"
+    },
+    "email_label": {
+      "zh": "Email",
+      "en": "Email"
+    },
+    "email_hint": {
+      "zh": "（點擊顯示）",
+      "en": "(click to reveal)"
+    },
+    "about_title": {
+      "zh": "關於我",
+      "en": "About"
+    },
+    "demos_title": {
+      "zh": "互動展示",
+      "en": "Interactive Demos"
+    },
+    "demos_intro": {
+      "zh": "把設計想法做成可以親手操作的小東西。每個展示都是獨立頁面，可能只支援桌面瀏覽器。",
+      "en": "Design ideas turned into small things you can play with. Each demo is a standalone page and may be desktop-only."
+    },
+    "articles_title": {
+      "zh": "文章",
+      "en": "Articles"
+    },
+    "articles_empty": {
+      "zh": "文章整理中，敬請期待。",
+      "en": "Articles are on their way."
+    },
+    "platform_desktop": {
+      "zh": "桌面瀏覽器限定",
+      "en": "Desktop only"
+    },
+    "platform_all": {
+      "zh": "桌面／手機皆可",
+      "en": "Desktop & mobile"
+    },
+    "type_music": {
+      "zh": "音樂",
+      "en": "Music"
+    },
+    "type_game": {
+      "zh": "遊戲",
+      "en": "Game"
+    },
+    "type_tool": {
+      "zh": "工具",
+      "en": "Tool"
+    },
+    "type_demo": {
+      "zh": "展示",
+      "en": "Demo"
+    },
+    "filter_all": {
+      "zh": "全部",
+      "en": "All"
+    },
+    "lang_switch": {
+      "zh": "English",
+      "en": "中文"
+    },
+    "footer": {
+      "zh": "© {year} IraStoria",
+      "en": "© {year} IraStoria"
+    },
+    "os_name": {
+      "zh": "IraStoria OS",
+      "en": "IraStoria OS"
+    },
+    "boot_1": {
+      "zh": "載入音訊引擎…",
+      "en": "loading audio engine…"
+    },
+    "boot_2": {
+      "zh": "掛載作品資料庫…",
+      "en": "mounting works database…"
+    },
+    "boot_3": {
+      "zh": "校準節拍器…",
+      "en": "calibrating metronome…"
+    },
+    "boot_ready": {
+      "zh": "準備完成。",
+      "en": "ready."
+    },
+    "boot_enter": {
+      "zh": "▶ 開機，進入桌面",
+      "en": "▶ Boot into desktop"
+    },
+    "boot_hint": {
+      "zh": "或按 Enter ⏎ · 點任何地方",
+      "en": "or press Enter ⏎ · tap anywhere"
+    },
+    "app_works": {
+      "zh": "作品",
+      "en": "Works"
+    },
+    "app_demos": {
+      "zh": "互動展示",
+      "en": "Demos"
+    },
+    "app_articles": {
+      "zh": "文章",
+      "en": "Articles"
+    },
+    "app_about": {
+      "zh": "關於",
+      "en": "About"
+    },
+    "app_player": {
+      "zh": "播放器",
+      "en": "Player"
+    },
+    "app_terminal": {
+      "zh": "終端機",
+      "en": "Terminal"
+    },
+    "desk_hint": {
+      "zh": "點圖示開啟應用程式 · 視窗可拖曳",
+      "en": "Click an icon to open an app · windows are draggable"
+    },
+    "sticky": {
+      "zh": "TODO.txt\n把新曲子丟進 works.json ✅\n下一個 demo：adaptive layers",
+      "en": "TODO.txt\nDrop new tracks into works.json ✅\nNext demo: adaptive layers"
+    },
+    "player_empty": {
+      "zh": "播放清單還沒有可試聽的曲目。先放一首試聽用的合成音。",
+      "en": "No listenable tracks yet — here's a synthesized placeholder."
+    },
+    "player_placeholder": {
+      "zh": "合成示意曲（佔位）",
+      "en": "Synth placeholder"
+    },
+    "player_now": {
+      "zh": "正在播放",
+      "en": "Now playing"
+    },
+    "player_external": {
+      "zh": "此曲在外部平台播放",
+      "en": "This track plays on an external platform"
+    },
+    "open_page": {
+      "zh": "以整頁開啟 ↗",
+      "en": "Open as page ↗"
+    },
+    "win_close": {
+      "zh": "關閉",
+      "en": "Close"
+    },
+    "win_min": {
+      "zh": "最小化",
+      "en": "Minimize"
+    },
+    "term_help": {
+      "zh": "可用指令：help, works, demos, about, play, clear, lang",
+      "en": "commands: help, works, demos, about, play, clear, lang"
+    },
+    "term_unknown": {
+      "zh": "找不到指令：",
+      "en": "command not found: "
+    }
   },
   "about_body": {
     "zh": [

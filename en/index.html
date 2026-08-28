@@ -2,58 +2,70 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Home · IraStoria</title>
-<meta name="description" content="Composer · Game Audio · Interactive Music Design">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IraStoria · Composer · Game Audio · Interactive Music Design</title>
+<meta name="description" content="I write music and build the systems that make music move with the player. This is the home for my works, experiments and notes.">
 <link rel="alternate" hreflang="zh-Hant" href="https://irastoria.github.io/zh/">
 <link rel="alternate" hreflang="en" href="https://irastoria.github.io/en/">
 <link rel="canonical" href="https://irastoria.github.io/en/">
-<link rel="stylesheet" href="../assets/css/style.css">
+<link rel="stylesheet" href="../assets/css/os.css">
 </head>
-<body data-lang="en">
-<header class="site-header">
-  <a class="brand" href="../en/">IraStoria</a>
-  <nav class="site-nav">
-    <a href="../en/" aria-current="page">Home</a>
-    <a href="../en/works/" >Works</a>
-    <a href="../en/demos/" >Demos</a>
-    <a href="../en/articles/" >Articles</a>
-    <a href="../en/about/" >About</a>
-    <a class="lang-switch" href="../zh/" hreflang="zh" data-lang-switch="zh">中文</a>
-  </nav>
-</header>
-<main class="site-main">
-<section class="hero">
-  <h1>IraStoria</h1>
-  <p class="tagline">Composer · Game Audio · Interactive Music Design</p>
-  <p class="intro">I write music and build the systems that make music move with the player. This is the home for my works, experiments and notes.</p>
-  <div class="hero-contact">
-    <ul class="contact-list"><li>Email: <a data-email href="#" data-u="irastoriatw" data-d="gmail.com">(click to reveal)</a></li><li><a href="https://github.com/IraStoria" rel="me noopener">GitHub</a></li></ul>
-  </div>
-</section>
-<section class="featured">
-  <h2>Featured Works</h2>
-  <div class="card-grid">
-    <article class="card" data-type="demo">
-      <div class="card-head">
-        <span class="badge badge-demo">Demo</span>
-        <span class="year">2026</span>
-      </div>
-      <h3 class="card-title">Music Transition Concept Demo</h3>
-      <p class="card-desc">How does interactive music move between sections without breaking? Switch between two loops and compare four transition strategies — immediate, next beat, next bar, and crossfade — by ear. Pure in-browser synthesis, written from scratch.</p>
-      
-      <div class="card-foot">
-        <span class="platform">Desktop only</span>
-        <a class="btn" href="../demos/transition/">Open demo</a>
-      </div>
-    </article>
+<body data-lang="en" class="os">
 
+<div id="boot" class="boot" role="dialog" aria-label="boot">
+  <div class="laptop">
+    <div class="screen">
+      <div class="term-bar"><span class="dots"><i></i><i></i><i></i></span><span class="term-title">irastoria@studio — zsh</span></div>
+      <pre id="boot-log" class="term-log"></pre>
+    </div>
+    <div class="base"></div>
   </div>
-  <p class="more"><a href="../en/works/">View all works →</a></p>
-</section>
+  <button id="boot-btn" class="boot-btn" hidden>▶ Boot into desktop</button>
+  <p class="boot-hint" id="boot-hint" hidden>or press Enter ⏎ · tap anywhere</p>
+</div>
 
-</main>
-<footer class="site-footer">© 2026 IraStoria</footer>
-<script src="../assets/js/main.js"></script>
+<div id="desktop" class="desktop" hidden>
+  <header class="menubar">
+    <span class="menubar-brand">⌘ IraStoria OS</span>
+    <span class="menubar-mid">Composer · Game Audio · Interactive Music Design</span>
+    <span class="menubar-right">
+      <a class="lang-switch" href="../zh/" data-lang-switch="zh">中文</a>
+      <span id="clock"></span>
+    </span>
+  </header>
+
+  <div class="icons" id="icons">
+    <button class="icon" data-app="works"><span class="glyph">🎼</span><span>Works</span></button>
+    <button class="icon" data-app="demos"><span class="glyph">🎛️</span><span>Demos</span></button>
+    <button class="icon" data-app="player"><span class="glyph">▶️</span><span>Player</span></button>
+    <button class="icon" data-app="articles"><span class="glyph">📝</span><span>Articles</span></button>
+    <button class="icon" data-app="about"><span class="glyph">👤</span><span>About</span></button>
+    <button class="icon" data-app="terminal"><span class="glyph">⌨️</span><span>Terminal</span></button>
+  </div>
+
+  <section class="hero-text">
+    <h1>IraStoria</h1>
+    <p>I write music and build the systems that make music move with the player. This is the home for my works, experiments and notes.</p>
+    <p class="hint">// Click an icon to open an app · windows are draggable</p>
+  </section>
+
+  <div class="sticky" id="sticky">TODO.txt
+Drop new tracks into works.json ✅
+Next demo: adaptive layers</div>
+
+  <div id="windows" class="windows"></div>
+
+  <nav class="dock" id="dock" aria-label="dock"></nav>
+</div>
+
+<noscript>
+  <main class="site-main" style="padding:2rem">
+    <h1>IraStoria</h1><p>I write music and build the systems that make music move with the player. This is the home for my works, experiments and notes.</p>
+    <p><a href="works/">Works</a> · <a href="demos/">Demos</a> · <a href="articles/">Articles</a> · <a href="about/">About</a></p>
+  </main>
+</noscript>
+
+<script id="site-data" type="application/json">{"lang": "en", "author": "IraStoria", "tagline": "Composer · Game Audio · Interactive Music Design", "hero_intro": "I write music and build the systems that make music move with the player. This is the home for my works, experiments and notes.", "about": ["IraStoria — composer and game audio designer. My long-running interest is how music responds to interaction: not pasting music onto a screen, but letting the music itself follow the player's rhythm in a structured way.", "I am currently working on a rhythm game and a home-grown DAW / notation tool. This site collects works, hands-on concept demos, and scattered notes."], "contact": {"email_user": "irastoriatw", "email_domain": "gmail.com", "links": [{"label": "GitHub", "url": "https://github.com/IraStoria"}]}, "ui": {"featured": "Featured Works", "all_works": "All Works", "view_all": "View all works →", "open_demo": "Open demo", "listen": "Listen", "read_more": "Read", "contact_title": "Contact", "email_label": "Email", "email_hint": "(click to reveal)", "about_title": "About", "demos_title": "Interactive Demos", "demos_intro": "Design ideas turned into small things you can play with. Each demo is a standalone page and may be desktop-only.", "articles_title": "Articles", "articles_empty": "Articles are on their way.", "platform_desktop": "Desktop only", "platform_all": "Desktop & mobile", "type_music": "Music", "type_game": "Game", "type_tool": "Tool", "type_demo": "Demo", "filter_all": "All", "lang_switch": "中文", "footer": "© {year} IraStoria", "os_name": "IraStoria OS", "boot_1": "loading audio engine…", "boot_2": "mounting works database…", "boot_3": "calibrating metronome…", "boot_ready": "ready.", "boot_enter": "▶ Boot into desktop", "boot_hint": "or press Enter ⏎ · tap anywhere", "app_works": "Works", "app_demos": "Demos", "app_articles": "Articles", "app_about": "About", "app_player": "Player", "app_terminal": "Terminal", "desk_hint": "Click an icon to open an app · windows are draggable", "sticky": "TODO.txt\nDrop new tracks into works.json ✅\nNext demo: adaptive layers", "player_empty": "No listenable tracks yet — here's a synthesized placeholder.", "player_placeholder": "Synth placeholder", "player_now": "Now playing", "player_external": "This track plays on an external platform", "open_page": "Open as page ↗", "win_close": "Close", "win_min": "Minimize", "term_help": "commands: help, works, demos, about, play, clear, lang", "term_unknown": "command not found: "}, "works": [{"id": "demo-transition", "type": "demo", "year": 2026, "featured": true, "title": "Music Transition Concept Demo", "desc": "How does interactive music move between sections without breaking? Switch between two loops and compare four transition strategies — immediate, next beat, next bar, and crossfade — by ear. Pure in-browser synthesis, written from scratch.", "media": {"demo": "demos/transition/"}, "platform": "desktop", "links": []}], "demos": [{"path": "demos/transition", "title": "Music Transition Concept Demo", "desc": "Switch between two loops and compare the timing and feel of four transition strategies: immediate, next beat, next bar, crossfade.", "platform": "desktop", "year": 2026}], "articles": []}</script>
+<script src="../assets/js/os.js"></script>
 </body>
 </html>

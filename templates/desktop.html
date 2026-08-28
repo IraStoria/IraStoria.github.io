@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="{{html_lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{site_name}} · {{tagline}}</title>
+<meta name="description" content="{{meta_desc}}">
+<link rel="alternate" hreflang="zh-Hant" href="{{base_url}}/zh/">
+<link rel="alternate" hreflang="en" href="{{base_url}}/en/">
+<link rel="canonical" href="{{base_url}}/{{lang}}/">
+<link rel="stylesheet" href="../assets/css/os.css">
+</head>
+<body data-lang="{{lang}}" class="os">
+
+<div id="boot" class="boot" role="dialog" aria-label="boot">
+  <div class="laptop">
+    <div class="screen">
+      <div class="term-bar"><span class="dots"><i></i><i></i><i></i></span><span class="term-title">irastoria@studio — zsh</span></div>
+      <pre id="boot-log" class="term-log"></pre>
+    </div>
+    <div class="base"></div>
+  </div>
+  <button id="boot-btn" class="boot-btn" hidden>{{ui_boot_enter}}</button>
+  <p class="boot-hint" id="boot-hint" hidden>{{ui_boot_hint}}</p>
+</div>
+
+<div id="desktop" class="desktop" hidden>
+  <header class="menubar">
+    <span class="menubar-brand">⌘ {{ui_os_name}}</span>
+    <span class="menubar-mid">{{tagline}}</span>
+    <span class="menubar-right">
+      <a class="lang-switch" href="../{{other_lang}}/" data-lang-switch="{{other_lang}}">{{lang_switch}}</a>
+      <span id="clock"></span>
+    </span>
+  </header>
+
+  <div class="icons" id="icons">
+    <button class="icon" data-app="works"><span class="glyph">🎼</span><span>{{ui_app_works}}</span></button>
+    <button class="icon" data-app="demos"><span class="glyph">🎛️</span><span>{{ui_app_demos}}</span></button>
+    <button class="icon" data-app="player"><span class="glyph">▶️</span><span>{{ui_app_player}}</span></button>
+    <button class="icon" data-app="articles"><span class="glyph">📝</span><span>{{ui_app_articles}}</span></button>
+    <button class="icon" data-app="about"><span class="glyph">👤</span><span>{{ui_app_about}}</span></button>
+    <button class="icon" data-app="terminal"><span class="glyph">⌨️</span><span>{{ui_app_terminal}}</span></button>
+  </div>
+
+  <section class="hero-text">
+    <h1>{{author}}</h1>
+    <p>{{hero_intro}}</p>
+    <p class="hint">// {{ui_desk_hint}}</p>
+  </section>
+
+  <div class="sticky" id="sticky">{{sticky}}</div>
+
+  <div id="windows" class="windows"></div>
+
+  <nav class="dock" id="dock" aria-label="dock"></nav>
+</div>
+
+<noscript>
+  <main class="site-main" style="padding:2rem">
+    <h1>{{author}}</h1><p>{{hero_intro}}</p>
+    <p><a href="works/">{{ui_app_works}}</a> · <a href="demos/">{{ui_app_demos}}</a> · <a href="articles/">{{ui_app_articles}}</a> · <a href="about/">{{ui_app_about}}</a></p>
+  </main>
+</noscript>
+
+<script id="site-data" type="application/json">{{site_data}}</script>
+<script src="../assets/js/os.js"></script>
+</body>
+</html>

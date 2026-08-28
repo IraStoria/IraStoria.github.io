@@ -379,13 +379,27 @@ def build_pages(site, works, demos, articles):
             return esc(t(site, key, lang))
         base_ctx = {"lang": lang, "root": "../", "author": esc(site["author"][lang])}
 
-        # home
-        featured = [w for w in works if w.get("featured")] or works[:3]
-        home = render(tpl("index"), {**base_ctx,
-            "tagline": esc(site["tagline"][lang]), "hero_intro": esc(site["hero_intro"][lang]),
-            "contact_block": contact_block(site, lang), "ui_featured": L("featured"), "ui_view_all": L("view_all"),
-            "featured_cards": "\n".join(card(site, w, lang, "../") for w in featured)})
-        out[f"{lang}/index.html"] = page(site, lang, "", "home", site["nav"]["home"][lang], site["tagline"][lang], home, 1)
+        # home = desktop OS shell (client renders apps from embedded JSON; sub-pages remain as deep links)
+        def loc(w):
+            return {"id": w["id"], "type": w["type"], "year": w["year"], "featured": bool(w.get("featured")),
+                    "title": w["title"][lang], "desc": w["desc"][lang], "media": w.get("media") or {},
+                    "platform": w["platform"], "links": [{"label": l["label"][lang], "url": l["url"]} for l in w.get("links", [])]}
+        data = {
+            "lang": lang, "author": site["author"][lang], "tagline": site["tagline"][lang], "hero_intro": site["hero_intro"][lang],
+            "about": site["about_body"][lang], "contact": site["contact"],
+            "ui": {k: v[lang] for k, v in site["ui"].items()},
+            "works": [loc(w) for w in works],
+            "demos": [{"path": rel, "title": m["title"][lang], "desc": m["desc"][lang], "platform": m["platform"], "year": m.get("year", "")} for rel, m in demos.items()],
+            "articles": [{"slug": a["slug"], "title": a[lang]["meta"]["title"], "date": a[lang]["meta"]["date"]} for a in articles],
+        }
+        site_json = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
+        home_ctx = {"html_lang": HTML_LANG[lang], "lang": lang, "other_lang": "en" if lang == "zh" else "zh",
+                    "site_name": esc(site["site_name"]), "base_url": site["base_url"], "tagline": esc(site["tagline"][lang]),
+                    "meta_desc": esc(site["hero_intro"][lang]), "author": esc(site["author"][lang]), "hero_intro": esc(site["hero_intro"][lang]),
+                    "lang_switch": L("lang_switch"), "sticky": L("sticky"), "site_data": site_json}
+        for k in ("boot_enter", "boot_hint", "os_name", "app_works", "app_demos", "app_articles", "app_about", "app_player", "app_terminal", "desk_hint"):
+            home_ctx["ui_" + k] = L(k)
+        out[f"{lang}/index.html"] = render(tpl("desktop"), home_ctx)
 
         # works
         present_types = [ty for ty in TYPES if any(w["type"] == ty for w in works)]
