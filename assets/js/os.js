@@ -55,7 +55,7 @@
   }
 
   // ============================================================ background wave + now-playing caption
-  var CONNECT_MS = 1100, DECAY_PER_SEC = 0.3, FADE_SEC = 1.5;   // bars keep 30%/s when paused (~3.5 s to silence); audio fades out over FADE_SEC on pause
+  var CONNECT_MS = 1100, DECAY_PER_SEC = 0.55, FADE_SEC = 3;   // bars keep 55%/s when paused (~7 s to silence); audio fades out over FADE_SEC on pause
   function decayFactor(dtMs) { return Math.pow(DECAY_PER_SEC, dtMs / 1000); }   // frame-rate independent (real elapsed time, so a throttled tab catches up)
   function makeWave(cv, yRatio) {
     var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0;
@@ -325,7 +325,7 @@
         if (!audio._wired) { var s = actx.createMediaElementSource(audio); s.connect(master); audio._wired = true; }
         if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = null; }
         master.gain.cancelScheduledValues(0); master.gain.setValueAtTime(1, actx.currentTime);
-        audio.play();
+        var pr = audio.play(); if (pr && pr.catch) pr.catch(function () { playing = false; refresh(); caption.refresh(); });   // autoplay blocked → show ▶ again
       } else return;
       playing = true; started = true; refresh();
     }
