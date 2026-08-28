@@ -63,7 +63,7 @@
     var ul = $('#upd-log'); if (ul) ul.innerHTML = (D.updates || []).length ? D.updates.map(function (u) { return '<div class="msg"><time>' + esc(u.date) + '</time><p>' + esc(u.text) + '</p></div>'; }).join('') : '<p class="note">' + esc(U.updates_empty) + '</p>';
     document.querySelectorAll('.np-cap .np-lbl').forEach(function (l) { var stt = l.querySelector('.np-state'); l.textContent = U.player_now + (stt ? ' · ' : ''); if (stt) l.appendChild(stt); });
     caption.reset();
-    Object.keys(wins).forEach(function (a) { var w = wins[a]; w.setAttribute('aria-label', TITLES[a]); var tt = w.querySelector('.win-title'); if (tt) tt.innerHTML = GLYPH[a] + ' ' + esc(TITLES[a]); var ft = w.querySelector('.win-foot a'); if (ft) ft.textContent = U.open_page; if (RENDER[a]) RENDER[a](w.querySelector('.win-body'), w); });
+    Object.keys(wins).forEach(function (a) { var w = wins[a]; if (!TITLES[a]) return; w.setAttribute('aria-label', TITLES[a]); var tt = w.querySelector('.win-title'); if (tt) tt.innerHTML = GLYPH[a] + ' ' + esc(TITLES[a]); var ft = w.querySelector('.win-foot a'); if (ft) ft.textContent = U.open_page; if (RENDER[a]) RENDER[a](w.querySelector('.win-body'), w); });
   }
 
   // ============================================================ boot sequence
@@ -344,7 +344,7 @@
     updateDock();
   }
   function minimize(app) { var w = wins[app]; if (w) { w.classList.add('minimized'); w.classList.remove('focus'); } updateDock(); }
-  function closeApp(app) { var w = wins[app]; if (!w) return; if (app === 'player' && player) player.stop(true); w.remove(); delete wins[app]; updateDock(); }
+  function closeApp(app) { var w = wins[app]; if (!w) return; w.remove(); delete wins[app]; if (w.dataset.duck) player.unduck(); updateDock(); }   // closing the player window never stops the music
   function focus(w) {
     Object.keys(wins).forEach(function (k) { wins[k].classList.remove('focus'); });
     w.classList.add('focus'); w.style.zIndex = ++z;
@@ -359,23 +359,49 @@
   }
 
   var spawn = 0;
-  function createWindow(app) {
-    var w = document.createElement('section'); w.className = 'win'; w.setAttribute('data-app', app); w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', TITLES[app]);
-    var size = { works: [560, 520], demos: [520, 420], player: [400, 520], articles: [480, 380], about: [520, 460], terminal: [560, 380] }[app];
+  // a demo opens as a desktop window hosting its page in an iframe (same origin); ⛶ in the title bar goes real fullscreen
+  function openDemo(id) {
+    var d = D.demos.filter(function (x) { return x.path === id; })[0]; if (!d) return;
+    var key = 'demo-' + id.replace(/[^a-z0-9-]/gi, '-'), w = wins[key];
+    if (!w) {
+      w = createWindow(key, { title: d.title, glyph: '🎛️', size: [900, 640], page: '../' + d.path + '/', render: function (body, win) {
+        body.classList.add('frame');
+        var f = document.createElement('iframe'); f.className = 'demo-frame'; f.src = '../' + d.path + '/'; f.title = d.title; f.setAttribute('allow', 'autoplay; fullscreen'); f.allowFullscreen = true;
+        f.addEventListener('load', function () { watchAudio(f, win); });
+        body.appendChild(f);
+      } });
+      wins[key] = w;
+    }
+    w.classList.remove('minimized'); focus(w); updateDock();
+  }
+  // same-origin iframe: wrap its AudioContext so the first time it actually runs we duck the background music; closing the window restores it
+  function watchAudio(f, win) {
+    try {
+      var cw = f.contentWindow, Orig = cw.AudioContext || cw.webkitAudioContext; if (!Orig || Orig.__wrapped) return;
+      var Wrapped = function () { var c = new Orig(); var check = function () { if (c.state === 'running' && !win.dataset.duck && player.isPlaying()) { win.dataset.duck = '1'; player.duck(); } }; c.addEventListener('statechange', check); setTimeout(check, 0); return c; };
+      Wrapped.__wrapped = true; Wrapped.prototype = Orig.prototype; cw.AudioContext = Wrapped; cw.webkitAudioContext = Wrapped;
+    } catch (e) {}
+  }
+  function createWindow(app, opts) {
+    opts = opts || {};
+    var title = opts.title || TITLES[app], glyph = opts.glyph || GLYPH[app];
+    var w = document.createElement('section'); w.className = 'win'; w.setAttribute('data-app', app); w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', title);
+    var size = opts.size || { works: [560, 520], demos: [520, 420], player: [480, 620], articles: [480, 380], about: [520, 460], terminal: [560, 380] }[app];
     var vw = window.innerWidth, vh = window.innerHeight - 30;
     var W = Math.min(size[0], vw - 24), H = Math.min(size[1], vh - 100);
     var x = Math.max(110, Math.min(vw - W - 20, 140 + (spawn % 5) * 40)), y = Math.max(8, Math.min(vh - H - 90, 30 + (spawn % 5) * 32)); spawn++;
     w.style.cssText = 'left:' + x + 'px;top:' + y + 'px;width:' + W + 'px;height:' + H + 'px;z-index:' + (++z);
     w.innerHTML = '<div class="win-bar"><span class="dots"><button class="close" title="' + esc(U.win_close) + '"></button><button class="min" title="' + esc(U.win_min) + '"></button><button class="max"></button></span>' +
-      '<span class="win-title">' + GLYPH[app] + ' ' + esc(TITLES[app]) + '</span></div><div class="win-body"></div>' +
-      (PAGES[app] ? '<div class="win-foot"><span></span><a href="' + PAGES[app] + '">' + esc(U.open_page) + '</a></div>' : '');
+      '<span class="win-title">' + glyph + ' ' + esc(title) + '</span>' + (opts.render ? '<button class="fs" title="' + esc(U.win_fullscreen) + '">⛶</button>' : '') + '</div><div class="win-body"></div>' +
+      ((opts.page || PAGES[app]) ? '<div class="win-foot"><span></span><a href="' + esc(opts.page || PAGES[app]) + '">' + esc(U.open_page) + '</a></div>' : '');
+    var fsb = $('.fs', w); if (fsb) fsb.addEventListener('click', function () { if (document.fullscreenElement === w) document.exitFullscreen(); else if (w.requestFullscreen) w.requestFullscreen(); });
     $('.close', w).addEventListener('click', function () { closeApp(app); });
     $('.min', w).addEventListener('click', function () { minimize(app); });
     $('.max', w).addEventListener('click', function () { w.classList.toggle('maxed'); if (w.classList.contains('maxed')) { w.dataset.prev = w.style.cssText; w.style.cssText = 'left:8px;top:8px;width:' + (vw - 16) + 'px;height:' + (vh - 90) + 'px;z-index:' + (++z); } else { w.style.cssText = w.dataset.prev; } });
     w.addEventListener('pointerdown', function () { focus(w); });
     makeDraggable(w, $('.win-bar', w));
     windowsEl.appendChild(w);
-    RENDER[app]($('.win-body', w), w);
+    (opts.render || RENDER[app])($('.win-body', w), w);
     return w;
   }
 
@@ -430,8 +456,10 @@
     demos: function (body) {
       body.innerHTML = '<p class="d">' + esc(U.demos_intro) + '</p><ul class="list">' + D.demos.map(function (d) {
         return '<li><span class="badge demo">' + esc(U.type_demo) + '</span><div style="flex:1"><div class="t">' + esc(d.title) + ' <span class="meta">' + esc(d.year || '') + '</span></div><div class="d">' + esc(d.desc) + '</div>' +
-          '<div class="meta" style="margin:.3rem 0">' + esc(d.platform === 'desktop' ? U.platform_desktop : U.platform_all) + '</div><a class="btn" href="../' + esc(d.path) + '/">' + esc(U.open_demo) + '</a></div></li>';
+          '<div class="meta" style="margin:.3rem 0">' + esc(d.platform === 'desktop' ? U.platform_desktop : U.platform_all) + '</div>' +
+          (PHONE ? '<a class="btn" href="../' + esc(d.path) + '/">' + esc(U.open_demo) + '</a>' : '<button class="btn" data-demo="' + esc(d.path) + '">' + esc(U.open_demo) + '</button>') + '</div></li>';
       }).join('') + '</ul>';
+      body.addEventListener('click', function (e) { var b = e.target.closest('[data-demo]'); if (b) openDemo(b.dataset.demo); });
     },
     articles: function (body) {
       body.innerHTML = D.articles.length ? '<ul class="list">' + D.articles.map(function (a) { return '<li><div><div class="t"><a href="articles/' + esc(a.slug) + '/">' + esc(a.title) + '</a></div><div class="meta">' + esc(a.date) + '</div></div></li>'; }).join('') + '</ul>'
@@ -519,9 +547,13 @@
         master.gain.cancelScheduledValues(0); master.gain.setValueAtTime(1, actx.currentTime);
         var pr = audio.play(); if (pr && pr.catch) pr.catch(function () { playing = false; refresh(); caption.refresh(); });   // autoplay blocked → show ▶ again
       } else return;
-      playing = true; started = true; refresh();
+      playing = true; started = true; ducked = false; refresh();
     }
     function toggle() { if (playing) stopAll(); else play(); }
+    // duck: another window started making sound -> pause (fade, position kept); unduck: that window closed -> resume from where we stopped
+    var ducked = false;
+    function duck() { if (playing) { ducked = true; stopAll(); } }
+    function unduck() { if (ducked) { ducked = false; if (!playing) play(); } }
     function playId(id) { var i = list.findIndex(function (t) { return t.id === id; }); if (i >= 0) { remember(i); load(i, true); } }
     // Placeholder: a gentle generative pad so the player is demonstrable before real tracks exist.
     function startSynth() {
@@ -595,7 +627,7 @@
     function remember(i) { history.push(i); if (history.length > 8) history.shift(); }
     function prev() { var i = pickRandom(); remember(i); load(i, true); }
     function next() { var i = pickRandom(); remember(i); load(i, true); }
-    return { onTrack: function (fn) { trackListeners.push(fn); }, mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state, autoplay: autoplay, prepare: prepare, restore: restore, prev: prev, next: next, toggleMute: toggleMute, setVolume: setVolume,
+    return { onTrack: function (fn) { trackListeners.push(fn); }, duck: duck, unduck: unduck, mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state, autoplay: autoplay, prepare: prepare, restore: restore, prev: prev, next: next, toggleMute: toggleMute, setVolume: setVolume,
              analyser: function () { return analyser; }, isPlaying: function () { return playing; } };
   })();
   player.onTrack(function () { wave.sweep(true); phoneWave.sweep(true); });   // new track: sweep the amber off the line and the bars

@@ -282,6 +282,10 @@
     "boot_continue": {
       "zh": "點選任意按鍵繼續 _",
       "en": "Press any key to continue _"
+    },
+    "win_fullscreen": {
+      "zh": "全螢幕",
+      "en": "Full screen"
     }
   },
   "about_body": {
