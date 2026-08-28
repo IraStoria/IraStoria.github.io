@@ -182,7 +182,7 @@
     var pending = allSegs().filter(function (s) { return !buffers[bufKey(s)]; }), done = 0;
     startBtn.disabled = true; if (pending.length) startBtn.textContent = T('loading') + ' 0/' + pending.length;
     Promise.all(pending.map(function (s) { return loadBuffer(s).then(function (b) { buffers[bufKey(s)] = b; done++; startBtn.textContent = T('loading') + ' ' + done + '/' + pending.length; }); })).then(function () {
-      if (pending.length) logLoad(pending);
+      if (pending.length && /[?&]debug/.test(location.search)) logLoad(pending);   /* decode check only with ?debug */
       running = true; queued = later = null; randomAuto = false; lastId = null; history = [];
       var first = INTRO || SEG[0];
       cur = schedule(first, ctx.currentTime + 0.05 + preSec(first)); nxt = null;   /* first entry sits after its own pick-up: start times can't be negative */
