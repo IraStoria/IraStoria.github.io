@@ -23,13 +23,13 @@
     if (!ALT) { location.href = '../' + (lang === 'zh' ? 'en' : 'zh') + '/#desktop'; return; }
     if (swapping) return;
     swapping = true;
-    var outEls = Array.prototype.slice.call(document.querySelectorAll('#np-desktop .np-lbl, #np-desktop .np-title'));
+    var outEls = Array.prototype.slice.call(document.querySelectorAll('#np-desktop .np-lbl'));   // only the label — the track title is not language-bound
     outEls.forEach(function (el) { var r = el.getBoundingClientRect(); el.style.transition = 'transform .6s cubic-bezier(.4,0,.6,1), opacity .5s ease'; el.style.transform = 'translateX(' + (-(r.right + 40)) + 'px)'; el.style.opacity = '0'; });
     desktop.classList.add('swap', 'swap-out');
     setTimeout(function () {
       applyLang(ALT);
       // now-playing label + title (not the buttons) enter from the right edge of the window
-      var npEls = Array.prototype.slice.call(document.querySelectorAll('#np-desktop .np-lbl, #np-desktop .np-title'));
+      var npEls = Array.prototype.slice.call(document.querySelectorAll('#np-desktop .np-lbl'));
       npEls.forEach(function (el) { var r = el.getBoundingClientRect(); el.style.transition = 'none'; el.style.transform = 'translateX(' + (window.innerWidth - r.left + 40) + 'px)'; el.style.opacity = '1'; });
       desktop.classList.remove('swap-out'); desktop.classList.add('swap-in');
       void desktop.offsetWidth;   // flush styles so the entrance actually transitions
