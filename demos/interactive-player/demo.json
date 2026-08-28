@@ -1,13 +1,16 @@
 {
   "id": "interactive-player",
   "year": 2026,
-  "title": { "zh": "互動式段落播放器（測試版）", "en": "Interactive Section Player (test build)" },
+  "title": {
+    "zh": "互動式段落播放器 · Theme A",
+    "en": "Interactive Section Player · Theme A"
+  },
   "desc": {
-    "zh": "多個段落按鈕：A 段自動開始；播放中點選段落，會在目前段落結束時無縫接續；沒選的話「隨機」鈕會自動亮起接手。目前段落為瀏覽器合成，之後可直接換成音檔。",
-    "en": "Section buttons: A starts automatically; pick a section while playing and it joins seamlessly when the current one ends; if you don't, the Random button lights up and takes over. Sections are synthesized for now and can be swapped for audio files."
+    "zh": "IraStoria 原創曲 Theme A 的段落切片：播放中點選段落，會在目前段落結束時無縫接續（含 pick-up／tail 重疊）；沒選的話「隨機」鈕自動接手；I 段可自我循環。接續白名單待定。",
+    "en": "Section slices of the original IraStoria track Theme A: pick a section while playing and it joins seamlessly when the current one ends (pick-up/tail overlap); otherwise Random takes over; section I loops itself. Transition whitelist pending."
   },
   "platform": "all",
   "concept_level_checked": true,
-  "concept_level_note": "ADR-004 self-check 2026-08-28: generic queued-section playback with random fallback; all audio synthesized in-browser; no project code, assets, or gameplay details. Asset policy for real audio pending user decision (IDEA-002).",
-  "dependencies": "none (Web Audio API only)"
+  "concept_level_note": "ADR-004 self-check 2026-08-29: generic queued-section playback with random fallback, written from scratch. Audio = the user's own original track Theme A (user decision 2026-08-29 to publish real mp3 slices); no project code or gameplay details.",
+  "dependencies": "none (Web Audio API only); audio/*.mp3 (~11 MB)"
 }

@@ -36,3 +36,16 @@ h1{margin:.2rem 0 .4rem;font-size:1.7rem}.lead{color:var(--dim);max-width:65ch}
 .note{color:var(--dim);font-size:.9rem;border-left:3px solid var(--border);padding-left:.8rem}
 
 .viz{display:block;width:100%;height:90px;border-radius:8px;background:linear-gradient(135deg,#2a2440,#0e2a33);margin-bottom:1rem}
+
+/* grouped layout (Theme A): one row per section letter, versions inside; the random row sits last */
+.segs{display:block}
+.grp{display:grid;grid-template-columns:7.5rem 1fr;gap:.6rem;align-items:start;padding:.45rem 0;border-top:1px solid var(--border)}
+.grp:first-child{border-top:0}
+.grp.active .ghead b{color:var(--c)}
+.ghead{padding-top:.55rem}.ghead b{display:block;font-size:.95rem}.ghead i{display:block;font-style:normal;font-size:.72rem;color:var(--dim)}
+.gsegs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.5rem}
+.grp.rnd{grid-template-columns:1fr}.grp.rnd .seg{max-width:220px}
+.seg .nm{display:block;font-size:1.05rem}
+.seg .meta{display:block;font-size:.68rem;font-weight:400;color:var(--dim);margin-top:.1rem}
+.hist .dim{color:#6f7480}
+@media (max-width:560px){.grp{grid-template-columns:1fr;gap:.3rem}.ghead{padding-top:0}}
