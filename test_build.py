@@ -152,6 +152,16 @@ ok("assets carry cache-busting version", all(re.search(r'os\.js\?v=[0-9a-f]{8}',
 # XSS escape sanity
 ok("html escaping", B.esc('<a "b">') == "&lt;a &quot;b&quot;&gt;")
 
+# JS syntax (fail-closed): a stray comment once shipped a broken os.js — node --check every shipped script
+import subprocess, shutil
+_node = shutil.which("node")
+for _js in sorted(list((B.ROOT / "assets" / "js").glob("*.js")) + list((B.ROOT / "demos").glob("*/demo.js"))):
+    if _node:
+        _r = subprocess.run([_node, "--check", str(_js)], capture_output=True, text=True)
+        ok(f"js syntax {_js.relative_to(B.ROOT).as_posix()}", _r.returncode == 0, _r.stderr.strip().splitlines()[-1] if _r.returncode else "")
+    else:
+        ok(f"js syntax {_js.name}", False, "node not found")
+
 # ---- report
 fails = [r for r in results if not r[0]]
 for okk, name, msg in results:
