@@ -13,6 +13,7 @@ Nothing is written until every check passes.  R4: files > 10 MB are reported.
 Usage:  python build.py            build
         python build.py --check    validate only, write nothing
 """
+import hashlib
 import html
 import json
 import re
@@ -293,6 +294,14 @@ def scan_big_files():
 
 
 # ---------------------------------------------------------------- rendering
+def asset_versions():
+    """Short content hashes for cache-busting (?v=) — GitHub Pages serves max-age=600."""
+    def h(rel):
+        return hashlib.sha1((ROOT / rel).read_bytes()).hexdigest()[:8]
+    return {"v_style": h("assets/css/style.css"), "v_main": h("assets/js/main.js"),
+            "v_os_css": h("assets/css/os.css"), "v_os_js": h("assets/js/os.js")}
+
+
 def t(site, key, lang):
     return site["ui"][key][lang]
 
@@ -365,6 +374,7 @@ def page(site, lang, page_path, page_key, title, desc, content, depth):
         "footer": esc(t(site, "footer", lang).replace("{year}", str(date.today().year))),
         "content": content,
     }
+    ctx.update(asset_versions())
     for k, v in site["nav"].items():
         ctx[f"nav_{k}"] = esc(v[lang])
         ctx[f"nav_active_{k}"] = 'aria-current="page"' if k == page_key else ""
@@ -397,6 +407,7 @@ def build_pages(site, works, demos, articles):
                     "site_name": esc(site["site_name"]), "base_url": site["base_url"], "tagline": esc(site["tagline"][lang]),
                     "meta_desc": esc(site["hero_intro"][lang]), "author": esc(site["author"][lang]), "hero_intro": esc(site["hero_intro"][lang]),
                     "lang_switch": L("lang_switch"), "sticky": L("sticky"), "site_data": site_json}
+        home_ctx.update(asset_versions())
         for k in ("boot_enter", "boot_hint", "os_name", "app_works", "app_demos", "app_articles", "app_about", "app_player", "app_terminal", "desk_hint", "ph_unlock", "ph_lock_line"):
             home_ctx["ui_" + k] = L(k)
         out[f"{lang}/index.html"] = render(tpl("desktop"), home_ctx)

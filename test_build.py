@@ -96,7 +96,7 @@ try:
     pages = B.build_pages(site, works, demos, arts)
     ok("article pages generated in both languages",
        "zh/articles/zz-test/index.html" in pages and "en/articles/zz-test/index.html" in pages)
-    ok("article page escapes and links root correctly", 'href="../../../assets/css/style.css"' in pages["zh/articles/zz-test/index.html"])
+    ok("article page escapes and links root correctly", 'href="../../../assets/css/style.css?v=' in pages["zh/articles/zz-test/index.html"])
 finally:
     zh.unlink(missing_ok=True); en.unlink(missing_ok=True)
 
@@ -114,7 +114,7 @@ broken = []
 for p, h in pages.items():
     base = Path(p).parent
     for m in re.finditer(r'(?:href|src)="([^"#]+)"', h):
-        u = m.group(1)
+        u = m.group(1).split("?")[0]
         if u.startswith(("http", "mailto:", "#")) or u == "#":
             continue
         target = (base / u) if not u.startswith("/") else Path(u.lstrip("/"))
@@ -146,6 +146,8 @@ ok("lang switch mirrors path", not mis, str(mis))
 
 # platform note (R3) present on demo card
 ok("R3 platform note on demo card", "桌面瀏覽器限定" in pages["zh/index.html"] and "Desktop only" in pages["en/index.html"])
+
+ok("assets carry cache-busting version", all(re.search(r'os\.js\?v=[0-9a-f]{8}', pages[f"{l}/index.html"]) and re.search(r'style\.css\?v=[0-9a-f]{8}', pages[f"{l}/about/index.html"]) for l in ("zh", "en")))
 
 # XSS escape sanity
 ok("html escaping", B.esc('<a "b">') == "&lt;a &quot;b&quot;&gt;")
