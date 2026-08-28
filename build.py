@@ -76,6 +76,19 @@ def render(template, ctx):
     return out
 
 
+def load_updates():
+    """content/updates.json (optional): [{date, zh, en}] → validated, newest first."""
+    fp = CONTENT / "updates.json"
+    updates = read_json(fp) if fp.exists() else []
+    if not isinstance(updates, list):
+        raise BuildError("updates.json: must be a list")
+    for i, u in enumerate(updates):
+        if not isinstance(u, dict) or not u.get("date"):
+            raise BuildError(f"updates.json[{i}]: 'date' required")
+        bilingual({"zh": u.get("zh"), "en": u.get("en")}, f"updates.json[{i}]")
+    return sorted(updates, key=lambda u: u["date"], reverse=True)
+
+
 def bilingual(obj, path):
     """Return obj if it is a {zh:..., en:...} pair with non-empty values; else raise."""
     if not isinstance(obj, dict):
@@ -125,6 +138,7 @@ def load_site():
 
 
 def load_works():
+    load_updates()   # validate (fail-closed) — build_pages re-reads it
     works = read_json(CONTENT / "works.json")
     if not isinstance(works, list):
         raise BuildError("works.json must be a list")
@@ -422,6 +436,7 @@ def build_pages(site, works, demos, articles):
             "ui": {k: v[lang] for k, v in site["ui"].items()},
             "fx": {name: {k: (local_versioned(v) if k in ("video", "sound") and v else v) for k, v in f.items() if not k.startswith("_")} for name, f in (site.get("fx") or {}).items()},
             "works": [loc(w) for w in works],
+            "updates": [{"date": u["date"], "text": u[lang]} for u in load_updates()],
             "demos": [{"path": rel, "title": m["title"][lang], "desc": m["desc"][lang], "platform": m["platform"], "year": m.get("year", "")} for rel, m in demos.items()],
             "articles": [{"slug": a["slug"], "title": a[lang]["meta"]["title"], "date": a[lang]["meta"]["date"]} for a in articles],
         }

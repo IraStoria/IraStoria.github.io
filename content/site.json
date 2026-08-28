@@ -262,6 +262,14 @@
     "ph_lock_line": {
       "zh": "IraStoria · 作曲 × 遊戲音訊",
       "en": "IraStoria · music × game audio"
+    },
+    "app_updates": {
+      "zh": "最近更新",
+      "en": "Recent updates"
+    },
+    "updates_empty": {
+      "zh": "目前沒有更新。",
+      "en": "No updates yet."
     }
   },
   "about_body": {
@@ -282,11 +290,12 @@
       "sound_onset": 0.062,
       "width": 240,
       "opacity": 0.55,
-      "_note": "click-to-enter easter egg. anchor=screen-right: inside the boot laptop's terminal screen, inset px from its right edge, anchor_y = vertical position as a fraction of the screen height. sound_at = video time where the sound's onset lands. clip plays → fades → after_ms → desktop loads.",
+      "_note": "click-to-enter easter egg. anchor=screen-right: inside the boot laptop's terminal screen, inset px from its right edge, anchor_y = vertical position as a fraction of the screen height. sound_at = video time where the sound's onset lands. clip plays → vanishes instantly (vanish:cut) → after_ms → desktop loads.",
       "after_ms": 600,
       "anchor": "screen-right",
-      "inset": 60,
-      "anchor_y": 0.62
+      "inset": 140,
+      "anchor_y": 0.7,
+      "vanish": "cut"
     }
   }
 }

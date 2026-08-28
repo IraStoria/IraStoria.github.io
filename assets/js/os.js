@@ -55,9 +55,10 @@
       vid.onended = finish;
       var p = vid.play(); if (p && p.catch) p.catch(function () { vid.remove(); finish(); });
       var safety = ((vid.duration || 1.5) + 1.5) * 1000; setTimeout(finish, safety);   // never leave the visitor stuck on the boot screen
-      var origCb = cb; cb = function () {   // clip → fade out → short hold → only then hand over to the desktop / home screen
-        vid.classList.add('fade');
-        setTimeout(function () { vid.remove(); vid.classList.remove('fade'); setTimeout(origCb, cfg.after_ms == null ? 600 : cfg.after_ms); }, 320);
+      var origCb = cb; cb = function () {   // clip → gone (instant cut, or a short fade) → hold after_ms → only then hand over to the desktop / home screen
+        var hold = cfg.after_ms == null ? 600 : cfg.after_ms;
+        if (cfg.vanish === 'fade') { vid.classList.add('fade'); setTimeout(function () { vid.remove(); vid.classList.remove('fade'); setTimeout(origCb, hold); }, 320); }
+        else { vid.remove(); setTimeout(origCb, hold); }
       };
     }
     return { click: click };
@@ -172,10 +173,10 @@
 
   // ============================================================ desktop
   var wins = {}, z = 20, dock = $('#dock'), windowsEl = $('#windows');
-  var APPS = ['works', 'demos', 'player', 'articles', 'about', 'terminal'];
-  var TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, terminal: U.app_terminal };
+  var APPS = ['works', 'demos', 'player', 'articles', 'about', 'terminal', 'updates'];
+  var TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, terminal: U.app_terminal, updates: U.app_updates };
   var PAGES = { works: 'works/', demos: 'demos/', articles: 'articles/', about: 'about/' };
-  var GLYPH = { works: '🎼', demos: '🎛️', player: '▶️', articles: '📝', about: '👤', terminal: '⌨️' };
+  var GLYPH = { works: '🎼', demos: '🎛️', player: '▶️', articles: '📝', about: '👤', terminal: '⌨️', updates: '💬' };
 
   function initDesktop() {
     if (initDesktop.did) return; initDesktop.did = true;
@@ -194,7 +195,7 @@
     // deep link ?app=works
     var m = /[?&]app=([a-z]+)/.exec(location.search);
     if (m && APPS.indexOf(m[1]) >= 0) openApp(m[1]);
-    else if (!isMobile()) setTimeout(function () { openApp('works'); }, reduced ? 0 : 400);
+    else if (!isMobile()) setTimeout(function () { openApp('updates'); }, reduced ? 0 : 400);   // default: the little 'recent updates' chat window
     updateDock();
   }
 
@@ -224,10 +225,11 @@
   var spawn = 0;
   function createWindow(app) {
     var w = document.createElement('section'); w.className = 'win'; w.setAttribute('data-app', app); w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', TITLES[app]);
-    var size = { works: [560, 520], demos: [520, 420], player: [400, 520], articles: [480, 380], about: [520, 460], terminal: [560, 380] }[app];
+    var size = { works: [560, 520], demos: [520, 420], player: [400, 520], articles: [480, 380], about: [520, 460], terminal: [560, 380], updates: [330, 300] }[app];
     var vw = window.innerWidth, vh = window.innerHeight - 30;
     var W = Math.min(size[0], vw - 24), H = Math.min(size[1], vh - 100);
     var x = Math.max(110, Math.min(vw - W - 20, 140 + (spawn % 5) * 40)), y = Math.max(8, Math.min(vh - H - 90, 30 + (spawn % 5) * 32)); spawn++;
+    if (app === 'updates') { x = vw - W - 16; y = vh - H - 70; w.classList.add('chat'); }   // sits in the lower-right corner like a chat widget
     w.style.cssText = 'left:' + x + 'px;top:' + y + 'px;width:' + W + 'px;height:' + H + 'px;z-index:' + (++z);
     w.innerHTML = '<div class="win-bar"><span class="dots"><button class="close" title="' + esc(U.win_close) + '"></button><button class="min" title="' + esc(U.win_min) + '"></button><button class="max"></button></span>' +
       '<span class="win-title">' + GLYPH[app] + ' ' + esc(TITLES[app]) + '</span></div><div class="win-body"></div>' +
@@ -281,6 +283,12 @@
   }
 
   var RENDER = {
+    updates: function (body) {
+      var list = D.updates || [];
+      body.innerHTML = '<div class="chat-log">' + (list.length ? list.map(function (u) {
+        return '<div class="msg"><time>' + esc(u.date) + '</time><p>' + esc(u.text) + '</p></div>';
+      }).join('') : '<p class="note">' + esc(U.updates_empty) + '</p>') + '</div>';
+    },
     works: function (body) {
       var types = ['music', 'game', 'tool', 'demo'].filter(function (t) { return D.works.some(function (w) { return w.type === t; }); });
       body.innerHTML = '<div class="filter"><button class="on" data-f="all">' + esc(U.filter_all) + '</button>' + types.map(function (t) { return '<button data-f="' + t + '">' + esc(U['type_' + t]) + '</button>'; }).join('') + '</div>' +
