@@ -12,32 +12,32 @@
   var I18N = {
     zh: {
       title: '互動式段落播放器',
-      lead: '按「開始」後從前奏播放。播放中點任一段落，會在目前段落結束的瞬間無縫接上；若什麼都不點，「隨機」會替你挑下一段。點「尾奏」收尾。',
+      lead: '按「開始」後從 A 播放。播放中點任一段落，會在目前段落結束的瞬間無縫接上；若什麼都不點，「隨機」會替你挑下一段。同字母 1→2 是正常順序；E1→E2 是前後段的中繼；點 I 收尾。',
       start: '▶ 開始', stop: '■ 停止', now: '播放中：', random: '隨機', random_auto: '自動接手中', loading: '載入音檔…',
-      intro: '前奏', outro: '尾奏', loop: '循環',
+      zone_pre: '前段', zone_gate: '中繼', zone_post: '後段',
       st_playing: '播放中', st_queued: '已排隊', st_next_next: '排到下下段', st_blocked: '不可接', st_loop: '循環中',
-      next_none: '下一段：尚未決定（{s} 秒後隨機接手）', next_queued: '下一段：<em>{n}</em>（你的選擇）', next_auto: '下一段：<em>{n}</em>（隨機自動接手）', next_locked: '已鎖定 → <em>{n}</em>', next_loop: '下一段：<em>{n}</em>（自我循環，點其他段可離開）', next_end: '尾奏播完即結束',
+      next_none: '下一段：尚未決定（{s} 秒後隨機接手）', next_queued: '下一段：<em>{n}</em>（你的選擇）', next_auto: '下一段：<em>{n}</em>（隨機自動接手）', next_locked: '已鎖定 → <em>{n}</em>', next_loop: '下一段：<em>{n}</em>（自我循環，點其他段可離開）', next_end: 'I 播完即結束',
       opt_exclude: '隨機不重複上一段', opt_rules: '啟用接續規則',
       how: '這個播放器怎麼運作',
       e1: '無縫：每一段都是預先解碼的 AudioBuffer，下一段以「上一段結束的取樣點」起播（下方紀錄列出實際接縫誤差）。',
       e2: '佇列：播放中點段落＝排到下一段；在決策鎖定之後才點，會自動排到下下段。',
-      e3: '隨機後備：到決策點若沒有選擇，隨機接手，且可設定不重複上一段。I 沒被指定下一段時會自我循環。',
+      e3: '隨機後備：到決策點若沒有選擇，隨機接手，且可設定不重複上一段。I loop 沒被指定下一段時會自我循環。',
       e4: '接續規則：每段允許接哪些段由設定檔定義；不允許的按鈕會變灰。',
       e5: '每段自帶前導與尾音：下一段的前導與上一段的尾音重疊，接縫仍落在小節線上；決策點（進度條白線）依候選段的前導自動提前。',
       note: '素材為 IraStoria 原創曲的段落切片。'
     },
     en: {
       title: 'Interactive Section Player',
-      lead: 'Press Start and the intro plays. Pick any section while playing and it joins the instant the current one ends; pick nothing and Random chooses for you. Pick Outro to finish.',
+      lead: 'Press Start and A plays. Pick any section while playing and it joins the instant the current one ends; pick nothing and Random chooses for you. Within a letter, 1→2 is the natural order; E1→E2 bridges the two halves; pick I to finish.',
       start: '▶ Start', stop: '■ Stop', now: 'Now playing:', random: 'Random', random_auto: 'auto-picking', loading: 'Loading audio…',
-      intro: 'Intro', outro: 'Outro', loop: 'loop',
+      zone_pre: 'first half', zone_gate: 'bridge', zone_post: 'second half',
       st_playing: 'playing', st_queued: 'queued', st_next_next: 'queued after next', st_blocked: 'not allowed', st_loop: 'looping',
-      next_none: 'Next: undecided (random takes over in {s}s)', next_queued: 'Next: <em>{n}</em> (your pick)', next_auto: 'Next: <em>{n}</em> (random, automatic)', next_locked: 'Locked → <em>{n}</em>', next_loop: 'Next: <em>{n}</em> (self-loop; pick another section to leave)', next_end: 'Ends after the outro',
+      next_none: 'Next: undecided (random takes over in {s}s)', next_queued: 'Next: <em>{n}</em> (your pick)', next_auto: 'Next: <em>{n}</em> (random, automatic)', next_locked: 'Locked → <em>{n}</em>', next_loop: 'Next: <em>{n}</em> (self-loop; pick another section to leave)', next_end: 'Ends after I',
       opt_exclude: 'Random avoids repeating last', opt_rules: 'Enable transition rules',
       how: 'How it works',
       e1: 'Seamless: every section is a decoded AudioBuffer; the next starts at the exact sample where the previous ends (the log shows measured seam error).',
       e2: 'Queue: tapping a section while playing queues it next; tapping after the decision lock queues it after the next one.',
-      e3: 'Random fallback: with nothing queued at the decision point, Random takes over, optionally never repeating the last section. I loops itself when nothing else is queued.',
+      e3: 'Random fallback: with nothing queued at the decision point, Random takes over, optionally never repeating the last section. I loop repeats itself when nothing else is queued.',
       e4: 'Rules: the config restricts which sections may follow which; disallowed buttons grey out.',
       e5: 'Every section carries its own lead-in and tail: the next lead-in overlaps the previous tail while the seam stays on the barline; the decision point (white marker) moves earlier by the candidates\' lead-ins.',
       note: 'Material: section slices of original IraStoria tracks.'
@@ -79,7 +79,7 @@
   function postSec(seg) { return (seg.tailBars || 0) * barSec(seg.bpmOut); }   /* tail rings at the outgoing tempo */
   function logicalSec(seg) { var b = buffers[bufKey(seg)]; return b ? Math.max(0.1, (seg.durationSec || b.duration) - preSec(seg) - postSec(seg)) : 0; }   /* durationSec: true length for files whose mp3 has no gapless tag */
   function colorOf(seg) { return (byGroup[seg.group] || {}).color || '#e0b04a'; }
-  function nameOf(seg) { return seg === INTRO ? T('intro') : seg === OUTRO ? T('outro') : seg.id; }
+  function nameOf(seg) { return seg.id.replace('_', ' '); }
 
   /* ------------------------------------------------------------ audio loading */
   function loadBuffer(seg) {
@@ -208,19 +208,28 @@
   /* compact grid: one column per letter (header = letter), versions stacked under it; Outro + Random as the last columns */
   function buildButtons() {
     segsEl.innerHTML = ''; segBtns = {}; colEls = {};
-    GROUPS.forEach(function (g) {
-      var col = document.createElement('div'); col.className = 'col'; col.style.setProperty('--c', g.color);
-      var head = document.createElement('div'); head.className = 'chead'; head.textContent = g.name[lang] || g.id; col.appendChild(head);
-      SEG.filter(function (s) { return s.group === g.id; }).forEach(function (s) {
-        var b = document.createElement('button'); b.className = 'seg'; b.style.setProperty('--c', g.color);
-        b.innerHTML = '<span class="nm"></span><span class="st"></span>';
-        b.addEventListener('click', function () { choose(s.id); });
-        col.appendChild(b); segBtns[s.id] = b;
+    /* zones: first half {B,C,D} · bridge {E} · second half {F,G,H,I_loop}; within a column, 1 sits above 2 with a ↓ (natural order) */
+    var zones = [{ k: 'zone_pre', g: ['B', 'C', 'D'] }, { k: 'zone_gate', g: ['E'] }, { k: 'zone_post', g: ['F', 'G', 'H', 'I_loop'] }];
+    zones.forEach(function (z) {
+      var band = document.createElement('div'); band.className = 'zone ' + z.k;
+      var lab = document.createElement('div'); lab.className = 'zlab'; lab.textContent = T(z.k); band.appendChild(lab);
+      var cols = document.createElement('div'); cols.className = 'zcols'; band.appendChild(cols);
+      z.g.forEach(function (gid) {
+        var g = byGroup[gid]; if (!g) return;
+        var col = document.createElement('div'); col.className = 'col'; col.style.setProperty('--c', g.color);
+        SEG.filter(function (s) { return s.group === g.id; }).forEach(function (s, i) {
+          if (i > 0) { var arrow = document.createElement('i'); arrow.className = 'link'; arrow.textContent = '↓'; col.appendChild(arrow); }
+          var b = document.createElement('button'); b.className = 'seg'; b.style.setProperty('--c', g.color);
+          b.innerHTML = '<span class="nm"></span><span class="st"></span>';
+          b.addEventListener('click', function () { choose(s.id); });
+          col.appendChild(b); segBtns[s.id] = b;
+        });
+        cols.appendChild(col); colEls[g.id] = col;
       });
-      segsEl.appendChild(col); colEls[g.id] = col;
+      segsEl.appendChild(band);
     });
-    var tail = document.createElement('div'); tail.className = 'col ctrl';
-    var th = document.createElement('div'); th.className = 'chead'; th.textContent = ' '; tail.appendChild(th);
+    var tail = document.createElement('div'); tail.className = 'zone ctrl';
+    var tl = document.createElement('div'); tl.className = 'zlab'; tl.textContent = ' '; tail.appendChild(tl);
     if (OUTRO) {
       outroBtn = document.createElement('button'); outroBtn.className = 'seg outro'; outroBtn.innerHTML = '<span class="nm"></span><span class="st"></span>';
       outroBtn.addEventListener('click', function () { choose(OUTRO.id); }); tail.appendChild(outroBtn); segBtns[OUTRO.id] = outroBtn;
@@ -233,7 +242,7 @@
     document.documentElement.lang = lang === 'zh' ? 'zh-Hant' : 'en';
     document.querySelectorAll('[data-i18n]').forEach(function (el) { var k = el.getAttribute('data-i18n'); el.textContent = k === 'start' ? (running ? T('stop') : T('start')) : T(k); });
     document.querySelectorAll('[data-lang]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-lang') === lang); });
-    GROUPS.forEach(function (g) { colEls[g.id].classList.toggle('active', !!cur && cur.seg.group === g.id); });
+    GROUPS.forEach(function (g) { if (colEls[g.id]) colEls[g.id].classList.toggle('active', !!cur && cur.seg.group === g.id); });
     var list = SEG.slice(); if (OUTRO) list.push(OUTRO);
     list.forEach(function (s) {
       var b = segBtns[s.id], st = '';
@@ -305,7 +314,8 @@
   document.addEventListener('keydown', function (e) {
     if (!running) return;
     var g = e.key.toUpperCase();
-    if (g === 'O' && OUTRO) { choose(OUTRO.id); return; }
+    if (g === 'I' && OUTRO) { choose(OUTRO.id); return; }
+    if (g === 'L' && byId.I_loop) { choose('I_loop'); return; }
     if (!byGroup[g]) return;
     var segs = SEG.filter(function (s) { return s.group === g; }), i = 0;
     var curPick = nxt ? later : queued;
