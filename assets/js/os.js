@@ -72,13 +72,18 @@
       }
       var an = player.analyser();
       if (mode === 'live' && an && player.isPlaying()) {
-        var data = new Uint8Array(an.fftSize); an.getByteTimeDomainData(data);
-        var peak = 0.02, step = W / (data.length - 1);
-        for (var k = 0; k < data.length; k++) peak = Math.max(peak, Math.abs((data[k] - 128) / 128));
-        var amp = H * 0.22 / peak;   // auto-gain: quiet material still draws a visible wave
-        g2.beginPath();
-        for (var i = 0; i < data.length; i++) { var v = (data[i] - 128) / 128; var yy = y + v * amp; if (i) g2.lineTo(i * step, yy); else g2.moveTo(0, yy); }
-        g2.stroke();
+        // spectrum bars (same log-frequency mapping as the player), growing up from the baseline with a soft mirror below
+        var data = new Uint8Array(an.frequencyBinCount); an.getByteFrequencyData(data);
+        var n = Math.max(48, Math.min(128, Math.floor(W / 12))), bw = W / n, maxH = H * 0.28;
+        g2.shadowBlur = 0;
+        for (var i = 0; i < n; i++) {
+          var lo = Math.floor(Math.pow(data.length, i / n)), hi = Math.max(lo + 1, Math.floor(Math.pow(data.length, (i + 1) / n))), m = 0;
+          for (var b = lo; b < hi && b < data.length; b++) m = Math.max(m, data[b]);
+          var h = m / 255 * maxH, x = i * bw + 1;
+          g2.fillStyle = 'rgba(224,176,74,.75)'; g2.fillRect(x, y - h, bw - 2, h);
+          g2.fillStyle = 'rgba(224,176,74,.18)'; g2.fillRect(x, y, bw - 2, h * 0.45);
+        }
+        g2.strokeStyle = 'rgba(224,176,74,.9)'; g2.shadowBlur = 10; g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
       } else {
         g2.strokeStyle = 'rgba(224,176,74,.28)'; g2.shadowBlur = 0;
         g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
