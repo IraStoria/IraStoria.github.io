@@ -45,7 +45,7 @@
 
   // ------------------------------------------------------------ data
   var CFG = null, SEG = [], byId = {};
-  var ctx = null, master = null, buffers = {};
+  var ctx = null, master = null, buffers = {}, analyser = null;
   var LOOKAHEAD = 0.25;  // decision lock window (s)
   var TICK = 25;
 
@@ -164,7 +164,7 @@
     renderProgress();
   }
   function start() {
-    if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = 0.8; master.connect(ctx.destination); }
+    if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = 0.8; analyser = ctx.createAnalyser(); analyser.fftSize = 512; master.connect(analyser); analyser.connect(ctx.destination); }
     if (ctx.state === 'suspended') ctx.resume();
     var pending = SEG.filter(function (s) { return !buffers[s.id]; });
     startBtn.disabled = true;
@@ -246,6 +246,24 @@
     dmark.style.left = (Math.max(0, 1 - decisionLead() / (cur.end - cur.start)) * 100) + '%';
     if (!nxt && !queued) nextEl.innerHTML = T('next_none').replace('{s}', Math.max(0, cur.end - decisionLead() - ctx.currentTime).toFixed(1));
   }
+
+  // spectrum display (same style as the OS player) + segment colour
+  var viz = document.getElementById('viz'), vg = viz.getContext('2d');
+  (function drawViz() {
+    requestAnimationFrame(drawViz);
+    if (viz.width !== viz.clientWidth) viz.width = viz.clientWidth;
+    var W = viz.width, H = viz.height; vg.clearRect(0, 0, W, H);
+    if (!analyser || !running) { vg.strokeStyle = 'rgba(224,176,74,.25)'; vg.beginPath(); vg.moveTo(0, H / 2); vg.lineTo(W, H / 2); vg.stroke(); return; }
+    var data = new Uint8Array(analyser.frequencyBinCount); analyser.getByteFrequencyData(data);
+    var n = 64, bw = W / n, col = cur ? cur.seg.color : '#e0b04a';
+    vg.fillStyle = col + '99';
+    for (var i = 0; i < n; i++) { var lo = Math.floor(Math.pow(data.length, i / n)), hi = Math.max(lo + 1, Math.floor(Math.pow(data.length, (i + 1) / n))), m = 0; for (var b = lo; b < hi && b < data.length; b++) m = Math.max(m, data[b]); var h = m / 255 * H; vg.fillRect(i * bw, H - h, bw - 1, h); }
+    var td = new Uint8Array(analyser.fftSize); analyser.getByteTimeDomainData(td);
+    var peak = 0.02; for (var q = 0; q < td.length; q++) peak = Math.max(peak, Math.abs((td[q] - 128) / 128));
+    vg.strokeStyle = 'rgba(255,255,255,.7)'; vg.lineWidth = 1.5; vg.beginPath();
+    for (var k = 0; k < td.length; k++) { var x = k / (td.length - 1) * W, y = H / 2 + (td[k] - 128) / 128 / peak * H * 0.35; k ? vg.lineTo(x, y) : vg.moveTo(x, y); }
+    vg.stroke();
+  })();
 
   startBtn.addEventListener('click', function () { running ? stop() : start(); });
   document.querySelectorAll('[data-lang]').forEach(function (b) { b.addEventListener('click', function () { lang = b.getAttribute('data-lang'); try { localStorage.setItem('lang', lang); } catch (e) {} render(); }); });

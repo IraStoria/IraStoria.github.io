@@ -32,6 +32,7 @@ button{font:inherit;color:inherit}
 /* ---------- desktop ---------- */
 .desktop{position:fixed;inset:0;background:radial-gradient(ellipse at 20% 0%,var(--wall1),var(--wall2) 60%);background-image:radial-gradient(ellipse at 20% 0%,var(--wall1),var(--wall2) 60%),radial-gradient(rgba(255,255,255,.06) 1px,transparent 1px);background-size:100% 100%,22px 22px}
 .desktop[hidden]{display:none}
+.wave{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
 .menubar{position:absolute;top:0;left:0;right:0;height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 .9rem;font:12px var(--mono);color:var(--dim);background:rgba(10,12,16,.7);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);z-index:50}
 .menubar-brand{color:var(--fg);font-weight:700}
 .menubar-mid{display:none}@media(min-width:700px){.menubar-mid{display:inline}}

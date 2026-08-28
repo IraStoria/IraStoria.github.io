@@ -32,6 +32,8 @@
     desktop.hidden = false;
     setTimeout(function () { boot.remove(); }, reduced ? 0 : 500);
     initDesktop();
+    // two lines grow from the edges and meet in the middle; music starts the instant they connect (user gesture = this click)
+    wave.connect(function () { try { player.autoplay(); } catch (e) {} });
   }
   function typeLine(text, cb) {
     var i = 0, span = document.createElement('span'); span.className = 'p'; log.appendChild(span);
@@ -51,6 +53,40 @@
     if (k >= script.length) { bootBtn.hidden = false; bootHint.hidden = false; return; }
     typeLine(script[k][0], function () { printOut(script[k][1], function () { runBoot(k + 1); }); });
   }
+
+  // ============================================================ desktop wave (background waveform; "connect" transition on boot)
+  var wave = (function () {
+    var cv = $('#wave'), g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, CONNECT_MS = 1100, mode = 'idle', raf = null, onConnected = null;
+    function size() { if (cv.width !== cv.clientWidth || cv.height !== cv.clientHeight) { cv.width = cv.clientWidth; cv.height = cv.clientHeight; } }
+    function ease(x) { return 1 - Math.pow(1 - x, 3); }
+    function draw() {
+      raf = requestAnimationFrame(draw); size();
+      var W = cv.width, H = cv.height, y = H * 0.58; g2.clearRect(0, 0, W, H);
+      g2.lineWidth = 2; g2.strokeStyle = 'rgba(224,176,74,.85)'; g2.shadowColor = 'rgba(224,176,74,.6)'; g2.shadowBlur = 12;
+      if (mode === 'connect') {
+        var p = Math.min(1, (performance.now() - connectT0) / CONNECT_MS), e = ease(p), half = W / 2 * e;
+        g2.beginPath(); g2.moveTo(0, y); g2.lineTo(half, y); g2.moveTo(W, y); g2.lineTo(W - half, y); g2.stroke();
+        if (p >= 1) { mode = 'live'; if (onConnected) { var cb = onConnected; onConnected = null; cb(); } }
+        return;
+      }
+      var an = player.analyser();
+      if (mode === 'live' && an && player.isPlaying()) {
+        var data = new Uint8Array(an.fftSize); an.getByteTimeDomainData(data);
+        var peak = 0.02, step = W / (data.length - 1);
+        for (var k = 0; k < data.length; k++) peak = Math.max(peak, Math.abs((data[k] - 128) / 128));
+        var amp = H * 0.22 / peak;   // auto-gain: quiet material still draws a visible wave
+        g2.beginPath();
+        for (var i = 0; i < data.length; i++) { var v = (data[i] - 128) / 128; var yy = y + v * amp; if (i) g2.lineTo(i * step, yy); else g2.moveTo(0, yy); }
+        g2.stroke();
+      } else {
+        g2.strokeStyle = 'rgba(224,176,74,.28)'; g2.shadowBlur = 0;
+        g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
+      }
+    }
+    function start(m) { if (!cv) return; mode = m || 'idle'; if (!raf) draw(); }
+    function connect(cb) { if (!cv) { cb(); return; } onConnected = cb; connectT0 = performance.now(); start('connect'); }
+    return { start: start, connect: connect };
+  })();
 
   // ============================================================ desktop
   var wins = {}, z = 20, dock = $('#dock'), windowsEl = $('#windows');
@@ -215,7 +251,7 @@
       if (cur < 0) load(0, false); else refresh();
       draw(); if (!timeTimer) timeTimer = setInterval(tickTime, 250); tickTime();
     }
-    function ensureCtx() { if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); analyser = actx.createAnalyser(); analyser.fftSize = 128; analyser.connect(actx.destination); } if (actx.state === 'suspended') actx.resume(); }
+    function ensureCtx() { if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); analyser = actx.createAnalyser(); analyser.fftSize = 512; analyser.connect(actx.destination); } if (actx.state === 'suspended') actx.resume(); }
     function stopAll() {
       if (audio) { audio.pause(); }
       if (synth) {
@@ -228,13 +264,13 @@
     }
     function load(i, autoplay) {
       stopAll(); cur = i; var t = list[i];
-      ui.ext.innerHTML = '';
+      if (ui.ext) ui.ext.innerHTML = '';
       if (t.synth || (t.media && t.media.local)) {
         if (!t.synth) { if (!audio) { audio = new Audio(); audio.addEventListener('ended', function () { load((cur + 1) % list.length, true); }); } audio.src = '../' + t.media.local; }
         if (autoplay) play();
       } else {
         var m = t.media, src = m.youtube ? 'https://www.youtube-nocookie.com/embed/' + m.youtube + (autoplay ? '?autoplay=1' : '') : 'https://w.soundcloud.com/player/?url=' + m.soundcloud + '&color=%23e0b04a' + (autoplay ? '&auto_play=true' : '');
-        ui.ext.innerHTML = '<p class="note">' + esc(U.player_external) + '</p><iframe class="media" src="' + esc(src) + '" allow="autoplay; encrypted-media" title="' + esc(t.title) + '"></iframe>';
+        if (ui.ext) ui.ext.innerHTML = '<p class="note">' + esc(U.player_external) + '</p><iframe class="media" src="' + esc(src) + '" allow="autoplay; encrypted-media" title="' + esc(t.title) + '"></iframe>';
       }
       refresh();
     }
@@ -277,8 +313,8 @@
       g2.clearRect(0, 0, c.width, c.height);
       if (analyser && playing) {
         var data = new Uint8Array(analyser.frequencyBinCount); analyser.getByteFrequencyData(data);
-        var bw = c.width / data.length; g2.fillStyle = 'rgba(224,176,74,.55)';
-        for (var i = 0; i < data.length; i++) { var h = data[i] / 255 * c.height; g2.fillRect(i * bw, c.height - h, bw - 1, h); }
+        var n = 64, bw = c.width / n; g2.fillStyle = 'rgba(224,176,74,.55)';
+        for (var i = 0; i < n; i++) { var lo = Math.floor(Math.pow(data.length, i / n)), hi = Math.max(lo + 1, Math.floor(Math.pow(data.length, (i + 1) / n))), m = 0; for (var b = lo; b < hi && b < data.length; b++) m = Math.max(m, data[b]); var h = m / 255 * c.height; g2.fillRect(i * bw, c.height - h, bw - 1, h); }
       }
     }
     function tickTime() {
@@ -294,7 +330,9 @@
       else if (audio && !t.synth) { pos = audio.currentTime; dur = audio.duration || 0; }
       return { title: t.title || '', playing: playing, started: cur >= 0 && (playing || pos > 0), frac: dur ? pos / dur : 0 };
     }
-    return { mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state };
+    function autoplay() { ensureCtx(); if (cur < 0) load(0, false); if (!playing) play(); }
+    return { mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state, autoplay: autoplay,
+             analyser: function () { return analyser; }, isPlaying: function () { return playing; } };
   })();
 
   // ============================================================ terminal app (playful nav)
@@ -402,7 +440,7 @@
 
   // ============================================================ kick-off (after all apps are defined)
   if (PHONE) { boot.remove(); desktop.remove(); phone.init(); }
-  else if (skipBoot) { boot.remove(); desktop.hidden = false; initDesktop(); }
+  else if (skipBoot) { boot.remove(); desktop.hidden = false; initDesktop(); wave.start('live'); }
   else {
     runBoot(0);
     bootBtn.addEventListener('click', enterDesktop);
