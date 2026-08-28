@@ -184,7 +184,7 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .ph-status{position:absolute;top:0;left:0;right:0;height:calc(20px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 18px 0;display:flex;justify-content:space-between;align-items:center;font:600 13px var(--font);z-index:5;pointer-events:none}
 .ph-sig{font-size:10px;letter-spacing:1px;opacity:.9}
 /* lock */
-.ph-lock{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:18vh;gap:.2rem;z-index:4;background:radial-gradient(ellipse at 50% 100%,#3a2a5a 0%,transparent 60%),radial-gradient(ellipse at 30% 0%,#1f3a4a,#0b0d12 70%);touch-action:none;transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .35s}
+.ph-lock{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:12vh;gap:.2rem;z-index:4;background:radial-gradient(ellipse at 50% 100%,#3a2a5a 0%,transparent 60%),radial-gradient(ellipse at 30% 0%,#1f3a4a,#0b0d12 70%);touch-action:none;transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .35s}
 .ph-lock.up{transform:translateY(-100%);opacity:0;pointer-events:none}
 .ph-lock-time{font-size:78px;font-weight:200;line-height:1;letter-spacing:-2px}
 .ph-lock-date{font-size:16px;opacity:.85}
@@ -201,7 +201,7 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .ph-app:active .ic{transform:scale(.92);filter:brightness(.8)}
 .ic.works{background:linear-gradient(160deg,#8e5cff,#4d2bb3)}.ic.demos{background:linear-gradient(160deg,#ffb347,#e06a1a)}.ic.player{background:linear-gradient(160deg,#ff5f7e,#c1123b)}
 .ic.articles{background:linear-gradient(160deg,#ffd76a,#e0a020)}.ic.about{background:linear-gradient(160deg,#5fd4ff,#1b7fc9)}.ic.terminal{background:linear-gradient(160deg,#3a3f4b,#14171e)}
-.ic.lang{background:linear-gradient(160deg,#54d68a,#1a8a4f)}.ic.page{background:linear-gradient(160deg,#c9cdd8,#7a8090)}
+.ic.lang{background:linear-gradient(160deg,#54d68a,#1a8a4f)}.ic.upd{background:linear-gradient(160deg,#6ec6ff,#2a6fd6)}.ic.page{background:linear-gradient(160deg,#c9cdd8,#7a8090)}
 .ph-hero{margin-top:auto;padding:0 8px 14px;text-align:center;opacity:.85}
 .ph-hero b{display:block;font-size:22px;letter-spacing:.04em}.ph-hero span{font-size:12px;opacity:.8}
 .ph-dock{margin:0 0 calc(12px + env(safe-area-inset-bottom));background:rgba(255,255,255,.14);backdrop-filter:blur(20px);border-radius:28px;padding:12px 10px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -229,11 +229,11 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .papp-body .list li{padding:.8rem 0}
 .papp .term{min-height:60vh}
 /* mini player */
-.ph-mini{position:absolute;left:10px;right:10px;bottom:calc(108px + env(safe-area-inset-bottom));z-index:7;background:rgba(30,34,46,.92);backdrop-filter:blur(16px);border:1px solid var(--border);border-radius:16px;padding:8px 10px;display:flex;align-items:center;gap:10px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.ph-mini{position:absolute;left:10px;right:10px;bottom:calc(108px + env(safe-area-inset-bottom));z-index:7;background:rgba(30,34,46,.92);backdrop-filter:blur(16px);border:1px solid var(--border);border-radius:16px;padding:8px 10px;display:flex;align-items:center;gap:3px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
 .ph-mini[hidden]{display:none}
 .ph-mini .art{width:38px;height:38px;border-radius:9px;background:linear-gradient(135deg,#2a2440,#0e2a33);display:flex;align-items:center;justify-content:center;font-size:18px}
 .ph-mini .info{flex:1;min-width:0;font-size:13px;line-height:1.25}.ph-mini .info b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ph-mini .info span{font-size:11px;color:var(--dim)}
-.ph-mini button{background:none;border:0;color:#fff;font-size:20px;padding:4px 8px}
+.ph-mini button{background:none;border:0;color:#fff;font-size:17px;padding:4px 5px;flex:none}
 .ph-mini .prog{position:absolute;left:14px;right:14px;bottom:0;height:2px;background:#333;border-radius:1px}.ph-mini .prog i{display:block;height:100%;width:0;background:var(--accent)}
 
 /* now-playing caption (fades in over the same duration as the connect line) */
@@ -272,3 +272,35 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .boot-lang button{background:none;border:0;color:var(--dim);font:inherit;cursor:pointer;padding:.2rem .4rem;border-radius:6px}
 .boot-lang button:hover{color:var(--fg)}.boot-lang button.on{color:#28c840}
 .boot-lang[hidden]{display:none}
+
+/* ---------- phone shell, LOG-048: lock screen = power glyph + language picker + update cards; three-stage reveal; in-place language swap; demo panels ---------- */
+.ph-notes{width:min(92vw,360px);margin-top:1rem;display:flex;flex-direction:column;gap:8px}
+.ph-note{background:rgba(255,255,255,.14);backdrop-filter:blur(14px);border-radius:16px;padding:9px 12px;text-align:left;font-size:13px;line-height:1.35}
+.ph-note-h{display:flex;justify-content:space-between;font-size:11px;opacity:.75;margin-bottom:3px}
+.ph-note p{margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ph-power{position:absolute;left:50%;bottom:calc(118px + env(safe-area-inset-bottom));transform:translateX(-50%);width:84px;height:84px;padding:0;border-radius:50%;background:transparent;color:#fff;border:2px solid rgba(255,255,255,.4);font:300 36px/1 var(--font);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:border-color .25s,box-shadow .25s,color .25s}
+.ph-power.on,.ph-power:active{border-color:#28c840;color:#28c840;box-shadow:0 0 42px rgba(40,200,64,.5)}
+.boot-lang.ph-lang{position:absolute;top:auto;bottom:calc(60px + env(safe-area-inset-bottom));font-size:14px}
+/* reveal: black veil under the line; grid comes in from the left, name from the right, dock and mini simply fade (same timings as the desktop) */
+.ph-veil{position:absolute;inset:0;background:#000;z-index:0;opacity:0;pointer-events:none;transition:opacity 3s ease}
+.phone.dark .ph-veil{opacity:1}
+.ph-grid,.ph-hero,.ph-dock,.ph-mini,.ph-status{transition:opacity 3s ease,transform 2.4s cubic-bezier(.2,.7,.2,1)}
+.phone.dark .ph-grid,.phone.dark .ph-hero,.phone.dark .ph-dock,.phone.dark .ph-mini,.phone.dark .ph-status{opacity:0;pointer-events:none}
+.phone.dark .ph-grid{transform:translateX(-70px)}.phone.dark .ph-hero{transform:translateX(70px)}
+/* in-place language swap: out to the left, back in from the right */
+.phone.swap .ph-grid,.phone.swap .ph-hero,.phone.swap .ph-dock,.phone.swap .ph-mini .info{transition:opacity .4s ease,transform .5s cubic-bezier(.4,0,.6,1)!important}
+.phone.swap-out .ph-grid,.phone.swap-out .ph-hero,.phone.swap-out .ph-dock,.phone.swap-out .ph-mini .info{transform:translateX(-60px);opacity:0}
+.phone.swap-in .ph-grid,.phone.swap-in .ph-hero,.phone.swap-in .ph-dock,.phone.swap-in .ph-mini .info{transform:translateX(60px);opacity:0;transition:none!important}
+/* mini player: title · state | ⏮ ▶ ⏭ 🔊 | EN|中 */
+.ph-mini .info{cursor:pointer;padding-left:4px;margin-right:2px}
+.ph-mini .pp{color:var(--accent);font-size:19px;min-width:2em}
+.ph-mini .ph-ls{margin-left:4px;flex:none;font-size:10px;gap:.3rem}
+.ph-mini .ph-ls .ls-track{width:34px;height:20px}.ph-mini .ph-ls .ls-knob{width:14px;height:14px}
+body[data-lang="zh"] .ph-mini .ls-knob{transform:translateX(14px)}
+/* demo panel: the iframe fills the body; ⛶ folds the nav away (iPhone has no real fullscreen for iframes) */
+.papp-body.frame{padding:0;overflow:hidden;display:flex}
+.papp-demo .demo-frame{flex:1;width:100%;height:100%;border:0;display:block}
+.papp .more .full{background:none;border:0;color:var(--accent);font-size:17px;padding:0 8px 0 0;cursor:pointer;vertical-align:middle}
+.papp.full .papp-nav{position:absolute;top:0;right:0;left:auto;padding-right:6px;background:transparent;backdrop-filter:none;border:0;z-index:2;pointer-events:none}
+.papp.full .papp-nav .back,.papp.full .papp-nav .ttl,.papp.full .papp-nav .more a{display:none}
+.papp.full .papp-nav .more{pointer-events:auto}.papp.full .papp-nav .full{background:rgba(15,18,24,.7);border-radius:8px;padding:4px 8px}

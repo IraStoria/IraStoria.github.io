@@ -64,6 +64,7 @@
 
 
 <div id="phone" class="phone" hidden>
+  <div class="ph-veil" aria-hidden="true"></div>
   <canvas id="ph-wave" class="wave" aria-hidden="true"></canvas>
   <div class="np-cap np-phone" id="np-phone" aria-live="polite"><span class="np-lbl">{{ui_player_now}}</span><b class="np-title"></b></div>
   <div class="ph-status"><span id="ph-time">9:41</span><span class="ph-sig">●●●● ᯤ ▮▮▮</span></div>
@@ -71,7 +72,9 @@
     <div class="ph-lock-time" id="ph-lock-time">9:41</div>
     <div class="ph-lock-date" id="ph-lock-date"></div>
     <div class="ph-lock-line">{{ui_ph_lock_line}}</div>
-    <div class="ph-lock-hint">{{ui_ph_unlock}}<div class="ph-bar"></div></div>
+    <div class="ph-notes" id="ph-notes" aria-label="{{ui_app_updates}}"></div>
+    <button id="ph-power" class="ph-power" aria-label="power on" title="power on">{{ui_boot_power}}</button>
+    <div class="boot-lang ph-lang" id="ph-lang" role="group" aria-label="language"><button type="button" data-l="zh">中文</button><span>|</span><button type="button" data-l="en">English</button></div>
   </div>
   <div id="ph-home" class="ph-home" hidden>
     <div class="ph-grid" id="ph-grid"></div>
