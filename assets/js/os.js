@@ -42,7 +42,7 @@
       var scr = cfg.anchor === 'screen-right' ? document.querySelector('#boot .screen, #ph-lock') : null;
       if (scr) {   // inside the boot laptop's terminal screen, flush to its right edge
         var r = scr.getBoundingClientRect(), ins = cfg.inset == null ? 16 : cfg.inset;
-        vid.style.left = Math.round(r.right - ins - w / 2) + 'px'; vid.style.top = Math.round(r.top + r.height / 2) + 'px';
+        vid.style.left = Math.round(r.right - ins - w / 2) + 'px'; vid.style.top = Math.round(r.top + r.height * (cfg.anchor_y == null ? 0.5 : cfg.anchor_y)) + 'px';
       } else { vid.style.left = cfg.x || '50%'; vid.style.top = cfg.y || '50%'; }
       document.body.appendChild(vid); vid.currentTime = 0;
       // drive everything off the clip's own clock (immune to timer drift / throttling): sound at t = sound_at − onset, hand-over at the end
@@ -336,9 +336,9 @@
       ui.play.addEventListener('click', toggle);
       $('#pl-prev', body).addEventListener('click', prev);
       $('#pl-next', body).addEventListener('click', next);
-      ui.list.addEventListener('click', function (e) { var li = e.target.closest('li[data-i]'); if (li) load(+li.dataset.i, true); });
+      ui.list.addEventListener('click', function (e) { var li = e.target.closest('li[data-i]'); if (li) { remember(+li.dataset.i); load(+li.dataset.i, true); } });
       ui.seek.addEventListener('click', function (e) { var r = ui.seek.getBoundingClientRect(), f = (e.clientX - r.left) / r.width; if (audio && audio.duration) { audio.currentTime = f * audio.duration; if (pausedAt !== null) pausedAt = audio.currentTime; } });
-      if (cur < 0) load(0, false); else refresh();
+      if (cur < 0) prepare(); else refresh();
       draw(); if (!timeTimer) timeTimer = setInterval(tickTime, 250); tickTime();
     }
     function ensureCtx() { if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); analyser = actx.createAnalyser(); analyser.fftSize = 512; out = actx.createGain(); out.gain.value = muted ? 0 : vol; analyser.connect(out); out.connect(actx.destination); master = actx.createGain(); master.connect(analyser); } /* analyser sits before the volume stage so the bars keep moving while muted */ if (actx.state === 'suspended') actx.resume(); }
@@ -361,7 +361,7 @@
       stopAll(true); cur = i; var t = list[i];
       if (ui.ext) ui.ext.innerHTML = '';
       if (t.synth || (t.media && t.media.local)) {
-        if (!t.synth) { if (!audio) { audio = new Audio(); audio.addEventListener('ended', function () { load((cur + 1) % list.length, true); }); } audio.src = '../' + t.media.local; }
+        if (!t.synth) { if (!audio) { audio = new Audio(); audio.addEventListener('ended', function () { next(); }); } audio.src = '../' + t.media.local; }
         if (autoplay) play();
       } else {
         var m = t.media, src = m.youtube ? 'https://www.youtube-nocookie.com/embed/' + m.youtube + (autoplay ? '?autoplay=1' : '') : 'https://w.soundcloud.com/player/?url=' + m.soundcloud + '&color=%23e0b04a' + (autoplay ? '&auto_play=true' : '');
@@ -383,7 +383,7 @@
       playing = true; started = true; refresh();
     }
     function toggle() { if (playing) stopAll(); else play(); }
-    function playId(id) { var i = list.findIndex(function (t) { return t.id === id; }); if (i >= 0) load(i, true); }
+    function playId(id) { var i = list.findIndex(function (t) { return t.id === id; }); if (i >= 0) { remember(i); load(i, true); } }
     // Placeholder: a gentle generative pad so the player is demonstrable before real tracks exist.
     function startSynth() {
       var g = actx.createGain(); g.gain.value = 0.0001; g.connect(analyser);
@@ -434,10 +434,19 @@
       else if (audio && !t.synth) { pos = pausedAt !== null ? pausedAt : audio.currentTime; dur = audio.duration || 0; }
       return { title: t.title || '', playing: playing, started: cur >= 0 && (started || playing || pos > 0), frac: dur ? pos / dur : 0, muted: mutedNow, vol: vol };
     }
-    function autoplay() { ensureCtx(); if (cur < 0) load(0, false); if (!playing) play(); }
-    function prepare() { if (cur < 0) load(0, false); }   // load first track silently so the desktop transport has something to show
-    function prev() { load((cur - 1 + list.length) % list.length, true); }
-    function next() { load((cur + 1) % list.length, true); }
+    function autoplay() { ensureCtx(); prepare(); if (!playing) play(); }
+    function prepare() { if (cur < 0) { var i = pickRandom(); remember(i); load(i, false); } }   // load first track silently so the desktop transport has something to show
+    // shuffle mode: every hand-over (track end, ⏮, ⏭, first play) draws a random track, never one of the last NO_REPEAT picks
+    var NO_REPEAT = 2, history = [];
+    function pickRandom() {
+      var n = list.length; if (n < 2) return 0;
+      var avoid = history.slice(-Math.min(NO_REPEAT, n - 1));
+      var pool = []; for (var i = 0; i < n; i++) if (avoid.indexOf(i) < 0) pool.push(i);
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+    function remember(i) { history.push(i); if (history.length > 8) history.shift(); }
+    function prev() { var i = pickRandom(); remember(i); load(i, true); }
+    function next() { var i = pickRandom(); remember(i); load(i, true); }
     return { mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state, autoplay: autoplay, prepare: prepare, prev: prev, next: next, toggleMute: toggleMute, setVolume: setVolume,
              analyser: function () { return analyser; }, isPlaying: function () { return playing; } };
   })();

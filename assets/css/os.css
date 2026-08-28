@@ -34,9 +34,9 @@ button{font:inherit;color:inherit}
 .desktop[hidden]{display:none}
 .wave{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
 /* desktop reveal: .dark = black veil over the wallpaper and everything except the line hidden; removing it fades colours + UI in together */
-.veil{position:absolute;inset:0;background:#000;z-index:0;opacity:0;pointer-events:none;transition:opacity 1.2s ease}
+.veil{position:absolute;inset:0;background:#000;z-index:0;opacity:0;pointer-events:none;transition:opacity 3s ease}
 .desktop.dark .veil{opacity:1}
-.desktop>:not(.wave):not(.veil){transition:opacity 1.2s ease}
+.desktop>:not(.wave):not(.veil){transition:opacity 3s ease}
 .desktop.dark>:not(.wave):not(.veil){opacity:0!important;pointer-events:none}
 .menubar{position:absolute;top:0;left:0;right:0;height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 .9rem;font:12px var(--mono);color:var(--dim);background:rgba(10,12,16,.7);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);z-index:50}
 .menubar-brand{color:var(--fg);font-weight:700}

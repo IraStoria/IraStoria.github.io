@@ -22,6 +22,50 @@
     ]
   },
   {
+    "id": "summer",
+    "type": "music",
+    "year": 2026,
+    "featured": true,
+    "title": {
+      "zh": "Summer -《立夏》",
+      "en": "Summer - 立夏"
+    },
+    "desc": {
+      "zh": "原創曲（2026）。",
+      "en": "Original track (2026)."
+    },
+    "media": {
+      "local": "assets/audio/summer.mp3"
+    },
+    "platform": "all",
+    "links": [],
+    "tags": [
+      "music"
+    ]
+  },
+  {
+    "id": "rainbow",
+    "type": "music",
+    "year": 2026,
+    "featured": true,
+    "title": {
+      "zh": "Rainbow -《虹》",
+      "en": "Rainbow - 虹"
+    },
+    "desc": {
+      "zh": "原創曲（2026）。",
+      "en": "Original track (2026)."
+    },
+    "media": {
+      "local": "assets/audio/rainbow.mp3"
+    },
+    "platform": "all",
+    "links": [],
+    "tags": [
+      "music"
+    ]
+  },
+  {
     "id": "demo-interactive-player",
     "type": "demo",
     "year": 2026,
