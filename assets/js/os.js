@@ -196,7 +196,7 @@
   }
   function decayFactor(dtMs) { return Math.pow(DECAY_PER_SEC, dtMs / 1000); }   // frame-rate independent (real elapsed time, so a throttled tab catches up)
   function makeWave(cv, yRatio) {
-    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, CLEAR_MS = 600;
+    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, CLEAR_MS = 600, GAP = 5;
     function size() { if (cv.width !== cv.clientWidth || cv.height !== cv.clientHeight) { cv.width = cv.clientWidth; cv.height = cv.clientHeight; } }
     function ease(x) { return 1 - Math.pow(1 - x, 3); }
     function draw() {
@@ -227,10 +227,12 @@
           levels[i] = target > levels[i] ? target : Math.max(target, levels[i] * dk);
           var h = levels[i] * maxH, x = i * bw + 1, w = bw - 2; if (h > 0.5) any = true;
           // the play head wipes each bar from its left edge: grey underneath, amber over the part left of px
-          g2.fillStyle = 'rgba(255,255,255,.28)'; g2.fillRect(x, y - h, w, h);
-          g2.fillStyle = 'rgba(255,255,255,.07)'; g2.fillRect(x, y, w, h * 0.45);
+          // bars sit GAP px off the baseline (above and the reflection below) so the line reads as its own element; no per-bar shadow (it smears)
+          var top = y - GAP - h, rb = y + GAP;
+          g2.fillStyle = 'rgba(255,255,255,.28)'; g2.fillRect(x, top, w, h);
+          g2.fillStyle = 'rgba(255,255,255,.07)'; g2.fillRect(x, rb, w, h * 0.45);
           var aw = Math.min(w, px - x);
-          if (aw > 0) { g2.shadowColor = 'rgba(224,176,74,.7)'; g2.shadowBlur = 10; g2.fillStyle = 'rgba(224,176,74,.85)'; g2.fillRect(x, y - h, aw, h); g2.shadowBlur = 0; g2.fillStyle = 'rgba(224,176,74,.2)'; g2.fillRect(x, y, aw, h * 0.45); }
+          if (aw > 0) { g2.fillStyle = 'rgba(224,176,74,.8)'; g2.fillRect(x, top, aw, h); g2.fillStyle = 'rgba(224,176,74,.18)'; g2.fillRect(x, rb, aw, h * 0.45); }
         }
         // baseline glow eases between 'sound' (1) and 'silence' (.55) instead of snapping — no more glow dropping out when a track starts quietly
         glow += ((any ? 1 : 0.55) - glow) * 0.05;
