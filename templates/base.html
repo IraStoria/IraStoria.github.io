@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="{{html_lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{page_title}} · {{site_name}}</title>
+<meta name="description" content="{{meta_desc}}">
+<link rel="alternate" hreflang="zh-Hant" href="{{base_url}}/zh/{{page_path}}">
+<link rel="alternate" hreflang="en" href="{{base_url}}/en/{{page_path}}">
+<link rel="canonical" href="{{base_url}}/{{lang}}/{{page_path}}">
+<link rel="stylesheet" href="{{root}}assets/css/style.css">
+</head>
+<body data-lang="{{lang}}">
+<header class="site-header">
+  <a class="brand" href="{{root}}{{lang}}/">{{site_name}}</a>
+  <nav class="site-nav">
+    <a href="{{root}}{{lang}}/" {{nav_active_home}}>{{nav_home}}</a>
+    <a href="{{root}}{{lang}}/works/" {{nav_active_works}}>{{nav_works}}</a>
+    <a href="{{root}}{{lang}}/demos/" {{nav_active_demos}}>{{nav_demos}}</a>
+    <a href="{{root}}{{lang}}/articles/" {{nav_active_articles}}>{{nav_articles}}</a>
+    <a href="{{root}}{{lang}}/about/" {{nav_active_about}}>{{nav_about}}</a>
+    <a class="lang-switch" href="{{root}}{{other_lang}}/{{page_path}}" hreflang="{{other_lang}}" data-lang-switch="{{other_lang}}">{{lang_switch}}</a>
+  </nav>
+</header>
+<main class="site-main">
+{{content}}
+</main>
+<footer class="site-footer">{{footer}}</footer>
+<script src="{{root}}assets/js/main.js"></script>
+</body>
+</html>

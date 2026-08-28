@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{site_name}}</title>
+<meta name="robots" content="noindex">
+<link rel="alternate" hreflang="zh-Hant" href="{{base_url}}/zh/">
+<link rel="alternate" hreflang="en" href="{{base_url}}/en/">
+<script>
+(function(){
+  var pref=null;try{pref=localStorage.getItem('lang');}catch(e){}
+  var nav=(navigator.language||'').toLowerCase();
+  var lang=pref||(nav.indexOf('zh')===0?'zh':'en');
+  location.replace('{{prefix}}'+lang+'/');
+})();
+</script>
+<meta http-equiv="refresh" content="1;url={{prefix}}{{default_language}}/">
+</head>
+<body><p><a href="{{prefix}}zh/">中文</a> · <a href="{{prefix}}en/">English</a></p></body>
+</html>

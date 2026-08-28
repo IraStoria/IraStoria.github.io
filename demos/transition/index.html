@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Music Transition Demo · IraStoria</title>
+<link rel="stylesheet" href="demo.css">
+</head>
+<body>
+<header class="top">
+  <a class="back" href="../../">← IraStoria</a>
+  <div class="langs"><button data-lang="zh" class="active">中文</button><button data-lang="en">EN</button></div>
+</header>
+
+<main>
+  <h1 data-i18n="title"></h1>
+  <p class="lead" data-i18n="lead"></p>
+
+  <section class="panel">
+    <div class="row">
+      <button id="play" class="big" data-i18n="start"></button>
+      <span class="status"><span data-i18n="now"></span> <b id="nowSection">A</b> · <span data-i18n="bpm"></span> <input id="bpm" type="number" min="60" max="180" value="120"></span>
+    </div>
+
+    <div class="row">
+      <span class="label" data-i18n="mode"></span>
+      <div class="modes" id="modes">
+        <label><input type="radio" name="mode" value="immediate" checked> <span data-i18n="m_immediate"></span></label>
+        <label><input type="radio" name="mode" value="beat"> <span data-i18n="m_beat"></span></label>
+        <label><input type="radio" name="mode" value="bar"> <span data-i18n="m_bar"></span></label>
+        <label><input type="radio" name="mode" value="crossfade"> <span data-i18n="m_crossfade"></span></label>
+      </div>
+    </div>
+
+    <div class="row">
+      <button id="switch" class="big accent" disabled data-i18n="switch"></button>
+      <span id="pending" class="pending"></span>
+    </div>
+
+    <canvas id="viz" width="960" height="200"></canvas>
+  </section>
+
+  <section class="explain">
+    <h2 data-i18n="how"></h2>
+    <ul>
+      <li><b data-i18n="m_immediate"></b> — <span data-i18n="e_immediate"></span></li>
+      <li><b data-i18n="m_beat"></b> — <span data-i18n="e_beat"></span></li>
+      <li><b data-i18n="m_bar"></b> — <span data-i18n="e_bar"></span></li>
+      <li><b data-i18n="m_crossfade"></b> — <span data-i18n="e_crossfade"></span></li>
+    </ul>
+    <p class="note" data-i18n="note"></p>
+  </section>
+</main>
+<script src="demo.js"></script>
+</body>
+</html>

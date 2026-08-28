@@ -1,0 +1,13 @@
+# media source files never enter the public repo (ADR-005 / R4)
+*.wav
+*.aif
+*.aiff
+*.flac
+*.psd
+*.blend
+*.zip
+*.7z
+# generated
+__pycache__/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>IraStoria</title>
+<meta name="robots" content="noindex">
+<link rel="alternate" hreflang="zh-Hant" href="https://irastoria.github.io/zh/">
+<link rel="alternate" hreflang="en" href="https://irastoria.github.io/en/">
+<script>
+(function(){
+  var pref=null;try{pref=localStorage.getItem('lang');}catch(e){}
+  var nav=(navigator.language||'').toLowerCase();
+  var lang=pref||(nav.indexOf('zh')===0?'zh':'en');
+  location.replace(''+lang+'/');
+})();
+</script>
+<meta http-equiv="refresh" content="1;url=zh/">
+</head>
+<body><p><a href="zh/">中文</a> · <a href="en/">English</a></p></body>
+</html>

@@ -1,0 +1,51 @@
+/* IraStoria — base stylesheet (visual style still provisional, see ADR 延後決策) */
+:root{
+  --bg:#0f1115;--bg-2:#171a21;--fg:#e8e6e1;--fg-dim:#9a9890;--accent:#e0b04a;--accent-2:#5fb3c9;
+  --border:#2a2e38;--radius:10px;--maxw:1040px;
+  --font:system-ui,-apple-system,"Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+}
+@media (prefers-color-scheme: light){
+  :root{--bg:#faf8f4;--bg-2:#ffffff;--fg:#1d1f24;--fg-dim:#5f6169;--accent:#a86f0a;--accent-2:#1e7f97;--border:#e2ddd2}
+}
+*{box-sizing:border-box}
+html{font-family:var(--font);background:var(--bg);color:var(--fg);line-height:1.6;-webkit-text-size-adjust:100%}
+body{margin:0;min-height:100vh;display:flex;flex-direction:column}
+a{color:var(--accent-2);text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3{line-height:1.25;margin:0 0 .5em}
+h1{font-size:clamp(1.8rem,4vw,2.6rem)}h2{font-size:1.4rem;margin-top:1.5em}h3{font-size:1.1rem}
+.site-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.9rem 1.2rem;border-bottom:1px solid var(--border);position:sticky;top:0;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);z-index:10}
+.brand{font-weight:700;letter-spacing:.04em;color:var(--fg);font-size:1.1rem}
+.site-nav{display:flex;flex-wrap:wrap;gap:.2rem .9rem;font-size:.95rem}
+.site-nav a{color:var(--fg-dim);padding:.2rem 0;border-bottom:2px solid transparent}
+.site-nav a[aria-current="page"]{color:var(--fg);border-bottom-color:var(--accent)}
+.site-nav .lang-switch{margin-left:.5rem;padding:.15rem .6rem;border:1px solid var(--border);border-radius:999px;color:var(--fg)}
+.site-main{flex:1;width:100%;max-width:var(--maxw);margin:0 auto;padding:2rem 1.2rem 4rem}
+.site-footer{text-align:center;color:var(--fg-dim);font-size:.85rem;padding:1.5rem;border-top:1px solid var(--border)}
+.hero{padding:2rem 0 1rem}
+.hero .tagline{color:var(--accent);font-weight:600;margin:0 0 .8rem}
+.hero .intro,.intro{max-width:60ch;color:var(--fg-dim);font-size:1.05rem}
+.hero-contact{margin-top:1.2rem}
+.contact-list{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:.5rem 1.2rem}
+.contact-list a[data-email]{cursor:pointer}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1.2rem;margin-top:1rem}
+.card{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);padding:1.1rem 1.2rem;display:flex;flex-direction:column;gap:.6rem;transition:transform .15s,border-color .15s}
+.card:hover{transform:translateY(-2px);border-color:var(--accent)}
+.card-head{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:var(--fg-dim)}
+.badge{padding:.1rem .55rem;border-radius:999px;border:1px solid var(--border);font-weight:600;letter-spacing:.03em;text-transform:uppercase;font-size:.72rem}
+.badge-music{color:#d98cff}.badge-game{color:#7fd67f}.badge-tool{color:var(--accent-2)}.badge-demo{color:var(--accent)}
+.card-title{margin:0}.card-desc{margin:0;color:var(--fg-dim);font-size:.95rem;flex:1}
+.card-foot{display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap;font-size:.85rem}
+.platform{color:var(--fg-dim)}
+.btn{display:inline-block;padding:.4rem .9rem;border-radius:6px;background:var(--accent);color:#14110a;font-weight:600;font-size:.9rem}
+.btn:hover{text-decoration:none;filter:brightness(1.08)}
+.media{aspect-ratio:16/9;width:100%;border:0;border-radius:6px;background:#000}
+audio.media{aspect-ratio:auto;height:40px;background:transparent}
+.filter-bar{display:flex;gap:.5rem;flex-wrap:wrap;margin:.5rem 0 1rem}
+.filter-bar button{background:transparent;border:1px solid var(--border);color:var(--fg-dim);border-radius:999px;padding:.3rem .9rem;cursor:pointer;font:inherit;font-size:.85rem}
+.filter-bar button.active{color:var(--fg);border-color:var(--accent)}
+.card[hidden]{display:none}
+.about p{max-width:65ch}
+.article-list{list-style:none;padding:0}.article-list li{padding:.6rem 0;border-bottom:1px solid var(--border)}
+.article-meta{color:var(--fg-dim);font-size:.9rem}
+.empty{color:var(--fg-dim);font-style:italic}
+@media (max-width:600px){.site-header{flex-direction:column;align-items:flex-start}.site-main{padding:1.2rem 1rem 3rem}}
