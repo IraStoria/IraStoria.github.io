@@ -318,6 +318,11 @@ def contact_block(site, lang):
     return '<ul class="contact-list">' + "".join(items) + "</ul>"
 
 
+def local_versioned(rel):
+    """Local media path with a content-hash ?v= so a re-exported track is not served from browser cache."""
+    return f"{rel}?v={hashlib.sha1((ROOT / rel).read_bytes()).hexdigest()[:8]}"
+
+
 def media_block(w, root):
     m = w.get("media") or {}
     if "youtube" in m:
@@ -327,7 +332,7 @@ def media_block(w, root):
         return (f'<iframe class="media" src="https://w.soundcloud.com/player/?url={esc(m["soundcloud"])}&amp;color=%23e0b04a" '
                 f'title="{esc(w["title"]["en"])}" loading="lazy"></iframe>')
     if "local" in m:
-        return f'<audio class="media" controls preload="none" src="{root}{esc(m["local"])}"></audio>'
+        return f'<audio class="media" controls preload="none" src="{root}{esc(local_versioned(m["local"]))}"></audio>'
     return ""
 
 
@@ -390,9 +395,12 @@ def build_pages(site, works, demos, articles):
         base_ctx = {"lang": lang, "root": "../", "author": esc(site["author"][lang])}
 
         # home = desktop OS shell (client renders apps from embedded JSON; sub-pages remain as deep links)
+        def loc_media(m):
+            return dict(m, local=local_versioned(m["local"])) if "local" in m else m
+
         def loc(w):
             return {"id": w["id"], "type": w["type"], "year": w["year"], "featured": bool(w.get("featured")),
-                    "title": w["title"][lang], "desc": w["desc"][lang], "media": w.get("media") or {},
+                    "title": w["title"][lang], "desc": w["desc"][lang], "media": loc_media(w.get("media") or {}),
                     "platform": w["platform"], "links": [{"label": l["label"][lang], "url": l["url"]} for l in w.get("links", [])]}
         data = {
             "lang": lang, "author": site["author"][lang], "tagline": site["tagline"][lang], "hero_intro": site["hero_intro"][lang],
