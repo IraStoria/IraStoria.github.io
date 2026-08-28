@@ -22,6 +22,8 @@
     if (!ALT) { location.href = '../' + (lang === 'zh' ? 'en' : 'zh') + '/#desktop'; return; }
     if (swapping) return;
     swapping = true;
+    var outEls = Array.prototype.slice.call(document.querySelectorAll('#np-desktop .np-lbl, #np-desktop .np-title'));
+    outEls.forEach(function (el) { var r = el.getBoundingClientRect(); el.style.transition = 'transform .6s cubic-bezier(.4,0,.6,1), opacity .5s ease'; el.style.transform = 'translateX(' + (-(r.right + 40)) + 'px)'; el.style.opacity = '0'; });
     desktop.classList.add('swap', 'swap-out');
     setTimeout(function () {
       applyLang(ALT);
@@ -53,7 +55,7 @@
     document.querySelectorAll('.icon[data-app]').forEach(function (b) { var t = b.querySelector('span:last-child'); if (t) t.textContent = TITLES[b.getAttribute('data-app')]; });
     document.querySelectorAll('#dock button[data-app]').forEach(function (b) { var a = b.getAttribute('data-app'); b.innerHTML = '<span>' + GLYPH[a] + '</span>' + esc(TITLES[a]); });
     var hp = document.querySelectorAll('.hero-text p'); if (hp[0]) hp[0].textContent = D.hero_intro; if (hp[1]) hp[1].textContent = '// ' + U.desk_hint;
-    var st = $('#sticky'); if (st) st.textContent = U.sticky;
+    var st = $('#sticky .sticky-text'); if (st) st.textContent = U.sticky;
     var uh = $('#updates .upd-head span'); if (uh) uh.textContent = '💬 ' + U.app_updates;
     var ub = $('#upd-hide'); if (ub) { ub.title = U.updates_hide; ub.setAttribute('aria-label', U.updates_hide); }
     var ul = $('#upd-log'); if (ul) ul.innerHTML = (D.updates || []).length ? D.updates.map(function (u) { return '<div class="msg"><time>' + esc(u.date) + '</time><p>' + esc(u.text) + '</p></div>'; }).join('') : '<p class="note">' + esc(U.updates_empty) + '</p>';
@@ -224,7 +226,10 @@
       els.forEach(function (el) {
         // desktop: visible as soon as a track is loaded (so the transport works even if autoplay was blocked); phone: only once started
         var title = (el.id === 'np-desktop' || st.started) ? st.title : '';
-        el.querySelector('.np-title').textContent = title; el.classList.toggle('show', !!title); el.classList.toggle('playing', st.playing);
+        var tEl = el.querySelector('.np-title');
+        if (el.id === 'np-desktop' && tEl.textContent && title && tEl.textContent !== title && !swapping) slideTitle(tEl, title);   // track change: old name slides off left, new one in from the right
+        else tEl.textContent = title;
+        el.classList.toggle('show', !!title); el.classList.toggle('playing', st.playing);
         var pp = el.querySelector('.np-pp'); if (pp) pp.textContent = st.playing ? '❚❚' : '▶';
         var stt = el.querySelector('.np-state'); if (stt) stt.textContent = st.playing ? U.ph_now : U.ph_paused;
         var mu = el.querySelector('.np-mute'); if (mu) { mu.textContent = st.muted ? '🔇' : '🔊'; mu.classList.toggle('on', st.muted); }
@@ -240,6 +245,17 @@
       var t = el.querySelector('.np-title'); if (t && el.id === 'np-desktop') t.addEventListener('click', function () { openApp('player'); });
     });
     function arm() { player.prepare(); els.forEach(function (el) { el.style.transitionDuration = CONNECT_MS + 'ms'; }); if (!timer) timer = setInterval(refresh, 400); refresh(); }
+    function slideTitle(tEl, title) {
+      var r = tEl.getBoundingClientRect();
+      tEl.style.transition = 'transform .45s cubic-bezier(.4,0,.6,1), opacity .35s ease'; tEl.style.transform = 'translateX(' + (-(r.right + 40)) + 'px)'; tEl.style.opacity = '0';
+      setTimeout(function () {
+        tEl.textContent = title;
+        tEl.style.transition = 'none'; tEl.style.transform = 'translateX(' + (window.innerWidth - r.left + 40) + 'px)'; tEl.style.opacity = '1';
+        void tEl.offsetWidth;
+        tEl.style.transition = 'transform .7s cubic-bezier(.2,.7,.2,1), opacity .3s ease'; tEl.style.transform = '';
+        setTimeout(function () { tEl.style.transition = ''; tEl.style.opacity = ''; }, 750);
+      }, 460);
+    }
     function reset() { last = ''; refresh(); }
     return { arm: arm, refresh: refresh, reset: reset };
   })();
