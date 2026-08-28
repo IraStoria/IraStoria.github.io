@@ -733,7 +733,9 @@
     function prev() { var i = pickRandom(); remember(i); load(i, true); }
     function next() { var i = pickRandom(); remember(i); load(i, true); }
     return { onTrack: function (fn) { trackListeners.push(fn); }, duck: duck, unduck: unduck, unlock: unlock, mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state, autoplay: autoplay, prepare: prepare, restore: restore, prev: prev, next: next, toggleMute: toggleMute, setVolume: setVolume,
-             analyser: function () { return analyser; }, isPlaying: function () { return playing; } };
+             analyser: function () { return analyser; }, isPlaying: function () { return playing; },
+             debug: function () { return { ctx: actx ? actx.state : '-', playing: playing, started: started, ducked: ducked, muted: muted, vol: vol, cur: cur, unlocked: !!(audio && audio._unlocked), wired: !!(audio && audio._wired),
+               paused: audio ? audio.paused : '-', rs: audio ? audio.readyState : '-', ns: audio ? audio.networkState : '-', t: audio ? audio.currentTime.toFixed(1) : '-', err: audio && audio.error ? audio.error.code : 0, gain: master ? master.gain.value.toFixed(3) : '-', out: out ? out.gain.value.toFixed(2) : '-' }; } };
   })();
   player.onTrack(function (fromFrac) { wave.sweep(true, fromFrac); phoneWave.sweep(true, fromFrac); });   // new track: sweep the amber off the line and the bars
 
@@ -902,6 +904,13 @@
       }, 500);
     }
     return { init: init, open: open, openDemo: openDemo, relabel: relabel, switchLang: switchLang };
+  })();
+
+  // ?debug: a small live readout of the audio pipeline (for reports from phones we cannot attach a debugger to)
+  if (/[?&]debug/.test(location.search)) (function () {
+    var hud = document.createElement('pre'); hud.style.cssText = 'position:fixed;left:6px;top:28px;z-index:9999;margin:0;padding:6px 8px;font:11px/1.35 monospace;color:#9f9;background:rgba(0,0,0,.75);border-radius:6px;pointer-events:none;white-space:pre-wrap;max-width:60vw';
+    document.body.appendChild(hud);
+    setInterval(function () { var d = player.debug(); hud.textContent = Object.keys(d).map(function (k) { return k + '=' + d[k]; }).join('  '); }, 500);
   })();
 
   // ============================================================ kick-off (after all apps are defined)
