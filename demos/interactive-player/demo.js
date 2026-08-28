@@ -164,7 +164,7 @@
     renderProgress();
   }
   function start() {
-    if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = 0.8; analyser = ctx.createAnalyser(); analyser.fftSize = 2048; analyser.minDecibels = -90; analyser.maxDecibels = -10; master.connect(analyser); analyser.connect(ctx.destination); }
+    if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = 0.8; analyser = ctx.createAnalyser(); analyser.fftSize = 2048; analyser.minDecibels = -96; analyser.maxDecibels = 6; master.connect(analyser); analyser.connect(ctx.destination); }
     if (ctx.state === 'suspended') ctx.resume();
     var pending = SEG.filter(function (s) { return !buffers[s.id]; });
     startBtn.disabled = true;
@@ -263,7 +263,7 @@
       var a = lo0 * Math.pow(ratio, i / n), b2 = lo0 * Math.pow(ratio, (i + 1) / n), m;
       if (b2 - a < 1) { var k = Math.floor(a), f = a - k; m = data[k] * (1 - f) + (data[Math.min(k + 1, hi0)] || 0) * f; }
       else { m = 0; for (var b = Math.floor(a); b < b2 && b <= hi0; b++) m = Math.max(m, data[b]); }
-      var h = m / 255 * H; vg.fillRect(i * bw, H - h, bw - 1, h);
+      var h = Math.pow(m / 255, 0.7) * H; vg.fillRect(i * bw, H - h, bw - 1, h);
     }
     var td = new Uint8Array(analyser.fftSize); analyser.getByteTimeDomainData(td);
     var peak = 0.02; for (var q = 0; q < td.length; q++) peak = Math.max(peak, Math.abs((td[q] - 128) / 128));

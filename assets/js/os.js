@@ -189,7 +189,7 @@
       var a = lo * Math.pow(ratio, i / n), b = lo * Math.pow(ratio, (i + 1) / n), v;
       if (b - a < 1) { var k = Math.floor(a), f = a - k; v = data[k] * (1 - f) + (data[Math.min(k + 1, hi)] || 0) * f; }   // narrower than a bin → interpolate
       else { v = 0; for (var j = Math.floor(a); j < b && j <= hi; j++) v = Math.max(v, data[j]); }                          // wider → peak
-      out[i] = v / 255;
+      out[i] = Math.pow(v / 255, 0.7);   // gamma lifts quiet/mid levels back up after widening the dB window
     }
     return out;
   }
@@ -457,7 +457,7 @@
       if (cur < 0) prepare(); else refresh();
       draw(); if (!timeTimer) timeTimer = setInterval(tickTime, 250); tickTime();
     }
-    function ensureCtx() { if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); analyser = actx.createAnalyser(); analyser.fftSize = 2048; analyser.minDecibels = -90; analyser.maxDecibels = -10; analyser.smoothingTimeConstant = 0.8; out = actx.createGain(); out.gain.value = muted ? 0 : vol; analyser.connect(out); out.connect(actx.destination); master = actx.createGain(); master.connect(analyser); } /* analyser sits before the volume stage so the bars keep moving while muted */ if (actx.state === 'suspended') actx.resume(); }
+    function ensureCtx() { if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); analyser = actx.createAnalyser(); analyser.fftSize = 2048; analyser.minDecibels = -96; analyser.maxDecibels = 6; analyser.smoothingTimeConstant = 0.8;   // +6 dB headroom: mastered bass no longer clips to a flat top out = actx.createGain(); out.gain.value = muted ? 0 : vol; analyser.connect(out); out.connect(actx.destination); master = actx.createGain(); master.connect(analyser); } /* analyser sits before the volume stage so the bars keep moving while muted */ if (actx.state === 'suspended') actx.resume(); }
     var fadeTimer = null, pausedAt = null;   // position at the moment pause was pressed (the fade tail must not count as progress)
     function rampDown(g) { g.gain.cancelScheduledValues(0); g.gain.setValueAtTime(Math.max(g.gain.value, 0.0001), actx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + FADE_SEC); }
     function stopAll(immediate) {
