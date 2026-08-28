@@ -52,7 +52,16 @@ button{font:inherit;color:inherit}
 .menubar-brand{color:var(--fg);font-weight:700}
 .menubar-mid{display:none}@media(min-width:700px){.menubar-mid{display:inline}}
 .menubar-right{display:flex;gap:.9rem;align-items:center}
-.lang-switch{color:var(--fg);border:1px solid var(--border);border-radius:999px;padding:.05rem .55rem}
+/* language switch: iOS-style toggle — knob left = English, knob right = 中文 (follows body[data-lang]) */
+.lang-switch{display:inline-flex;align-items:center;gap:.4rem;background:none;border:0;padding:0;cursor:pointer;color:var(--dim);font:11px var(--mono);text-decoration:none}
+.lang-switch .ls-lbl{transition:color .25s}
+.ls-track{position:relative;width:40px;height:22px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid var(--border);transition:background .25s}
+.ls-knob{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.5);transition:transform .3s cubic-bezier(.2,.7,.2,1)}
+body[data-lang="zh"] .ls-knob{transform:translateX(18px)}
+body[data-lang="zh"] .ls-track{background:rgba(224,176,74,.35)}
+body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child{color:var(--fg)}
+.lang-switch:hover .ls-track{background:rgba(255,255,255,.2)}body[data-lang="zh"] .lang-switch:hover .ls-track{background:rgba(224,176,74,.5)}
+.lang-switch:focus-visible{outline:1px solid var(--accent);outline-offset:3px;border-radius:999px}
 
 .icons{position:absolute;top:48px;left:16px;display:grid;grid-template-columns:repeat(2,76px);gap:6px 4px;z-index:5}
 @media(min-width:700px){.icons{grid-template-columns:76px}}

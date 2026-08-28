@@ -13,6 +13,7 @@
   var PHONE = shellOverride ? shellOverride === 'phone' : (window.matchMedia('(max-width: 699px)').matches || (window.matchMedia('(pointer: coarse)').matches && window.innerWidth < 900));
   try { localStorage.setItem('lang', lang); } catch (e) {}
   var sw = $('[data-lang-switch]');
+  if (sw) sw.setAttribute('aria-checked', lang === 'zh' ? 'true' : 'false');
   if (sw) sw.addEventListener('click', function (e) { try { localStorage.setItem('lang', sw.getAttribute('data-lang-switch')); } catch (e2) {} if (!PHONE && desktop && !desktop.hidden) { e.preventDefault(); switchLang(); } });
   // desktop language switch WITHOUT reloading (music keeps playing, no boot flash): apps slide out left, tagline flips,
   // now-playing slides left and fades (the name stays put); then the texts are swapped in place and everything comes back:
@@ -51,7 +52,7 @@
     try { history.replaceState(null, '', location.pathname.replace(/\/(zh|en)\//, '/' + lang + '/') + location.search + ((desktop && !desktop.hidden) ? '#desktop' : '')); } catch (e) {}   // keep #desktop only once the desktop is up (a refresh from the boot screen must boot again)
     var mid = $('.menubar-mid'); if (mid) mid.textContent = D.tagline;
     if (bootContinue) bootContinue.textContent = U.boot_continue;
-    if (sw) { sw.textContent = U.lang_switch; sw.setAttribute('href', '../' + other + '/'); sw.setAttribute('data-lang-switch', other); }
+    if (sw) { sw.setAttribute('data-lang-switch', other); sw.setAttribute('href', '../' + other + '/'); sw.title = U.lang_switch; sw.setAttribute('aria-label', U.lang_switch); sw.setAttribute('aria-checked', lang === 'zh' ? 'true' : 'false'); }   // the knob itself follows body[data-lang] via CSS
     TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, terminal: U.app_terminal };
     document.querySelectorAll('.icon[data-app]').forEach(function (b) { var t = b.querySelector('span:last-child'); if (t) t.textContent = TITLES[b.getAttribute('data-app')]; });
     document.querySelectorAll('#dock button[data-app]').forEach(function (b) { var a = b.getAttribute('data-app'); b.innerHTML = '<span>' + GLYPH[a] + '</span>' + esc(TITLES[a]); });
