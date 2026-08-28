@@ -297,7 +297,9 @@
         // desktop: visible as soon as a track is loaded (so the transport works even if autoplay was blocked); phone: only once started
         var title = (el.id === 'np-desktop' || st.started) ? st.title : '';
         var tEl = el.querySelector('.np-title');
-        if (el.id === 'np-desktop' && tEl.textContent && title && tEl.textContent !== title && !swapping) slideTitle(tEl, title);   // track change: old name slides off left, new one in from the right
+        if (st.parts && title) renderParts(tEl, st.parts);   /* section player: 'V1 - B2 | Full on V6 - by …' — only the tag flips on a section change */
+        else if (tEl.dataset.parts) { delete tEl.dataset.parts; tEl.textContent = title; }   /* back to the OS player: plain text again, no slide */
+        else if (el.id === 'np-desktop' && tEl.textContent && title && tEl.textContent !== title && !swapping) slideTitle(tEl, title);   // track change: old name slides off left, new one in from the right
         else tEl.textContent = title;
         el.classList.toggle('show', !!title); el.classList.toggle('playing', st.playing);
         var pp = el.querySelector('.np-pp'); if (pp) pp.textContent = st.playing ? '❚❚' : '▶';
@@ -315,6 +317,29 @@
       var t = el.querySelector('.np-title'); if (t && el.id === 'np-desktop') t.addEventListener('click', function () { openApp('player'); });
     });
     function arm() { player.prepare(); els.forEach(function (el) { el.style.transitionDuration = CONNECT_MS + 'ms'; }); if (!timer) timer = setInterval(refresh, 400); refresh(); }
+    /* split caption for the section player: <tag> | <rest>; a changed tag flips over its horizontal axis (down, swap, up) */
+    function renderParts(tEl, parts) {
+      var tag = tEl.querySelector('.np-tag'), rest = tEl.querySelector('.np-rest');
+      if (!tEl.dataset.parts || !tag) {
+        tEl.dataset.parts = '1'; tEl.style.transition = ''; tEl.style.transform = ''; tEl.style.opacity = '';
+        tEl.innerHTML = '<span class="np-tag"></span><span class="np-sep">|</span><span class="np-rest"></span>';
+        tag = tEl.querySelector('.np-tag'); rest = tEl.querySelector('.np-rest'); tag.textContent = parts.tag; rest.textContent = parts.rest; return;
+      }
+      rest.textContent = parts.rest;
+      if (tag.dataset.flipping) { tag.dataset.next = parts.tag; return; }
+      if (tag.textContent === parts.tag) return;
+      tag.dataset.flipping = '1'; tag.dataset.next = parts.tag;
+      tag.style.transition = 'transform .22s ease-in'; tag.style.transform = 'rotateX(90deg)';
+      setTimeout(function () {
+        tag.textContent = tag.dataset.next; delete tag.dataset.next;
+        tag.style.transition = 'none'; tag.style.transform = 'rotateX(-90deg)'; void tag.offsetWidth;
+        tag.style.transition = 'transform .26s ease-out'; tag.style.transform = 'rotateX(0deg)';
+        setTimeout(function () {
+          delete tag.dataset.flipping; tag.style.transition = '';
+          if (tag.dataset.next) { var n = tag.dataset.next; delete tag.dataset.next; renderParts(tEl, { tag: n, rest: rest.textContent }); }
+        }, 280);
+      }, 230);
+    }
     function slideTitle(tEl, title) {
       var r = tEl.getBoundingClientRect();
       tEl.style.transition = 'transform .45s cubic-bezier(.4,0,.6,1), opacity .35s ease'; tEl.style.transform = 'translateX(' + (-(r.right + 40)) + 'px)'; tEl.style.opacity = '0';

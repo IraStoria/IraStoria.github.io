@@ -57,3 +57,5 @@ h1{margin:.2rem 0 .4rem;font-size:1.7rem}.lead{color:var(--dim);max-width:65ch}
 .seg.outro{--c:#e8e6e1}
 .hist .dim{color:#6f7480}
 @media (max-width:560px){.segs{gap:.4rem}.col{width:52px}}
+.seg.random.mode{border-color:color-mix(in srgb,var(--accent) 55%,var(--border))}
+.seg.seq{--c:#9ad0ff}

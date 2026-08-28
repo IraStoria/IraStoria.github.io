@@ -13,15 +13,15 @@
     zh: {
       title: '互動式段落播放器',
       lead: '按「開始」後從 A 播放。播放中點任一段落，會在目前段落結束的瞬間無縫接上；若什麼都不點，「隨機」會替你挑下一段。同字母 1→2 是正常順序；E1→E2 是前後段的中繼；點 I 收尾。',
-      start: '▶ 開始', stop: '■ 停止', now: '播放中：', random: '隨機', random_auto: '自動接手中', loading: '載入音檔…',
+      start: '▶ 開始', stop: '■ 停止', now: '播放中：', random: '隨機', random_auto: '自動接手中', seq: '順序', seq_auto: '依序接手中', loading: '載入音檔…',
       zone_pre: '前段', zone_gate: '中繼', zone_post: '後段',
       st_playing: '播放中', st_queued: '已排隊', st_next_next: '排到下下段', st_blocked: '不可接', st_loop: '循環中',
-      next_none: '下一段：尚未決定（{s} 秒後隨機接手）', next_queued: '下一段：<em>{n}</em>（你的選擇）', next_auto: '下一段：<em>{n}</em>（隨機自動接手）', next_locked: '已鎖定 → <em>{n}</em>', next_loop: '下一段：<em>{n}</em>（自我循環，點其他段可離開）', next_end: 'I 播完即結束',
+      next_none: '下一段：尚未決定（{s} 秒後隨機接手）', next_none_seq: '下一段：尚未決定（{s} 秒後依序接手）', next_queued: '下一段：<em>{n}</em>（你的選擇）', next_auto: '下一段：<em>{n}</em>（隨機自動接手）', next_seq: '下一段：<em>{n}</em>（依序自動接手）', next_locked: '已鎖定 → <em>{n}</em>', next_loop: '下一段：<em>{n}</em>（自我循環，點其他段可離開）', next_end: 'I 播完即結束',
       opt_exclude: '隨機不重複上一段', opt_rules: '啟用接續規則',
       how: '這個播放器怎麼運作',
       e1: '無縫：每一段都是預先解碼的 AudioBuffer，下一段以「上一段結束的取樣點」起播（下方紀錄列出實際接縫誤差）。',
       e2: '佇列：播放中點段落＝排到下一段；在決策鎖定之後才點，會自動排到下下段。',
-      e3: '隨機後備：到決策點若沒有選擇，隨機接手，且可設定不重複上一段。I loop 沒被指定下一段時會自我循環。',
+      e3: '自動接手：到決策點若沒有選擇，由「隨機」或「順序」接手（順序＝照段落自然順序一路到 I）。I loop 沒被指定下一段時會自我循環。',
       e4: '接續規則：每段允許接哪些段由設定檔定義；不允許的按鈕會變灰。',
       e5: '每段自帶前導與尾音：下一段的前導與上一段的尾音重疊，接縫仍落在小節線上；決策點（進度條白線）依候選段的前導自動提前。',
       note: '素材為 IraStoria 原創曲的段落切片。'
@@ -29,15 +29,15 @@
     en: {
       title: 'Interactive Section Player',
       lead: 'Press Start and A plays. Pick any section while playing and it joins the instant the current one ends; pick nothing and Random chooses for you. Within a letter, 1→2 is the natural order; E1→E2 bridges the two halves; pick I to finish.',
-      start: '▶ Start', stop: '■ Stop', now: 'Now playing:', random: 'Random', random_auto: 'auto-picking', loading: 'Loading audio…',
+      start: '▶ Start', stop: '■ Stop', now: 'Now playing:', random: 'Random', random_auto: 'auto-picking', seq: 'In order', seq_auto: 'auto, in order', loading: 'Loading audio…',
       zone_pre: 'first half', zone_gate: 'bridge', zone_post: 'second half',
       st_playing: 'playing', st_queued: 'queued', st_next_next: 'queued after next', st_blocked: 'not allowed', st_loop: 'looping',
-      next_none: 'Next: undecided (random takes over in {s}s)', next_queued: 'Next: <em>{n}</em> (your pick)', next_auto: 'Next: <em>{n}</em> (random, automatic)', next_locked: 'Locked → <em>{n}</em>', next_loop: 'Next: <em>{n}</em> (self-loop; pick another section to leave)', next_end: 'Ends after I',
+      next_none: 'Next: undecided (random takes over in {s}s)', next_none_seq: 'Next: undecided (in-order takes over in {s}s)', next_queued: 'Next: <em>{n}</em> (your pick)', next_auto: 'Next: <em>{n}</em> (random, automatic)', next_seq: 'Next: <em>{n}</em> (in order, automatic)', next_locked: 'Locked → <em>{n}</em>', next_loop: 'Next: <em>{n}</em> (self-loop; pick another section to leave)', next_end: 'Ends after I',
       opt_exclude: 'Random avoids repeating last', opt_rules: 'Enable transition rules',
       how: 'How it works',
       e1: 'Seamless: every section is a decoded AudioBuffer; the next starts at the exact sample where the previous ends (the log shows measured seam error).',
       e2: 'Queue: tapping a section while playing queues it next; tapping after the decision lock queues it after the next one.',
-      e3: 'Random fallback: with nothing queued at the decision point, Random takes over, optionally never repeating the last section. I loop repeats itself when nothing else is queued.',
+      e3: 'Auto hand-over: with nothing queued at the decision point, Random or In-order takes over (in order = the natural section order through to I). I loop repeats itself when nothing else is queued.',
       e4: 'Rules: the config restricts which sections may follow which; disallowed buttons grey out.',
       e5: 'Every section carries its own lead-in and tail: the next lead-in overlaps the previous tail while the seam stays on the barline; the decision point (white marker) moves earlier by the candidates\' lead-ins.',
       note: 'Material: section slices of original IraStoria tracks.'
@@ -62,16 +62,19 @@
   var queued = null;     /* user's choice for the next decision (segment id) */
   var later = null;      /* user's choice after a lock (applies to the decision after next) */
   var randomAuto = false, lastId = null, history = [], ending = false;
+  var autoMode = 'random';   /* 'random' | 'seq' — what takes over at the decision point when nothing is queued */
   var trackListeners = [];   /* fired on every section change with the outgoing progress fraction (the OS shell sweeps its progress bar from there) */
   function fireTrack(fromFrac) { trackListeners.forEach(function (fn) { try { fn(fromFrac); } catch (e) {} }); }
   /* "now playing" title shared with the OS shell: V1.B2 Full on V6 - by Shiou Hsu (V = theme version, XX = section) */
-  function trackTitle(seg) { var song = (CFG && CFG.song) || {}; return (TH.version || 'V1') + '.' + seg.id.replace('_loop', ' loop') + ' ' + (song.title || '') + (song.artist ? ' - by ' + song.artist : ''); }
+  /* two parts: tag = 'V1 - B2' (flips on every section change in the OS caption), rest = 'Full on V6 - by Shiou Hsu' */
+  function titleParts(seg) { var song = (CFG && CFG.song) || {}; return { tag: (TH.version || 'V1') + ' - ' + seg.id.replace('_loop', ' loop'), rest: (song.title || '') + (song.artist ? ' - by ' + song.artist : '') }; }
+  function trackTitle(seg) { var p = titleParts(seg); return p.tag + ' | ' + p.rest; }
   /* public API for the host page (same-origin iframe): progress / spectrum / title of the current section */
   window.sectionPlayer = {
     state: function () {
       if (!running || !cur || !ctx) return { active: false, started: false, playing: false, title: '', pos: 0, dur: 0, frac: 0, muted: false };
       var pos = Math.max(0, Math.min(cur.end - cur.start, ctx.currentTime - cur.start)), dur = cur.end - cur.start;
-      return { active: true, started: true, playing: true, title: trackTitle(cur.seg), id: cur.seg.id, pos: pos, dur: dur, frac: dur ? pos / dur : 0, muted: false };
+      return { active: true, started: true, playing: true, title: trackTitle(cur.seg), parts: titleParts(cur.seg), id: cur.seg.id, pos: pos, dur: dur, frac: dur ? pos / dur : 0, muted: false };
     },
     analyser: function () { return running ? analyser : null; },
     onTrack: function (fn) { trackListeners.push(fn); }
@@ -132,6 +135,14 @@
     if (!a) return true;
     return a.indexOf(toId) >= 0 || a.indexOf(to.group) >= 0 || (to === OUTRO && a.indexOf('OUTRO') >= 0);
   }
+  /* natural order: the config order of the middle sections (I_loop skipped), then I */
+  function pickNext(fromId) {
+    var from = byId[fromId];
+    var order = SEG.filter(function (s) { return !s.loop; }); if (OUTRO) order.push(OUTRO);
+    var i = order.indexOf(from), pool = order.slice(i + 1).filter(function (s) { return allowed(fromId, s.id); });
+    if (from.loop) pool = order.filter(function (s) { return allowed(fromId, s.id); });
+    return pool.length ? pool[0] : pickRandom(fromId);
+  }
   function pickRandom(fromId) {
     var from = byId[fromId];
     if (from.loop) return from;   /* outro loop: keeps looping itself until the user picks something */
@@ -143,7 +154,7 @@
   function decide() {
     var choice = null;
     if (queued && allowed(cur.seg.id, queued)) { choice = byId[queued]; randomAuto = false; }
-    else { choice = pickRandom(cur.seg.id); randomAuto = !choice.loop; }
+    else { choice = autoMode === 'seq' ? pickNext(cur.seg.id) : pickRandom(cur.seg.id); randomAuto = !(choice.loop && autoMode === 'random'); }
     queued = null;
     nxt = schedule(choice, cur.end);
     fadeOut(cur);
@@ -192,7 +203,7 @@
   }
   function logSeam(a, b) {
     var err = (b.start - a.end) * 1000, pre = (b.start - b.audioStart) * 1000;
-    var how = (b.seg.loop && a.seg.id === b.seg.id) ? '(loop)' : randomAuto ? '(random)' : '(queued)';
+    var how = (b.seg.loop && a.seg.id === b.seg.id) ? '(loop)' : randomAuto ? (autoMode === 'seq' ? '(in order)' : '(random)') : '(queued)';
     var line = a.seg.id + ' → ' + b.seg.id + '  ' + how + '   seam ' + err.toFixed(3) + ' ms' + (pre > 0 ? '   lead-in ' + pre.toFixed(0) + ' ms overlapped' : '');
     var span = document.createElement('span'); span.className = Math.abs(err) < 1 ? 'gap' : 'bad'; span.textContent = line + '\n';
     histEl.appendChild(span); histEl.scrollTop = histEl.scrollHeight;
@@ -208,7 +219,7 @@
       progEl = document.getElementById('prog'), nextEl = document.getElementById('next'), histEl = document.getElementById('hist'),
       optExclude = document.getElementById('optExclude'), optRules = document.getElementById('optRules'), dmark = document.getElementById('dmark'),
       themesEl = document.getElementById('themes');
-  var segBtns = {}, randomBtn, outroBtn, colEls = {};
+  var segBtns = {}, randomBtn, seqBtn, outroBtn, colEls = {};
 
   function buildThemes() {
     themesEl.innerHTML = '';
@@ -249,8 +260,10 @@
       outroBtn.addEventListener('click', function () { choose(OUTRO.id); }); tail.appendChild(outroBtn); segBtns[OUTRO.id] = outroBtn;
     }
     randomBtn = document.createElement('button'); randomBtn.className = 'seg random'; randomBtn.innerHTML = '<span class="nm"></span><span class="st"></span>';
-    randomBtn.addEventListener('click', function () { queued = null; later = null; randomAuto = false; render(); });
-    tail.appendChild(randomBtn); segsEl.appendChild(tail);
+    randomBtn.addEventListener('click', function () { autoMode = 'random'; queued = null; later = null; randomAuto = false; render(); });
+    seqBtn = document.createElement('button'); seqBtn.className = 'seg random seq'; seqBtn.innerHTML = '<span class="nm"></span><span class="st"></span>';
+    seqBtn.addEventListener('click', function () { autoMode = 'seq'; queued = null; later = null; randomAuto = false; render(); });
+    tail.appendChild(randomBtn); tail.appendChild(seqBtn); segsEl.appendChild(tail);
   }
   function render() {
     document.documentElement.lang = lang === 'zh' ? 'zh-Hant' : 'en';
@@ -273,18 +286,20 @@
       else if (running && !ok) st = T('st_blocked');
       b.querySelector('.st').textContent = st;
     });
-    randomBtn.querySelector('.nm').textContent = T('random');
-    randomBtn.classList.toggle('auto', randomAuto && running);
-    randomBtn.querySelector('.st').textContent = randomAuto && running ? T('random_auto') : '';
-    randomBtn.disabled = !running || (cur && cur.seg === OUTRO);
+    randomBtn.querySelector('.nm').textContent = T('random'); seqBtn.querySelector('.nm').textContent = T('seq');
+    randomBtn.classList.toggle('mode', autoMode === 'random'); seqBtn.classList.toggle('mode', autoMode === 'seq');
+    randomBtn.classList.toggle('auto', randomAuto && running && autoMode === 'random'); seqBtn.classList.toggle('auto', randomAuto && running && autoMode === 'seq');
+    randomBtn.querySelector('.st').textContent = randomAuto && running && autoMode === 'random' ? T('random_auto') : '';
+    seqBtn.querySelector('.st').textContent = randomAuto && running && autoMode === 'seq' ? T('seq_auto') : '';
+    randomBtn.disabled = seqBtn.disabled = !running || (cur && cur.seg === OUTRO);
     nowEl.textContent = cur ? nameOf(cur.seg) : '—'; nowEl.style.color = cur ? colorOf(cur.seg) : '';
     progEl.style.setProperty('--c', cur ? colorOf(cur.seg) : '');
     if (!running) nextEl.innerHTML = '';
     else if (cur.seg === OUTRO) nextEl.innerHTML = T('next_end');
-    else if (nxt) nextEl.innerHTML = (nxt.seg.loop && nxt.seg.id === cur.seg.id ? T('next_loop') : randomAuto ? T('next_auto') : T('next_locked')).replace('{n}', nameOf(nxt.seg));
+    else if (nxt) nextEl.innerHTML = (nxt.seg.loop && nxt.seg.id === cur.seg.id ? T('next_loop') : randomAuto ? (autoMode === 'seq' ? T('next_seq') : T('next_auto')) : T('next_locked')).replace('{n}', nameOf(nxt.seg));
     else if (queued) nextEl.innerHTML = T('next_queued').replace('{n}', nameOf(byId[queued]));
     else if (cur.seg.loop) nextEl.innerHTML = T('next_loop').replace('{n}', nameOf(cur.seg));
-    else nextEl.innerHTML = T('next_none').replace('{s}', Math.max(0, cur.end - decisionLead() - ctx.currentTime).toFixed(1));
+    else nextEl.innerHTML = T(autoMode === 'seq' ? 'next_none_seq' : 'next_none').replace('{s}', Math.max(0, cur.end - decisionLead() - ctx.currentTime).toFixed(1));
   }
   function renderProgress() {
     if (!cur) { progEl.firstElementChild.style.width = '0'; return; }
@@ -293,7 +308,7 @@
     var showMark = cur.seg !== OUTRO;
     dmark.style.display = showMark ? '' : 'none';
     if (showMark) dmark.style.left = (Math.max(0, 1 - decisionLead() / (cur.end - cur.start)) * 100) + '%';
-    if (!nxt && !queued && !cur.seg.loop && showMark) nextEl.innerHTML = T('next_none').replace('{s}', Math.max(0, cur.end - decisionLead() - ctx.currentTime).toFixed(1));
+    if (!nxt && !queued && !cur.seg.loop && showMark) nextEl.innerHTML = T(autoMode === 'seq' ? 'next_none_seq' : 'next_none').replace('{s}', Math.max(0, cur.end - decisionLead() - ctx.currentTime).toFixed(1));
   }
 
   /* spectrum display (same style as the OS player) + segment colour */

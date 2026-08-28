@@ -97,6 +97,9 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .sticky-text{transition:opacity .6s ease}
 #np-desktop .np-lbl{display:inline-block}
 #np-desktop .np-title{will-change:transform}
+.np-cap .np-title .np-tag{display:inline-block;transform-origin:50% 50%;backface-visibility:hidden}
+.np-cap .np-title .np-sep{margin:0 .45em;color:var(--dim);font-weight:400}
+.np-cap .np-title .np-rest{font-weight:500}
 .hero-text{perspective:600px}
 .desktop.swap-out>.icons,.desktop.swap-out>.updates{transform:translateX(-140px);opacity:0}
 .desktop.swap-out .hero-text p{transform:rotateX(90deg);opacity:0}
