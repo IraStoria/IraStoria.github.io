@@ -171,11 +171,12 @@
      "id": "E2",
      "group": "E",
      "file": "audio/ThemeA_E2_1_4_SpeedUp.mp3",
-     "bpmIn": 145,
+     "bpmIn": 171.042,
      "bpmOut": 172,
      "preBars": 1,
      "tailBars": 4,
-     "info": "SpeedUp"
+     "info": "SpeedUp",
+     "note": "pick-up bar runs at 171.042 BPM (user 2026-08-29), so the lead-in is 1.403 s, not 1.655 s"
     },
     {
      "id": "F1",
