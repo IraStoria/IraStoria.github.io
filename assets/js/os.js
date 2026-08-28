@@ -196,7 +196,8 @@
   }
   function decayFactor(dtMs) { return Math.pow(DECAY_PER_SEC, dtMs / 1000); }   // frame-rate independent (real elapsed time, so a throttled tab catches up)
   function makeWave(cv, yRatio) {
-    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, CLEAR_MS = 600, GAP = 5;
+    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, CLEAR_MS = 600;
+    function grad(y0, y1, rgb, a0, a1) { var g = g2.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + rgb + ',' + a0 + ')'); g.addColorStop(1, 'rgba(' + rgb + ',' + a1 + ')'); return g; }
     function size() { if (cv.width !== cv.clientWidth || cv.height !== cv.clientHeight) { cv.width = cv.clientWidth; cv.height = cv.clientHeight; } }
     function ease(x) { return 1 - Math.pow(1 - x, 3); }
     function draw() {
@@ -220,6 +221,8 @@
         // the whole spectrum doubles as the progress bar: bars/baseline left of the play head are amber, the unplayed part is a quiet grey (frac frozen while paused)
         var st = player.state(), px = W * Math.max(0, Math.min(1, st.frac || 0));
         // right after the line joins, a grey sweep runs right→left over the amber line ("clearing" the progress bar) before real progress takes over
+        var gAmb = grad(y, y - maxH, '224,176,74', 0.22, 0.85), gGrey = grad(y, y - maxH, '255,255,255', 0.06, 0.32),
+            gAmbR = grad(y, y + maxH * 0.45, '224,176,74', 0.16, 0), gGreyR = grad(y, y + maxH * 0.45, '255,255,255', 0.06, 0);
         var lpx = px;   // the sweep only touches the baseline; the bars follow real progress
         if (clearT0) { var cp = (now - clearT0) / CLEAR_MS; if (cp >= 1) clearT0 = 0; else lpx = Math.max(px, W * (1 - ease(cp))); }
         for (var i = 0; i < n; i++) {
@@ -227,12 +230,12 @@
           levels[i] = target > levels[i] ? target : Math.max(target, levels[i] * dk);
           var h = levels[i] * maxH, x = i * bw + 1, w = bw - 2; if (h > 0.5) any = true;
           // the play head wipes each bar from its left edge: grey underneath, amber over the part left of px
-          // bars sit GAP px off the baseline (above and the reflection below) so the line reads as its own element; no per-bar shadow (it smears)
-          var top = y - GAP - h, rb = y + GAP;
-          g2.fillStyle = 'rgba(255,255,255,.28)'; g2.fillRect(x, top, w, h);
-          g2.fillStyle = 'rgba(255,255,255,.07)'; g2.fillRect(x, rb, w, h * 0.45);
+          // vertical gradients: bars are dim where they meet the baseline and brighten upward (reflection fades downward),
+          // so the line reads as its own element without a gap; no per-bar shadow (it smears)
+          g2.fillStyle = gGrey; g2.fillRect(x, y - h, w, h);
+          g2.fillStyle = gGreyR; g2.fillRect(x, y, w, h * 0.45);
           var aw = Math.min(w, px - x);
-          if (aw > 0) { g2.fillStyle = 'rgba(224,176,74,.8)'; g2.fillRect(x, top, aw, h); g2.fillStyle = 'rgba(224,176,74,.18)'; g2.fillRect(x, rb, aw, h * 0.45); }
+          if (aw > 0) { g2.fillStyle = gAmb; g2.fillRect(x, y - h, aw, h); g2.fillStyle = gAmbR; g2.fillRect(x, y, aw, h * 0.45); }
         }
         // baseline glow eases between 'sound' (1) and 'silence' (.55) instead of snapping — no more glow dropping out when a track starts quietly
         glow += ((any ? 1 : 0.55) - glow) * 0.05;
