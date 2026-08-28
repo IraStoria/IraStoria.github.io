@@ -196,7 +196,7 @@
   }
   function decayFactor(dtMs) { return Math.pow(DECAY_PER_SEC, dtMs / 1000); }   // frame-rate independent (real elapsed time, so a throttled tab catches up)
   function makeWave(cv, yRatio) {
-    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1;
+    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, CLEAR_MS = 600;
     function size() { if (cv.width !== cv.clientWidth || cv.height !== cv.clientHeight) { cv.width = cv.clientWidth; cv.height = cv.clientHeight; } }
     function ease(x) { return 1 - Math.pow(1 - x, 3); }
     function draw() {
@@ -207,7 +207,7 @@
       if (mode === 'connect') {
         var p = Math.min(1, (performance.now() - connectT0) / CONNECT_MS), e = ease(p), half = W / 2 * e;
         g2.beginPath(); g2.moveTo(0, y); g2.lineTo(half, y); g2.moveTo(W, y); g2.lineTo(W - half, y); g2.stroke();
-        if (p >= 1) { mode = 'live'; if (onConnected) { var cb = onConnected; onConnected = null; cb(); } }
+        if (p >= 1) { mode = 'live'; clearT0 = performance.now(); if (onConnected) { var cb = onConnected; onConnected = null; cb(); } }
         return;
       }
       var an = player.analyser();
@@ -219,6 +219,8 @@
         g2.shadowBlur = 0;
         // the whole spectrum doubles as the progress bar: bars/baseline left of the play head are amber, the unplayed part is a quiet grey (frac frozen while paused)
         var st = player.state(), px = W * Math.max(0, Math.min(1, st.frac || 0));
+        // right after the line joins, a grey sweep runs right→left over the amber line ("clearing" the progress bar) before real progress takes over
+        if (clearT0) { var cp = (now - clearT0) / CLEAR_MS; if (cp >= 1) clearT0 = 0; else px = Math.max(px, W * (1 - ease(cp))); }
         for (var i = 0; i < n; i++) {
           var target = lv[i];   // follows the real signal, so the fade-out and the bars fall together
           levels[i] = target > levels[i] ? target : Math.max(target, levels[i] * dk);
@@ -227,12 +229,15 @@
           g2.fillStyle = 'rgba(255,255,255,.28)'; g2.fillRect(x, y - h, w, h);
           g2.fillStyle = 'rgba(255,255,255,.07)'; g2.fillRect(x, y, w, h * 0.45);
           var aw = Math.min(w, px - x);
-          if (aw > 0) { g2.fillStyle = 'rgba(224,176,74,.75)'; g2.fillRect(x, y - h, aw, h); g2.fillStyle = 'rgba(224,176,74,.18)'; g2.fillRect(x, y, aw, h * 0.45); }
+          if (aw > 0) { g2.shadowColor = 'rgba(224,176,74,.7)'; g2.shadowBlur = 10; g2.fillStyle = 'rgba(224,176,74,.85)'; g2.fillRect(x, y - h, aw, h); g2.shadowBlur = 0; g2.fillStyle = 'rgba(224,176,74,.2)'; g2.fillRect(x, y, aw, h * 0.45); }
         }
         // baseline glow eases between 'sound' (1) and 'silence' (.55) instead of snapping — no more glow dropping out when a track starts quietly
         glow += ((any ? 1 : 0.55) - glow) * 0.05;
-        g2.strokeStyle = 'rgba(224,176,74,' + (0.28 + 0.62 * glow).toFixed(3) + ')'; g2.shadowColor = 'rgba(224,176,74,.6)'; g2.shadowBlur = 12 * glow; g2.beginPath(); g2.moveTo(0, y); g2.lineTo(px, y); g2.stroke();
+        g2.strokeStyle = 'rgba(224,176,74,' + (0.28 + 0.62 * glow).toFixed(3) + ')'; g2.shadowColor = 'rgba(224,176,74,.6)'; g2.shadowBlur = 18 * glow; g2.beginPath(); g2.moveTo(0, y); g2.lineTo(px, y); g2.stroke();
         if (px < W) { g2.strokeStyle = 'rgba(255,255,255,.22)'; g2.shadowBlur = 0; g2.beginPath(); g2.moveTo(px, y); g2.lineTo(W, y); g2.stroke(); }
+        // play head: a short bright segment with a strong halo at the amber/grey boundary
+        g2.strokeStyle = 'rgba(255,226,150,.95)'; g2.shadowColor = 'rgba(224,176,74,.9)'; g2.shadowBlur = 22; g2.lineWidth = 3;
+        g2.beginPath(); g2.moveTo(Math.max(0, px - 10), y); g2.lineTo(px, y); g2.stroke(); g2.lineWidth = 2; g2.shadowBlur = 0;
       } else {
         g2.strokeStyle = 'rgba(224,176,74,.28)'; g2.shadowBlur = 0;
         g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
