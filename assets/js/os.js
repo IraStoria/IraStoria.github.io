@@ -50,7 +50,10 @@
       vid.onended = finish;
       var p = vid.play(); if (p && p.catch) p.catch(function () { vid.remove(); finish(); });
       var safety = ((vid.duration || 1.5) + 1.5) * 1000; setTimeout(finish, safety);   // never leave the visitor stuck on the boot screen
-      var origCb = cb; cb = function () { vid.classList.add('fade'); setTimeout(function () { vid.remove(); vid.classList.remove('fade'); }, 320); origCb(); };
+      var origCb = cb; cb = function () {   // clip → fade out → short hold → only then hand over to the desktop / home screen
+        vid.classList.add('fade');
+        setTimeout(function () { vid.remove(); vid.classList.remove('fade'); setTimeout(origCb, cfg.after_ms == null ? 600 : cfg.after_ms); }, 320);
+      };
     }
     return { click: click };
   })();

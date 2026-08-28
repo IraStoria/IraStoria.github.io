@@ -282,9 +282,10 @@
       "sound_onset": 0.062,
       "width": 240,
       "opacity": 0.55,
-      "x": "38%",
-      "y": "56%",
-      "_note": "click-to-enter easter egg: clip plays first (rough, off-centre on purpose), the desktop only starts loading after it ends; sound onset lands at video t=sound_at"
+      "x": "84%",
+      "y": "48%",
+      "_note": "click-to-enter easter egg (right of the boot laptop). click.mp4 = source trimmed by 0.10 s at the head (user: sound felt early). clip plays, fades, waits after_ms, THEN the desktop loads; sound onset lands at video t=sound_at",
+      "after_ms": 600
     }
   }
 }
