@@ -13,12 +13,13 @@
       start: '▶ 開始', stop: '■ 停止', now: '播放中：', random: '隨機', random_auto: '自動接手中',
       st_playing: '播放中', st_queued: '已排隊', st_next_next: '排到下下段', st_blocked: '規則不允許',
       next_none: '下一段：尚未決定（{s} 秒後隨機接手）', next_queued: '下一段：<em>{n}</em>（你的選擇）', next_auto: '下一段：<em>{n}</em>（隨機自動接手）', next_locked: '已鎖定 → <em>{n}</em>',
-      opt_exclude: '隨機不重複上一段', opt_xfade: '接縫 15ms 等功率淡接', opt_rules: '啟用接續規則',
+      opt_exclude: '隨機不重複上一段', opt_xfade: '接縫 15ms 等功率淡接', opt_rules: '啟用接續規則', opt_pre: '啟用 pre-entry／post-exit（關掉可比較）',
       how: '這個測試版證明了什麼',
       e1: '無縫：每一段都是預先解碼的 AudioBuffer，下一段以「上一段結束的取樣點」起播，誤差 <1ms（右側紀錄會列出實際接縫誤差）。',
       e2: '佇列：播放中點段落＝排到下一段；在最後 0.25 秒（決策鎖定）之後才點，會自動排到下下段。',
       e3: '隨機後備：到決策點若沒有選擇，隨機鈕亮起並接手，且可設定不重複上一段。',
       e4: '接續規則：segments.json 可定義每段允許接哪些段（例如 A 不能直接接 A）；不允許的按鈕會變灰。',
+      e5: 'Pre-entry／post-exit：每段有前導（B 一拍、C 兩拍）與尾音；下一段在「exit − 前導」就起播、與上一段尾音重疊，接縫仍對齊小節線。決策點（進度條白線）依候選段最大前導自動提前，所以隨機接手也保證前導完整。',
       note: '概念示意，音樂為合成佔位。換成真實素材時：ogg 格式、同 BPM、整小節長度，接縫會與此處一致。'
     },
     en: {
@@ -27,12 +28,13 @@
       start: '▶ Start', stop: '■ Stop', now: 'Now playing:', random: 'Random', random_auto: 'auto-picking',
       st_playing: 'playing', st_queued: 'queued', st_next_next: 'queued after next', st_blocked: 'not allowed',
       next_none: 'Next: undecided (random takes over in {s}s)', next_queued: 'Next: <em>{n}</em> (your pick)', next_auto: 'Next: <em>{n}</em> (random, automatic)', next_locked: 'Locked → <em>{n}</em>',
-      opt_exclude: 'Random avoids repeating last', opt_xfade: '15 ms equal-power seam', opt_rules: 'Enable transition rules',
+      opt_exclude: 'Random avoids repeating last', opt_xfade: '15 ms equal-power seam', opt_rules: 'Enable transition rules', opt_pre: 'Enable pre-entry / post-exit (toggle to compare)',
       how: 'What this test build proves',
       e1: 'Seamless: every section is a decoded AudioBuffer; the next starts at the exact sample where the previous ends (<1 ms; the log shows measured seam error).',
       e2: 'Queue: tapping a section while playing queues it next; tapping after the 0.25 s decision lock queues it after the next one.',
       e3: 'Random fallback: with nothing queued at the decision point, Random lights up and takes over, optionally never repeating the last section.',
       e4: 'Rules: segments.json can restrict which sections may follow which; disallowed buttons grey out.',
+      e5: 'Pre-entry / post-exit: sections carry lead-ins (B: 1 beat, C: 2 beats) and tails; the next section starts at exit − pre-entry and overlaps the previous tail while the seam stays on the barline. The decision point (white marker) moves earlier by the largest candidate pre-entry, so random picks keep their lead-in intact.',
       note: 'Concept sketch with synthesized placeholder music. For real material: ogg, same BPM, whole-bar lengths — seams will behave exactly as here.'
     }
   };
@@ -58,8 +60,11 @@
   function secPerBar() { return 60 / CFG.bpm * CFG.beatsPerBar; }
 
   // ------------------------------------------------------------ synthesis (placeholder; replaced by decodeAudioData for real files)
+  function beatSec() { return 60 / CFG.bpm; }
+  function preSec(seg) { return (seg.preEntryBeats || 0) * beatSec(); }
+  function postSec(seg) { return seg.postExitSec || 0; }
   function renderSection(seg) {
-    var dur = seg.bars * secPerBar(), sr = 44100;
+    var logical = seg.bars * secPerBar(), pre = preSec(seg), post = postSec(seg), dur = pre + logical + post, sr = 44100;
     var off = new OfflineAudioContext(2, Math.ceil(dur * sr), sr);
     var out = off.createGain(); out.gain.value = 0.6; out.connect(off.destination);
     var step = 60 / CFG.bpm / 4, steps = seg.bars * CFG.beatsPerBar * 4;
@@ -78,8 +83,20 @@
       var s = off.createBufferSource(), f = off.createBiquadFilter(), g = off.createGain();
       f.type = 'highpass'; f.frequency.value = hp; g.gain.value = vol; s.buffer = b; s.connect(f); f.connect(g); g.connect(out); s.start(t);
     }
+    // pre-entry: a drum fill / riser leading into the entry cue (so a truncated lead-in is audible)
+    if (pre > 0) {
+      var fillSteps = Math.round(pre / step);
+      for (var f = 0; f < fillSteps; f++) { var ft = f * step; noise(ft, 0.1, 0.25 + 0.35 * f / fillSteps, 1200 + 400 * f); tone(200 + 120 * f, ft, step * 0.9, 'triangle', 0.15); }
+      var rs = off.createOscillator(), rg = off.createGain(); rs.type = 'sawtooth'; rs.frequency.setValueAtTime(root * 2, 0); rs.frequency.exponentialRampToValueAtTime(root * 8, pre);
+      rg.gain.setValueAtTime(0.02, 0); rg.gain.linearRampToValueAtTime(0.12, pre); rs.connect(rg); rg.connect(out); rs.start(0); rs.stop(pre);
+    }
+    // post-exit: a sustained chord tail that decays past the logical end
+    if (post > 0) {
+      [0, 4, 7].forEach(function (iv) { var o = off.createOscillator(), g = off.createGain(); o.type = 'triangle'; o.frequency.value = root * 2 * Math.pow(2, iv / 12);
+        g.gain.setValueAtTime(0.09, pre + logical - 0.01); g.gain.exponentialRampToValueAtTime(0.0001, pre + logical + post); o.connect(g); g.connect(out); o.start(pre + logical - 0.01); o.stop(dur); });
+    }
     for (var i = 0; i < steps; i++) {
-      var t = i * step, beat = i % 4 === 0, bar = i % 16 === 0;
+      var t = pre + i * step, beat = i % 4 === 0, bar = i % 16 === 0;
       if (beat) tone(bar ? 60 : 50, t, 0.12, 'sine', 0.7);                              // kick
       if (seg.density >= 1 && i % 2 === 0) noise(t, 0.03, beat ? 0.25 : 0.1, 6000);      // hats
       if (seg.density >= 2 && i % 8 === 4) noise(t, 0.12, 0.35, 1500);                   // snare
@@ -87,23 +104,33 @@
       if (seg.density >= 3 && i % 2 === 1) tone(root * 2, t, step * 0.8, 'square', 0.08); // off-beat stab
       if (rnd() < (seg.density === 0 ? 0.25 : 0.45)) tone(root * 2 * Math.pow(2, scale[Math.floor(rnd() * scale.length)] / 12), t, step * (seg.density === 0 ? 3 : 1.5), seg.density === 0 ? 'sine' : 'triangle', 0.12);
     }
-    if (seg.density === 0) { var p = off.createOscillator(), pg = off.createGain(); p.type = 'triangle'; p.frequency.value = root; pg.gain.value = 0.08; p.connect(pg); pg.connect(out); p.start(0); p.stop(dur); }
+    if (seg.density === 0) { var p = off.createOscillator(), pg = off.createGain(); p.type = 'triangle'; p.frequency.value = root; pg.gain.value = 0.08; p.connect(pg); pg.connect(out); p.start(pre); p.stop(pre + logical); }
     return off.startRendering();
   }
 
   // ------------------------------------------------------------ scheduler (production path)
-  function schedule(seg, at) {
+  function usePre() { return optPre.checked; }
+  function schedule(seg, entry) {
     var src = ctx.createBufferSource(), g = ctx.createGain();
     src.buffer = buffers[seg.id]; src.connect(g); g.connect(master);
-    var xf = optXfade.checked ? CFG.crossfadeMs / 1000 : 0;
-    if (xf > 0 && cur) { g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(1, at + xf); }
-    src.start(at);
-    return { seg: seg, start: at, end: at + seg.bars * secPerBar(), src: src, gain: g };
+    var pre = preSec(seg), xf = (optXfade.checked && !(usePre() && pre > 0)) ? CFG.crossfadeMs / 1000 : 0;
+    if (xf > 0 && cur) { g.gain.setValueAtTime(0, entry); g.gain.linearRampToValueAtTime(1, entry + xf); }
+    // entry cue is always on the barline; with pre-entry enabled the file starts earlier, otherwise we skip the lead-in.
+    if (usePre() && pre > 0) src.start(entry - pre); else src.start(entry, pre);
+    return { seg: seg, start: entry, end: entry + seg.bars * secPerBar(), audioStart: usePre() ? entry - pre : entry, src: src, gain: g };
   }
   function fadeOut(item) {
-    var xf = optXfade.checked ? CFG.crossfadeMs / 1000 : 0;
-    if (xf > 0) { item.gain.gain.setValueAtTime(1, item.end); item.gain.gain.linearRampToValueAtTime(0, item.end + xf); item.src.stop(item.end + xf); }
+    var xf = (optXfade.checked && !(usePre() && nxt && preSec(nxt.seg) > 0)) ? CFG.crossfadeMs / 1000 : 0;
+    var post = usePre() ? postSec(item.seg) : 0;
+    if (post > 0) { item.src.stop(item.end + post); }            // let the tail ring out over the next section
+    else if (xf > 0) { item.gain.gain.setValueAtTime(1, item.end); item.gain.gain.linearRampToValueAtTime(0, item.end + xf); item.src.stop(item.end + xf); }
     else item.src.stop(item.end);
+  }
+  function decisionLead() {
+    // how far before cur.end the next section must be decided: global lead OR the largest pre-entry among candidates
+    var lead = (CFG.decisionLeadBeats || 0) * beatSec();
+    if (usePre()) SEG.forEach(function (s) { if (allowed(cur.seg.id, s.id)) lead = Math.max(lead, preSec(s)); });
+    return lead + LOOKAHEAD;
   }
   function allowed(fromId, toId) {
     if (!optRules.checked) return true;
@@ -127,7 +154,7 @@
   }
   function tick() {
     var now = ctx.currentTime;
-    if (!nxt && now >= cur.end - LOOKAHEAD) decide();
+    if (!nxt && now >= cur.end - decisionLead()) decide();
     if (nxt && now >= cur.end) {           // hand-over
       lastId = cur.seg.id; cur = nxt; nxt = null;
       if (later) { queued = later; later = null; }
@@ -159,8 +186,8 @@
     render();
   }
   function logSeam(a, b) {
-    var err = (b.start - a.end) * 1000;
-    var line = a.seg.id + ' → ' + b.seg.id + (randomAuto ? '  (random)' : '  (queued)') + '   seam ' + err.toFixed(3) + ' ms';
+    var err = (b.start - a.end) * 1000, pre = (b.start - b.audioStart) * 1000;
+    var line = a.seg.id + ' → ' + b.seg.id + (randomAuto ? '  (random)' : '  (queued)') + '   seam ' + err.toFixed(3) + ' ms' + (pre > 0 ? '   pre-entry ' + pre.toFixed(0) + ' ms overlapped' : '');
     var span = document.createElement('span'); span.className = Math.abs(err) < 1 ? 'gap' : 'bad'; span.textContent = line + '\n';
     histEl.appendChild(span); histEl.scrollTop = histEl.scrollHeight;
   }
@@ -168,7 +195,7 @@
   // ------------------------------------------------------------ UI
   var startBtn = document.getElementById('start'), segsEl = document.getElementById('segs'), nowEl = document.getElementById('now'),
       progEl = document.getElementById('prog'), nextEl = document.getElementById('next'), histEl = document.getElementById('hist'),
-      optExclude = document.getElementById('optExclude'), optXfade = document.getElementById('optXfade'), optRules = document.getElementById('optRules');
+      optExclude = document.getElementById('optExclude'), optXfade = document.getElementById('optXfade'), optRules = document.getElementById('optRules'), optPre = document.getElementById('optPre'), dmark = document.getElementById('dmark');
   var segBtns = {}, randomBtn;
 
   function buildButtons() {
@@ -210,18 +237,19 @@
     if (!running) nextEl.innerHTML = '';
     else if (nxt) nextEl.innerHTML = (randomAuto ? T('next_auto') : T('next_locked')).replace('{n}', nxt.seg.name[lang]);
     else if (queued) nextEl.innerHTML = T('next_queued').replace('{n}', byId[queued].name[lang]);
-    else nextEl.innerHTML = T('next_none').replace('{s}', Math.max(0, cur.end - LOOKAHEAD - ctx.currentTime).toFixed(1));
+    else nextEl.innerHTML = T('next_none').replace('{s}', Math.max(0, cur.end - decisionLead() - ctx.currentTime).toFixed(1));
   }
   function renderProgress() {
     if (!cur) { progEl.firstElementChild.style.width = '0'; return; }
     var f = Math.min(1, Math.max(0, (ctx.currentTime - cur.start) / (cur.end - cur.start)));
     progEl.firstElementChild.style.width = (f * 100) + '%';
-    if (!nxt && !queued) nextEl.innerHTML = T('next_none').replace('{s}', Math.max(0, cur.end - LOOKAHEAD - ctx.currentTime).toFixed(1));
+    dmark.style.left = (Math.max(0, 1 - decisionLead() / (cur.end - cur.start)) * 100) + '%';
+    if (!nxt && !queued) nextEl.innerHTML = T('next_none').replace('{s}', Math.max(0, cur.end - decisionLead() - ctx.currentTime).toFixed(1));
   }
 
   startBtn.addEventListener('click', function () { running ? stop() : start(); });
   document.querySelectorAll('[data-lang]').forEach(function (b) { b.addEventListener('click', function () { lang = b.getAttribute('data-lang'); try { localStorage.setItem('lang', lang); } catch (e) {} render(); }); });
-  [optExclude, optXfade, optRules].forEach(function (o) { o.addEventListener('change', render); });
+  [optExclude, optXfade, optRules, optPre].forEach(function (o) { o.addEventListener('change', render); });
   document.addEventListener('keydown', function (e) { var i = 'ABCDEFGH'.indexOf(e.key.toUpperCase()); if (i >= 0 && SEG[i]) choose(SEG[i].id); });
 
   fetch('segments.json').then(function (r) { return r.json(); }).then(function (cfg) {

@@ -4,9 +4,78 @@
   "crossfadeMs": 15,
   "excludeLast": true,
   "segments": [
-    { "id": "A", "name": { "zh": "A 段・開場", "en": "A · Intro" }, "bars": 2, "color": "#5fb3c9", "key": 0,  "density": 1, "allow": ["B", "C", "D"] },
-    { "id": "B", "name": { "zh": "B 段・推進", "en": "B · Drive" }, "bars": 2, "color": "#e0b04a", "key": 5,  "density": 2, "allow": ["A", "C", "D"] },
-    { "id": "C", "name": { "zh": "C 段・高潮", "en": "C · Peak" },  "bars": 2, "color": "#ff6b8a", "key": 7,  "density": 3, "allow": ["A", "B", "D"] },
-    { "id": "D", "name": { "zh": "D 段・沉靜", "en": "D · Calm" },  "bars": 2, "color": "#7fd67f", "key": -3, "density": 0, "allow": ["A", "B", "C"] }
-  ]
+    {
+      "id": "A",
+      "name": {
+        "zh": "A 段・開場",
+        "en": "A · Intro"
+      },
+      "bars": 2,
+      "color": "#5fb3c9",
+      "key": 0,
+      "density": 1,
+      "allow": [
+        "B",
+        "C",
+        "D"
+      ],
+      "preEntryBeats": 0,
+      "postExitSec": 0.8
+    },
+    {
+      "id": "B",
+      "name": {
+        "zh": "B 段・推進",
+        "en": "B · Drive"
+      },
+      "bars": 2,
+      "color": "#e0b04a",
+      "key": 5,
+      "density": 2,
+      "allow": [
+        "A",
+        "C",
+        "D"
+      ],
+      "preEntryBeats": 1,
+      "postExitSec": 0.5
+    },
+    {
+      "id": "C",
+      "name": {
+        "zh": "C 段・高潮",
+        "en": "C · Peak"
+      },
+      "bars": 2,
+      "color": "#ff6b8a",
+      "key": 7,
+      "density": 3,
+      "allow": [
+        "A",
+        "B",
+        "D"
+      ],
+      "preEntryBeats": 2,
+      "postExitSec": 1.5
+    },
+    {
+      "id": "D",
+      "name": {
+        "zh": "D 段・沉靜",
+        "en": "D · Calm"
+      },
+      "bars": 2,
+      "color": "#7fd67f",
+      "key": -3,
+      "density": 0,
+      "allow": [
+        "A",
+        "B",
+        "C"
+      ],
+      "preEntryBeats": 0,
+      "postExitSec": 2.0
+    }
+  ],
+  "decisionLeadBeats": 1
 }

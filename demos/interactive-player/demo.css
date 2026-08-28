@@ -24,7 +24,8 @@ h1{margin:.2rem 0 .4rem;font-size:1.7rem}.lead{color:var(--dim);max-width:65ch}
 @keyframes pulse{50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 25%,transparent)}}
 .prog{height:10px;background:#1d212a;border-radius:5px;overflow:hidden;position:relative;margin-bottom:.4rem}
 .prog i{display:block;height:100%;width:0;background:var(--c,var(--accent));transition:none}
-.prog b{position:absolute;right:0;top:0;bottom:0;width:2px;background:#fff6}
+.prog b{position:absolute;top:-3px;bottom:-3px;width:2px;background:#fff;box-shadow:0 0 6px #fff;left:100%}
+.prog b::after{content:"";position:absolute;left:-4px;top:-5px;border:5px solid transparent;border-top-color:#fff}
 .next{font-size:.9rem;color:var(--dim);min-height:1.5em}
 .next em{color:var(--fg);font-style:normal;font-weight:600}
 .hist{font:12px ui-monospace,Consolas,monospace;color:var(--dim);margin-top:1rem;white-space:pre-wrap}
