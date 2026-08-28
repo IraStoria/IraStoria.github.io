@@ -220,7 +220,8 @@
         // the whole spectrum doubles as the progress bar: bars/baseline left of the play head are amber, the unplayed part is a quiet grey (frac frozen while paused)
         var st = player.state(), px = W * Math.max(0, Math.min(1, st.frac || 0));
         // right after the line joins, a grey sweep runs right→left over the amber line ("clearing" the progress bar) before real progress takes over
-        if (clearT0) { var cp = (now - clearT0) / CLEAR_MS; if (cp >= 1) clearT0 = 0; else px = Math.max(px, W * (1 - ease(cp))); }
+        var lpx = px;   // the sweep only touches the baseline; the bars follow real progress
+        if (clearT0) { var cp = (now - clearT0) / CLEAR_MS; if (cp >= 1) clearT0 = 0; else lpx = Math.max(px, W * (1 - ease(cp))); }
         for (var i = 0; i < n; i++) {
           var target = lv[i];   // follows the real signal, so the fade-out and the bars fall together
           levels[i] = target > levels[i] ? target : Math.max(target, levels[i] * dk);
@@ -233,11 +234,11 @@
         }
         // baseline glow eases between 'sound' (1) and 'silence' (.55) instead of snapping — no more glow dropping out when a track starts quietly
         glow += ((any ? 1 : 0.55) - glow) * 0.05;
-        g2.strokeStyle = 'rgba(224,176,74,' + (0.28 + 0.62 * glow).toFixed(3) + ')'; g2.shadowColor = 'rgba(224,176,74,.6)'; g2.shadowBlur = 18 * glow; g2.beginPath(); g2.moveTo(0, y); g2.lineTo(px, y); g2.stroke();
-        if (px < W) { g2.strokeStyle = 'rgba(255,255,255,.22)'; g2.shadowBlur = 0; g2.beginPath(); g2.moveTo(px, y); g2.lineTo(W, y); g2.stroke(); }
-        // play head: a short bright segment with a strong halo at the amber/grey boundary
-        g2.strokeStyle = 'rgba(255,226,150,.95)'; g2.shadowColor = 'rgba(224,176,74,.9)'; g2.shadowBlur = 22; g2.lineWidth = 3;
-        g2.beginPath(); g2.moveTo(Math.max(0, px - 10), y); g2.lineTo(px, y); g2.stroke(); g2.lineWidth = 2; g2.shadowBlur = 0;
+        g2.strokeStyle = 'rgba(224,176,74,' + (0.28 + 0.62 * glow).toFixed(3) + ')'; g2.shadowColor = 'rgba(224,176,74,.6)'; g2.shadowBlur = 18 * glow; g2.beginPath(); g2.moveTo(0, y); g2.lineTo(lpx, y); g2.stroke();
+        if (lpx < W) { g2.strokeStyle = 'rgba(255,255,255,.22)'; g2.shadowBlur = 0; g2.beginPath(); g2.moveTo(lpx, y); g2.lineTo(W, y); g2.stroke(); }
+        // play head: same amber as the line (no highlight), just a stronger halo at the amber/grey boundary
+        g2.strokeStyle = 'rgba(224,176,74,.9)'; g2.shadowColor = 'rgba(224,176,74,.9)'; g2.shadowBlur = 24;
+        g2.beginPath(); g2.moveTo(Math.max(0, lpx - 14), y); g2.lineTo(lpx, y); g2.stroke(); g2.shadowBlur = 0;
       } else {
         g2.strokeStyle = 'rgba(224,176,74,.28)'; g2.shadowBlur = 0;
         g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
