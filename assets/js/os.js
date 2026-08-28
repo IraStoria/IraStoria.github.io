@@ -102,11 +102,25 @@
   var caption = (function () {
     var els = [$('#np-desktop'), $('#np-phone')].filter(Boolean), timer = null, last = '';
     function refresh() {
-      var st = player.state(), title = st.started ? st.title : '';
-      if (title === last) return; last = title;
-      els.forEach(function (el) { el.querySelector('.np-title').textContent = title; el.classList.toggle('show', !!title); });
+      var st = player.state(), key = st.title + '|' + (st.started ? 1 : 0) + '|' + (st.playing ? 1 : 0);
+      if (key === last) return; last = key;
+      els.forEach(function (el) {
+        // desktop: visible as soon as a track is loaded (so the transport works even if autoplay was blocked); phone: only once started
+        var title = (el.id === 'np-desktop' || st.started) ? st.title : '';
+        el.querySelector('.np-title').textContent = title; el.classList.toggle('show', !!title); el.classList.toggle('playing', st.playing);
+        var pp = el.querySelector('.np-pp'); if (pp) pp.textContent = st.playing ? '❚❚' : '▶';
+        var stt = el.querySelector('.np-state'); if (stt) stt.textContent = st.playing ? U.ph_now : U.ph_paused;
+      });
     }
-    function arm() { els.forEach(function (el) { el.style.transitionDuration = CONNECT_MS + 'ms'; }); if (!timer) timer = setInterval(refresh, 400); refresh(); }
+    // desktop caption doubles as a mini transport: pause / previous / next without opening the player window
+    els.forEach(function (el) {
+      var pp = el.querySelector('.np-pp'), pv = el.querySelector('.np-prev'), nx = el.querySelector('.np-next');
+      if (pp) pp.addEventListener('click', function () { player.toggle(); refresh(); });
+      if (pv) pv.addEventListener('click', function () { player.prev(); refresh(); });
+      if (nx) nx.addEventListener('click', function () { player.next(); refresh(); });
+      var t = el.querySelector('.np-title'); if (t && el.id === 'np-desktop') t.addEventListener('click', function () { openApp('player'); });
+    });
+    function arm() { player.prepare(); els.forEach(function (el) { el.style.transitionDuration = CONNECT_MS + 'ms'; }); if (!timer) timer = setInterval(refresh, 400); refresh(); }
     return { arm: arm, refresh: refresh };
   })();
 
@@ -255,7 +269,7 @@
     var tracks = D.works.filter(function (w) { return w.type === 'music' && w.media && (w.media.local || w.media.youtube || w.media.soundcloud); });
     var placeholder = { id: '_synth', title: U.player_placeholder, desc: '', synth: true };
     var list = tracks.length ? tracks : [placeholder];
-    var cur = -1, playing = false, audio = null, actx = null, analyser = null, synth = null, synthStart = 0, SYNTH_LEN = 24;
+    var cur = -1, playing = false, started = false, audio = null, actx = null, analyser = null, synth = null, synthStart = 0, SYNTH_LEN = 24;
     var body, ui = {}, raf, timeTimer = null, vizLevels = [];
 
     function mount(b) {
@@ -266,8 +280,8 @@
         (tracks.length ? '' : '<p class="note">' + esc(U.player_empty) + '</p>') + '</div>';
       ui = { title: $('#pl-title', body), sub: $('#pl-sub', body), play: $('#pl-play', body), seek: $('#pl-seek', body), bar: $('#pl-seek i', body), time: $('#pl-time', body), ext: $('#pl-ext', body), list: $('#pl-list', body), viz: $('#pl-viz', body) };
       ui.play.addEventListener('click', toggle);
-      $('#pl-prev', body).addEventListener('click', function () { load((cur - 1 + list.length) % list.length, true); });
-      $('#pl-next', body).addEventListener('click', function () { load((cur + 1) % list.length, true); });
+      $('#pl-prev', body).addEventListener('click', prev);
+      $('#pl-next', body).addEventListener('click', next);
       ui.list.addEventListener('click', function (e) { var li = e.target.closest('li[data-i]'); if (li) load(+li.dataset.i, true); });
       ui.seek.addEventListener('click', function (e) { var r = ui.seek.getBoundingClientRect(), f = (e.clientX - r.left) / r.width; if (audio && audio.duration) audio.currentTime = f * audio.duration; });
       if (cur < 0) load(0, false); else refresh();
@@ -304,7 +318,7 @@
         if (!audio._wired) { var s = actx.createMediaElementSource(audio); s.connect(analyser); audio._wired = true; }
         audio.play();
       } else return;
-      playing = true; refresh();
+      playing = true; started = true; refresh();
     }
     function toggle() { if (playing) stopAll(); else play(); }
     function playId(id) { var i = list.findIndex(function (t) { return t.id === id; }); if (i >= 0) load(i, true); }
@@ -353,10 +367,13 @@
       var t = list[cur] || {}; var pos = 0, dur = 0;
       if (t.synth && playing && actx) { pos = (actx.currentTime - synthStart) % SYNTH_LEN; dur = SYNTH_LEN; }
       else if (audio && !t.synth) { pos = audio.currentTime; dur = audio.duration || 0; }
-      return { title: t.title || '', playing: playing, started: cur >= 0 && (playing || pos > 0), frac: dur ? pos / dur : 0 };
+      return { title: t.title || '', playing: playing, started: cur >= 0 && (started || playing || pos > 0), frac: dur ? pos / dur : 0 };
     }
     function autoplay() { ensureCtx(); if (cur < 0) load(0, false); if (!playing) play(); }
-    return { mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state, autoplay: autoplay,
+    function prepare() { if (cur < 0) load(0, false); }   // load first track silently so the desktop transport has something to show
+    function prev() { load((cur - 1 + list.length) % list.length, true); }
+    function next() { load((cur + 1) % list.length, true); }
+    return { mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state, autoplay: autoplay, prepare: prepare, prev: prev, next: next,
              analyser: function () { return analyser; }, isPlaying: function () { return playing; } };
   })();
 
