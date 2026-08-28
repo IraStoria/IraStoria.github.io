@@ -276,8 +276,8 @@
       "en": "Hide"
     },
     "boot_power": {
-      "zh": "⏻ 按下電源",
-      "en": "⏻ Power on"
+      "zh": "⏻",
+      "en": "⏻"
     },
     "boot_continue": {
       "zh": "點選任意按鍵繼續 _",
@@ -300,7 +300,7 @@
       "sound": "assets/fx/click.ogg",
       "sound_at": 0.18,
       "sound_onset": 0.062,
-      "width": 240,
+      "width": 336,
       "opacity": 0.55,
       "_note": "click-to-enter easter egg (fires with probability `chance`). anchor=screen-right: inside the boot laptop's terminal screen, inset px from its right edge, anchor_y = vertical position as a fraction of the screen height. sound_at = video time where the sound's onset lands. clip plays → vanishes instantly (vanish:cut) → after_ms → desktop loads.",
       "after_ms": 600,
