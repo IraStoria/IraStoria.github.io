@@ -195,7 +195,7 @@
   }
   function decayFactor(dtMs) { return Math.pow(DECAY_PER_SEC, dtMs / 1000); }   // frame-rate independent (real elapsed time, so a throttled tab catches up)
   function makeWave(cv, yRatio) {
-    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0;
+    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1;
     function size() { if (cv.width !== cv.clientWidth || cv.height !== cv.clientHeight) { cv.width = cv.clientWidth; cv.height = cv.clientHeight; } }
     function ease(x) { return 1 - Math.pow(1 - x, 3); }
     function draw() {
@@ -223,7 +223,9 @@
           g2.fillStyle = 'rgba(224,176,74,.75)'; g2.fillRect(x, y - h, bw - 2, h);
           g2.fillStyle = 'rgba(224,176,74,.18)'; g2.fillRect(x, y, bw - 2, h * 0.45);
         }
-        g2.strokeStyle = any ? 'rgba(224,176,74,.9)' : 'rgba(224,176,74,.28)'; g2.shadowBlur = any ? 10 : 0; g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
+        // baseline glow eases between 'sound' (1) and 'silence' (.55) instead of snapping — no more glow dropping out when a track starts quietly
+        glow += ((any ? 1 : 0.55) - glow) * 0.05;
+        g2.strokeStyle = 'rgba(224,176,74,' + (0.28 + 0.62 * glow).toFixed(3) + ')'; g2.shadowColor = 'rgba(224,176,74,.6)'; g2.shadowBlur = 12 * glow; g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
       } else {
         g2.strokeStyle = 'rgba(224,176,74,.28)'; g2.shadowBlur = 0;
         g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();

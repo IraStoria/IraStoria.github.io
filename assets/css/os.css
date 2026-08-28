@@ -236,7 +236,7 @@ button{font:inherit;color:inherit}
 :root{--boot-font:clamp(13px,1.05vw,15px)}
 .term-log{padding:clamp(1rem,4vh,3rem) clamp(1rem,5vw,4rem);font:var(--boot-font)/1.75 var(--mono)}
 .boot-btn.power{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:112px;height:112px;padding:0;border-radius:50%;font:300 48px/1 var(--font);letter-spacing:0;background:transparent;color:var(--fg);border:2px solid rgba(255,255,255,.35);box-shadow:0 0 0 0 rgba(224,176,74,0);transition:border-color .25s,box-shadow .25s,color .25s}
-.boot-btn.power{border-color:rgba(40,200,64,.55);color:#9be7a6;box-shadow:0 0 28px rgba(40,200,64,.18)}
+.boot-btn.power{border-color:rgba(255,255,255,.35);color:var(--fg);box-shadow:none}   /* idle: neutral; green only on hover/focus */
 .boot-btn.power:hover,.boot-btn.power:focus-visible{border-color:#28c840;color:#28c840;box-shadow:0 0 48px rgba(40,200,64,.45);transform:translate(-50%,-50%);outline:none}
 .boot-btn.power[hidden]{display:none}
 .boot-continue{animation:none;margin-top:auto;padding:0 clamp(1rem,5vw,4rem) clamp(1rem,4vh,3rem);color:var(--dim);font:var(--boot-font)/1.75 var(--mono)}
