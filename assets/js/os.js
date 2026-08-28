@@ -313,9 +313,8 @@
         else if (canSlide && tEl.textContent !== title) slideTitle(tEl, title);   // track change: old name slides off left, new one in from the right
         else tEl.textContent = title;
         el.classList.toggle('show', !!title); el.classList.toggle('playing', st.playing);
-        var pp = el.querySelector('.np-pp'); if (pp) pp.textContent = st.playing ? '❚❚' : '▶';
         var stt = el.querySelector('.np-state'); if (stt) stt.textContent = st.playing ? U.ph_now : U.ph_paused;
-        var mu = el.querySelector('.np-mute'); if (mu) { mu.textContent = st.muted ? '🔇' : '🔊'; mu.classList.toggle('on', st.muted); }
+        var mu = el.querySelector('.np-mute'); if (mu) mu.classList.toggle('on', st.muted);   /* the icons are SVG pairs switched by .playing / .on */
       });
     }
     // desktop caption doubles as a mini transport: pause / previous / next without opening the player window
@@ -325,7 +324,7 @@
       if (pv) pv.addEventListener('click', function () { player.prev(); refresh(); });
       if (nx) nx.addEventListener('click', function () { player.next(); refresh(); });
       var mu = el.querySelector('.np-mute'); if (mu) mu.addEventListener('click', function () { player.toggleMute(); refresh(); });
-      var t = el.querySelector('.np-title'); if (t && el.id === 'np-desktop') t.addEventListener('click', function () { openApp('player'); });
+      var t = el.querySelector('.np-title'); if (t) t.addEventListener('click', function () { openApp('player'); });
     });
     function arm() { player.prepare(); els.forEach(function (el) { el.style.transitionDuration = CONNECT_MS + 'ms'; }); if (!timer) timer = setInterval(refresh, 400); refresh(); }
     /* split caption for the section player: <tag> | <rest>; a changed tag flips over its horizontal axis (down, swap, up) */
@@ -766,8 +765,8 @@
 
   // ============================================================ phone shell (iOS-like)
   var phone = (function () {
-    var root = $('#phone'), lock = $('#ph-lock'), home = $('#ph-home'), grid = $('#ph-grid'), dockEl = $('#ph-dock'), appsEl = $('#ph-apps'), mini = $('#ph-mini'), notes = $('#ph-notes'), power = $('#ph-power'), langPick = $('#ph-lang');
-    var stack = [], miniTimer = null, unlocked = false, powered = false, swappingPh = false;
+    var root = $('#phone'), lock = $('#ph-lock'), home = $('#ph-home'), grid = $('#ph-grid'), dockEl = $('#ph-dock'), appsEl = $('#ph-apps'), notes = $('#ph-notes'), power = $('#ph-power'), powerScr = $('#ph-power-scr'), langPick = $('#ph-lang'), ls = $('#ph-ls');
+    var stack = [], unlocked = false, powered = false, swappingPh = false;
     var HOME_APPS = ['works', 'demos', 'player', 'articles', 'updates', 'about', 'terminal', 'lang'];
     var DOCK_APPS = ['works', 'demos', 'player', 'about'];
     function label(a) { return a === 'lang' ? U.lang_switch : TITLES[a]; }
@@ -797,30 +796,36 @@
       HOME_APPS.forEach(function (a) { grid.appendChild(appBtn(a)); });
       DOCK_APPS.forEach(function (a) { dockEl.appendChild(appBtn(a)); });
       if (power) power.addEventListener('click', function (e) { e.stopPropagation(); powerOn(); });
+      if (ls) ls.addEventListener('click', function (e) { e.preventDefault(); switchLang(); });
+      // lock screen: swipe up (or a tap) unlocks — a second gesture, so the easter-egg click sound is fine here too
+      var y0 = null;
+      lock.addEventListener('pointerdown', function (e) { y0 = e.clientY; });
+      lock.addEventListener('pointerup', function (e) { if (!powered) return; if (y0 === null || y0 - e.clientY > 40 || Math.abs(y0 - e.clientY) < 8) unlock(); y0 = null; });
       var skip = false; try { skip = (navType !== 'reload' && sessionStorage.getItem('unlocked') === '1') || /[?&]app=/.test(location.search); } catch (e) {}   // refresh -> lock screen; returning from a sub-page -> straight to home
       if (skip) unlock(true);
       window.addEventListener('popstate', function () { if (stack.length) close(true); });
       var m = /[?&]app=([a-z]+)/.exec(location.search);
       if (m && APPS.indexOf(m[1]) >= 0) open(m[1]);
     }
-    // power glyph (same role as the desktop's ⏻): this tap is the user gesture the browser needs, so the boot sound plays right here
-    // and the music track / click sound get their gesture-time unlock; the real start comes after the easter egg and the connect line
+    // black power screen (same role as the desktop's ⏻): this tap is the user gesture the browser needs, so the boot sound plays right
+    // here and the music track / click sound get their gesture-time unlock; then the lock screen appears (swipe → easter egg → home)
     function powerOn() {
       if (powered) return; powered = true;
       fx.boot(); fx.prime(); player.unlock();
-      if (power) power.classList.add('on'); if (langPick) langPick.hidden = true;
-      unlock();
+      if (power) power.classList.add('on');
+      setTimeout(function () { powerScr.classList.add('off'); setTimeout(function () { powerScr.remove(); }, reduced ? 0 : 600); }, 350);   /* let the glyph light up, then fade to the lock screen */
     }
     function unlock(instant) {
       if (unlocked) return; unlocked = true;
       try { sessionStorage.setItem('unlocked', '1'); } catch (e) {}
       function go() {
+        if (powerScr) powerScr.remove();
         lock.classList.add('up'); home.hidden = false;
         setTimeout(function () { lock.remove(); }, (instant || reduced) ? 0 : 400);
-        if (instant) { phoneWave.start('live'); caption.arm(); updateMini(); return; }
+        if (instant) { phoneWave.start('live'); caption.arm(); return; }
         // three-stage reveal (as on the desktop): black veil with only the line -> the halves join and the music starts -> icons / name / dock fade + slide in
         root.classList.add('dark');
-        phoneWave.connect(function () { try { player.autoplay(); } catch (e) {} caption.arm(); root.classList.remove('dark'); updateMini(); });
+        phoneWave.connect(function () { try { player.autoplay(); } catch (e) {} caption.arm(); root.classList.remove('dark'); });
       }
       if (instant) go(); else fx.click(go);   // easter egg first, then the home screen
     }
@@ -829,7 +834,6 @@
       $('.back', pnl).addEventListener('click', function () { history.back(); });
       appsEl.appendChild(pnl); stack.push(pnl);
       history.pushState({ app: pnl.dataset.app }, '', location.pathname + location.search + '#' + hash);
-      updateMini();
     }
     function open(app) {
       if (!unlocked) unlock(true);
@@ -868,31 +872,6 @@
       pnl.classList.add('out'); setTimeout(function () { pnl.remove(); if (pnl.dataset.demo) caption.reset(); }, reduced ? 0 : 220);
       if (pnl.dataset.duck) player.unduck();   /* the demo that silenced the music is gone -> resume where it stopped */
       if (!fromHistory) history.back();
-      updateMini();
-    }
-    function langSwitchHtml() {
-      var other = lang === 'zh' ? 'en' : 'zh';
-      return '<a class="lang-switch ph-ls" href="../' + other + '/" role="switch" aria-checked="' + (lang === 'zh' ? 'true' : 'false') + '" title="' + esc(U.lang_switch) + '" aria-label="' + esc(U.lang_switch) + '"><span class="ls-lbl">EN</span><span class="ls-track"><i class="ls-knob"></i></span><span class="ls-lbl">中</span></a>';
-    }
-    // mini player (above the dock): title · state | ⏮ ▶ ⏭ 🔊 | EN|中 switch. Shown as soon as a track is loaded (so the switch and ▶ are
-    // reachable even if autoplay was refused); hidden while the player app itself is on top. Tapping the title opens the player app.
-    function updateMini() {
-      var top = stack[stack.length - 1], st = player.state(), showing = !!st.id && !(top && (top.dataset.app === 'player' || top.dataset.demo));   /* hidden under the player app and under a demo panel (it would cover the demo) */
-      mini.hidden = !showing;
-      if (showing) {
-        if (!mini.firstChild) {
-          mini.innerHTML = '<div class="info"><b></b><span></span></div><button class="pv" aria-label="prev">⏮</button><button class="pp" aria-label="play/pause"></button><button class="nx" aria-label="next">⏭</button><button class="mu" aria-label="mute"></button>' + langSwitchHtml() + '<div class="prog"><i></i></div>';
-          $('.info', mini).addEventListener('click', function () { open('player'); });
-          $('.pp', mini).addEventListener('click', function () { player.toggle(); updateMini(); });
-          $('.pv', mini).addEventListener('click', function () { player.prev(); updateMini(); });
-          $('.nx', mini).addEventListener('click', function () { player.next(); updateMini(); });
-          $('.mu', mini).addEventListener('click', function () { player.toggleMute(); updateMini(); });
-          $('.lang-switch', mini).addEventListener('click', function (e) { e.preventDefault(); switchLang(); });
-        }
-        $('.info b', mini).textContent = st.title; $('.info span', mini).textContent = st.playing ? U.ph_now : U.ph_paused;
-        $('.pp', mini).textContent = st.playing ? '❚❚' : '▶'; $('.mu', mini).textContent = st.muted ? '🔇' : '🔊'; $('.prog i', mini).style.width = (st.frac * 100) + '%';
-        if (!miniTimer) miniTimer = setInterval(updateMini, 500);
-      } else if (miniTimer) { clearInterval(miniTimer); miniTimer = null; }
     }
     // in-place language switch (called by applyLang): every phone label follows the new language without a reload
     function relabel() {
@@ -907,10 +886,9 @@
         var fb = $('.full', pnl); if (fb) { fb.title = U.win_fullscreen; fb.setAttribute('aria-label', U.win_fullscreen); }
         if (!pnl.dataset.demo && RENDER[pnl.dataset.app]) RENDER[pnl.dataset.app]($('.papp-body', pnl), pnl);
       });
-      var ls = $('.lang-switch', mini); if (ls) { ls.setAttribute('href', '../' + (lang === 'zh' ? 'en' : 'zh') + '/'); ls.setAttribute('aria-checked', lang === 'zh' ? 'true' : 'false'); ls.title = U.lang_switch; ls.setAttribute('aria-label', U.lang_switch); }
-      if (mini.firstChild) updateMini();
+      if (ls) { ls.setAttribute('href', '../' + (lang === 'zh' ? 'en' : 'zh') + '/'); ls.setAttribute('data-lang-switch', lang === 'zh' ? 'en' : 'zh'); ls.setAttribute('aria-checked', lang === 'zh' ? 'true' : 'false'); ls.title = U.lang_switch; ls.setAttribute('aria-label', U.lang_switch); }
     }
-    // choreography: grid / name / dock / mini title slide out to the left and fade, texts swap in place, then everything comes back from the right
+    // choreography: grid / name / dock slide out to the left and fade, texts swap in place, then everything comes back from the right
     function switchLang() {
       if (!ALT) { location.href = '../' + (lang === 'zh' ? 'en' : 'zh') + '/#desktop'; return; }
       if (swappingPh) return; swappingPh = true;

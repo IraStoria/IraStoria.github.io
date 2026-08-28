@@ -58,7 +58,7 @@
 
   <div id="windows" class="windows"></div>
 
-  <div class="np-cap" id="np-desktop" aria-live="polite"><span class="np-lbl">{{ui_player_now}} · <span class="np-state"></span></span><b class="np-title" title="{{ui_app_player}}"></b><div class="np-ctl"><button class="np-prev" aria-label="prev">⏮</button><button class="np-pp" aria-label="play/pause">▶</button><button class="np-next" aria-label="next">⏭</button><button class="np-mute" aria-label="mute">🔊</button></div></div>
+  <div class="np-cap" id="np-desktop" aria-live="polite"><span class="np-lbl">{{ui_player_now}} · <span class="np-state"></span></span><b class="np-title" title="{{ui_app_player}}"></b><div class="np-ctl"><button class="np-prev" aria-label="prev"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zM19 5v14L9 12z"/></svg></button><button class="np-pp" aria-label="play/pause"><svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg><svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button><button class="np-next" aria-label="next"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2zM5 5v14l10-7z"/></svg></button><button class="np-mute" aria-label="mute"><svg class="i-snd" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 8.5a4.5 4.5 0 0 1 0 7M18.5 6a8 8 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><svg class="i-mute" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9l5 6M21 9l-5 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div></div>
   <nav class="dock" id="dock" aria-label="dock"></nav>
 </div>
 
@@ -66,23 +66,26 @@
 <div id="phone" class="phone" hidden>
   <div class="ph-veil" aria-hidden="true"></div>
   <canvas id="ph-wave" class="wave" aria-hidden="true"></canvas>
-  <div class="np-cap np-phone" id="np-phone" aria-live="polite"><span class="np-lbl">{{ui_player_now}}</span><b class="np-title"></b></div>
+  <div class="np-cap np-phone" id="np-phone" aria-live="polite"><span class="np-lbl">{{ui_player_now}} · <span class="np-state"></span></span><b class="np-title" title="{{ui_app_player}}"></b><div class="np-ctl"><button class="np-prev" aria-label="prev"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zM19 5v14L9 12z"/></svg></button><button class="np-pp" aria-label="play/pause"><svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg><svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button><button class="np-next" aria-label="next"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2zM5 5v14l10-7z"/></svg></button><button class="np-mute" aria-label="mute"><svg class="i-snd" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 8.5a4.5 4.5 0 0 1 0 7M18.5 6a8 8 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><svg class="i-mute" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9l5 6M21 9l-5 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div></div>
   <div class="ph-status"><span id="ph-time">9:41</span><span class="ph-sig">●●●● ᯤ ▮▮▮</span></div>
+  <div id="ph-power-scr" class="ph-power-scr">
+    <button id="ph-power" class="ph-power" aria-label="power on" title="power on">{{ui_boot_power}}</button>
+    <div class="boot-lang ph-lang" id="ph-lang" role="group" aria-label="language"><button type="button" data-l="zh">中文</button><span>|</span><button type="button" data-l="en">English</button></div>
+  </div>
   <div id="ph-lock" class="ph-lock">
     <div class="ph-lock-time" id="ph-lock-time">9:41</div>
     <div class="ph-lock-date" id="ph-lock-date"></div>
     <div class="ph-lock-line">{{ui_ph_lock_line}}</div>
     <div class="ph-notes" id="ph-notes" aria-label="{{ui_app_updates}}"></div>
-    <button id="ph-power" class="ph-power" aria-label="power on" title="power on">{{ui_boot_power}}</button>
-    <div class="boot-lang ph-lang" id="ph-lang" role="group" aria-label="language"><button type="button" data-l="zh">中文</button><span>|</span><button type="button" data-l="en">English</button></div>
+    <div class="ph-lock-hint">{{ui_ph_unlock}}<div class="ph-bar"></div></div>
   </div>
   <div id="ph-home" class="ph-home" hidden>
     <div class="ph-grid" id="ph-grid"></div>
     <div class="ph-hero"><b>{{author}}</b><span>{{tagline}}</span></div>
+    <a class="lang-switch ph-ls" id="ph-ls" href="../{{other_lang}}/" role="switch" data-lang-switch="{{other_lang}}" title="{{lang_switch}}" aria-label="{{lang_switch}}"><span class="ls-lbl">EN</span><span class="ls-track"><i class="ls-knob"></i></span><span class="ls-lbl">中</span></a>
     <div class="ph-dock" id="ph-dock"></div>
   </div>
   <div id="ph-apps" class="ph-apps"></div>
-  <div id="ph-mini" class="ph-mini" hidden></div>
 </div>
 
 <noscript>
