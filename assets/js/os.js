@@ -31,19 +31,26 @@
     if (cfg && cfg.sound) { snd = new Audio('../' + cfg.sound); snd.preload = 'auto'; snd.load(); }
     function muted() { try { return localStorage.getItem('muted') === '1'; } catch (e) { return false; } }
     function volume() { try { var v = parseFloat(localStorage.getItem('vol')); return (v >= 0 && v <= 1) ? v : 1; } catch (e) { return 1; } }
-    function click() {
-      if (!cfg) return;
-      // sound: its onset (cfg.sound_onset s into the file) must land at video time cfg.sound_at
-      if (snd && !muted()) {
-        var delay = Math.max(0, ((cfg.sound_at || 0) - (cfg.sound_onset || 0)) * 1000);
-        setTimeout(function () { try { snd.volume = volume(); snd.currentTime = 0; snd.play().catch(function () {}); } catch (e) {} }, delay);
-      }
-      if (vid) {
-        vid.style.width = (cfg.width || 240) + 'px'; vid.style.opacity = cfg.opacity == null ? 0.55 : cfg.opacity; vid.style.left = cfg.x || '50%'; vid.style.top = cfg.y || '50%';
-        document.body.appendChild(vid); vid.currentTime = 0;
-        var p = vid.play(); if (p && p.catch) p.catch(function () { vid.remove(); });
-        vid.onended = function () { vid.classList.add('fade'); setTimeout(function () { vid.remove(); vid.classList.remove('fade'); }, 320); };
-      }
+    function playSnd() { if (snd && !muted()) { try { snd.volume = volume(); snd.currentTime = 0; snd.play().catch(function () {}); } catch (e) {} } }
+    function click(cb) {
+      cb = cb || function () {};
+      if (!cfg || !vid) { playSnd(); cb(); return; }
+      var doneCb = false, sndDone = false, raf = null;
+      var sndAt = Math.max(0, (cfg.sound_at || 0) - (cfg.sound_onset || 0));
+      function finish() { if (doneCb) return; doneCb = true; if (raf) cancelAnimationFrame(raf); if (!sndDone) { sndDone = true; playSnd(); } cb(); }
+      vid.style.width = (cfg.width || 240) + 'px'; vid.style.opacity = cfg.opacity == null ? 0.55 : cfg.opacity; vid.style.left = cfg.x || '50%'; vid.style.top = cfg.y || '50%';
+      document.body.appendChild(vid); vid.currentTime = 0;
+      // drive everything off the clip's own clock (immune to timer drift / throttling): sound at t = sound_at − onset, hand-over at the end
+      (function tick() {
+        raf = requestAnimationFrame(tick);
+        var t = vid.currentTime, d = vid.duration;
+        if (!sndDone && t >= sndAt) { sndDone = true; playSnd(); }
+        if (d && t >= d - 0.05) finish();
+      })();
+      vid.onended = finish;
+      var p = vid.play(); if (p && p.catch) p.catch(function () { vid.remove(); finish(); });
+      var safety = ((vid.duration || 1.5) + 1.5) * 1000; setTimeout(finish, safety);   // never leave the visitor stuck on the boot screen
+      var origCb = cb; cb = function () { vid.classList.add('fade'); setTimeout(function () { vid.remove(); vid.classList.remove('fade'); }, 320); origCb(); };
     }
     return { click: click };
   })();
@@ -51,13 +58,14 @@
   var done = false;
   function enterDesktop() {
     if (done) return; done = true;
-    fx.click();
+    fx.click(function () {   // easter egg plays out over the boot screen; only then does the desktop load
     boot.classList.add('out');
     desktop.hidden = false;
     setTimeout(function () { boot.remove(); }, reduced ? 0 : 500);
     initDesktop();
     // two lines grow from the edges and meet in the middle; music starts the instant they connect (user gesture = this click)
     wave.connect(function () { try { player.autoplay(); } catch (e) {} caption.arm(); });
+    });
   }
   function typeLine(text, cb) {
     var i = 0, span = document.createElement('span'); span.className = 'p'; log.appendChild(span);
@@ -486,12 +494,14 @@
       if (m && APPS.indexOf(m[1]) >= 0) open(m[1]);
     }
     function unlock(instant) {
-      if (!instant) fx.click();
       if (unlocked) return; unlocked = true;
-      lock.classList.add('up'); home.hidden = false;
-      setTimeout(function () { lock.remove(); }, (instant || reduced) ? 0 : 400);
-      if (instant) { phoneWave.start('live'); caption.arm(); }
-      else phoneWave.connect(function () { try { player.autoplay(); } catch (e) {} caption.arm(); updateMini(); });
+      function go() {
+        lock.classList.add('up'); home.hidden = false;
+        setTimeout(function () { lock.remove(); }, (instant || reduced) ? 0 : 400);
+        if (instant) { phoneWave.start('live'); caption.arm(); }
+        else phoneWave.connect(function () { try { player.autoplay(); } catch (e) {} caption.arm(); updateMini(); });
+      }
+      if (instant) go(); else fx.click(go);   // easter egg first, then the home screen
     }
     function open(app) {
       if (!unlocked) unlock(true);

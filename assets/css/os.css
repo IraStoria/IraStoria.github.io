@@ -184,5 +184,5 @@ button{font:inherit;color:inherit}
 @media(max-width:699px){.np-cap:not(.np-phone){top:auto;right:auto;text-align:left;bottom:70px;left:16px}.np-ctl{justify-content:flex-start}}
 
 /* fx: click-to-enter clip (above everything, never intercepts input) */
-.fx-clip{position:fixed;transform:translate(-50%,-50%);z-index:500;pointer-events:none;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.6);transition:opacity .3s ease}
+.fx-clip{position:fixed;transform:translate(-50%,-50%);z-index:500;pointer-events:none;transition:opacity .3s ease}   /* deliberately raw: no rounding, no shadow, off-centre (meme easter egg) */
 .fx-clip.fade{opacity:0!important}

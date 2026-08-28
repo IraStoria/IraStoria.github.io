@@ -282,9 +282,9 @@
       "sound_onset": 0.062,
       "width": 240,
       "opacity": 0.55,
-      "x": "50%",
-      "y": "50%",
-      "_note": "click-to-enter effect: video overlay (pointer-events none) + sound whose onset lands at video t=sound_at"
+      "x": "38%",
+      "y": "56%",
+      "_note": "click-to-enter easter egg: clip plays first (rough, off-centre on purpose), the desktop only starts loading after it ends; sound onset lands at video t=sound_at"
     }
   }
 }
