@@ -63,14 +63,15 @@ button{font:inherit;color:inherit}
 .sticky{position:absolute;right:3vw;bottom:120px;width:190px;background:#d9a33b;color:#2a1d05;padding:.8rem .9rem;font:12px/1.5 var(--mono);white-space:pre-wrap;transform:rotate(-3deg);box-shadow:0 10px 24px rgba(0,0,0,.45);border-radius:2px;z-index:2;cursor:grab}
 @media(max-width:699px){.sticky{display:none}}
 /* recent-updates panel: fixed lower-left, translucent; darkens on hover; × hides it for this visit */
-.updates{position:absolute;left:16px;bottom:64px;width:min(340px,calc(100vw - 32px));max-height:38vh;display:flex;flex-direction:column;z-index:4;background:rgba(20,23,32,.42);border:1px solid rgba(255,255,255,.08);border-radius:14px;backdrop-filter:blur(10px);opacity:.75;transition:opacity .25s ease,background .25s ease,border-color .25s ease}
+.updates{position:absolute;left:16px;bottom:64px;width:min(520px,calc(100vw - 32px));max-height:calc(42vh - 84px);display:flex;flex-direction:column;z-index:4;background:rgba(20,23,32,.35);border:1px solid rgba(255,255,255,.06);border-radius:14px;backdrop-filter:blur(10px);opacity:.45;transition:opacity .3s ease,background .3s ease,border-color .3s ease}   /* stays below the spectrum line (58%): 42vh minus bottom offset; unfocused = faint, hover = solid */
 .updates:hover,.updates:focus-within{opacity:1;background:rgba(20,23,32,.9);border-color:var(--border)}
 .updates[hidden]{display:none}
 .upd-head{display:flex;align-items:center;justify-content:space-between;padding:.45rem .5rem .35rem .8rem;font:600 12px var(--font);color:var(--dim);letter-spacing:.04em}
 .upd-hide{background:none;border:0;color:var(--dim);font-size:16px;line-height:1;padding:.1rem .4rem;cursor:pointer;border-radius:6px}.upd-hide:hover{background:rgba(255,255,255,.1);color:var(--fg)}
 .upd-log{overflow:auto;padding:0 .6rem .6rem;display:flex;flex-direction:column;gap:.5rem;scrollbar-width:thin}
-.upd-log .msg{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.06);border-radius:14px 14px 14px 4px;padding:.45rem .65rem;font-size:13px;line-height:1.5}
-.upd-log .msg time{display:block;font:11px var(--mono);color:var(--dim);margin-bottom:.15rem}.upd-log .msg p{margin:0}
+.upd-log .msg{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.06);border-radius:14px 14px 14px 4px;padding:.4rem .65rem;font-size:13px;line-height:1.45}
+.upd-log .msg time{display:inline;margin-right:.5em}.upd-log .msg p{display:inline}
+.upd-log .msg time{font:11px var(--mono);color:var(--dim)}.upd-log .msg p{margin:0}
 @media(max-width:699px){.updates{display:none}}
 
 /* ---------- windows ---------- */
