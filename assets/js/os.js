@@ -372,7 +372,18 @@
       });
       g2.restore();
     }
-    return { draw: draw, preroll: preroll };
+    // lighting cues (map.json scenes): between from..to the whole canvas (wallpaper, bars, notes) dims towards `depth`, like a filter closing;
+    // at `to` a flash pops and decays over `flash` s — the drop. Drawn last, over the line.
+    function overlay(g2, W, H) {
+      if (!data || !data.scenes || !data.scenes.length) return;
+      var pos = lastPos;
+      data.scenes.forEach(function (sc) {
+        var f = sc.from, t = sc.to, fl = sc.flash == null ? 0.7 : sc.flash, depth = sc.depth == null ? 0.85 : sc.depth;
+        if (pos >= f && pos < t) { var k = (pos - f) / (t - f); g2.fillStyle = 'rgba(0,0,0,' + (depth * k * k).toFixed(3) + ')'; g2.fillRect(0, 0, W, H); }   /* ease-in: darkest right before the drop */
+        else if (pos >= t && pos < t + fl) { var q = 1 - (pos - t) / fl; g2.fillStyle = 'rgba(' + (sc.color || '255,240,200') + ',' + (0.9 * q * q * q).toFixed(3) + ')'; g2.fillRect(0, 0, W, H); }
+      });
+    }
+    return { draw: draw, preroll: preroll, overlay: overlay };
   }
   function makeWave(cv, yRatio, withNotes) {
     var wf = withNotes ? makeWaterfall() : null;
@@ -428,6 +439,7 @@
         // play head: same amber as the line (no highlight), just a stronger halo at the amber/grey boundary
         g2.strokeStyle = 'rgba(224,176,74,.9)'; g2.shadowColor = 'rgba(224,176,74,.9)'; g2.shadowBlur = 24;
         g2.beginPath(); g2.moveTo(Math.max(0, lpx - 14), y); g2.lineTo(lpx, y); g2.stroke(); g2.shadowBlur = 0;
+        if (wf) wf.overlay(g2, W, H);   /* lighting cues: dim / flash over everything on the canvas */
       } else {
         g2.strokeStyle = 'rgba(224,176,74,.28)'; g2.shadowBlur = 0;
         g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
