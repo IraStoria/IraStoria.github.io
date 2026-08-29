@@ -1112,7 +1112,7 @@
     var DOCK_APPS = ['works', 'demos', 'player', 'about'];
     function label(a) { return a === 'lang' ? U.lang_switch : TITLES[a]; }
     function glyph(a) { return a === 'lang' ? (lang === 'zh' ? 'EN' : '中') : GLYPH[a]; }
-    function fill(b) { var a = b.getAttribute('data-app'); b.innerHTML = '<span class="ic ' + (a === 'updates' ? 'upd' : a) + '">' + glyph(a) + '</span><span>' + esc(label(a)) + '</span>'; }
+    function fill(b) { var a = b.getAttribute('data-app'); b.innerHTML = '<span class="ic ' + (a === 'updates' ? 'upd' : a) + '"><span class="wg">' + glyph(a) + '</span></span><span>' + esc(label(a)) + '</span>'; }
     function appBtn(a) {
       var b = document.createElement('button'); b.className = 'ph-app'; b.setAttribute('data-app', a); fill(b);
       b.addEventListener('click', function () { if (a === 'lang') switchLang(); else open(a); });   /* lang: in place, no reload (music keeps playing) */
