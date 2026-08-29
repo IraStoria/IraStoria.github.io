@@ -351,6 +351,6 @@ body.hb .lang-switch:hover .ls-track,body.hb[data-lang="zh"] .lang-switch:hover 
 body.hb .filter button.on{border-color:#3dff7a}body.hb .win-bar .fs:hover{color:#3dff7a}
 /* hb on the phone: app tiles keep a dark ground — translucent green with a thin outline — and only the emoji is tinted (a filtered gradient tile was a solid bright block) */
 .ph-app .ic{transition:background .7s ease,box-shadow .7s ease}
-body.hb .ph-app .ic{background:rgba(61,255,122,.10);box-shadow:inset 0 0 0 1px rgba(61,255,122,.45),0 0 10px rgba(61,255,122,.12)}
-body.hb .ph-dock{background:rgba(61,255,122,.06);box-shadow:inset 0 0 0 1px rgba(61,255,122,.18)}
+body.hb .ph-app .ic{background:linear-gradient(rgba(61,255,122,.10),rgba(61,255,122,.10)),#0b0d12;box-shadow:inset 0 0 0 1px rgba(61,255,122,.45),0 0 10px rgba(61,255,122,.12)}
+body.hb .ph-dock{background:rgba(12,24,16,.88);box-shadow:inset 0 0 0 1px rgba(61,255,122,.18)}
 body.hb .phone *:not(.np-title,.np-title *,canvas){text-shadow:0 0 8px rgba(61,255,122,.3)}
