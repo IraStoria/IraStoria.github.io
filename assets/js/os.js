@@ -292,6 +292,10 @@
             gg.addColorStop(0, 'rgba(150,158,176,' + (0.22 * (1 - d)).toFixed(3) + ')'); gg.addColorStop(1, 'rgba(150,158,176,' + (0.22 * (1 - d2)).toFixed(3) + ')');
             rrect(g2, x + 0.5, below + 0.5, w - 1, yBot - below - 1, 3); g2.fillStyle = gg; g2.fill(); g2.strokeStyle = 'rgba(150,158,176,' + (0.35 * (1 - d)).toFixed(3) + ')'; g2.stroke();
           }
+          if (t.label && live) {   // track label (e.g. a trigger note for an audio drum sequence): floats above the note while it is held
+            g2.font = '600 12px ' + ((getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace').trim()) + ', "Segoe UI", "Yu Gothic UI", "Hiragino Sans", sans-serif';   /* kaomoji halfwidth kana need a CJK fallback */ g2.textAlign = 'left'; g2.textBaseline = 'bottom';
+            g2.shadowColor = 'rgba(0,0,0,.9)'; g2.shadowBlur = 6; g2.fillStyle = 'rgba(' + t.rgb + ',.95)'; g2.fillText(t.label, x + w + 8, y - 10); g2.shadowBlur = 0;
+          }
           // "cleared" flash: bright spark at the line while the note is held (attack burst, then a steady glow), fading out after release
           var age = now - t0, k = 0;
           if (age >= 0) {

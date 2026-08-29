@@ -59,7 +59,8 @@
       "en": "Original track (2026)."
     },
     "media": {
-      "local": "assets/audio/rainbow.mp3"
+      "local": "assets/audio/rainbow.mp3",
+      "notes": "assets/notes/rainbow.json"
     },
     "platform": "all",
     "links": [],

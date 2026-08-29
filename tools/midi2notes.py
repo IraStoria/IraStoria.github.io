@@ -95,7 +95,7 @@ def main(a):
         if tm and (cfg is None or cfg.get('show') is False): continue
         hide = set((cfg or {}).get('hide_pitches', []))   # keyswitch / articulation trigger notes that are not music
         notes = [n for n in t['notes'] if n[2] not in hide]
-        keep.append({'name': t['name'], 'lane': (cfg or {}).get('lane', 'pitch'), 'color': (cfg or {}).get('color', '#e0b04a'), 'row': (cfg or {}).get('row'), 'notes': notes})
+        keep.append({'name': t['name'], 'lane': (cfg or {}).get('lane', 'pitch'), 'color': (cfg or {}).get('color', '#e0b04a'), 'row': (cfg or {}).get('row'), 'label': (cfg or {}).get('label'), 'notes': notes})
     res = {'duration': m['duration'], 'offset_ms': mp.get('offset_ms', 0), 'tracks': keep}
     json.dump(res, open(a[2], 'w', encoding='utf-8'), separators=(',', ':'))
     print('wrote', a[2], sum(len(t['notes']) for t in keep), 'notes in', len(keep), 'tracks')
