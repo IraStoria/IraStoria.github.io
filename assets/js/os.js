@@ -554,7 +554,7 @@
     function start(m) { if (!cv) return; mode = m || 'idle'; if (!raf) draw(); }
     function connect(cb, lead) { if (!cv) { cb(); return; } onConnected = cb; connectT0 = performance.now(); if (wf && lead) wf.preroll(connectT0, lead); start('connect'); }   /* lead: waterfall pre-roll seconds */
     function sweep(bars, fromFrac) { clearT0 = performance.now(); clearBars = !!bars; clearFrom = (fromFrac == null) ? 1 : Math.max(0, Math.min(1, fromFrac)); }
-    return { start: start, connect: connect, sweep: sweep };
+    return { start: start, connect: connect, sweep: sweep, hb: function () { return !!(wf && wf.hb()); } };
   }
   var wave = makeWave($('#wave'), 0.58, true), phoneWave = makeWave($('#ph-wave'), 0.47, true);   /* waterfall on both shells */  // phone: slightly above centre
 
@@ -563,7 +563,9 @@
     var els = [PHONE ? $('#np-phone') : $('#np-desktop')].filter(Boolean), timer = null, last = '', sliding = false;   /* only this shell's caption: the other one would grab the shared `sliding` flag and block the slide */
     function refresh() {
       ext.ensureDucked();
-      var st = ext.state(), key = st.title + '|' + (st.started ? 1 : 0) + '|' + (st.playing ? 1 : 0) + '|' + (st.muted ? 1 : 0);
+      var st = ext.state(), hbNow = (PHONE ? phoneWave : wave).hb();
+      document.body.classList.toggle('hb', hbNow);   /* heartbeat egg: name, intro and 'now playing' label cross-fade to ECG green (CSS transition) */
+      var key = st.title + '|' + (st.started ? 1 : 0) + '|' + (st.playing ? 1 : 0) + '|' + (st.muted ? 1 : 0) + '|' + (hbNow ? 1 : 0);
       if (key === last) return; last = key;
       els.forEach(function (el) {
         // desktop: visible as soon as a track is loaded (so the transport works even if autoplay was blocked); phone: only once started
@@ -581,7 +583,7 @@
           else { delete tEl.dataset.parts; tEl.textContent = title; }
         }
         else if (canSlide && tEl.textContent !== title) slideTitle(tEl, title);   // track change: old name slides off left, new one in from the right
-        else tEl.textContent = title;
+        else { tEl.textContent = title; if (!sliding) document.body.classList.toggle('hb-t', hbNow); }   /* no slide (boot / same title): the title colour follows at once */
         el.classList.toggle('show', !!title); el.classList.toggle('playing', st.playing);
         var stt = el.querySelector('.np-state'); if (stt) stt.textContent = st.playing ? U.ph_now : U.ph_paused;
         var mu = el.querySelector('.np-mute'); if (mu) mu.classList.toggle('on', st.muted);   /* the icons are SVG pairs switched by .playing / .on */
@@ -627,6 +629,7 @@
       tEl.style.transition = 'transform .45s cubic-bezier(.4,0,.6,1), opacity .35s ease'; tEl.style.transform = 'translateX(' + (-(r.right + 40)) + 'px)'; tEl.style.opacity = '0';
       setTimeout(function () {
         if (typeof title === 'function') title(); else tEl.textContent = title;
+        document.body.classList.toggle('hb-t', (PHONE ? phoneWave : wave).hb());   /* the outgoing name kept its colour; the incoming one wears the new mode (yellow out / green in, and back) */
         tEl.style.transition = 'none'; tEl.style.transform = 'translateX(' + (window.innerWidth - r.left + 40) + 'px)'; tEl.style.opacity = '1';
         void tEl.offsetWidth;
         tEl.style.transition = 'transform .7s cubic-bezier(.2,.7,.2,1), opacity .3s ease'; tEl.style.transform = '';
