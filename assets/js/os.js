@@ -164,12 +164,11 @@
     initDesktop();
     // stage 2: two lines grow from the edges and meet in the middle; the instant they connect: music starts,
     // stage 3: wallpaper colours, now-playing caption, icons and dock fade in together
-    var lead = wfLead();
-    wave.connect(function () { desktop.classList.remove('dark'); setTimeout(function () { try { player.autoplay(); } catch (e) {} caption.arm(); }, Math.max(0, lead * 1000 - CONNECT_MS)); }, lead);   /* caption arms with the music, so it never reads 'paused' during the pre-roll */
+    wave.connect(function () { try { player.autoplay(); } catch (e) {} caption.arm(); desktop.classList.remove('dark'); }, wfLead());   /* music still starts at the join; the waterfall pre-rolls from line entry */
     });
   }
-  // waterfall pre-roll: with the waterfall on, notes start falling when the lines start and the music waits until the first ones reach the line
-  function wfLead() { try { return (wfOn() && player.state().notes) ? LOOKAHEAD_S : 0; } catch (e) { return 0; } }
+  // waterfall pre-roll: with the waterfall on, the notes start falling the moment the connect lines start (CONNECT_MS before the music), so the music start time is untouched
+  function wfLead() { try { return (wfOn() && player.state().notes) ? CONNECT_MS / 1000 : 0; } catch (e) { return 0; } }
   function typeLine(text, cb) {
     var i = 0, span = document.createElement('span'); span.className = 'p'; log.appendChild(span);
     var cur = document.createElement('span'); cur.className = 'cursor'; log.appendChild(cur);
@@ -1040,8 +1039,7 @@
         if (instant) { phoneWave.start('live'); caption.arm(); return; }
         // three-stage reveal (as on the desktop): black veil with only the line -> the halves join and the music starts -> icons / name / dock fade + slide in
         root.classList.add('dark');
-        var lead = wfLead();
-        phoneWave.connect(function () { root.classList.remove('dark'); setTimeout(function () { try { player.autoplay(); } catch (e) {} caption.arm(); }, Math.max(0, lead * 1000 - CONNECT_MS)); }, lead);
+        phoneWave.connect(function () { try { player.autoplay(); } catch (e) {} caption.arm(); root.classList.remove('dark'); }, wfLead());
       }
       if (instant) go(); else fx.click(go);   // easter egg first, then the home screen
     }
