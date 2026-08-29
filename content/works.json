@@ -36,7 +36,8 @@
       "en": "Original track (2026)."
     },
     "media": {
-      "local": "assets/audio/summer.mp3"
+      "local": "assets/audio/summer.mp3",
+      "notes": "assets/notes/summer.json"
     },
     "platform": "all",
     "links": [],
