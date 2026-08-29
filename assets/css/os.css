@@ -284,10 +284,12 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .ph-grid,.ph-hero,.ph-dock,.ph-ls,.ph-status{transition:opacity 3s ease,transform 2.4s cubic-bezier(.2,.7,.2,1)}
 .phone.dark .ph-grid,.phone.dark .ph-hero,.phone.dark .ph-dock,.phone.dark .ph-ls,.phone.dark .ph-status{opacity:0;pointer-events:none}
 .phone.dark .ph-grid{transform:translateX(-70px)}.phone.dark .ph-hero{transform:translateX(70px)}
-/* in-place language swap: out to the left, back in from the right */
-.phone.swap .ph-grid,.phone.swap .ph-hero,.phone.swap .ph-dock,.phone.swap .np-phone .np-lbl{transition:opacity .4s ease,transform .5s cubic-bezier(.4,0,.6,1)!important}
-.phone.swap-out .ph-grid,.phone.swap-out .ph-hero,.phone.swap-out .ph-dock,.phone.swap-out .np-phone .np-lbl{transform:translateX(-60px);opacity:0}
-.phone.swap-in .ph-grid,.phone.swap-in .ph-hero,.phone.swap-in .ph-dock,.phone.swap-in .np-phone .np-lbl{transform:translateX(60px);opacity:0;transition:none!important}
+/* in-place language swap, iPhone page-style: grid / name / dock / label slide fully past one screen edge (direction drawn at random each time, .swap-l = leaves left) and re-enter from the opposite edge, still travelling the same way */
+.phone.swap .ph-grid,.phone.swap .ph-hero,.phone.swap .ph-dock,.phone.swap .np-phone .np-lbl{transition:opacity .45s ease,transform .5s cubic-bezier(.4,0,.2,1)!important}
+.phone.swap-out.swap-l .ph-grid,.phone.swap-out.swap-l .ph-hero,.phone.swap-out.swap-l .ph-dock,.phone.swap-out.swap-l .np-phone .np-lbl{transform:translateX(-112%);opacity:.6}
+.phone.swap-out.swap-r .ph-grid,.phone.swap-out.swap-r .ph-hero,.phone.swap-out.swap-r .ph-dock,.phone.swap-out.swap-r .np-phone .np-lbl{transform:translateX(112%);opacity:.6}
+.phone.swap-in.swap-l .ph-grid,.phone.swap-in.swap-l .ph-hero,.phone.swap-in.swap-l .ph-dock,.phone.swap-in.swap-l .np-phone .np-lbl{transform:translateX(112%);opacity:.6;transition:none!important}
+.phone.swap-in.swap-r .ph-grid,.phone.swap-in.swap-r .ph-hero,.phone.swap-in.swap-r .ph-dock,.phone.swap-in.swap-r .np-phone .np-lbl{transform:translateX(-112%);opacity:.6;transition:none!important}
 /* demo panel: the iframe fills the body; ⛶ folds the nav away (iPhone has no real fullscreen for iframes) */
 .papp-body.frame{padding:0;overflow:hidden;display:flex}
 .papp-demo .demo-frame{flex:1;width:100%;height:100%;border:0;display:block}
@@ -328,7 +330,7 @@ body[data-lang="zh"] .ph-ls .ls-knob{transform:translateX(26px)}
 .hero-text h1{transition:transform 2.4s cubic-bezier(.2,.7,.2,1),color .7s ease,text-shadow .7s ease}
 .ls-track{transition:background .25s,border-color .7s ease}.ls-knob{transition:transform .3s cubic-bezier(.2,.7,.2,1),background .7s ease,box-shadow .7s ease}
 .desktop *:not(.desktop>*,.hero-text h1,.sticky,.sticky *,.np-title,.np-title *,.ls-track,.ls-knob,.fx-clip,.fx-clip *,canvas),
-.phone *:not(.ph-grid,.ph-hero,.ph-dock,.ph-ls,.ph-status,.ph-veil,.ph-power-scr,.ph-power-scr *,.np-title,.np-title *,.np-lbl,canvas){transition:color .7s ease,text-shadow .7s ease,border-color .7s ease,filter .7s ease}
+.phone *:not(.ph-grid,.ph-hero,.ph-dock,.ph-ls,.ph-status,.ph-veil,.ph-power-scr,.ph-power-scr *,.np-title,.np-title *,.np-lbl,.ls-track,.ls-knob,canvas){transition:color .7s ease,text-shadow .7s ease,border-color .7s ease,filter .7s ease}
 body.hb .desktop *:not(.sticky,.sticky *,.np-title,.np-title *,canvas),
 body.hb .phone *:not(.np-title,.np-title *,canvas){color:#3dff7a;text-shadow:0 0 12px rgba(61,255,122,.45);border-color:rgba(61,255,122,.35)}
 body.hb .desktop .glyph,body.hb .phone .glyph,body.hb .dock button>span,body.hb .ph-app .ic .wg,body.hb .spot-hit .g{filter:grayscale(1) sepia(1) saturate(6) hue-rotate(85deg) brightness(1.15) drop-shadow(0 0 6px rgba(61,255,122,.7))}

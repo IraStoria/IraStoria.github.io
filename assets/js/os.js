@@ -1234,11 +1234,12 @@
       if (!ALT) { location.href = '../' + (lang === 'zh' ? 'en' : 'zh') + '/#desktop'; return; }
       if (swappingPh) return; swappingPh = true;
       if (lock.isConnected) { applyLang(ALT); swappingPh = false; return; }   /* still on the lock screen: plain swap */
-      root.classList.add('swap', 'swap-out');
+      var dirCls = Math.random() < 0.5 ? 'swap-l' : 'swap-r';   /* which edge everything leaves through — drawn fresh on every switch */
+      root.classList.add('swap', 'swap-out', dirCls);
       setTimeout(function () {
         applyLang(ALT);
         root.classList.remove('swap-out'); root.classList.add('swap-in'); void root.offsetWidth;
-        var released = false, release = function () { if (released) return; released = true; root.classList.remove('swap-in'); setTimeout(function () { root.classList.remove('swap'); swappingPh = false; }, 650); };
+        var released = false, release = function () { if (released) return; released = true; root.classList.remove('swap-in'); setTimeout(function () { root.classList.remove('swap', 'swap-l', 'swap-r'); swappingPh = false; }, 650); };
         requestAnimationFrame(release); setTimeout(release, 80);   // timer fallback for throttled / background tabs
       }, 500);
     }
