@@ -65,7 +65,7 @@
     document.querySelectorAll('#dock button[data-app]').forEach(function (b) { var a = b.getAttribute('data-app'); b.innerHTML = '<span>' + GLYPH[a] + '</span>' + esc(TITLES[a]); });
     var hp = document.querySelectorAll('.hero-text p'); if (hp[0]) hp[0].textContent = D.hero_intro; if (hp[1]) hp[1].textContent = '// ' + U.desk_hint;
     var st = $('#sticky .sticky-text'); if (st) st.textContent = U.sticky;
-    var uh = $('#updates .upd-head span'); if (uh) uh.textContent = '💬 ' + U.app_updates;
+    var uh = $('#updates .upd-head span'); if (uh) uh.innerHTML = '<span class="wg">💬</span> ' + esc(U.app_updates);
     var ub = $('#upd-hide'); if (ub) { ub.title = U.updates_hide; ub.setAttribute('aria-label', U.updates_hide); }
     var ul = $('#upd-log'); if (ul) ul.innerHTML = (D.updates || []).length ? D.updates.map(function (u) { return '<div class="msg"><time>' + esc(u.date) + '</time><p>' + esc(u.text) + '</p></div>'; }).join('') : '<p class="note">' + esc(U.updates_empty) + '</p>';
     document.querySelectorAll('.np-cap .np-lbl').forEach(function (l) { var stt = l.querySelector('.np-state'); l.textContent = U.player_now + (stt ? ' · ' : ''); if (stt) l.appendChild(stt); });
@@ -850,7 +850,7 @@
     var list = tracks.length ? tracks : [placeholder];
     var trackListeners = [];   // fired on every track change (the wave uses it to sweep the progress colour off)
     var cur = -1, playing = false, started = false, audio = null, actx = null, analyser = null, synth = null, synthStart = 0, SYNTH_LEN = 24;
-    var body, ui = {}, raf, timeTimer = null, vizLevels = [], vizLastT = 0, master = null, out = null;
+    var body, ui = {}, raf, timeTimer = null, vizLevels = [], vizLastT = 0, vizHb = 0, vizHbT = 0, master = null, out = null;
     var vol = 1, muted = false;   // persisted in localStorage — the only thing remembered between visits
     try { var lv = parseFloat(localStorage.getItem('vol')); if (lv >= 0 && lv <= 1) vol = lv; muted = localStorage.getItem('muted') === '1'; } catch (e) {}
     function applyOut() { if (out) out.gain.setTargetAtTime(muted ? 0 : vol, actx.currentTime, 0.02); }
@@ -952,7 +952,9 @@
       var c = ui.viz, g2 = c.getContext('2d'); if (c.width !== c.clientWidth) { c.width = c.clientWidth; c.height = c.clientHeight; }
       g2.clearRect(0, 0, c.width, c.height);
       if (analyser) {
-        var n = 64, bw = c.width / n; g2.fillStyle = 'rgba(224,176,74,.55)';
+        var n = 64, bw = c.width / n, hbTg = document.body.classList.contains('hb') ? 1 : 0;   /* heartbeat egg: bars lerp yellow -> ECG green over the same .7 s as the CSS cross-fade */
+        vizHb = hbTg > vizHb ? Math.min(1, vizHb + (nowT - (vizHbT || nowT)) / 700) : Math.max(0, vizHb - (nowT - (vizHbT || nowT)) / 700); vizHbT = nowT;
+        g2.fillStyle = 'rgba(' + Math.round(224 + (61 - 224) * vizHb) + ',' + Math.round(176 + (255 - 176) * vizHb) + ',' + Math.round(74 + (122 - 74) * vizHb) + ',.55)';
         var lv = barLevels(analyser, n);
         if (vizLevels.length !== n) vizLevels = new Array(n).fill(0);
         for (var i = 0; i < n; i++) { var tg = lv[i]; vizLevels[i] = tg > vizLevels[i] ? tg : Math.max(tg, vizLevels[i] * dk);
@@ -1125,7 +1127,7 @@
     // lock-screen notifications: the newest recent updates (updates.json) as iOS-style cards; the full list lives in the 更新 app
     function renderNotes() {
       if (!notes) return;
-      notes.innerHTML = (D.updates || []).slice(0, 3).map(function (u) { return '<div class="ph-note"><div class="ph-note-h"><span>💬 ' + esc(U.app_updates) + '</span><time>' + esc(u.date) + '</time></div><p>' + esc(u.text) + '</p></div>'; }).join('');
+      notes.innerHTML = (D.updates || []).slice(0, 3).map(function (u) { return '<div class="ph-note"><div class="ph-note-h"><span><span class="wg">💬</span> ' + esc(U.app_updates) + '</span><time>' + esc(u.date) + '</time></div><p>' + esc(u.text) + '</p></div>'; }).join('');
     }
     function markLang() { if (langPick) langPick.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-l') === lang); }); }
     function init() {
