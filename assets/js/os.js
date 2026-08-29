@@ -898,7 +898,7 @@
     function mount(b) {
       body = b;
       body.innerHTML = '<div class="player"><div class="art"><canvas id="pl-viz"></canvas><div class="np">' + esc(U.player_now) + '<b id="pl-title">—</b><span id="pl-sub"></span></div></div>' +
-        '<div class="ctl"><button id="pl-prev">⏮</button><button class="play" id="pl-play">▶</button><button id="pl-next">⏭</button><div class="seek" id="pl-seek"><i></i></div><span class="time" id="pl-time">0:00 / 0:00</span><button class="mute" id="pl-mute" aria-label="mute"></button><input type="range" class="vol" id="pl-vol" min="0" max="1" step="0.01" aria-label="volume"></div>' +
+        '<div class="ctl"><button id="pl-prev" aria-label="prev"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zM19 5v14L9 12z"/></svg></button><button class="play" id="pl-play" aria-label="play/pause"><svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg><svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button><button id="pl-next" aria-label="next"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2zM5 5v14l10-7z"/></svg></button><div class="seek" id="pl-seek"><i></i></div><span class="time" id="pl-time">0:00 / 0:00</span><button class="mute" id="pl-mute" aria-label="mute"><svg class="i-snd" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 8.5a4.5 4.5 0 0 1 0 7M18.5 6a8 8 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><svg class="i-mute" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9l5 6M21 9l-5 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button><input type="range" class="vol" id="pl-vol" min="0" max="1" step="0.01" aria-label="volume"></div>' +
         '<div id="pl-ext"></div><ul class="list pl" id="pl-list">' + list.map(function (t, i) { return t.secret ? '' : '<li data-i="' + i + '"><span class="meta">' + ('0' + (i + 1)).slice(-2) + '</span><div><div class="t">' + esc(t.title) + '</div><div class="d">' + esc(t.desc || '') + '</div></div></li>'; }).join('') + '</ul>' +
         (tracks.length ? '' : '<p class="note">' + esc(U.player_empty) + '</p>') + '</div>';
       ui = { title: $('#pl-title', body), sub: $('#pl-sub', body), play: $('#pl-play', body), seek: $('#pl-seek', body), bar: $('#pl-seek i', body), time: $('#pl-time', body), ext: $('#pl-ext', body), list: $('#pl-list', body), viz: $('#pl-viz', body), mute: $('#pl-mute', body), vol: $('#pl-vol', body) };
@@ -978,8 +978,8 @@
     function refresh() {
       if (!body) return; var t = list[cur] || {};
       ui.title.textContent = t.title || '—'; ui.sub.textContent = t.synth ? 'Web Audio · generative' : (t.year || '');
-      ui.play.textContent = playing ? '❚❚' : '▶';
-      if (ui.mute) { ui.mute.textContent = (muted || vol === 0) ? '🔇' : (vol < 0.5 ? '🔉' : '🔊'); ui.vol.value = muted ? 0 : vol; }
+      ui.play.classList.toggle('on', playing);   /* SVG icons (no emoji: iOS drew ⏮ ▶ ⏭ 🔊 as colour emoji) */
+      if (ui.mute) { ui.mute.classList.toggle('on', muted || vol === 0); ui.vol.value = muted ? 0 : vol; }
       ui.list.querySelectorAll('li').forEach(function (li) { li.classList.toggle('on', +li.dataset.i === cur); });
     }
     function draw() {
