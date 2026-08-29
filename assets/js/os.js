@@ -237,30 +237,58 @@
   // notes JSON (built from content/midi/<id>.mid by build.py) is fetched when the track changes; the clock is the player's own position
   // (frozen while paused). Pitched lanes share the spectrum's log-frequency X so a note lands on the bars it lights up; drum / fx lanes
   // are fixed columns on the left, the beat lane is the rightmost column. A note keeps falling past the line, greyed and fading.
-  var LOOKAHEAD_S = 4, TAIL_FRAC = 0.32, LATENCY_S = 0;
+  var LOOKAHEAD_S = 4, TAIL_FRAC = 0.32, LATENCY_S = 0, WF_CHANCE = 1;   /* WF_CHANCE: probability (per track load) that the waterfall shows at all — easter-egg gate, 1 = always */
   function makeWaterfall() {
-    var url = '', data = null, pending = null, FLASH_S = 0.3;
+    var url = '', data = null, pending = null, FLASH_S = 0.3, anim = null, lastPos = 0, ANIM_IN_MS = 1600, ANIM_SWAP_IN_MS = 600, ANIM_OUT_MS = 450, next = null;
     function hex(h) { var v = parseInt(h.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255].join(','); }
-    function ensure(st) {
+    function prep(j) {
+      j.tracks.forEach(function (t) { t.rgb = hex(t.color || '#e0b04a'); var md = 0; t.notes.forEach(function (n) { if (n[1] - n[0] > md) md = n[1] - n[0]; }); t.maxDur = md; });
+      return j;
+    }
+    // track change: the current layer slides up and out, the new one (once fetched) slides in from the top edge; the very first layer glides in slowly (boot)
+    function ensure(st, now) {
       var u = st.notes || '';
-      if (u === url) return; url = u; data = null;
-      if (!u) return;
+      if (u === url) return; url = u;
+      var show = !!u && Math.random() < WF_CHANCE;
+      if (data) { anim = { mode: 'out', t0: now, ms: ANIM_OUT_MS, pos: lastPos }; next = null; }   /* the leaving layer keeps the old track's clock so its notes do not jump */
+      pending = null;
+      if (!show) return;
       var req = pending = fetch('../' + u).then(function (r) { return r.json(); }).then(function (j) {
-        if (req !== pending) return;
-        j.tracks.forEach(function (t) { t.rgb = hex(t.color || '#e0b04a'); var md = 0; t.notes.forEach(function (n) { if (n[1] - n[0] > md) md = n[1] - n[0]; }); t.maxDur = md; });
-        data = j;
+        if (req !== pending) return; j = prep(j);
+        if (anim && anim.mode === 'out') next = j;                                   /* wait for the exit to finish */
+        else { data = j; anim = { mode: 'in', t0: performance.now(), ms: ANIM_IN_MS }; }   /* boot: glide in */
       }).catch(function () {});
     }
+    function ease(x) { return 1 - Math.pow(1 - x, 3); }
     function firstAt(notes, t) { var lo = 0, hi = notes.length; while (lo < hi) { var m = (lo + hi) >> 1; if (notes[m][0] < t) lo = m + 1; else hi = m; } return lo; }
     function rrect(g, x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); g.beginPath(); g.moveTo(x + r, y); g.lineTo(x + w - r, y); g.quadraticCurveTo(x + w, y, x + w, y + r); g.lineTo(x + w, y + h - r); g.quadraticCurveTo(x + w, y + h, x + w - r, y + h); g.lineTo(x + r, y + h); g.quadraticCurveTo(x, y + h, x, y + h - r); g.lineTo(x, y + r); g.quadraticCurveTo(x, y, x + r, y); g.closePath(); }
-    // draw(g2, W, H, y, st): notes are drawn over the bars (under the line); pitched X shares the bars' log-frequency mapping
-    function draw(g2, W, H, y, st) {
-      ensure(st); if (!data || !st.started) return;
-      var now = st.pos + (data.offset_ms || 0) / 1000 + LATENCY_S, pps = y / LOOKAHEAD_S, tail = H * TAIL_FRAC / pps;
+    // bend offset (px) of a note at progress f (0..1): nt[4] number = hand-annotated target pitch (+ nt[5] start fraction); array = MIDI polyline [[frac, semitones], ...]
+    function bendPx(nt, f, semi, xPitch) {
+      if (nt.length <= 4) return 0;
+      if (typeof nt[4] === 'number') { var bs = nt.length > 5 ? nt[5] : 0; f = Math.max(0, Math.min(1, (f - bs) / Math.max(1e-6, 1 - bs))); return (xPitch(nt[4]) - xPitch(nt[2])) * f; }
+      var pl = nt[4], off = pl[0][1];
+      for (var q = 1; q < pl.length; q++) { if (f <= pl[q][0]) { var a = pl[q - 1], b = pl[q]; off = a[1] + (b[1] - a[1]) * ((f - a[0]) / Math.max(1e-6, b[0] - a[0])); break; } off = pl[q][1]; }
+      return semi * off;
+    }
+    // draw(g2, W, H, y, st, nowMs): notes are drawn over the bars (under the line); pitched X shares the bars' log-frequency mapping
+    function draw(g2, W, H, y, st, nowMs) {
+      ensure(st, nowMs);
+      var shift = 0;
+      if (anim) {   // entrance / exit choreography: the whole layer translates vertically
+        var p = Math.min(1, (nowMs - anim.t0) / anim.ms);
+        if (anim.mode === 'out') {
+          shift = -H * (1 - Math.pow(1 - p, 2));
+          if (p >= 1) { data = next; next = null; anim = data ? { mode: 'in', t0: nowMs, ms: ANIM_SWAP_IN_MS } : null; shift = data ? -H : 0; }
+        } else { shift = -H * (1 - ease(p)); if (p >= 1) { anim = null; shift = 0; } }
+      }
+      if (!data || !st.started) return;
+      var pos = (anim && anim.mode === 'out') ? anim.pos : st.pos; lastPos = pos;
+      var now = pos + (data.offset_ms || 0) / 1000 + LATENCY_S, pps = y / LOOKAHEAD_S, tail = H * TAIL_FRAC / pps;
       var hiBin = 1023, nyq = st.sr / 2, semi = W * Math.log(Math.pow(2, 1 / 12)) / Math.log(hiBin);   /* one semitone in px (constant on the log axis) */
       var narrow = W < 700, colW = narrow ? Math.max(7, Math.min(10, semi * 2)) : Math.max(14, Math.min(22, semi * 1.5)), colGap = colW * 1.9, left = narrow ? W * 0.04 : Math.max(120, W * 0.085), beatX = narrow ? W * 0.9 : W * 0.8;   /* columns sit inward, not glued to the edges; the phone packs them tighter */
       function xPitch(p) { var f = 440 * Math.pow(2, (p - 69) / 12), bin = f / nyq * 1024; return W * Math.log(Math.max(1, bin)) / Math.log(hiBin); }
       g2.save(); g2.lineWidth = 1; g2.lineJoin = 'round';
+      if (shift) g2.translate(0, shift);
       data.tracks.forEach(function (t) {
         var notes = t.notes, i = firstAt(notes, now - tail - t.maxDur), end = now + LOOKAHEAD_S, x, w, col = t.lane !== 'pitch';
         if (t.lane === 'drum' || t.lane === 'fx') { x = left + (t.row || 0) * colGap; w = colW; }
@@ -268,51 +296,51 @@
         for (; i < notes.length && notes[i][0] < end; i++) {
           var nt = notes[i], t0 = nt[0], t1 = nt[1]; if (t.lane === 'drum' || t.lane === 'beat') t1 = Math.min(t1, t0 + 0.18);   /* hits read as short blocks whatever the MIDI length */
           if (t1 < now - tail) continue;
-          if (!col) { w = Math.max(5, semi * 1.25); x = xPitch(nt[2]) - w / 2; }   /* user's call: bigger notes over strict non-overlap (rims keep neighbours readable); ≥5px on narrow screens */
-          // hand-annotated bend (nt[4] = target pitch, nt[5] = optional start fraction): the note falls straight at its start pitch,
-          // then while it is held the whole block and its flash drift sideways to the target; the grey tail stays where it ended up
-          if (!col && nt.length > 4) {
-            var bf = now < nt[0] ? 0 : Math.min(1, (Math.min(now, nt[1]) - nt[0]) / (nt[1] - nt[0]));
-            if (typeof nt[4] === 'number') {   // hand-annotated target pitch (+ optional start fraction)
-              var bs = nt.length > 5 ? nt[5] : 0; bf = Math.max(0, Math.min(1, (bf - bs) / Math.max(1e-6, 1 - bs)));
-              x += (xPitch(nt[4]) - xPitch(nt[2])) * bf;
-            } else {   // real MIDI pitch-bend polyline [[frac, semitones], ...]: interpolate at the note's current progress
-              var pl = nt[4], off = pl[0][1];
-              for (var q = 1; q < pl.length; q++) { if (bf <= pl[q][0]) { var a = pl[q - 1], b = pl[q]; off = a[1] + (b[1] - a[1]) * ((bf - a[0]) / Math.max(1e-6, b[0] - a[0])); break; } off = pl[q][1]; }
-              x += semi * off;   /* one semitone is a constant px on the log axis */
-            }
-          }
+          var bx = 0, bent = !col && nt.length > 4;
+          if (!col) { w = Math.max(5, semi * 1.25); bx = xPitch(nt[2]) - w / 2; x = bx; }   /* user's call: bigger notes over strict non-overlap (rims keep neighbours readable); >=5px on narrow screens */
+          var dur = nt[1] - nt[0], bf = now < t0 ? 0 : Math.min(1, (Math.min(now, nt[1]) - t0) / dur);
+          if (bent) x = bx + bendPx(nt, bf, semi, xPitch);   /* the block (and its flash) sits where the pitch currently is */
           var yTop = y - (t1 - now) * pps, yBot = y - (t0 - now) * pps, vel = nt[3] / 127;
           if (yBot - yTop < 6) yTop = yBot - 6;
           var live = t0 <= now && now < t1, above = Math.min(yBot, y), below = Math.max(yTop, y);
-          if (above > yTop) {   // still above the line: filled + outlined, brighter as it nears the line; the sounding note glows
+          if (above > yTop) {   // still above the line: filled + outlined, brighter as it nears the line; the sounding note glows; a soft dark drop shadow lifts it off the bars
             var near = 1 - Math.min(1, (y - above) / y), fa = 0.32 + 0.45 * (0.5 + 0.5 * vel) * (0.35 + 0.65 * near);
             rrect(g2, x + 0.5, yTop + 0.5, w - 1, above - yTop - 1, 3);
             if (live) { g2.shadowColor = 'rgba(' + t.rgb + ',.95)'; g2.shadowBlur = 16; fa = 0.95; }
-            g2.fillStyle = 'rgba(' + t.rgb + ',' + fa.toFixed(3) + ')'; g2.fill(); g2.shadowBlur = 0;
+            else { g2.shadowColor = 'rgba(0,0,0,.8)'; g2.shadowBlur = 8; g2.shadowOffsetY = 2; }
+            g2.fillStyle = 'rgba(' + t.rgb + ',' + fa.toFixed(3) + ')'; g2.fill(); g2.shadowBlur = 0; g2.shadowOffsetY = 0;
             g2.strokeStyle = 'rgba(' + t.rgb + ',' + (live ? 1 : 0.55 + 0.45 * near).toFixed(3) + ')'; g2.stroke();
             g2.strokeStyle = 'rgba(8,10,16,.55)'; rrect(g2, x - 0.5, yTop - 0.5, w + 1, above - yTop + 1, 4); g2.stroke();   /* dark rim separates overlapping notes */
           }
-          if (yBot > below) {   // past the line: grey, outlined, fading with distance
+          if (yBot > below) {   // past the line: grey, outlined, fading with distance; a bent note leaves the path it actually travelled
             var d = Math.min(1, (below - y) / (H * TAIL_FRAC)), d2 = Math.min(1, (yBot - y) / (H * TAIL_FRAC)), gg = g2.createLinearGradient(0, below, 0, yBot);
             gg.addColorStop(0, 'rgba(150,158,176,' + (0.22 * (1 - d)).toFixed(3) + ')'); gg.addColorStop(1, 'rgba(150,158,176,' + (0.22 * (1 - d2)).toFixed(3) + ')');
-            rrect(g2, x + 0.5, below + 0.5, w - 1, yBot - below - 1, 3); g2.fillStyle = gg; g2.fill(); g2.strokeStyle = 'rgba(150,158,176,' + (0.35 * (1 - d)).toFixed(3) + ')'; g2.stroke();
+            if (bent) {   // polygon: left edge top->bottom, right edge bottom->top, each slice at the pitch the note had at that moment
+              var step = 3, ys = [], k;
+              for (k = below; k < yBot; k += step) ys.push(k); ys.push(yBot);
+              g2.beginPath();
+              for (k = 0; k < ys.length; k++) { var tk = now - (ys[k] - y) / pps, fk = Math.max(0, Math.min(1, (tk - t0) / dur)), xk = bx + bendPx(nt, fk, semi, xPitch); if (k === 0) g2.moveTo(xk + 0.5, ys[k]); else g2.lineTo(xk + 0.5, ys[k]); }
+              for (k = ys.length - 1; k >= 0; k--) { var tk2 = now - (ys[k] - y) / pps, fk2 = Math.max(0, Math.min(1, (tk2 - t0) / dur)); g2.lineTo(bx + bendPx(nt, fk2, semi, xPitch) + w - 0.5, ys[k]); }
+              g2.closePath();
+            } else rrect(g2, x + 0.5, below + 0.5, w - 1, yBot - below - 1, 3);
+            g2.fillStyle = gg; g2.fill(); g2.strokeStyle = 'rgba(150,158,176,' + (0.35 * (1 - d)).toFixed(3) + ')'; g2.stroke();
           }
           if (t.label && live) {   // track label (e.g. a trigger note for an audio drum sequence): floats above the note while it is held
-            g2.font = '600 12px ' + ((getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace').trim()) + ', "Segoe UI", "Yu Gothic UI", "Hiragino Sans", sans-serif';   /* kaomoji halfwidth kana need a CJK fallback */ g2.textAlign = 'left'; g2.textBaseline = 'bottom';
+            g2.font = '600 12px ' + ((getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace').trim()) + ', "Segoe UI", "Yu Gothic UI", "Hiragino Sans", sans-serif';   /* kaomoji halfwidth kana need a CJK fallback */
+            g2.textAlign = 'left'; g2.textBaseline = 'bottom';
             g2.shadowColor = 'rgba(0,0,0,.9)'; g2.shadowBlur = 6; g2.fillStyle = 'rgba(' + t.rgb + ',.95)'; g2.fillText(t.label, x + w + 8, y - 10); g2.shadowBlur = 0;
           }
           // "cleared" flash: bright spark at the line while the note is held (attack burst, then a steady glow), fading out after release
-          var age = now - t0, k = 0;
+          var age = now - t0, kf = 0;
           if (age >= 0) {
-            if (now < t1) k = 0.55 + 0.45 * Math.max(0, 1 - age / FLASH_S);   /* held: burst on the attack, then a steady 55 % */
-            else if (now - t1 < FLASH_S) k = 0.55 * (1 - (now - t1) / FLASH_S);   /* released: fade */
+            if (now < t1) kf = 0.55 + 0.45 * Math.max(0, 1 - age / FLASH_S);   /* held: burst on the attack, then a steady 55 % */
+            else if (now - t1 < FLASH_S) kf = 0.55 * (1 - (now - t1) / FLASH_S);   /* released: fade */
           }
-          if (k > 0) {
-            var ex = w * (0.6 + 1.2 * (1 - k)), fh = 3 + 5 * k;
-            g2.shadowColor = 'rgba(' + t.rgb + ',1)'; g2.shadowBlur = 28 * k;
-            g2.fillStyle = 'rgba(255,255,255,' + (0.85 * k).toFixed(3) + ')'; g2.fillRect(x - ex / 2, y - fh / 2, w + ex, fh);
-            g2.fillStyle = 'rgba(' + t.rgb + ',' + (0.6 * k).toFixed(3) + ')'; g2.fillRect(x - ex, y - fh, w + ex * 2, fh * 2);
+          if (kf > 0) {
+            var ex = w * (0.6 + 1.2 * (1 - kf)), fh = 3 + 5 * kf;
+            g2.shadowColor = 'rgba(' + t.rgb + ',1)'; g2.shadowBlur = 28 * kf;
+            g2.fillStyle = 'rgba(255,255,255,' + (0.85 * kf).toFixed(3) + ')'; g2.fillRect(x - ex / 2, y - fh / 2, w + ex, fh);
+            g2.fillStyle = 'rgba(' + t.rgb + ',' + (0.6 * kf).toFixed(3) + ')'; g2.fillRect(x - ex, y - fh, w + ex * 2, fh * 2);
             g2.shadowBlur = 0;
           }
         }
@@ -366,7 +394,7 @@
           var aw = Math.min(w, px - x);
           if (aw > 0) { g2.fillStyle = gAmb; g2.fillRect(x, y - h, aw, h); g2.fillStyle = gAmbR; g2.fillRect(x, y, aw, h * 0.45); }
         }
-        if (wf) wf.draw(g2, W, H, y, st);   /* waterfall: over the bars, under the line */
+        if (wf) wf.draw(g2, W, H, y, st, now);   /* waterfall: over the bars, under the line */
         // baseline glow eases between 'sound' (1) and 'silence' (.55) instead of snapping — no more glow dropping out when a track starts quietly
         glow += ((any ? 1 : 0.55) - glow) * 0.05;
         g2.strokeStyle = 'rgba(224,176,74,' + (0.28 + 0.62 * glow).toFixed(3) + ')'; g2.shadowColor = 'rgba(224,176,74,.6)'; g2.shadowBlur = 18 * glow; g2.beginPath(); g2.moveTo(0, y); g2.lineTo(lpx, y); g2.stroke();
