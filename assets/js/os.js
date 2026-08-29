@@ -10,6 +10,8 @@
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   // shell: phone (iOS-like) vs desktop. Width is the primary signal; ?shell= overrides for previews.
   var shellOverride = (/[?&]shell=(phone|desktop)/.exec(location.search) || [])[1];
+  // easter eggs forced by the search bar (`-- EE_cat restart`): the flag is consumed on this load, so exactly the next boot fires them
+  var EE = {}; try { var eeRaw = sessionStorage.getItem('ee'); if (eeRaw) { sessionStorage.removeItem('ee'); eeRaw.split(',').forEach(function (k) { if (k) EE[k] = true; }); } } catch (e) {}
   var PHONE = shellOverride ? shellOverride === 'phone' : (window.matchMedia('(max-width: 699px)').matches || (window.matchMedia('(pointer: coarse)').matches && window.innerWidth < 900));
   try { localStorage.setItem('lang', lang); } catch (e) {}
   var sw = $('[data-lang-switch]');
@@ -101,7 +103,7 @@
     function click(cb) {
       cb = cb || function () {};
       bootOnGesture();
-      if (cfg && cfg.chance != null && Math.random() >= cfg.chance) { cb(); return; }   // easter egg only fires with probability `chance`
+      if (cfg && cfg.chance != null && !EE.cat && Math.random() >= cfg.chance) { cb(); return; }   // easter egg only fires with probability `chance` (EE_cat forces it)
       if (!cfg || !vid) { playSnd(); cb(); return; }
       var doneCb = false, sndDone = false, raf = null;
       var sndAt = Math.max(0, (cfg.sound_at || 0) - (cfg.sound_onset || 0));
@@ -237,7 +239,8 @@
   // notes JSON (built from content/midi/<id>.mid by build.py) is fetched when the track changes; the clock is the player's own position
   // (frozen while paused). Pitched lanes share the spectrum's log-frequency X so a note lands on the bars it lights up; drum / fx lanes
   // are fixed columns on the left, the beat lane is the rightmost column. A note keeps falling past the line, greyed and fading.
-  var LOOKAHEAD_S = 4, TAIL_FRAC = 0.32, LATENCY_S = 0, WF_CHANCE = 1, BEND_SMOOTH_S = 0.3;   /* WF_CHANCE: probability (per track load) that the waterfall shows at all — easter-egg gate, 1 = always */
+  var LOOKAHEAD_S = 4, TAIL_FRAC = 0.32, LATENCY_S = 0, WF_CHANCE = 0.1, BEND_SMOOTH_S = 0.3;   /* WF_CHANCE: probability that this page load shows the waterfall at all (rolled once, every track follows); EE_midi forces it */
+  var WF_ON = null; function wfOn() { if (WF_ON === null) WF_ON = !!EE.midi || Math.random() < WF_CHANCE; return WF_ON; }
   function makeWaterfall() {
     var url = '', data = null, pending = null, FLASH_S = 0.3, anim = null, lastPos = 0, ANIM_IN_MS = 1600, ANIM_SWAP_IN_MS = 600, ANIM_OUT_MS = 450, next = null;
     function hex(h) { var v = parseInt(h.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255].join(','); }
@@ -249,7 +252,7 @@
     function ensure(st, now) {
       var u = st.notes || '';
       if (u === url) return; url = u;
-      var show = !!u && Math.random() < WF_CHANCE;
+      var show = !!u && wfOn();
       if (data) { anim = { mode: 'out', t0: now, ms: ANIM_OUT_MS, pos: lastPos }; next = null; }   /* the leaving layer keeps the old track's clock so its notes do not jump */
       pending = null;
       if (!show) return;
@@ -508,7 +511,7 @@
   var APPS = ['works', 'demos', 'player', 'articles', 'about', 'terminal'];
   var TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, terminal: U.app_terminal, updates: U.app_updates };
   var PAGES = { works: 'works/', demos: 'demos/', articles: 'articles/', about: 'about/' };
-  var GLYPH = { works: '🎼', demos: '🎛️', player: '▶️', articles: '📝', about: '👤', terminal: '⌨️', updates: '💬' };
+  var GLYPH = { works: '🎼', demos: '🎛️', player: '▶️', articles: '📝', about: '👤', terminal: '🔍', updates: '💬' };
 
   function initDesktop() {
     if (initDesktop.did) return; initDesktop.did = true;
@@ -539,6 +542,7 @@
 
   function openApp(app) {
     if (PHONE) return phone.open(app);
+    if (app === 'terminal') return spot.open();   /* Spotlight-style search bar instead of a window */
     var w = wins[app];
     if (!w) { w = createWindow(app); wins[app] = w; }
     w.classList.remove('minimized');
@@ -877,30 +881,88 @@
   if (/[?&]debug/.test(location.search)) window.__player = player;   /* ?debug: console access for testing (seek / state) */
   player.onTrack(function (fromFrac) { wave.sweep(true, fromFrac); phoneWave.sweep(true, fromFrac); });   // new track: sweep the amber off the line and the bars
 
-  // ============================================================ terminal app (playful nav)
+  // ============================================================ search ("尋找": Spotlight-style app launcher + command line)
+  // Typing filters apps and works; Enter opens the top hit. Commands: help, works, demos, about, play, lang, clear, restart,
+  // and easter-egg forcing: `-- EE_cat restart` / `-- EE_midi restart` (either or both) → the flag is stored, the page reloads, and that boot fires the egg for sure.
   var terminal = (function () {
-    var body, out, input;
-    function mount(b) {
-      body = b; body.innerHTML = '<div class="term"><div class="out" id="t-out"></div><div class="in"><span>$</span><input id="t-in" autocomplete="off" spellcheck="false" aria-label="terminal"></div></div>';
-      out = $('#t-out', body); input = $('#t-in', body);
-      print(U.term_help + '\n');
-      input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { var c = input.value.trim(); input.value = ''; print('$ ' + c); run(c); } });
-      setTimeout(function () { input.focus(); }, 50);
+    var APP_KEYS = ['works', 'demos', 'player', 'articles', 'updates', 'about', 'lang'];
+    function label(k) { return k === 'lang' ? (U.lang_switch || 'Language') : (TITLES[k] || k); }
+    function glyph(k) { return k === 'lang' ? '🌐' : (GLYPH[k] || ''); }
+    function results(q) {
+      q = q.trim().toLowerCase(); var out = [];
+      if (!q || q.charAt(0) === '-') return out;
+      APP_KEYS.forEach(function (k) { var l = label(k); if (l.toLowerCase().indexOf(q) >= 0 || k.indexOf(q) >= 0) out.push({ t: 'app', k: k, g: glyph(k), l: l, sub: U.spot_app }); });
+      (D.works || []).forEach(function (w) { if ((w.title || '').toLowerCase().indexOf(q) >= 0) out.push({ t: 'work', k: w.id, g: w.type === 'music' ? '🎵' : '🎛️', l: w.title, sub: w.year + ' · ' + w.type }); });
+      return out.slice(0, 7);
     }
-    function print(s) { out.textContent += s + '\n'; out.scrollTop = out.scrollHeight; }
+    function pick(r) { if (r.t === 'app') { if (r.k === 'lang') switchLang(); else openApp(r.k); } else if (r.t === 'work') { openApp('works'); } }
+    // returns a message string (or '' for silent), and may navigate away
     function run(c) {
-      var a = c.split(/\s+/)[0];
-      if (!a) return;
-      if (a === 'help') print(U.term_help);
-      else if (a === 'clear') out.textContent = '';
-      else if (a === 'works' || a === 'ls') { print(D.works.map(function (w) { return '  ' + w.year + '  [' + w.type + ']  ' + w.title; }).join('\n')); openApp('works'); }
-      else if (a === 'demos') openApp('demos');
-      else if (a === 'about' || a === 'whoami') { print('> ' + D.author + ' — ' + D.tagline); openApp('about'); }
-      else if (a === 'play') { openApp('player'); player.toggle(); }
-      else if (a === 'lang') { switchLang(); }
-      else print(U.term_unknown + a);
+      var toks = c.trim().split(/\s+/).filter(function (t) { return t && t !== '--'; }), a = (toks[0] || '').toLowerCase();
+      if (!a) return '';
+      var eggs = toks.filter(function (t) { return /^EE_/i.test(t); }).map(function (t) { return t.replace(/^EE_/i, '').toLowerCase(); }), wantRestart = toks.some(function (t) { return t.toLowerCase() === 'restart'; });
+      if (eggs.length || wantRestart) {
+        var bad = eggs.filter(function (k) { return k !== 'cat' && k !== 'midi'; });
+        if (bad.length) return U.term_unknown + 'EE_' + bad.join(', EE_');
+        if (!wantRestart) return U.spot_need_restart;
+        try { if (eggs.length) sessionStorage.setItem('ee', eggs.join(',')); } catch (e) {}
+        setTimeout(function () { location.reload(); }, 150);
+        return (eggs.length ? '→ EE_' + eggs.join(' + EE_') + ' · ' : '') + U.spot_restarting;
+      }
+      if (a === 'help') return U.term_help;
+      if (a === 'works' || a === 'ls') { openApp('works'); return (D.works || []).map(function (w) { return '  ' + w.year + '  [' + w.type + ']  ' + w.title; }).join('\n'); }
+      if (a === 'demos') { openApp('demos'); return ''; }
+      if (a === 'about' || a === 'whoami') { openApp('about'); return '> ' + D.author + ' — ' + D.tagline; }
+      if (a === 'play') { openApp('player'); player.toggle(); return ''; }
+      if (a === 'lang') { switchLang(); return ''; }
+      if (a === 'clear') return '\u0000';
+      var r = results(a); if (r.length) { pick(r[0]); return ''; }
+      return U.term_unknown + a;
     }
-    return { mount: mount };
+    // shared UI: one field, a hit list, a message line (used inside the phone app panel and by the desktop overlay)
+    function build(host, onDone) {
+      host.innerHTML = '<div class="spot-box"><div class="spot-in"><span class="spot-ico">🔍</span><input class="spot-q" autocomplete="off" spellcheck="false" placeholder="' + esc(U.spot_placeholder) + '" aria-label="' + esc(U.app_terminal) + '"></div><div class="spot-list"></div><pre class="spot-msg" hidden></pre></div>';
+      var q = $('.spot-q', host), list = $('.spot-list', host), msg = $('.spot-msg', host), sel = 0, hits = [];
+      function render() {
+        hits = results(q.value); sel = Math.min(sel, Math.max(0, hits.length - 1));
+        list.innerHTML = hits.map(function (r, i) { return '<button class="spot-hit' + (i === sel ? ' on' : '') + '" data-i="' + i + '"><span class="g">' + r.g + '</span><span class="l">' + esc(r.l) + '</span><span class="s">' + esc(r.sub) + '</span></button>'; }).join('');
+        list.hidden = !hits.length;
+      }
+      function say(m) { if (m === '\u0000') { msg.textContent = ''; msg.hidden = true; return; } if (!m) { msg.hidden = true; return; } msg.textContent = m; msg.hidden = false; }
+      q.addEventListener('input', function () { sel = 0; render(); if (!msg.hidden) say(''); });
+      q.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(hits.length - 1, sel + 1); render(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(0, sel - 1); render(); }
+        else if (e.key === 'Enter') { e.preventDefault(); var v = q.value.trim(); if (!v) return; if (hits.length && v.charAt(0) !== '-' && !/^(help|clear|restart|play|lang)$/i.test(v)) { pick(hits[sel]); q.value = ''; render(); onDone && onDone(); } else { var m = run(v); q.value = ''; render(); say(m); if (m === '' && onDone) onDone(); } }
+        else if (e.key === 'Escape') { onDone && onDone(true); }
+      });
+      list.addEventListener('click', function (e) { var b = e.target.closest('.spot-hit'); if (!b) return; pick(hits[+b.getAttribute('data-i')]); q.value = ''; render(); onDone && onDone(); });
+      render(); setTimeout(function () { q.focus(); }, 40);
+      return { focus: function () { q.focus(); }, reset: function () { q.value = ''; render(); say(''); } };
+    }
+    function mount(b) { build(b, null); }   /* phone: lives inside the app panel */
+    return { mount: mount, build: build, run: run };
+  })();
+  // desktop overlay (Spotlight): opened by the dock / icon or by pressing "/" anywhere; Esc or a click outside closes it
+  var spot = (function () {
+    var el = null, ui = null;
+    function ensureEl() {
+      if (el) return;
+      el = document.createElement('div'); el.className = 'spot'; el.hidden = true; el.innerHTML = '<div class="spot-back"></div><div class="spot-host"></div>';
+      (desktop || document.body).appendChild(el);
+      ui = terminal.build($('.spot-host', el), function () { close(); });
+      $('.spot-back', el).addEventListener('click', close);
+    }
+    function open() { ensureEl(); el.hidden = false; ui.reset(); ui.focus(); }
+    function close() { if (el) el.hidden = true; }
+    function isOpen() { return !!el && !el.hidden; }
+    document.addEventListener('keydown', function (e) {
+      if (PHONE || !desktop || desktop.hidden) return;
+      var tag = (e.target && e.target.tagName) || '';
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && tag !== 'INPUT' && tag !== 'TEXTAREA' && !(e.target && e.target.isContentEditable)) { e.preventDefault(); open(); }
+      else if (e.key === 'Escape' && isOpen()) close();
+    });
+    return { open: open, close: close };
   })();
 
   // ============================================================ phone shell (iOS-like)
