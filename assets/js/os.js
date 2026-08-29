@@ -268,7 +268,7 @@
         for (; i < notes.length && notes[i][0] < end; i++) {
           var nt = notes[i], t0 = nt[0], t1 = nt[1]; if (t.lane === 'drum' || t.lane === 'beat') t1 = Math.min(t1, t0 + 0.18);   /* hits read as short blocks whatever the MIDI length */
           if (t1 < now - tail) continue;
-          if (!col) { w = semi * 0.86; x = xPitch(nt[2]) - w / 2; }   /* < one semitone so neighbouring pitches never overlap */
+          if (!col) { w = semi - 1.5; x = xPitch(nt[2]) - w / 2; }   /* exactly one semitone minus a hairline: as wide as possible without neighbours overlapping */
           var yTop = y - (t1 - now) * pps, yBot = y - (t0 - now) * pps, vel = nt[3] / 127;
           if (yBot - yTop < 6) yTop = yBot - 6;
           var live = t0 <= now && now < t1, above = Math.min(yBot, y), below = Math.max(yTop, y);
