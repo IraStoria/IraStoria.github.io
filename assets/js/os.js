@@ -449,7 +449,7 @@
   }
   function makeWave(cv, yRatio, withNotes) {
     var wf = withNotes ? makeWaterfall() : null;
-    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000, hbMix = 0, HB_MORPH_MS = 700, AMB = '224,176,74', GRN = '61,255,122', SLATE = '96,104,122', DIMG = '30,120,62';   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
+    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000, hbMix = 0, HB_MORPH_MS = 700, liveT0 = 0, GRID_FADE_MS = 3000, AMB = '224,176,74', GRN = '61,255,122', SLATE = '96,104,122', DIMG = '30,120,62';   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
     function grad(y0, y1, rgb, a0, a1) { var g = g2.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + rgb + ',' + a0 + ')'); g.addColorStop(1, 'rgba(' + rgb + ',' + a1 + ')'); return g; }
     function size() { if (cv.width !== cv.clientWidth || cv.height !== cv.clientHeight) { cv.width = cv.clientWidth; cv.height = cv.clientHeight; } }
     function ease(x) { return 1 - Math.pow(1 - x, 3); }
@@ -468,7 +468,7 @@
         var p = Math.min(1, (performance.now() - connectT0) / CONNECT_MS), e = ease(p), half = W / 2 * e;
         if (wf) { g2.shadowBlur = 0; wf.draw(g2, W, H, y, ext.state(), now); g2.shadowColor = 'rgba(' + LC + ',.6)'; g2.shadowBlur = 12; }   /* pre-rolling notes fall while the lines grow */
         g2.beginPath(); g2.moveTo(0, y); g2.lineTo(half, y); g2.moveTo(W, y); g2.lineTo(W - half, y); g2.stroke();
-        if (p >= 1) { mode = 'live'; sweep(false); if (onConnected) { var cb = onConnected; onConnected = null; cb(); } }
+        if (p >= 1) { mode = 'live'; liveT0 = performance.now(); sweep(false); if (onConnected) { var cb = onConnected; onConnected = null; cb(); } }
         return;
       }
       var an = ext.analyser();
@@ -488,7 +488,8 @@
         // clearing sweep (right→left): after the line joins it touches the baseline only; on a track change it takes the bars with it
         if (m > 0) {   // ECG paper: dim green grid, a major line exactly on the baseline; band around the line, edges feathered
           var cell = Math.max(12, Math.round(W / 96)), top = y - maxH * 2.2, bot = y + maxH * 1.1;
-          g2.save(); g2.beginPath(); g2.rect(0, top, edge, bot - top); g2.clip();
+          var gridA = liveT0 ? Math.min(1, (now - liveT0) / GRID_FADE_MS) : 1;   /* boot: the paper fades in with the wallpaper instead of popping */
+          g2.save(); g2.globalAlpha = gridA; g2.beginPath(); g2.rect(0, top, edge, bot - top); g2.clip();
           var mask = g2.createLinearGradient(0, top, 0, bot); mask.addColorStop(0, 'rgba(0,0,0,0)'); mask.addColorStop(0.25, 'rgba(0,0,0,1)'); mask.addColorStop(0.8, 'rgba(0,0,0,1)'); mask.addColorStop(1, 'rgba(0,0,0,0)');
           g2.lineWidth = 1;
           for (var pass = 0; pass < 2; pass++) {
