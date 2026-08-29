@@ -517,11 +517,13 @@
         }
         // baseline glow eases between 'sound' (1) and 'silence' (.55) instead of snapping — no more glow dropping out when a track starts quietly
         glow += ((any ? 1 : 0.55) - glow) * 0.05;
-        g2.strokeStyle = 'rgba(' + LC + ',' + (0.28 + 0.62 * glow).toFixed(3) + ')'; g2.shadowColor = 'rgba(' + LC + ',.6)'; g2.shadowBlur = 18 * glow; g2.beginPath(); g2.moveTo(0, y); g2.lineTo(lpx, y); g2.stroke();
-        if (lpx < W) { g2.strokeStyle = 'rgba(255,255,255,.22)'; g2.shadowBlur = 0; g2.beginPath(); g2.moveTo(lpx, y); g2.lineTo(W, y); g2.stroke(); }
+        // hb mode: the trace IS the line — the flat baseline fades out with the morph so there is only one line
+        g2.strokeStyle = 'rgba(' + LC + ',' + ((0.28 + 0.62 * glow) * (1 - m)).toFixed(3) + ')'; g2.shadowColor = 'rgba(' + LC + ',.6)'; g2.shadowBlur = 18 * glow * (1 - m); g2.beginPath(); g2.moveTo(0, y); g2.lineTo(lpx, y); g2.stroke();
+        if (lpx < W) { g2.strokeStyle = 'rgba(255,255,255,' + (0.22 * (1 - m)).toFixed(3) + ')'; g2.shadowBlur = 0; g2.beginPath(); g2.moveTo(lpx, y); g2.lineTo(W, y); g2.stroke(); }
         // play head: same amber as the line (no highlight), just a stronger halo at the amber/grey boundary
         g2.strokeStyle = 'rgba(' + LC + ',.9)'; g2.shadowColor = 'rgba(' + LC + ',.9)'; g2.shadowBlur = 24;
-        g2.beginPath(); g2.moveTo(Math.max(0, lpx - 14), y); g2.lineTo(lpx, y); g2.stroke(); g2.shadowBlur = 0;
+        var hy = y; if (m > 0) { var ki = Math.min(n - 1, Math.max(0, Math.floor(lpx / bw))); hy = y - levels[ki] * maxH * m; }   /* hb: the play-head halo rides on the trace */
+        g2.beginPath(); g2.moveTo(Math.max(0, lpx - 14), hy); g2.lineTo(lpx, hy); g2.stroke(); g2.shadowBlur = 0;
       } else {
         g2.strokeStyle = 'rgba(' + LC + ',.28)'; g2.shadowBlur = 0;
         g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
