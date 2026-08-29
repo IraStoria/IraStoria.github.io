@@ -391,9 +391,9 @@
     // stage lights (map.json lights): two radial lamps low on each side of the canvas, behind the bars; every hit of `track` (e.g. the kick)
     // fires them to full and they decay like a club strobe; between hits a faint idle glow remains
     function lights(g2, W, H, y) {
-      var L = data && data.lights; if (!L || !L.track || !st_started) return;
-      var tr = null; data.tracks.forEach(function (t) { if (t.name === L.track) tr = t; }); if (!tr) return;
-      var pos = lastPos; if (L.from != null && pos < L.from) return; if (L.to != null && pos >= L.to) return;   /* only within the section (e.g. from the drop on) */
+      var L = data && data.lights; if (!L || !L.track || !st_started) return false;
+      var tr = null; data.tracks.forEach(function (t) { if (t.name === L.track) tr = t; }); if (!tr) return false;
+      var pos = lastPos; if (L.from != null && pos < L.from) return false; if (L.to != null && pos >= L.to) return false;   /* only within the section (e.g. from the drop on) */
       var idx = firstAt(tr.notes, pos + 1e-6) - 1, p = 0;
       if (idx >= 0) p = Math.exp(-(pos - tr.notes[idx][0]) / (L.decay || 0.28));
       var a = (L.idle == null ? 0.10 : L.idle) + (L.gain == null ? 0.55 : L.gain) * p, col = L.color || '224,176,74', r = W * (L.radius || 0.34);
@@ -403,7 +403,7 @@
         g2.save(); g2.beginPath(); g2.rect(0, 0, W, y); g2.clip(); g2.translate(cx, y); lamp(a); g2.restore();                                  /* the source: above the line only */
         g2.save(); g2.beginPath(); g2.rect(0, y, W, H - y); g2.clip(); g2.translate(cx, y); g2.scale(1, L.reflect_squash || 0.45); lamp(a * (L.reflect == null ? 0.3 : L.reflect)); g2.restore();   /* below: a squashed, fainter reflection, not a lamp */
       });
-      g2.restore();
+      g2.restore(); return true;
     }
     var st_started = false;
     return { draw: function (g2, W, H, y, st, nowMs) { st_started = !!st.started; return draw(g2, W, H, y, st, nowMs); }, preroll: preroll, overlay: overlay, lights: lights };
@@ -440,7 +440,7 @@
         var gAmb = grad(y, y - maxH, '224,176,74', 0.35, 0.95), gGrey = grad(y, y - maxH, '96,104,122', 0.45, 0.95),
             gAmbR = grad(y, y + maxH * 0.45, '224,176,74', 0.16, 0), gGreyR = grad(y, y + maxH * 0.45, '96,104,122', 0.18, 0);
         // clearing sweep (right→left): after the line joins it touches the baseline only; on a track change it takes the bars with it
-        if (wf) wf.lights(g2, W, H, y);   /* stage lights behind the bars */
+        var lit = wf ? wf.lights(g2, W, H, y) : false;   /* stage lights behind the bars; when lit, each bar punches the light out under itself so it reads as solid */
         var lpx = px;
         if (clearT0) { var cp = (now - clearT0) / CLEAR_MS; if (cp >= 1) clearT0 = 0; else { var sx = W * clearFrom * (1 - ease(cp)); lpx = Math.max(px, sx); if (clearBars) px = Math.max(px, sx); } }
         for (var i = 0; i < n; i++) {
@@ -450,6 +450,7 @@
           // the play head wipes each bar from its left edge: grey underneath, amber over the part left of px
           // vertical gradients: bars are dim where they meet the baseline and brighten upward (reflection fades downward),
           // so the line reads as its own element without a gap; no per-bar shadow (it smears)
+          if (lit && h > 0.5) { g2.globalCompositeOperation = 'destination-out'; g2.fillStyle = '#000'; g2.fillRect(x, y - h, w, h + h * 0.45); g2.globalCompositeOperation = 'source-over'; }   /* the bar occludes the lamp */
           g2.fillStyle = gGrey; g2.fillRect(x, y - h, w, h);
           g2.fillStyle = gGreyR; g2.fillRect(x, y, w, h * 0.45);
           var aw = Math.min(w, px - x);
