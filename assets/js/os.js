@@ -374,14 +374,16 @@
     }
     // lighting cues (map.json scenes): between from..to the whole canvas (wallpaper, bars, notes) dims towards `depth`, like a filter closing;
     // at `to` a flash pops and decays over `flash` s — the drop. Drawn last, over the line.
+    // returns the current darkness (0..1) so the caller can add a faint glow pass on top of it
     function overlay(g2, W, H) {
-      if (!data || !data.scenes || !data.scenes.length) return;
-      var pos = lastPos;
+      if (!data || !data.scenes || !data.scenes.length) return 0;
+      var pos = lastPos, dark = 0;
       data.scenes.forEach(function (sc) {
-        var f = sc.from, t = sc.to, fl = sc.flash == null ? 0.7 : sc.flash, depth = sc.depth == null ? 0.85 : sc.depth;
-        if (pos >= f && pos < t) { var k = (pos - f) / (t - f); g2.fillStyle = 'rgba(0,0,0,' + (depth * k * k).toFixed(3) + ')'; g2.fillRect(0, 0, W, H); }   /* ease-in: darkest right before the drop */
+        var f = sc.from, t = sc.to, da = sc.dark_at == null ? t : sc.dark_at, fl = sc.flash == null ? 0.7 : sc.flash, depth = sc.depth == null ? 0.85 : sc.depth;
+        if (pos >= f && pos < t) { var k = Math.min(1, (pos - f) / Math.max(0.01, da - f)); dark = depth * k * k; g2.fillStyle = 'rgba(0,0,0,' + dark.toFixed(3) + ')'; g2.fillRect(0, 0, W, H); }   /* ease-in; full depth at dark_at (the last build-up note), held until the drop */
         else if (pos >= t && pos < t + fl) { var q = 1 - (pos - t) / fl; g2.fillStyle = 'rgba(' + (sc.color || '255,240,200') + ',' + (0.9 * q * q * q).toFixed(3) + ')'; g2.fillRect(0, 0, W, H); }
       });
+      return dark;
     }
     return { draw: draw, preroll: preroll, overlay: overlay };
   }
@@ -439,7 +441,13 @@
         // play head: same amber as the line (no highlight), just a stronger halo at the amber/grey boundary
         g2.strokeStyle = 'rgba(224,176,74,.9)'; g2.shadowColor = 'rgba(224,176,74,.9)'; g2.shadowBlur = 24;
         g2.beginPath(); g2.moveTo(Math.max(0, lpx - 14), y); g2.lineTo(lpx, y); g2.stroke(); g2.shadowBlur = 0;
-        if (wf) wf.overlay(g2, W, H);   /* lighting cues: dim / flash over everything on the canvas */
+        if (wf) { var dark = wf.overlay(g2, W, H);   /* lighting cues: dim / flash over everything on the canvas */
+          if (dark > 0) {   // in the dark the bars keep a faint amber glow (drawn over the veil so they show through it)
+            g2.save(); g2.globalAlpha = 0.5 * dark; g2.shadowColor = 'rgba(224,176,74,.9)'; g2.shadowBlur = 14; g2.fillStyle = 'rgba(224,176,74,.55)';
+            for (var gi = 0; gi < n; gi++) { var gh = levels[gi] * maxH; if (gh > 0.5) g2.fillRect(gi * bw + 1, y - gh, bw - 2, gh); }
+            g2.restore();
+          }
+        }
       } else {
         g2.strokeStyle = 'rgba(224,176,74,.28)'; g2.shadowBlur = 0;
         g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
