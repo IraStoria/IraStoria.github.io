@@ -312,7 +312,7 @@
       // vertical ECG: the trace runs down the beat column with time (same clock as the falling notes); every note is a P-QRS-T complex
       // whose R spike crosses the line exactly at the note's onset — the pulse "jumps" as the beat hits
       function ecg(t, cx, amp) {
-        var notes = t.notes, tTop = now + LOOKAHEAD_S, tBot = now - tail, step = 2 / pps;   /* one sample per 2 px */
+        var notes = t.notes, tTop = now + LOOKAHEAD_S, tBot = now - (H - y + 4) / pps, step = 2 / pps;   /* one sample per 2 px; the trace spans the whole canvas height (past the note tail) */
         function qrs(dt) {   /* dt = seconds after onset; classic shape, ~0.45 s long */
           if (dt < 0 || dt > 0.3) return 0;                                                  /* nothing before the beat: the line stays flat until the note lands */
           if (dt < 0.005) return dt / 0.005;                                                  /* R up (instant) */
