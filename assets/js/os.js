@@ -247,10 +247,11 @@
   var LOOKAHEAD_S = 4, TAIL_FRAC = 0.32, LATENCY_S = 0, WF_CHANCE = 0.1, BEND_SMOOTH_S = 0.3;   /* WF_CHANCE: probability that this page load shows the waterfall at all (rolled once, every track follows); EE_midi forces it */
   var WF_ON = null; function wfOn() { if (WF_ON === null) WF_ON = !!EE.midi || !!EE.hb || !!EE_TRACK || Math.random() < WF_CHANCE; return WF_ON; }
   // heartbeat egg: rolled ONCE at page entry (1%, EE_hb forces it). If armed, it fires on the first track with a beat lane (elcirtnev) played
-  // this visit — whether that is the boot track or one switched to later — and is then spent: every later play is the normal look.
+  // this visit — whether that is the boot track or one switched to later.
+  // Every play of such a track spends the current roll and rolls again (1%) for the NEXT play: a hit always shows one play later, never twice in a row by the same roll.
   var HB_CHANCE = 0.01, HB_ARMED = !!EE.hb || Math.random() < HB_CHANCE, HB_URL = null, HB_ON = false;
   function hbFor(url, hasBeat) {
-    if (url !== HB_URL) { HB_URL = url; HB_ON = false; if (hasBeat && HB_ARMED) { HB_ON = true; HB_ARMED = false; } }
+    if (url !== HB_URL) { HB_URL = url; HB_ON = false; if (hasBeat) { HB_ON = HB_ARMED; HB_ARMED = Math.random() < HB_CHANCE; } }
     return HB_ON;
   }
   function makeWaterfall() {
