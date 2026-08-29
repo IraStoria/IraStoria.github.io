@@ -326,12 +326,14 @@
           var live = t0 <= now && now < t1, above = Math.min(yBot, y), below = Math.max(yTop, y);
           if (above > yTop) {   // still above the line: filled + outlined, brighter as it nears the line; the sounding note glows; a soft dark drop shadow lifts it off the bars
             var near = 1 - Math.min(1, (y - above) / y), fa = 0.32 + 0.45 * (0.5 + 0.5 * vel) * (0.35 + 0.65 * near);
+            g2.globalAlpha = alpha * (live ? 1 : Math.pow(near, 0.8));   /* the note fades in as it falls: fully opaque only when its leading edge touches the line */
             rrect(g2, x + 0.5, yTop + 0.5, w - 1, above - yTop - 1, 3);
             if (live) { g2.shadowColor = 'rgba(' + t.rgb + ',.95)'; g2.shadowBlur = 16; fa = 0.95; }
             else { g2.shadowColor = 'rgba(0,0,0,.8)'; g2.shadowBlur = 8; g2.shadowOffsetY = 2; }
             g2.fillStyle = 'rgba(' + t.rgb + ',' + fa.toFixed(3) + ')'; g2.fill(); g2.shadowBlur = 0; g2.shadowOffsetY = 0;
             g2.strokeStyle = 'rgba(' + t.rgb + ',' + (live ? 1 : 0.55 + 0.45 * near).toFixed(3) + ')'; g2.stroke();
             g2.strokeStyle = 'rgba(8,10,16,.55)'; rrect(g2, x - 0.5, yTop - 0.5, w + 1, above - yTop + 1, 4); g2.stroke();   /* dark rim separates overlapping notes */
+            g2.globalAlpha = alpha;
           }
           if (yBot > below) {   // past the line: grey, outlined, fading with distance; a bent note leaves the path it actually travelled
             var d = Math.min(1, (below - y) / (H * TAIL_FRAC)), d2 = Math.min(1, (yBot - y) / (H * TAIL_FRAC)), gg = g2.createLinearGradient(0, below, 0, yBot);
