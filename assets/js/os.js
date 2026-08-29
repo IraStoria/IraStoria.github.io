@@ -246,9 +246,13 @@
   // are fixed columns on the left, the beat lane is the rightmost column. A note keeps falling past the line, greyed and fading.
   var LOOKAHEAD_S = 4, TAIL_FRAC = 0.32, LATENCY_S = 0, WF_CHANCE = 0.1, BEND_SMOOTH_S = 0.3;   /* WF_CHANCE: probability that this page load shows the waterfall at all (rolled once, every track follows); EE_midi forces it */
   var WF_ON = null; function wfOn() { if (WF_ON === null) WF_ON = !!EE.midi || !!EE.hb || !!EE_TRACK || Math.random() < WF_CHANCE; return WF_ON; }
-  // heartbeat egg: rolled once per track change (1%); EE_hb forces the first roll only. Only tracks with a beat lane can win (elcirtnev).
-  var HB_CHANCE = 0.01, HB_URL = null, HB_ON = false, HB_FORCE = !!EE.hb;
-  function hbFor(url, hasBeat) { if (url !== HB_URL) { HB_URL = url; HB_ON = !!hasBeat && (HB_FORCE || Math.random() < HB_CHANCE); HB_FORCE = false; } return HB_ON && !!hasBeat; }
+  // heartbeat egg: rolled ONCE at page entry (1%, EE_hb forces it). If armed, it fires on the first track with a beat lane (elcirtnev) played
+  // this visit — whether that is the boot track or one switched to later — and is then spent: every later play is the normal look.
+  var HB_CHANCE = 0.01, HB_ARMED = !!EE.hb || Math.random() < HB_CHANCE, HB_URL = null, HB_ON = false;
+  function hbFor(url, hasBeat) {
+    if (url !== HB_URL) { HB_URL = url; HB_ON = false; if (hasBeat && HB_ARMED) { HB_ON = true; HB_ARMED = false; } }
+    return HB_ON;
+  }
   function makeWaterfall() {
     var url = '', data = null, pending = null, FLASH_S = 0.3, anim = null, lastPos = 0, ANIM_IN_MS = 1600, ANIM_SWAP_IN_MS = 600, ANIM_OUT_MS = 450, BOOT_FADE_MS = 3000, next = null, pre = null, hb = false;
     // pre-roll (boot): the clock runs from -lead s while the connect lines grow, so the first notes fall the full height before the music starts
