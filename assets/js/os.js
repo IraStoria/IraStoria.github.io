@@ -384,11 +384,28 @@
           if (sc.pulse) { var pt = null; data.tracks.forEach(function (tr) { if (tr.name === sc.pulse) pt = tr; });   /* pulse: the glow throbs on every note onset of this track (e.g. the bass quarter notes) */
             if (pt) { var idx = firstAt(pt.notes, pos + 1e-6) - 1; if (idx >= 0) { var since = pos - pt.notes[idx][0]; pulse = Math.max(pulse, Math.exp(-since / (sc.pulse_decay || 0.22))); } } }
         }
-        else if (pos >= t && pos < t + fl) { var q = 1 - (pos - t) / fl; g2.fillStyle = 'rgba(' + (sc.color || '255,240,200') + ',' + (0.9 * q * q * q).toFixed(3) + ')'; g2.fillRect(0, 0, W, H); }
+        else if (pos >= t && pos < t + fl) { var q = 1 - (pos - t) / fl; g2.fillStyle = 'rgba(' + (sc.color || '255,240,200') + ',' + ((sc.flash_gain == null ? 0.5 : sc.flash_gain) * q * q * q).toFixed(3) + ')'; g2.fillRect(0, 0, W, H); }   /* flash_gain: peak brightness of the drop flash */
       });
       return { dark: dark, pulse: pulse };
     }
-    return { draw: draw, preroll: preroll, overlay: overlay };
+    // stage lights (map.json lights): two radial lamps low on each side of the canvas, behind the bars; every hit of `track` (e.g. the kick)
+    // fires them to full and they decay like a club strobe; between hits a faint idle glow remains
+    function lights(g2, W, H, y) {
+      var L = data && data.lights; if (!L || !L.track || !st_started) return;
+      var tr = null; data.tracks.forEach(function (t) { if (t.name === L.track) tr = t; }); if (!tr) return;
+      var pos = lastPos, idx = firstAt(tr.notes, pos + 1e-6) - 1, p = 0;
+      if (idx >= 0) p = Math.exp(-(pos - tr.notes[idx][0]) / (L.decay || 0.28));
+      var a = (L.idle == null ? 0.10 : L.idle) + (L.gain == null ? 0.55 : L.gain) * p, col = L.color || '224,176,74', r = W * (L.radius || 0.34);
+      g2.save(); g2.globalCompositeOperation = 'lighter';
+      [[0, y], [W, y]].forEach(function (c) {
+        var g = g2.createRadialGradient(c[0], c[1], 0, c[0], c[1], r);
+        g.addColorStop(0, 'rgba(' + col + ',' + a.toFixed(3) + ')'); g.addColorStop(0.45, 'rgba(' + col + ',' + (a * 0.35).toFixed(3) + ')'); g.addColorStop(1, 'rgba(' + col + ',0)');
+        g2.fillStyle = g; g2.fillRect(c[0] - r, c[1] - r, 2 * r, 2 * r);
+      });
+      g2.restore();
+    }
+    var st_started = false;
+    return { draw: function (g2, W, H, y, st, nowMs) { st_started = !!st.started; return draw(g2, W, H, y, st, nowMs); }, preroll: preroll, overlay: overlay, lights: lights };
   }
   function makeWave(cv, yRatio, withNotes) {
     var wf = withNotes ? makeWaterfall() : null;
@@ -422,6 +439,7 @@
         var gAmb = grad(y, y - maxH, '224,176,74', 0.35, 0.95), gGrey = grad(y, y - maxH, '96,104,122', 0.45, 0.95),
             gAmbR = grad(y, y + maxH * 0.45, '224,176,74', 0.16, 0), gGreyR = grad(y, y + maxH * 0.45, '96,104,122', 0.18, 0);
         // clearing sweep (right→left): after the line joins it touches the baseline only; on a track change it takes the bars with it
+        if (wf) wf.lights(g2, W, H, y);   /* stage lights behind the bars */
         var lpx = px;
         if (clearT0) { var cp = (now - clearT0) / CLEAR_MS; if (cp >= 1) clearT0 = 0; else { var sx = W * clearFrom * (1 - ease(cp)); lpx = Math.max(px, sx); if (clearBars) px = Math.max(px, sx); } }
         for (var i = 0; i < n; i++) {
