@@ -520,9 +520,9 @@
           g2.save(); g2.lineWidth = 2; g2.lineJoin = 'round'; g2.lineCap = 'round';
           function trace(from, to, col, al, blur) {
             g2.strokeStyle = 'rgba(' + col + ',' + al + ')'; g2.shadowColor = 'rgba(' + col + ',.8)'; g2.shadowBlur = blur; g2.beginPath();
-            var started = false;
-            for (var k = 0; k < n; k++) { var cx = k * bw + bw / 2; if (cx < from - bw || cx > to + bw) continue; var yy = y - levels[k] * maxH; if (!started) { g2.moveTo(Math.max(from, cx), yy); started = true; } else g2.lineTo(cx, yy); }
-            if (started) g2.stroke();
+            g2.moveTo(0, y - levels[0] * maxH);   /* the full polyline every time; only the clip decides which part shows — no kink at the split */
+            for (var k = 0; k < n; k++) g2.lineTo(k * bw + bw / 2, y - levels[k] * maxH);
+            g2.lineTo(W, y - levels[n - 1] * maxH); g2.stroke();
           }
           g2.save(); g2.beginPath(); g2.rect(0, 0, Math.max(0, Math.min(px0, edge)), H); g2.clip(); trace(0, px0, GRN, 0.95, 12); g2.restore();
           if (edge > px0) { g2.save(); g2.beginPath(); g2.rect(px0, 0, edge - px0, H); g2.clip(); trace(px0, W, DIMG, 0.7, 0); g2.restore(); }
