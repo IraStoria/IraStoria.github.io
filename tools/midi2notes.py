@@ -3,7 +3,7 @@
 usage: python tools/midi2notes.py in.mid out.json [--map map.json] [--list]
   --list   print tracks (index, name, channel, note count, range) and exit
   --map    per-track layout: {"tracks": {"<name>": {"lane": "drum|fx|pitch|beat", "color": "#hex", "show": true, "hide_pitches": [45]}}, "offset_ms": 0}
-output: {"ppq":..., "duration": s, "tracks":[{"name","lane","color","notes":[[t_on, t_off, pitch, vel, (bend_to_pitch, (bend_start_frac))], ...]}]}
+output: {"ppq":..., "duration": s, "tracks":[{"name","lane","color","notes":[[t_on, t_off, pitch, vel, (bend: target_pitch | [[frac, semitones], ...]), (bend_start_frac)], ...]}]}
 Tempo map is expanded (SMPTE not supported). Times are seconds relative to MIDI tick 0.
 """
 import json, struct, sys
@@ -38,6 +38,7 @@ def parse(path):
             p1, p2 = d[j], d[j + 1]; j += 2
             if hi == 0x90 and p2 > 0: events.append((tick, 'on', p1, p2)); chans.add(ch)
             elif hi == 0x80 or (hi == 0x90 and p2 == 0): events.append((tick, 'off', p1, 0))
+            elif hi == 0xE0: events.append((tick, 'bend', ((p2 << 7) | p1) - 8192, 0))
         tracks.append({'name': name or '', 'events': events, 'chans': sorted(chans)}); i = end
     if not tempos: tempos = [(0, 500000)]
     tempos.sort()
@@ -55,8 +56,9 @@ def parse(path):
     out = []; dur = 0.0
     for tr in tracks:
         if not tr['events']: continue
-        open_ = {}; notes = []
+        open_ = {}; notes = []; bends = [(sec(tick), p) for tick, kind, p, v in tr['events'] if kind == 'bend']
         for tick, kind, p, v in tr['events']:
+            if kind == 'bend': continue
             if kind == 'on':
                 if p in open_: notes.append([open_[p][0], sec(tick), p, open_[p][1]])
                 open_[p] = (sec(tick), v)
@@ -64,7 +66,7 @@ def parse(path):
                 notes.append([open_[p][0], sec(tick), p, open_[p][1]]); del open_[p]
         for p, (t0, v) in open_.items(): notes.append([t0, t0 + 0.25, p, v])
         notes.sort(); dur = max(dur, notes[-1][1] if notes else 0)
-        out.append({'name': tr['name'], 'chans': tr['chans'], 'notes': [[round(a, 4), round(b, 4), p, v] for a, b, p, v in notes]})
+        out.append({'name': tr['name'], 'chans': tr['chans'], 'bends': bends, 'notes': [[round(a, 4), round(b, 4), p, v] for a, b, p, v in notes]})
     return {'ppq': ppq, 'duration': round(dur, 3), 'tempo_changes': len(tempos), 'tracks': out}
 
 def main(a):
@@ -79,6 +81,29 @@ def main(a):
     mp = {}
     if '--map' in a: mp = json.load(open(a[a.index('--map') + 1], encoding='utf-8'))
     tm = mp.get('tracks', {}); keep = []
+    # real MIDI pitch bends -> per-note polyline [[frac_of_note, semitones], ...] (5th element); range from map bend_range (default ±2 st)
+    for t in m['tracks']:
+        cfg = tm.get(t['name']) or {}
+        if not t['bends']: continue
+        rng = float(cfg.get('bend_range', 2)); ev = t['bends']
+        def at(sec):
+            v = 0
+            for ts, val in ev:
+                if ts <= sec: v = val
+                else: break
+            return v / 8192.0 * rng
+        for n in t['notes']:
+            t0, t1 = n[0], n[1]; dur = t1 - t0
+            if dur <= 0: continue
+            pts = [(0.0, at(t0))] + [((ts - t0) / dur, val / 8192.0 * rng) for ts, val in ev if t0 < ts < t1] + [(1.0, at(t1))]
+            if max(abs(v) for _, v in pts) < 0.05: continue
+            slim = [pts[0]]   # drop points on a straight line (tolerance 0.03 st) and thin dense runs
+            for i in range(1, len(pts) - 1):
+                p0, p1, p2 = slim[-1], pts[i], pts[i + 1]
+                lin = p0[1] + (p2[1] - p0[1]) * ((p1[0] - p0[0]) / max(1e-9, p2[0] - p0[0]))
+                if abs(p1[1] - lin) > 0.03 or p1[0] - p0[0] > 0.1: slim.append(p1)
+            slim.append(pts[-1])
+            del n[4:]; n.append([[round(f, 3), round(v, 2)] for f, v in slim])
     # manual bends: {"track", "at" (seconds, ±5 ms), "to" (target pitch), "start" (optional 0..1 fraction of the note where the bend begins)}
     for b in mp.get('bends', []):
         hit = 0

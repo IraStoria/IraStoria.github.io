@@ -272,9 +272,15 @@
           // hand-annotated bend (nt[4] = target pitch, nt[5] = optional start fraction): the note falls straight at its start pitch,
           // then while it is held the whole block and its flash drift sideways to the target; the grey tail stays where it ended up
           if (!col && nt.length > 4) {
-            var bf = now < nt[0] ? 0 : Math.min(1, (Math.min(now, nt[1]) - nt[0]) / (nt[1] - nt[0])), bs = nt.length > 5 ? nt[5] : 0;
-            bf = Math.max(0, Math.min(1, (bf - bs) / Math.max(1e-6, 1 - bs)));
-            x += (xPitch(nt[4]) - xPitch(nt[2])) * bf;
+            var bf = now < nt[0] ? 0 : Math.min(1, (Math.min(now, nt[1]) - nt[0]) / (nt[1] - nt[0]));
+            if (typeof nt[4] === 'number') {   // hand-annotated target pitch (+ optional start fraction)
+              var bs = nt.length > 5 ? nt[5] : 0; bf = Math.max(0, Math.min(1, (bf - bs) / Math.max(1e-6, 1 - bs)));
+              x += (xPitch(nt[4]) - xPitch(nt[2])) * bf;
+            } else {   // real MIDI pitch-bend polyline [[frac, semitones], ...]: interpolate at the note's current progress
+              var pl = nt[4], off = pl[0][1];
+              for (var q = 1; q < pl.length; q++) { if (bf <= pl[q][0]) { var a = pl[q - 1], b = pl[q]; off = a[1] + (b[1] - a[1]) * ((bf - a[0]) / Math.max(1e-6, b[0] - a[0])); break; } off = pl[q][1]; }
+              x += semi * off;   /* one semitone is a constant px on the log axis */
+            }
           }
           var yTop = y - (t1 - now) * pps, yBot = y - (t0 - now) * pps, vel = nt[3] / 127;
           if (yBot - yTop < 6) yTop = yBot - 6;
