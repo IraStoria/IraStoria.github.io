@@ -2,7 +2,7 @@
 
 usage: python tools/midi2notes.py in.mid out.json [--map map.json] [--list]
   --list   print tracks (index, name, channel, note count, range) and exit
-  --map    per-track layout: {"tracks": {"<name>": {"lane": "drum|fx|pitch|beat", "color": "#hex", "show": true}}, "offset_ms": 0}
+  --map    per-track layout: {"tracks": {"<name>": {"lane": "drum|fx|pitch|beat", "color": "#hex", "show": true, "hide_pitches": [45]}}, "offset_ms": 0}
 output: {"ppq":..., "duration": s, "tracks":[{"name","lane","color","notes":[[t_on, t_off, pitch, vel, (bend_to_pitch, (bend_start_frac))], ...]}]}
 Tempo map is expanded (SMPTE not supported). Times are seconds relative to MIDI tick 0.
 """
@@ -93,7 +93,9 @@ def main(a):
     for t in m['tracks']:
         cfg = tm.get(t['name'])
         if tm and (cfg is None or cfg.get('show') is False): continue
-        keep.append({'name': t['name'], 'lane': (cfg or {}).get('lane', 'pitch'), 'color': (cfg or {}).get('color', '#e0b04a'), 'row': (cfg or {}).get('row'), 'notes': t['notes']})
+        hide = set((cfg or {}).get('hide_pitches', []))   # keyswitch / articulation trigger notes that are not music
+        notes = [n for n in t['notes'] if n[2] not in hide]
+        keep.append({'name': t['name'], 'lane': (cfg or {}).get('lane', 'pitch'), 'color': (cfg or {}).get('color', '#e0b04a'), 'row': (cfg or {}).get('row'), 'notes': notes})
     res = {'duration': m['duration'], 'offset_ms': mp.get('offset_ms', 0), 'tracks': keep}
     json.dump(res, open(a[2], 'w', encoding='utf-8'), separators=(',', ':'))
     print('wrote', a[2], sum(len(t['notes']) for t in keep), 'notes in', len(keep), 'tracks')
