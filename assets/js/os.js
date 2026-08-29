@@ -542,7 +542,7 @@
         var ux = Math.max(lpx, edge); if (ux < W) { g2.strokeStyle = 'rgba(255,255,255,.22)'; g2.shadowBlur = 0; g2.beginPath(); g2.moveTo(ux, y); g2.lineTo(W, y); g2.stroke(); }
         // play head: same amber as the line (no highlight), just a stronger halo at the amber/grey boundary
         if (px0 >= edge) { g2.strokeStyle = 'rgba(' + AMB + ',.9)'; g2.shadowColor = 'rgba(' + AMB + ',.9)'; g2.shadowBlur = 24; g2.beginPath(); g2.moveTo(Math.max(edge, lpx - 14), y); g2.lineTo(lpx, y); g2.stroke(); }
-        else { g2.strokeStyle = 'rgba(' + GRN + ',.9)'; g2.shadowColor = 'rgba(' + GRN + ',.9)'; g2.shadowBlur = 24; g2.beginPath(); g2.moveTo(Math.max(0, px0 - 14), y); g2.lineTo(px0, y); g2.stroke(); }   /* ECG side: the same plain horizontal halo, in green */
+        /* ECG side: no play-head halo — the bright/dim split of the trace is the play head */   /* ECG side: the same plain horizontal halo, in green */
         g2.shadowBlur = 0;
       } else {
         g2.strokeStyle = 'rgba(' + AMB + ',.28)'; g2.shadowBlur = 0;
