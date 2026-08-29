@@ -314,11 +314,9 @@
       function ecg(t, cx, amp) {
         var notes = t.notes, tTop = now + LOOKAHEAD_S, tBot = now - tail, step = 2 / pps;   /* one sample per 2 px */
         function qrs(dt) {   /* dt = seconds after onset; classic shape, ~0.45 s long */
-          if (dt < -0.18 || dt > 0.3) return 0;
-          if (dt < -0.08) return 0.12 * Math.sin((dt + 0.18) / 0.10 * Math.PI);          /* P */
-          if (dt < -0.03) return 0;
-          if (dt < -0.01) return -0.15 * ((dt + 0.03) / 0.02);                              /* Q */
-          if (dt < 0.00) return -0.15 + 1.15 * ((dt + 0.01) / 0.01);                        /* R up */
+          if (dt < 0 || dt > 0.3) return 0;                                                  /* nothing before the beat: the line stays flat until the note lands */
+          if (dt < 0.005) return dt / 0.005;                                                  /* R up (instant) */
+          dt -= 0.005;
           if (dt < 0.02) return 1 - 1.4 * (dt / 0.02);                                      /* R down to S */
           if (dt < 0.05) return -0.4 * (1 - (dt - 0.02) / 0.03);                            /* S back */
           if (dt < 0.10) return 0;
@@ -328,14 +326,14 @@
         g2.strokeStyle = 'rgba(' + t.rgb + ',.95)'; g2.shadowColor = 'rgba(' + t.rgb + ',.9)'; g2.shadowBlur = 10;
         g2.beginPath(); var first = true, j0 = firstAt(notes, tBot - 0.35);
         for (var ts = tBot; ts <= tTop; ts += step) {   /* bottom (past) upward, so the note pointer j0 only ever advances */
-          var v = 0; for (var j = j0; j < notes.length && notes[j][0] < ts + 0.2; j++) { if (notes[j][0] < ts - 0.35) { j0 = j + 1; continue; } v += qrs(ts - notes[j][0]); }
+          var v = 0; if (ts <= now) for (var j = j0; j < notes.length && notes[j][0] <= ts; j++) { if (notes[j][0] < ts - 0.35) { j0 = j + 1; continue; } v += qrs(ts - notes[j][0]); }   /* only notes that have landed, only below the line */
           var yy = y - (ts - now) * pps, xx = cx + amp * v, past = ts < now;
           if (first) { g2.moveTo(xx, yy); first = false; } else g2.lineTo(xx, yy);
         }
         g2.stroke();
         var beat = 0, k = firstAt(notes, now + 1e-6) - 1; if (k >= 0) beat = Math.exp(-(now - notes[k][0]) / 0.18);   /* the dot on the line pulses on each beat */
         g2.fillStyle = 'rgba(' + t.rgb + ',' + (0.6 + 0.4 * beat).toFixed(2) + ')'; g2.shadowBlur = 8 + 18 * beat;
-        g2.beginPath(); g2.arc(cx + amp * (function () { var vv = 0; for (var j = firstAt(notes, now - 0.35); j < notes.length && notes[j][0] < now + 0.2; j++) vv += qrs(now - notes[j][0]); return vv; })(), y, 3 + 3 * beat, 0, Math.PI * 2); g2.fill();
+        g2.beginPath(); g2.arc(cx + amp * (function () { var vv = 0; for (var j = firstAt(notes, now - 0.35); j < notes.length && notes[j][0] <= now; j++) vv += qrs(now - notes[j][0]); return vv; })(), y, 3 + 3 * beat, 0, Math.PI * 2); g2.fill();
         g2.restore();
       }
       g2.save(); g2.lineWidth = 1; g2.lineJoin = 'round';
