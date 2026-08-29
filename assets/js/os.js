@@ -247,7 +247,7 @@
   var LOOKAHEAD_S = 4, TAIL_FRAC = 0.32, LATENCY_S = 0, WF_CHANCE = 0.1, BEND_SMOOTH_S = 0.3;   /* WF_CHANCE: probability that this page load shows the waterfall at all (rolled once, every track follows); EE_midi forces it */
   var WF_ON = null; function wfOn() { if (WF_ON === null) WF_ON = !!EE.midi || !!EE_TRACK || Math.random() < WF_CHANCE; return WF_ON; }
   function makeWaterfall() {
-    var url = '', data = null, pending = null, FLASH_S = 0.3, anim = null, lastPos = 0, ANIM_IN_MS = 1600, ANIM_SWAP_IN_MS = 600, ANIM_OUT_MS = 450, next = null, pre = null, preEnd = 0;
+    var url = '', data = null, pending = null, FLASH_S = 0.3, anim = null, lastPos = 0, ANIM_IN_MS = 1600, ANIM_SWAP_IN_MS = 600, ANIM_OUT_MS = 450, BOOT_FADE_MS = 3000, next = null, pre = null;
     // pre-roll (boot): the clock runs from -lead s while the connect lines grow, so the first notes fall the full height before the music starts
     function preroll(t0, lead) { pre = { t0: t0, lead: lead }; ensure(ext.state(), t0); }
     function hex(h) { var v = parseInt(h.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255].join(','); }
@@ -266,7 +266,7 @@
       var req = pending = fetch('../' + u).then(function (r) { return r.json(); }).then(function (j) {
         if (req !== pending) return; j = prep(j);
         if (anim && anim.mode === 'out') next = j;                                   /* wait for the exit to finish */
-        else { data = j; anim = { mode: 'in', t0: performance.now(), ms: ANIM_IN_MS }; }   /* boot: glide in */
+        else { data = j; anim = { mode: 'in', t0: performance.now(), ms: ANIM_IN_MS, fadeMs: BOOT_FADE_MS }; }   /* boot: glide in, fade in like the wallpaper */
       }).catch(function () {});
     }
     function ease(x) { return 1 - Math.pow(1 - x, 3); }
@@ -296,12 +296,11 @@
         if (anim.mode === 'out') {
           shift = -H * (1 - Math.pow(1 - p, 2)); alpha = 1 - p;
           if (p >= 1) { data = next; next = null; anim = data ? { mode: 'in', t0: nowMs, ms: ANIM_SWAP_IN_MS } : null; shift = data ? -H : 0; }
-        } else { shift = -H * (1 - ease(p)); alpha = ease(p); if (p >= 1) { anim = null; shift = 0; alpha = 1; } }
+        } else { var fp = Math.min(1, (nowMs - anim.t0) / (anim.fadeMs || anim.ms)); shift = -H * (1 - ease(p)); alpha = fp; if (p >= 1 && fp >= 1) { anim = null; shift = 0; alpha = 1; } else if (p >= 1) shift = 0; }
       }
       if (!data) return;
       var pos;
-      if (pre) { if (st.started && st.pos > 0.05) { pre = null; preEnd = nowMs; } else pos = -pre.lead + (nowMs - pre.t0) / 1000; }   /* pre-roll until the audio clock really moves */
-      var fadeW = pre ? 1 : (preEnd ? Math.max(0, 1 - (nowMs - preEnd) / (LOOKAHEAD_S * 1000)) : 0);   /* boot only: notes fade in as they fall; the effect eases off once the opening batch has landed */
+      if (pre) { if (st.started && st.pos > 0.05) pre = null; else pos = -pre.lead + (nowMs - pre.t0) / 1000; }   /* pre-roll until the audio clock really moves */
       if (pos === undefined) { if (!st.started) return; pos = (anim && anim.mode === 'out') ? anim.pos : st.pos; }
       lastPos = pos;
       var now = pos + (data.offset_ms || 0) / 1000 + LATENCY_S, pps = y / LOOKAHEAD_S, tail = H * TAIL_FRAC / pps;
@@ -327,14 +326,12 @@
           var live = t0 <= now && now < t1, above = Math.min(yBot, y), below = Math.max(yTop, y);
           if (above > yTop) {   // still above the line: filled + outlined, brighter as it nears the line; the sounding note glows; a soft dark drop shadow lifts it off the bars
             var near = 1 - Math.min(1, (y - above) / y), fa = 0.32 + 0.45 * (0.5 + 0.5 * vel) * (0.35 + 0.65 * near);
-            if (fadeW && !live) g2.globalAlpha = alpha * (1 - fadeW * (1 - Math.pow(near, 0.8)));   /* opening fall: opaque only when the leading edge touches the line */
             rrect(g2, x + 0.5, yTop + 0.5, w - 1, above - yTop - 1, 3);
             if (live) { g2.shadowColor = 'rgba(' + t.rgb + ',.95)'; g2.shadowBlur = 16; fa = 0.95; }
             else { g2.shadowColor = 'rgba(0,0,0,.8)'; g2.shadowBlur = 8; g2.shadowOffsetY = 2; }
             g2.fillStyle = 'rgba(' + t.rgb + ',' + fa.toFixed(3) + ')'; g2.fill(); g2.shadowBlur = 0; g2.shadowOffsetY = 0;
             g2.strokeStyle = 'rgba(' + t.rgb + ',' + (live ? 1 : 0.55 + 0.45 * near).toFixed(3) + ')'; g2.stroke();
             g2.strokeStyle = 'rgba(8,10,16,.55)'; rrect(g2, x - 0.5, yTop - 0.5, w + 1, above - yTop + 1, 4); g2.stroke();   /* dark rim separates overlapping notes */
-            g2.globalAlpha = alpha;
           }
           if (yBot > below) {   // past the line: grey, outlined, fading with distance; a bent note leaves the path it actually travelled
             var d = Math.min(1, (below - y) / (H * TAIL_FRAC)), d2 = Math.min(1, (yBot - y) / (H * TAIL_FRAC)), gg = g2.createLinearGradient(0, below, 0, yBot);
