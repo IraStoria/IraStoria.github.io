@@ -270,6 +270,13 @@
       for (var q = 1; q < pl.length; q++) { if (f <= pl[q][0]) { var a = pl[q - 1], b = pl[q]; off = a[1] + (b[1] - a[1]) * ((f - a[0]) / Math.max(1e-6, b[0] - a[0])); break; } off = pl[q][1]; }
       return semi * off;
     }
+    // MIDI bends often jump within a few ms (dives, slides): smooth them over ±150 ms so the ribbon bends in an S instead of a flat step
+    function bendSmooth(nt, f, dur, semi, xPitch) {
+      if (nt.length <= 4 || typeof nt[4] === 'number') return bendPx(nt, f, semi, xPitch);
+      var d = 0.075 / Math.max(0.05, dur), acc = 0, wts = [1, 2, 3, 2, 1];
+      for (var k = -2; k <= 2; k++) acc += wts[k + 2] * bendPx(nt, Math.max(0, Math.min(1, f + k * d)), semi, xPitch);
+      return acc / 9;
+    }
     // draw(g2, W, H, y, st, nowMs): notes are drawn over the bars (under the line); pitched X shares the bars' log-frequency mapping
     function draw(g2, W, H, y, st, nowMs) {
       ensure(st, nowMs);
@@ -299,7 +306,7 @@
           var bx = 0, bent = !col && nt.length > 4;
           if (!col) { w = Math.max(5, semi * 1.25); bx = xPitch(nt[2]) - w / 2; x = bx; }   /* user's call: bigger notes over strict non-overlap (rims keep neighbours readable); >=5px on narrow screens */
           var dur = nt[1] - nt[0], bf = now < t0 ? 0 : Math.min(1, (Math.min(now, nt[1]) - t0) / dur);
-          if (bent) x = bx + bendPx(nt, bf, semi, xPitch);   /* the block (and its flash) sits where the pitch currently is */
+          if (bent) x = bx + bendSmooth(nt, bf, dur, semi, xPitch);   /* the block (and its flash) sits where the pitch currently is */
           var yTop = y - (t1 - now) * pps, yBot = y - (t0 - now) * pps, vel = nt[3] / 127;
           if (yBot - yTop < 6) yTop = yBot - 6;
           var live = t0 <= now && now < t1, above = Math.min(yBot, y), below = Math.max(yTop, y);
@@ -315,15 +322,18 @@
           if (yBot > below) {   // past the line: grey, outlined, fading with distance; a bent note leaves the path it actually travelled
             var d = Math.min(1, (below - y) / (H * TAIL_FRAC)), d2 = Math.min(1, (yBot - y) / (H * TAIL_FRAC)), gg = g2.createLinearGradient(0, below, 0, yBot);
             gg.addColorStop(0, 'rgba(150,158,176,' + (0.22 * (1 - d)).toFixed(3) + ')'); gg.addColorStop(1, 'rgba(150,158,176,' + (0.22 * (1 - d2)).toFixed(3) + ')');
-            if (bent) {   // polygon: left edge top->bottom, right edge bottom->top, each slice at the pitch the note had at that moment
-              var step = 3, ys = [], k;
-              for (k = below; k < yBot; k += step) ys.push(k); ys.push(yBot);
-              g2.beginPath();
-              for (k = 0; k < ys.length; k++) { var tk = now - (ys[k] - y) / pps, fk = Math.max(0, Math.min(1, (tk - t0) / dur)), xk = bx + bendPx(nt, fk, semi, xPitch); if (k === 0) g2.moveTo(xk + 0.5, ys[k]); else g2.lineTo(xk + 0.5, ys[k]); }
-              for (k = ys.length - 1; k >= 0; k--) { var tk2 = now - (ys[k] - y) / pps, fk2 = Math.max(0, Math.min(1, (tk2 - t0) / dur)); g2.lineTo(bx + bendPx(nt, fk2, semi, xPitch) + w - 0.5, ys[k]); }
-              g2.closePath();
-            } else rrect(g2, x + 0.5, below + 0.5, w - 1, yBot - below - 1, 3);
-            g2.fillStyle = gg; g2.fill(); g2.strokeStyle = 'rgba(150,158,176,' + (0.35 * (1 - d)).toFixed(3) + ')'; g2.stroke();
+            if (bent) {   // ribbon: the note's centre line through time, stroked at the note's width with round joins (even thickness along the curve)
+              var step = 2, k, cx = [], cy = [];
+              for (k = below; k <= yBot; k += step) { var tk = now - (k - y) / pps, fk = Math.max(0, Math.min(1, (tk - t0) / dur)); cx.push(bx + w / 2 + bendSmooth(nt, fk, dur, semi, xPitch)); cy.push(k); }
+              if (cy[cy.length - 1] < yBot) { var tb = now - (yBot - y) / pps; cx.push(bx + w / 2 + bendSmooth(nt, Math.max(0, Math.min(1, (tb - t0) / dur)), dur, semi, xPitch)); cy.push(yBot); }
+              g2.beginPath(); g2.moveTo(cx[0], cy[0]);
+              for (k = 1; k < cx.length - 1; k++) g2.quadraticCurveTo(cx[k], cy[k], (cx[k] + cx[k + 1]) / 2, (cy[k] + cy[k + 1]) / 2);   /* rounded: curve through the midpoints, no corners */
+              if (cx.length > 1) g2.lineTo(cx[cx.length - 1], cy[cy.length - 1]);
+              g2.save(); g2.lineCap = 'round'; g2.lineJoin = 'round';
+              g2.lineWidth = w * 0.8; g2.strokeStyle = 'rgba(150,158,176,' + (0.35 * (1 - d)).toFixed(3) + ')'; g2.stroke();   /* outline */
+              g2.lineWidth = w * 0.8 - 2; g2.strokeStyle = gg; g2.stroke();                                                         /* body */
+              g2.restore();
+            } else { rrect(g2, x + 0.5, below + 0.5, w - 1, yBot - below - 1, 3); g2.fillStyle = gg; g2.fill(); g2.strokeStyle = 'rgba(150,158,176,' + (0.35 * (1 - d)).toFixed(3) + ')'; g2.stroke(); }
           }
           if (t.label && live) {   // track label (e.g. a trigger note for an audio drum sequence): floats above the note while it is held
             g2.font = '600 12px ' + ((getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace').trim()) + ', "Segoe UI", "Yu Gothic UI", "Hiragino Sans", sans-serif';   /* kaomoji halfwidth kana need a CJK fallback */
