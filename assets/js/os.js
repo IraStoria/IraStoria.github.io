@@ -260,7 +260,7 @@
     function preroll(t0, lead) { pre = { t0: t0, lead: lead }; ensure(ext.state(), t0); }
     function hex(h) { var v = parseInt(h.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255].join(','); }
     function prep(j) {
-      j.tracks.forEach(function (t) { t.rgb = hex(t.color || '#e0b04a'); var md = 0; t.notes.forEach(function (n) { if (n[1] - n[0] > md) md = n[1] - n[0]; }); t.maxDur = md; });
+      j.tracks.forEach(function (t) { t.rgb = t.rgb0 = hex(t.color || '#e0b04a'); var md = 0; t.notes.forEach(function (n) { if (n[1] - n[0] > md) md = n[1] - n[0]; }); t.maxDur = md; });
       return j;
     }
     // track change: the current layer slides up and out, the new one (once fetched) slides in from the top edge; the very first layer glides in slowly (boot)
@@ -350,6 +350,7 @@
       if (shift) g2.translate(0, shift);
       if (alpha < 1) g2.globalAlpha = alpha;   /* layer fades in with the glide (and out with the exit) */
       data.tracks.forEach(function (t) {
+        t.rgb = hb ? '61,255,122' : t.rgb0;   /* heartbeat egg: every note goes ECG green */
         var notes = t.notes, i = firstAt(notes, now - tail - t.maxDur), end = now + LOOKAHEAD_S, x, w, col = t.lane !== 'pitch';
         if (t.lane === 'drum' || t.lane === 'fx') { x = left + (t.row || 0) * colGap; w = colW; }
         else if (t.lane === 'beat') { x = beatX; w = colW; if (hb) { ecg(t, narrow ? x + w / 2 : W * 0.905, colW * 3); return; } }   /* ECG sits further right on desktop (between the o and r of the name) */   /* heartbeat egg: trace instead of blocks */
