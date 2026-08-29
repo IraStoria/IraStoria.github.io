@@ -12,6 +12,9 @@
   var shellOverride = (/[?&]shell=(phone|desktop)/.exec(location.search) || [])[1];
   // easter eggs forced by the search bar (`-- EE_cat restart`): the flag is consumed on this load, so exactly the next boot fires them
   var EE = {}; try { var eeRaw = sessionStorage.getItem('ee'); if (eeRaw) { sessionStorage.removeItem('ee'); eeRaw.split(',').forEach(function (k) { if (k) EE[k] = true; }); } } catch (e) {}
+  // secret tracks (works.json `secret: true`, e.g. ADE): never listed, never drawn by shuffle (0% chance); only `-- EE_<id> restart` plays one, as the first track of that boot
+  var SECRET_IDS = (D.works || []).filter(function (w) { return w.secret; }).map(function (w) { return w.id; });
+  var EE_TRACK = SECRET_IDS.filter(function (id) { return EE[id]; })[0] || null;
   var PHONE = shellOverride ? shellOverride === 'phone' : (window.matchMedia('(max-width: 699px)').matches || (window.matchMedia('(pointer: coarse)').matches && window.innerWidth < 900));
   try { localStorage.setItem('lang', lang); } catch (e) {}
   var sw = $('[data-lang-switch]');
@@ -240,7 +243,7 @@
   // (frozen while paused). Pitched lanes share the spectrum's log-frequency X so a note lands on the bars it lights up; drum / fx lanes
   // are fixed columns on the left, the beat lane is the rightmost column. A note keeps falling past the line, greyed and fading.
   var LOOKAHEAD_S = 4, TAIL_FRAC = 0.32, LATENCY_S = 0, WF_CHANCE = 0.1, BEND_SMOOTH_S = 0.3;   /* WF_CHANCE: probability that this page load shows the waterfall at all (rolled once, every track follows); EE_midi forces it */
-  var WF_ON = null; function wfOn() { if (WF_ON === null) WF_ON = !!EE.midi || Math.random() < WF_CHANCE; return WF_ON; }
+  var WF_ON = null; function wfOn() { if (WF_ON === null) WF_ON = !!EE.midi || !!EE_TRACK || Math.random() < WF_CHANCE; return WF_ON; }
   function makeWaterfall() {
     var url = '', data = null, pending = null, FLASH_S = 0.3, anim = null, lastPos = 0, ANIM_IN_MS = 1600, ANIM_SWAP_IN_MS = 600, ANIM_OUT_MS = 450, next = null;
     function hex(h) { var v = parseInt(h.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255].join(','); }
@@ -679,7 +682,7 @@
     works: function (body) {
       var types = ['music', 'game', 'tool', 'demo'].filter(function (t) { return D.works.some(function (w) { return w.type === t; }); });
       body.innerHTML = '<div class="filter"><button class="on" data-f="all">' + esc(U.filter_all) + '</button>' + types.map(function (t) { return '<button data-f="' + t + '">' + esc(U['type_' + t]) + '</button>'; }).join('') + '</div>' +
-        '<ul class="list">' + D.works.map(workItem).join('') + '</ul>';
+        '<ul class="list">' + D.works.filter(function (w) { return !w.secret; }).map(workItem).join('') + '</ul>';
       body.addEventListener('click', function (e) {
         var f = e.target.closest('[data-f]'); if (f) { body.querySelectorAll('[data-f]').forEach(function (b) { b.classList.toggle('on', b === f); }); body.querySelectorAll('.list li').forEach(function (li) { li.hidden = !(f.dataset.f === 'all' || li.dataset.type === f.dataset.f); }); }
         var p = e.target.closest('[data-play]'); if (p) { openApp('player'); player.playId(p.dataset.play); }
@@ -728,7 +731,7 @@
       body = b;
       body.innerHTML = '<div class="player"><div class="art"><canvas id="pl-viz"></canvas><div class="np">' + esc(U.player_now) + '<b id="pl-title">—</b><span id="pl-sub"></span></div></div>' +
         '<div class="ctl"><button id="pl-prev">⏮</button><button class="play" id="pl-play">▶</button><button id="pl-next">⏭</button><div class="seek" id="pl-seek"><i></i></div><span class="time" id="pl-time">0:00 / 0:00</span><button class="mute" id="pl-mute" aria-label="mute"></button><input type="range" class="vol" id="pl-vol" min="0" max="1" step="0.01" aria-label="volume"></div>' +
-        '<div id="pl-ext"></div><ul class="list pl" id="pl-list">' + list.map(function (t, i) { return '<li data-i="' + i + '"><span class="meta">' + ('0' + (i + 1)).slice(-2) + '</span><div><div class="t">' + esc(t.title) + '</div><div class="d">' + esc(t.desc || '') + '</div></div></li>'; }).join('') + '</ul>' +
+        '<div id="pl-ext"></div><ul class="list pl" id="pl-list">' + list.map(function (t, i) { return t.secret ? '' : '<li data-i="' + i + '"><span class="meta">' + ('0' + (i + 1)).slice(-2) + '</span><div><div class="t">' + esc(t.title) + '</div><div class="d">' + esc(t.desc || '') + '</div></div></li>'; }).join('') + '</ul>' +
         (tracks.length ? '' : '<p class="note">' + esc(U.player_empty) + '</p>') + '</div>';
       ui = { title: $('#pl-title', body), sub: $('#pl-sub', body), play: $('#pl-play', body), seek: $('#pl-seek', body), bar: $('#pl-seek i', body), time: $('#pl-time', body), ext: $('#pl-ext', body), list: $('#pl-list', body), viz: $('#pl-viz', body), mute: $('#pl-mute', body), vol: $('#pl-vol', body) };
       ui.mute.addEventListener('click', toggleMute);
@@ -861,14 +864,15 @@
         if (sv.playing) { ensureCtx(); play(); }   // may be refused without a gesture → the transport shows ▶
       }
     }
-    function prepare() { if (cur < 0) { var i = pickRandom(); remember(i); load(i, false); } }   // load first track silently so the desktop transport has something to show
+    function prepare() { if (cur < 0) { var i = EE_TRACK ? list.findIndex(function (t) { return t.id === EE_TRACK; }) : -1; if (i < 0) i = pickRandom(); remember(i); load(i, false); } }   /* a forced secret track (EE_<id>) is this boot's first track; afterwards shuffle takes over as usual */   // load first track silently so the desktop transport has something to show
     // shuffle mode: every hand-over (track end, ⏮, ⏭, first play) draws a random track, never one of the last NO_REPEAT picks
     var NO_REPEAT = 2, history = [];
     function pickRandom() {
       var n = list.length; if (n < 2) return 0;
       var avoid = history.slice(-Math.min(NO_REPEAT, n - 1));
-      var pool = []; for (var i = 0; i < n; i++) if (avoid.indexOf(i) < 0) pool.push(i);
-      return pool[Math.floor(Math.random() * pool.length)];
+      var pool = []; for (var i = 0; i < n; i++) if (avoid.indexOf(i) < 0 && !list[i].secret) pool.push(i);   /* secret tracks: 0% — command only */
+      if (!pool.length) for (i = 0; i < n; i++) if (!list[i].secret) pool.push(i);
+      return pool.length ? pool[Math.floor(Math.random() * pool.length)] : 0;
     }
     function remember(i) { history.push(i); if (history.length > 8) history.shift(); }
     function prev() { var i = pickRandom(); remember(i); load(i, true); }
@@ -892,7 +896,7 @@
       q = q.trim().toLowerCase(); var out = [];
       if (!q || q.charAt(0) === '-') return out;
       APP_KEYS.forEach(function (k) { var l = label(k); if (l.toLowerCase().indexOf(q) >= 0 || k.indexOf(q) >= 0) out.push({ t: 'app', k: k, g: glyph(k), l: l, sub: U.spot_app }); });
-      (D.works || []).forEach(function (w) { if ((w.title || '').toLowerCase().indexOf(q) >= 0) out.push({ t: 'work', k: w.id, g: w.type === 'music' ? '🎵' : '🎛️', l: w.title, sub: w.year + ' · ' + w.type }); });
+      (D.works || []).forEach(function (w) { if (!w.secret && (w.title || '').toLowerCase().indexOf(q) >= 0) out.push({ t: 'work', k: w.id, g: w.type === 'music' ? '🎵' : '🎛️', l: w.title, sub: w.year + ' · ' + w.type }); });
       return out.slice(0, 7);
     }
     function pick(r) { if (r.t === 'app') { if (r.k === 'lang') switchLang(); else openApp(r.k); } else if (r.t === 'work') { openApp('works'); } }
@@ -902,7 +906,7 @@
       if (!a) return '';
       var eggs = toks.filter(function (t) { return /^EE_/i.test(t); }).map(function (t) { return t.replace(/^EE_/i, '').toLowerCase(); }), wantRestart = toks.some(function (t) { return t.toLowerCase() === 'restart'; });
       if (eggs.length || wantRestart) {
-        var bad = eggs.filter(function (k) { return k !== 'cat' && k !== 'midi'; });
+        var bad = eggs.filter(function (k) { return k !== 'cat' && k !== 'midi' && SECRET_IDS.indexOf(k) < 0; });   /* EE_<secret track id>, e.g. EE_ADE */
         if (bad.length) return U.term_unknown + 'EE_' + bad.join(', EE_');
         if (!wantRestart) return U.spot_need_restart;
         try { if (eggs.length) sessionStorage.setItem('ee', eggs.join(',')); } catch (e) {}
@@ -910,7 +914,7 @@
         return (eggs.length ? '→ EE_' + eggs.join(' + EE_') + ' · ' : '') + U.spot_restarting;
       }
       if (a === 'help') return U.term_help;
-      if (a === 'works' || a === 'ls') { openApp('works'); return (D.works || []).map(function (w) { return '  ' + w.year + '  [' + w.type + ']  ' + w.title; }).join('\n'); }
+      if (a === 'works' || a === 'ls') { openApp('works'); return (D.works || []).filter(function (w) { return !w.secret; }).map(function (w) { return '  ' + w.year + '  [' + w.type + ']  ' + w.title; }).join('\n'); }
       if (a === 'demos') { openApp('demos'); return ''; }
       if (a === 'about' || a === 'whoami') { openApp('about'); return '> ' + D.author + ' — ' + D.tagline; }
       if (a === 'play') { openApp('player'); player.toggle(); return ''; }

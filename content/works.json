@@ -69,6 +69,31 @@
     ]
   },
   {
+    "id": "ade",
+    "type": "music",
+    "year": 2026,
+    "featured": false,
+    "secret": true,
+    "title": {
+      "zh": "Asymmetric Dissonant II -《非和諧不等式 第2樂章：過飽和》",
+      "en": "Asymmetric Dissonant II - Supersaturated"
+    },
+    "desc": {
+      "zh": "原創曲（2026）。特殊曲目，只能用尋找指令 -- EE_ADE restart 觸發。",
+      "en": "Original track (2026). Secret track: only the search command -- EE_ADE restart plays it."
+    },
+    "media": {
+      "local": "assets/audio/ade.mp3",
+      "notes": "assets/notes/ade.json"
+    },
+    "platform": "all",
+    "links": [],
+    "tags": [
+      "music",
+      "secret"
+    ]
+  },
+  {
     "id": "demo-interactive-player",
     "type": "demo",
     "year": 2026,

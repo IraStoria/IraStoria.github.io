@@ -430,7 +430,7 @@ def build_pages(site, works, demos, articles):
             return dict(m, notes=local_versioned(m["notes"])) if "notes" in m else m
 
         def loc(w):
-            return {"id": w["id"], "type": w["type"], "year": w["year"], "featured": bool(w.get("featured")),
+            return {"id": w["id"], "type": w["type"], "year": w["year"], "featured": bool(w.get("featured")), "secret": bool(w.get("secret")),
                     "title": w["title"][lang], "desc": w["desc"][lang], "media": loc_media(w.get("media") or {}),
                     "platform": w["platform"], "links": [{"label": l["label"][lang], "url": l["url"]} for l in w.get("links", [])]}
         def home_data(lang):
@@ -461,7 +461,7 @@ def build_pages(site, works, demos, articles):
         present_types = [ty for ty in TYPES if any(w["type"] == ty for w in works)]
         wk = render(tpl("works"), {**base_ctx, "root": "../../", "ui_all_works": L("all_works"), "ui_filter_all": L("filter_all"),
             "filter_buttons": "\n".join(f'    <button data-filter="{ty}">{L("type_" + ty)}</button>' for ty in present_types),
-            "work_cards": "\n".join(card(site, w, lang, "../../") for w in works)})
+            "work_cards": "\n".join(card(site, w, lang, "../../") for w in works if not w.get("secret"))})
         out[f"{lang}/works/index.html"] = page(site, lang, "works/", "works", site["nav"]["works"][lang], site["tagline"][lang], wk, 2)
 
         # demos
