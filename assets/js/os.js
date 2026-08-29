@@ -290,13 +290,13 @@
     // draw(g2, W, H, y, st, nowMs): notes are drawn over the bars (under the line); pitched X shares the bars' log-frequency mapping
     function draw(g2, W, H, y, st, nowMs) {
       ensure(st, nowMs);
-      var shift = 0;
-      if (anim) {   // entrance / exit choreography: the whole layer translates vertically
+      var shift = 0, alpha = 1;
+      if (anim) {   // entrance / exit choreography: the whole layer translates vertically and fades (no abrupt pop-in)
         var p = Math.min(1, (nowMs - anim.t0) / anim.ms);
         if (anim.mode === 'out') {
-          shift = -H * (1 - Math.pow(1 - p, 2));
+          shift = -H * (1 - Math.pow(1 - p, 2)); alpha = 1 - p;
           if (p >= 1) { data = next; next = null; anim = data ? { mode: 'in', t0: nowMs, ms: ANIM_SWAP_IN_MS } : null; shift = data ? -H : 0; }
-        } else { shift = -H * (1 - ease(p)); if (p >= 1) { anim = null; shift = 0; } }
+        } else { shift = -H * (1 - ease(p)); alpha = ease(p); if (p >= 1) { anim = null; shift = 0; alpha = 1; } }
       }
       if (!data) return;
       var pos;
@@ -309,6 +309,7 @@
       function xPitch(p) { var f = 440 * Math.pow(2, (p - 69) / 12), bin = f / nyq * 1024; return W * Math.log(Math.max(1, bin)) / Math.log(hiBin); }
       g2.save(); g2.lineWidth = 1; g2.lineJoin = 'round';
       if (shift) g2.translate(0, shift);
+      if (alpha < 1) g2.globalAlpha = alpha;   /* layer fades in with the glide (and out with the exit) */
       data.tracks.forEach(function (t) {
         var notes = t.notes, i = firstAt(notes, now - tail - t.maxDur), end = now + LOOKAHEAD_S, x, w, col = t.lane !== 'pitch';
         if (t.lane === 'drum' || t.lane === 'fx') { x = left + (t.row || 0) * colGap; w = colW; }
