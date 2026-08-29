@@ -258,7 +258,7 @@
       ensure(st); if (!data || !st.started) return;
       var now = st.pos + (data.offset_ms || 0) / 1000 + LATENCY_S, pps = y / LOOKAHEAD_S, tail = H * TAIL_FRAC / pps;
       var hiBin = 1023, nyq = st.sr / 2, semi = W * Math.log(Math.pow(2, 1 / 12)) / Math.log(hiBin);   /* one semitone in px (constant on the log axis) */
-      var colW = Math.max(14, Math.min(22, semi * 1.5)), colGap = colW * 1.9, left = Math.max(120, W * 0.085), beatX = W * 0.8;   /* columns sit inward, not glued to the edges */
+      var narrow = W < 700, colW = narrow ? Math.max(7, Math.min(10, semi * 2)) : Math.max(14, Math.min(22, semi * 1.5)), colGap = colW * 1.9, left = narrow ? W * 0.04 : Math.max(120, W * 0.085), beatX = narrow ? W * 0.9 : W * 0.8;   /* columns sit inward, not glued to the edges; the phone packs them tighter */
       function xPitch(p) { var f = 440 * Math.pow(2, (p - 69) / 12), bin = f / nyq * 1024; return W * Math.log(Math.max(1, bin)) / Math.log(hiBin); }
       g2.save(); g2.lineWidth = 1; g2.lineJoin = 'round';
       data.tracks.forEach(function (t) {
@@ -268,7 +268,7 @@
         for (; i < notes.length && notes[i][0] < end; i++) {
           var nt = notes[i], t0 = nt[0], t1 = nt[1]; if (t.lane === 'drum' || t.lane === 'beat') t1 = Math.min(t1, t0 + 0.18);   /* hits read as short blocks whatever the MIDI length */
           if (t1 < now - tail) continue;
-          if (!col) { w = semi * 1.25; x = xPitch(nt[2]) - w / 2; }   /* user's call: bigger notes over strict non-overlap (rims keep neighbours readable) */
+          if (!col) { w = Math.max(5, semi * 1.25); x = xPitch(nt[2]) - w / 2; }   /* user's call: bigger notes over strict non-overlap (rims keep neighbours readable); ≥5px on narrow screens */
           // hand-annotated bend (nt[4] = target pitch, nt[5] = optional start fraction): the note falls straight at its start pitch,
           // then while it is held the whole block and its flash drift sideways to the target; the grey tail stays where it ended up
           if (!col && nt.length > 4) {
@@ -384,7 +384,7 @@
     function sweep(bars, fromFrac) { clearT0 = performance.now(); clearBars = !!bars; clearFrom = (fromFrac == null) ? 1 : Math.max(0, Math.min(1, fromFrac)); }
     return { start: start, connect: connect, sweep: sweep };
   }
-  var wave = makeWave($('#wave'), 0.58, true), phoneWave = makeWave($('#ph-wave'), 0.47, false);   /* waterfall: desktop only for now */  // phone: slightly above centre
+  var wave = makeWave($('#wave'), 0.58, true), phoneWave = makeWave($('#ph-wave'), 0.47, true);   /* waterfall on both shells */  // phone: slightly above centre
 
   // caption: fades in over CONNECT_MS (same as the line), follows the current track
   var caption = (function () {
