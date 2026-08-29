@@ -465,13 +465,14 @@
     var wf = withNotes ? makeWaterfall() : null;
     var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000, hbMix = 0, HB_MORPH_MS = 700, liveT0 = 0, GRID_FADE_MS = 3000, AMB = '224,176,74', GRN = '61,255,122', SLATE = '96,104,122', DIMG = '30,120,62';   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
     function grad(y0, y1, rgb, a0, a1) { var g = g2.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + rgb + ',' + a0 + ')'); g.addColorStop(1, 'rgba(' + rgb + ',' + a1 + ')'); return g; }
-    function size() { if (cv.width !== cv.clientWidth || cv.height !== cv.clientHeight) { cv.width = cv.clientWidth; cv.height = cv.clientHeight; } }
+    var DPR = 1;   /* backing store at device resolution (capped at 2x): at 1x an iPhone upscales the layer 3x and the label text, note rims and the line go soft */
+    function size() { DPR = Math.min(2, Math.max(1, window.devicePixelRatio || 1)); var pw = Math.round(cv.clientWidth * DPR), ph = Math.round(cv.clientHeight * DPR); if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; } }
     function ease(x) { return 1 - Math.pow(1 - x, 3); }
     function lerpCol(a, b, t) { if (t <= 0) return a; if (t >= 1) return b; a = a.split(','); b = b.split(','); return a.map(function (v, i) { return Math.round(+v + (+b[i] - +v) * t); }).join(','); }
     function draw() {
       raf = requestAnimationFrame(draw); size();
       var now = performance.now(), dk = decayFactor(lastT ? now - lastT : 16), prevT = lastT; lastT = now;
-      var W = cv.width, H = cv.height, y = H * yRatio; g2.clearRect(0, 0, W, H);
+      var W = cv.clientWidth, H = cv.clientHeight, y = H * yRatio; g2.setTransform(DPR, 0, 0, DPR, 0, 0); g2.clearRect(0, 0, W, H);   /* all drawing stays in CSS px; the transform maps it onto the hi-res store */
       // heartbeat egg look: everything amber turns ECG green and the bars morph into a trace; snaps during the connect stage (boot), eases on a track change
       var hbT = wf && wf.hb() ? 1 : 0, dtm = prevT ? now - prevT : 16;
       if (mode === 'connect') hbMix = hbT; else hbMix = hbT > hbMix ? Math.min(hbT, hbMix + dtm / HB_MORPH_MS) : Math.max(hbT, hbMix - dtm / HB_MORPH_MS);
@@ -985,16 +986,16 @@
       if (!body || !document.contains(body)) return;
       raf = requestAnimationFrame(draw);
       var nowT = performance.now(), dk = decayFactor(vizLastT ? nowT - vizLastT : 16); vizLastT = nowT;
-      var c = ui.viz, g2 = c.getContext('2d'); if (c.width !== c.clientWidth) { c.width = c.clientWidth; c.height = c.clientHeight; }
-      g2.clearRect(0, 0, c.width, c.height);
+      var c = ui.viz, g2 = c.getContext('2d'), vd = Math.min(2, Math.max(1, window.devicePixelRatio || 1)), vw = c.clientWidth, vh = c.clientHeight; if (c.width !== Math.round(vw * vd) || c.height !== Math.round(vh * vd)) { c.width = Math.round(vw * vd); c.height = Math.round(vh * vd); }
+      g2.setTransform(vd, 0, 0, vd, 0, 0); g2.clearRect(0, 0, vw, vh);
       if (analyser) {
-        var n = 64, bw = c.width / n, hbTg = document.body.classList.contains('hb') ? 1 : 0;   /* heartbeat egg: bars lerp yellow -> ECG green over the same .7 s as the CSS cross-fade */
+        var n = 64, bw = vw / n, hbTg = document.body.classList.contains('hb') ? 1 : 0;   /* heartbeat egg: bars lerp yellow -> ECG green over the same .7 s as the CSS cross-fade */
         vizHb = hbTg > vizHb ? Math.min(1, vizHb + (nowT - (vizHbT || nowT)) / 700) : Math.max(0, vizHb - (nowT - (vizHbT || nowT)) / 700); vizHbT = nowT;
         g2.fillStyle = 'rgba(' + Math.round(224 + (61 - 224) * vizHb) + ',' + Math.round(176 + (255 - 176) * vizHb) + ',' + Math.round(74 + (122 - 74) * vizHb) + ',.55)';
         var lv = barLevels(analyser, n);
         if (vizLevels.length !== n) vizLevels = new Array(n).fill(0);
         for (var i = 0; i < n; i++) { var tg = lv[i]; vizLevels[i] = tg > vizLevels[i] ? tg : Math.max(tg, vizLevels[i] * dk);
-          var h = vizLevels[i] * c.height; g2.fillRect(i * bw, c.height - h, bw - 1, h); }
+          var h = vizLevels[i] * vh; g2.fillRect(i * bw, vh - h, bw - 1, h); }
       }
     }
     function tickTime() {
