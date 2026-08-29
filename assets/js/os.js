@@ -393,14 +393,15 @@
     function lights(g2, W, H, y) {
       var L = data && data.lights; if (!L || !L.track || !st_started) return;
       var tr = null; data.tracks.forEach(function (t) { if (t.name === L.track) tr = t; }); if (!tr) return;
-      var pos = lastPos, idx = firstAt(tr.notes, pos + 1e-6) - 1, p = 0;
+      var pos = lastPos; if (L.from != null && pos < L.from) return; if (L.to != null && pos >= L.to) return;   /* only within the section (e.g. from the drop on) */
+      var idx = firstAt(tr.notes, pos + 1e-6) - 1, p = 0;
       if (idx >= 0) p = Math.exp(-(pos - tr.notes[idx][0]) / (L.decay || 0.28));
       var a = (L.idle == null ? 0.10 : L.idle) + (L.gain == null ? 0.55 : L.gain) * p, col = L.color || '224,176,74', r = W * (L.radius || 0.34);
+      function lamp(alpha) { var g = g2.createRadialGradient(0, 0, 0, 0, 0, r); g.addColorStop(0, 'rgba(' + col + ',' + alpha.toFixed(3) + ')'); g.addColorStop(0.45, 'rgba(' + col + ',' + (alpha * 0.35).toFixed(3) + ')'); g.addColorStop(1, 'rgba(' + col + ',0)'); g2.fillStyle = g; g2.fillRect(-r, -r, 2 * r, 2 * r); }
       g2.save(); g2.globalCompositeOperation = 'lighter';
-      [[0, y], [W, y]].forEach(function (c) {
-        var g = g2.createRadialGradient(c[0], c[1], 0, c[0], c[1], r);
-        g.addColorStop(0, 'rgba(' + col + ',' + a.toFixed(3) + ')'); g.addColorStop(0.45, 'rgba(' + col + ',' + (a * 0.35).toFixed(3) + ')'); g.addColorStop(1, 'rgba(' + col + ',0)');
-        g2.fillStyle = g; g2.fillRect(c[0] - r, c[1] - r, 2 * r, 2 * r);
+      [0, W].forEach(function (cx) {
+        g2.save(); g2.beginPath(); g2.rect(0, 0, W, y); g2.clip(); g2.translate(cx, y); lamp(a); g2.restore();                                  /* the source: above the line only */
+        g2.save(); g2.beginPath(); g2.rect(0, y, W, H - y); g2.clip(); g2.translate(cx, y); g2.scale(1, L.reflect_squash || 0.45); lamp(a * (L.reflect == null ? 0.3 : L.reflect)); g2.restore();   /* below: a squashed, fainter reflection, not a lamp */
       });
       g2.restore();
     }
@@ -455,6 +456,13 @@
           if (aw > 0) { g2.fillStyle = gAmb; g2.fillRect(x, y - h, aw, h); g2.fillStyle = gAmbR; g2.fillRect(x, y, aw, h * 0.45); }
         }
         if (wf) wf.draw(g2, W, H, y, st, now);   /* waterfall: over the bars, under the line */
+        if (wf) { var ov = wf.overlay(g2, W, H), dark = ov.dark;   /* lighting cues: dim / flash over wallpaper, bars and notes — drawn before the baseline, so the line stays bright */
+          if (dark > 0) {   // in the dark the bars keep a faint amber glow (drawn over the veil so they show through it); it throbs on the scene's pulse track
+            g2.save(); g2.globalAlpha = Math.min(1, dark * (0.35 + 0.65 * ov.pulse)); g2.shadowColor = 'rgba(224,176,74,.9)'; g2.shadowBlur = 14 + 16 * ov.pulse; g2.fillStyle = 'rgba(224,176,74,.55)';
+            for (var gi = 0; gi < n; gi++) { var gh = levels[gi] * maxH; if (gh > 0.5) g2.fillRect(gi * bw + 1, y - gh, bw - 2, gh); }
+            g2.restore();
+          }
+        }
         // baseline glow eases between 'sound' (1) and 'silence' (.55) instead of snapping — no more glow dropping out when a track starts quietly
         glow += ((any ? 1 : 0.55) - glow) * 0.05;
         g2.strokeStyle = 'rgba(224,176,74,' + (0.28 + 0.62 * glow).toFixed(3) + ')'; g2.shadowColor = 'rgba(224,176,74,.6)'; g2.shadowBlur = 18 * glow; g2.beginPath(); g2.moveTo(0, y); g2.lineTo(lpx, y); g2.stroke();
@@ -462,13 +470,6 @@
         // play head: same amber as the line (no highlight), just a stronger halo at the amber/grey boundary
         g2.strokeStyle = 'rgba(224,176,74,.9)'; g2.shadowColor = 'rgba(224,176,74,.9)'; g2.shadowBlur = 24;
         g2.beginPath(); g2.moveTo(Math.max(0, lpx - 14), y); g2.lineTo(lpx, y); g2.stroke(); g2.shadowBlur = 0;
-        if (wf) { var ov = wf.overlay(g2, W, H), dark = ov.dark;   /* lighting cues: dim / flash over everything on the canvas */
-          if (dark > 0) {   // in the dark the bars keep a faint amber glow (drawn over the veil so they show through it); it throbs on the scene's pulse track
-            g2.save(); g2.globalAlpha = Math.min(1, dark * (0.35 + 0.65 * ov.pulse)); g2.shadowColor = 'rgba(224,176,74,.9)'; g2.shadowBlur = 14 + 16 * ov.pulse; g2.fillStyle = 'rgba(224,176,74,.55)';
-            for (var gi = 0; gi < n; gi++) { var gh = levels[gi] * maxH; if (gh > 0.5) g2.fillRect(gi * bw + 1, y - gh, bw - 2, gh); }
-            g2.restore();
-          }
-        }
       } else {
         g2.strokeStyle = 'rgba(224,176,74,.28)'; g2.shadowBlur = 0;
         g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
