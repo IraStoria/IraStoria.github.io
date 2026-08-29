@@ -342,7 +342,7 @@
       data.tracks.forEach(function (t) {
         var notes = t.notes, i = firstAt(notes, now - tail - t.maxDur), end = now + LOOKAHEAD_S, x, w, col = t.lane !== 'pitch';
         if (t.lane === 'drum' || t.lane === 'fx') { x = left + (t.row || 0) * colGap; w = colW; }
-        else if (t.lane === 'beat') { x = beatX; w = colW; if (hbOn()) { ecg(t, x + w / 2, colW * 3); return; } }   /* heartbeat egg: trace instead of blocks */
+        else if (t.lane === 'beat') { x = beatX; w = colW; if (hbOn()) { ecg(t, narrow ? x + w / 2 : W * 0.89, colW * 3); return; } }   /* ECG sits further right on desktop (between the o and r of the name) */   /* heartbeat egg: trace instead of blocks */
         for (; i < notes.length && notes[i][0] < end; i++) {
           var nt = notes[i], t0 = nt[0], t1 = nt[1]; if (t.lane === 'drum' || t.lane === 'beat') t1 = Math.min(t1, t0 + 0.18);   /* hits read as short blocks whatever the MIDI length */
           if (t1 < now - tail) continue;
