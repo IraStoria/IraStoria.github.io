@@ -898,7 +898,7 @@
     function pick(r) { if (r.t === 'app') { if (r.k === 'lang') switchLang(); else openApp(r.k); } else if (r.t === 'work') { openApp('works'); } }
     // returns a message string (or '' for silent), and may navigate away
     function run(c) {
-      var toks = c.trim().split(/\s+/).filter(function (t) { return t && t !== '--'; }), a = (toks[0] || '').toLowerCase();
+      var toks = c.trim().split(/\s+/).map(function (t) { return t.replace(/^-+/, ''); }).filter(function (t) { return t; }), a = (toks[0] || '').toLowerCase();   /* `--EE_midi --EE_cat restart` and `-- EE_midi restart` both parse: leading dashes are decoration */
       if (!a) return '';
       var eggs = toks.filter(function (t) { return /^EE_/i.test(t); }).map(function (t) { return t.replace(/^EE_/i, '').toLowerCase(); }), wantRestart = toks.some(function (t) { return t.toLowerCase() === 'restart'; });
       if (eggs.length || wantRestart) {
