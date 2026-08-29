@@ -306,7 +306,8 @@
       var now = pos + (data.offset_ms || 0) / 1000 + LATENCY_S, pps = y / LOOKAHEAD_S, tail = H * TAIL_FRAC / pps;
       var hiBin = 1023, nyq = st.sr / 2, semi = W * Math.log(Math.pow(2, 1 / 12)) / Math.log(hiBin);   /* one semitone in px (constant on the log axis) */
       var narrow = W < 700, colW = narrow ? Math.max(7, Math.min(10, semi * 2)) : Math.max(14, Math.min(22, semi * 1.5)), colGap = colW * 1.9, left = narrow ? W * 0.04 : Math.max(120, W * 0.085), beatX = narrow ? W * 0.9 : W * 0.8;   /* columns sit inward, not glued to the edges; the phone packs them tighter */
-      function xPitch(p) { var f = 440 * Math.pow(2, (p - 69) / 12), bin = f / nyq * 1024; return W * Math.log(Math.max(1, bin)) / Math.log(hiBin); }
+      var pShift = data.shift_semitones || 0;   /* map.json shift_semitones: slides the whole pitched layout along the log axis (+ = right) */
+      function xPitch(p) { var f = 440 * Math.pow(2, (p + pShift - 69) / 12), bin = f / nyq * 1024; return W * Math.log(Math.max(1, bin)) / Math.log(hiBin); }
       g2.save(); g2.lineWidth = 1; g2.lineJoin = 'round';
       if (shift) g2.translate(0, shift);
       if (alpha < 1) g2.globalAlpha = alpha;   /* layer fades in with the glide (and out with the exit) */
