@@ -12,7 +12,7 @@
   var I18N = {
     zh: {
       title: '互動式段落播放器',
-      lead: '按「開始」後從 A 播放。播放中點任一段落，會在目前段落結束的瞬間無縫接上；若什麼都不點，「隨機」會替你挑下一段。同字母 1→2 是正常順序；E1→E2 是前後段的中繼；點 I 收尾。',
+      lead: '按「開始」後從 A 播放。播放中點任一段落，會在目前段落結束的瞬間無縫接上；若什麼都不點，「順序」會照段落自然順序接下去（也可改成「隨機」）。同字母 1→2 是正常順序；E1→E2 是前後段的中繼；點 I 收尾。',
       start: '▶ 開始', stop: '■ 停止', now: '播放中：', random: '隨機', random_auto: '自動接手中', seq: '順序', seq_auto: '依序接手中', loading: '載入音檔…',
       zone_pre: '前段', zone_gate: '中繼', zone_post: '後段',
       st_playing: '播放中', st_queued: '已排隊', st_next_next: '排到下下段', st_blocked: '不可接', st_loop: '循環中',
@@ -28,7 +28,7 @@
     },
     en: {
       title: 'Interactive Section Player',
-      lead: 'Press Start and A plays. Pick any section while playing and it joins the instant the current one ends; pick nothing and Random chooses for you. Within a letter, 1→2 is the natural order; E1→E2 bridges the two halves; pick I to finish.',
+      lead: 'Press Start and A plays. Pick any section while playing and it joins the instant the current one ends; pick nothing and In order carries on through the natural sequence (or switch to Random). Within a letter, 1→2 is the natural order; E1→E2 bridges the two halves; pick I to finish.',
       start: '▶ Start', stop: '■ Stop', now: 'Now playing:', random: 'Random', random_auto: 'auto-picking', seq: 'In order', seq_auto: 'auto, in order', loading: 'Loading audio…',
       zone_pre: 'first half', zone_gate: 'bridge', zone_post: 'second half',
       st_playing: 'playing', st_queued: 'queued', st_next_next: 'queued after next', st_blocked: 'not allowed', st_loop: 'looping',
@@ -62,7 +62,7 @@
   var queued = null;     /* user's choice for the next decision (segment id) */
   var later = null;      /* user's choice after a lock (applies to the decision after next) */
   var randomAuto = false, lastId = null, history = [], ending = false;
-  var autoMode = 'random';   /* 'random' | 'seq' — what takes over at the decision point when nothing is queued */
+  var autoMode = 'seq';   /* 'random' | 'seq' — what takes over at the decision point when nothing is queued */
   var trackListeners = [];   /* fired on every section change with the outgoing progress fraction (the OS shell sweeps its progress bar from there) */
   function fireTrack(fromFrac) { trackListeners.forEach(function (fn) { try { fn(fromFrac); } catch (e) {} }); }
   /* "now playing" title shared with the OS shell: V1.B2 Full on V6 - by Shiou Hsu (V = theme version, XX = section) */

@@ -6,8 +6,8 @@
     "en": "Interactive Section Player"
   },
   "desc": {
-    "zh": "IraStoria 原創曲的段落切片：前奏後，播放中點選段落會在目前段落結束時無縫接續；沒選的話隨機接手；點尾奏收尾。",
-    "en": "Section slices of original IraStoria tracks: after the intro, pick a section while playing and it joins seamlessly when the current one ends; otherwise Random takes over; pick Outro to finish."
+    "zh": "IraStoria 原創曲的段落切片：前奏後，播放中點選段落會在目前段落結束時無縫接續；沒選的話依序接手（可切隨機）；點尾奏收尾。",
+    "en": "Section slices of original IraStoria tracks: after the intro, pick a section while playing and it joins seamlessly when the current one ends; otherwise it carries on in order (or Random, if chosen); pick Outro to finish."
   },
   "platform": "all",
   "concept_level_checked": true,
