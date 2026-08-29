@@ -460,7 +460,8 @@
       // heartbeat egg look: everything amber turns ECG green and the bars morph into a trace; snaps during the connect stage (boot), eases on a track change
       var hbT = wf && wf.hb() ? 1 : 0, dtm = prevT ? now - prevT : 16;
       if (mode === 'connect') hbMix = hbT; else hbMix = hbT > hbMix ? Math.min(hbT, hbMix + dtm / HB_MORPH_MS) : Math.max(hbT, hbMix - dtm / HB_MORPH_MS);
-      var m = ease(hbMix), LC = lerpCol(AMB, GRN, m), UC = lerpCol(SLATE, DIMG, m);
+      // the ECG look lives left of `edge`, the normal look right of it: entering sweeps the edge left→right, leaving sweeps it right→left; boot snaps it to W
+      var m = ease(hbMix), edge = W * m, LC = m >= 1 ? GRN : AMB, UC = SLATE;
       g2.lineWidth = 2; g2.strokeStyle = 'rgba(' + LC + ',.85)'; g2.shadowColor = 'rgba(' + LC + ',.6)'; g2.shadowBlur = 12;
       if (mode === 'connect') {
         var p = Math.min(1, (performance.now() - connectT0) / CONNECT_MS), e = ease(p), half = W / 2 * e;
@@ -482,15 +483,29 @@
         // unplayed bars are a solid cool slate (not translucent white — that reads as fog on the dark wallpaper); gradients only dim the foot near the line
         var gAmb = grad(y, y - maxH, LC, 0.35, 0.95), gGrey = grad(y, y - maxH, UC, 0.45, 0.95),
             gAmbR = grad(y, y + maxH * 0.45, LC, 0.16, 0), gGreyR = grad(y, y + maxH * 0.45, UC, 0.18, 0);
-        var barK = 1 - m;   /* hb morph: bars collapse into the baseline while the trace grows out of it */
+        function hbAt(x) { return x < edge ? 1 : 0; }   /* 1 = ECG side of the wipe */
         // clearing sweep (right→left): after the line joins it touches the baseline only; on a track change it takes the bars with it
+        if (m > 0) {   // ECG paper: dim green grid, a major line exactly on the baseline; band around the line, edges feathered
+          var cell = Math.max(12, Math.round(W / 96)), top = y - maxH * 2.2, bot = y + maxH * 1.1;
+          g2.save(); g2.beginPath(); g2.rect(0, top, edge, bot - top); g2.clip();
+          var mask = g2.createLinearGradient(0, top, 0, bot); mask.addColorStop(0, 'rgba(0,0,0,0)'); mask.addColorStop(0.25, 'rgba(0,0,0,1)'); mask.addColorStop(0.8, 'rgba(0,0,0,1)'); mask.addColorStop(1, 'rgba(0,0,0,0)');
+          g2.lineWidth = 1;
+          for (var pass = 0; pass < 2; pass++) {
+            var major = pass === 1; g2.strokeStyle = 'rgba(' + GRN + ',' + (major ? 0.22 : 0.09) + ')'; g2.beginPath();
+            for (var gx = (W / 2) % cell; gx <= W; gx += cell) { var ix = Math.round((gx - W / 2) / cell); if ((ix % 5 === 0) !== major) continue; g2.moveTo(Math.round(gx) + 0.5, top); g2.lineTo(Math.round(gx) + 0.5, bot); }
+            for (var gy = y - Math.ceil((y - top) / cell) * cell; gy <= bot; gy += cell) { var iy = Math.round((gy - y) / cell); if ((iy % 5 === 0) !== major) continue; g2.moveTo(0, Math.round(gy) + 0.5); g2.lineTo(W, Math.round(gy) + 0.5); }
+            g2.stroke();
+          }
+          g2.globalCompositeOperation = 'destination-in'; g2.fillStyle = mask; g2.fillRect(0, top, W, bot - top);   /* feather the band's top and bottom */
+          g2.restore();
+        }
         var lit = wf ? wf.lights(g2, W, H, y) : false;   /* stage lights behind the bars; when lit, each bar punches the light out under itself so it reads as solid */
         var lpx = px;
         if (clearT0) { var cp = (now - clearT0) / CLEAR_MS; if (cp >= 1) clearT0 = 0; else { var sx = W * clearFrom * (1 - ease(cp)); lpx = Math.max(px, sx); if (clearBars) px = Math.max(px, sx); } }
         for (var i = 0; i < n; i++) {
           var target = lv[i];   // follows the real signal, so the fade-out and the bars fall together
           levels[i] = target > levels[i] ? target : Math.max(target, levels[i] * dk);
-          var h = levels[i] * maxH * barK, x = i * bw + 1, w = bw - 2; if (levels[i] * maxH > 0.5) any = true;
+          var h = levels[i] * maxH * (1 - hbAt(i * bw + bw / 2)), x = i * bw + 1, w = bw - 2; if (levels[i] * maxH > 0.5) any = true;
           // the play head wipes each bar from its left edge: grey underneath, amber over the part left of px
           // vertical gradients: bars are dim where they meet the baseline and brighten upward (reflection fades downward),
           // so the line reads as its own element without a gap; no per-bar shadow (it smears)
@@ -505,32 +520,37 @@
           function trace(from, to, col, al, blur) {
             g2.strokeStyle = 'rgba(' + col + ',' + al + ')'; g2.shadowColor = 'rgba(' + col + ',.8)'; g2.shadowBlur = blur; g2.beginPath();
             var started = false;
-            for (var k = 0; k < n; k++) { var cx = k * bw + bw / 2; if (cx < from - bw || cx > to + bw) continue; var yy = y - levels[k] * maxH * m; if (!started) { g2.moveTo(Math.max(from, cx), yy); started = true; } else g2.lineTo(cx, yy); }
+            for (var k = 0; k < n; k++) { var cx = k * bw + bw / 2; if (cx < from - bw || cx > to + bw) continue; var yy = y - levels[k] * maxH; if (!started) { g2.moveTo(Math.max(from, cx), yy); started = true; } else g2.lineTo(cx, yy); }
             if (started) g2.stroke();
           }
-          g2.save(); g2.beginPath(); g2.rect(0, 0, Math.max(0, px), H); g2.clip(); trace(0, px, GRN, 0.95, 12 * m); g2.restore();
-          g2.save(); g2.beginPath(); g2.rect(px, 0, W - px, H); g2.clip(); trace(px, W, DIMG, 0.7, 0); g2.restore();
+          g2.save(); g2.beginPath(); g2.rect(0, 0, Math.max(0, Math.min(px, edge)), H); g2.clip(); trace(0, px, GRN, 0.95, 12); g2.restore();
+          if (edge > px) { g2.save(); g2.beginPath(); g2.rect(px, 0, edge - px, H); g2.clip(); trace(px, W, DIMG, 0.7, 0); g2.restore(); }
           g2.restore();
         }
         if (wf) wf.draw(g2, W, H, y, st, now);   /* waterfall: over the bars, under the line */
         if (wf) { var ov = wf.overlay(g2, W, H), dark = ov.dark;   /* lighting cues: dim / flash over wallpaper, bars and notes — drawn before the baseline, so the line stays bright */
           if (dark > 0) {   // in the dark the bars keep a faint amber glow (drawn over the veil so they show through it); it throbs on the scene's pulse track
             g2.save(); g2.globalAlpha = Math.min(1, dark * (0.35 + 0.65 * ov.pulse)); g2.shadowColor = 'rgba(' + LC + ',.9)'; g2.shadowBlur = 14 + 16 * ov.pulse; g2.fillStyle = 'rgba(' + LC + ',.55)';
-            for (var gi = 0; gi < n; gi++) { var gh = levels[gi] * maxH * barK; if (gh > 0.5) g2.fillRect(gi * bw + 1, y - gh, bw - 2, gh); }
+            for (var gi = 0; gi < n; gi++) { var gh = levels[gi] * maxH * (1 - hbAt(gi * bw + bw / 2)); if (gh > 0.5) g2.fillRect(gi * bw + 1, y - gh, bw - 2, gh); }
             g2.restore();
           }
         }
         // baseline glow eases between 'sound' (1) and 'silence' (.55) instead of snapping — no more glow dropping out when a track starts quietly
         glow += ((any ? 1 : 0.55) - glow) * 0.05;
         // hb mode: the trace IS the line — the flat baseline fades out with the morph so there is only one line
-        g2.strokeStyle = 'rgba(' + LC + ',' + ((0.28 + 0.62 * glow) * (1 - m)).toFixed(3) + ')'; g2.shadowColor = 'rgba(' + LC + ',.6)'; g2.shadowBlur = 18 * glow * (1 - m); g2.beginPath(); g2.moveTo(0, y); g2.lineTo(lpx, y); g2.stroke();
-        if (lpx < W) { g2.strokeStyle = 'rgba(255,255,255,' + (0.22 * (1 - m)).toFixed(3) + ')'; g2.shadowBlur = 0; g2.beginPath(); g2.moveTo(lpx, y); g2.lineTo(W, y); g2.stroke(); }
+        if (lpx > edge) { g2.strokeStyle = 'rgba(' + AMB + ',' + (0.28 + 0.62 * glow).toFixed(3) + ')'; g2.shadowColor = 'rgba(' + AMB + ',.6)'; g2.shadowBlur = 18 * glow; g2.beginPath(); g2.moveTo(edge, y); g2.lineTo(lpx, y); g2.stroke(); }
+        var ux = Math.max(lpx, edge); if (ux < W) { g2.strokeStyle = 'rgba(255,255,255,.22)'; g2.shadowBlur = 0; g2.beginPath(); g2.moveTo(ux, y); g2.lineTo(W, y); g2.stroke(); }
         // play head: same amber as the line (no highlight), just a stronger halo at the amber/grey boundary
-        g2.strokeStyle = 'rgba(' + LC + ',.9)'; g2.shadowColor = 'rgba(' + LC + ',.9)'; g2.shadowBlur = 24;
-        var hy = y; if (m > 0) { var ki = Math.min(n - 1, Math.max(0, Math.floor(lpx / bw))); hy = y - levels[ki] * maxH * m; }   /* hb: the play-head halo rides on the trace */
-        g2.beginPath(); g2.moveTo(Math.max(0, lpx - 14), hy); g2.lineTo(lpx, hy); g2.stroke(); g2.shadowBlur = 0;
+        if (lpx >= edge) { g2.strokeStyle = 'rgba(' + AMB + ',.9)'; g2.shadowColor = 'rgba(' + AMB + ',.9)'; g2.shadowBlur = 24; g2.beginPath(); g2.moveTo(Math.max(edge, lpx - 14), y); g2.lineTo(lpx, y); g2.stroke(); }
+        else {   // ECG side: the same short halo, but green and following the trace's slope so it never pokes out of the line
+          function traceY(xx) { var fi = Math.max(0, Math.min(n - 1, (xx - bw / 2) / bw)), i0 = Math.floor(fi), i1 = Math.min(n - 1, i0 + 1), ft = fi - i0; return y - (levels[i0] * (1 - ft) + levels[i1] * ft) * maxH; }
+          var x0 = Math.max(edge, lpx - 14);
+          g2.strokeStyle = 'rgba(' + GRN + ',.9)'; g2.shadowColor = 'rgba(' + GRN + ',.9)'; g2.shadowBlur = 24; g2.lineCap = 'round'; g2.beginPath(); g2.moveTo(x0, traceY(x0));
+          for (var hx = x0 + 3; hx < lpx; hx += 3) g2.lineTo(hx, traceY(hx)); g2.lineTo(lpx, traceY(lpx)); g2.stroke(); g2.lineCap = 'butt';
+        }
+        g2.shadowBlur = 0;
       } else {
-        g2.strokeStyle = 'rgba(' + LC + ',.28)'; g2.shadowBlur = 0;
+        g2.strokeStyle = 'rgba(' + AMB + ',.28)'; g2.shadowBlur = 0;
         g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
       }
     }
