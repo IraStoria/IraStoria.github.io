@@ -257,6 +257,7 @@
   function makeWaterfall() {
     var url = '', data = null, pending = null, FLASH_S = 0.3, anim = null, lastPos = 0, ANIM_IN_MS = 1600, ANIM_SWAP_IN_MS = 600, ANIM_OUT_MS = 450, BOOT_FADE_MS = 3000, next = null, pre = null, hb = false;
     // pre-roll (boot): the clock runs from -lead s while the connect lines grow, so the first notes fall the full height before the music starts
+    var slew = null, SLEW_MS = 500;
     function preroll(t0, lead) { pre = { t0: t0, lead: lead }; ensure(ext.state(), t0); }
     function hex(h) { var v = parseInt(h.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255].join(','); }
     function prep(j) {
@@ -308,8 +309,9 @@
       }
       if (!data) return;
       var pos;
-      if (pre) { if (st.started && st.pos > 0.05) pre = null; else pos = -pre.lead + (nowMs - pre.t0) / 1000; }   /* pre-roll until the audio clock really moves */
+      if (pre) { var prePos = -pre.lead + (nowMs - pre.t0) / 1000; if (st.started && st.pos > 0.05) { slew = { d: prePos - st.pos, t0: nowMs }; pre = null; if (window.__player) window.__wfSlew = slew.d; } else pos = prePos; }   /* pre-roll until the audio clock really moves */
       if (pos === undefined) { if (!st.started) return; pos = (anim && anim.mode === 'out') ? anim.pos : st.pos; }
+      if (slew) { var sk = (nowMs - slew.t0) / SLEW_MS; if (sk >= 1) slew = null; else pos += slew.d * (1 - ease(sk)); }   /* hand-off: the wall clock ran ahead (or behind) of the audio start by slew.d — bleed it out instead of jumping */
       lastPos = pos;
       var now = pos + (data.offset_ms || 0) / 1000 + LATENCY_S, pps = y / LOOKAHEAD_S, tail = H * TAIL_FRAC / pps;
       var hiBin = 1023, nyq = st.sr / 2, semi = W * Math.log(Math.pow(2, 1 / 12)) / Math.log(hiBin);   /* one semitone in px (constant on the log axis) */
