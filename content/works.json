@@ -94,6 +94,31 @@
     ]
   },
   {
+    "id": "dp",
+    "type": "music",
+    "year": 2026,
+    "featured": false,
+    "secret": true,
+    "title": {
+      "zh": "Death Piano - by Xi",
+      "en": "Death Piano - by Xi"
+    },
+    "desc": {
+      "zh": "特殊曲目，只能用尋找指令 -- EE_dp restart 觸發。",
+      "en": "Secret track: only the search command -- EE_dp restart plays it."
+    },
+    "media": {
+      "local": "assets/audio/dp.mp3",
+      "notes": "assets/notes/dp.json"
+    },
+    "platform": "all",
+    "links": [],
+    "tags": [
+      "music",
+      "secret"
+    ]
+  },
+  {
     "id": "demo-interactive-player",
     "type": "demo",
     "year": 2026,
