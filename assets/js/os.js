@@ -542,12 +542,7 @@
         var ux = Math.max(lpx, edge); if (ux < W) { g2.strokeStyle = 'rgba(255,255,255,.22)'; g2.shadowBlur = 0; g2.beginPath(); g2.moveTo(ux, y); g2.lineTo(W, y); g2.stroke(); }
         // play head: same amber as the line (no highlight), just a stronger halo at the amber/grey boundary
         if (lpx >= edge) { g2.strokeStyle = 'rgba(' + AMB + ',.9)'; g2.shadowColor = 'rgba(' + AMB + ',.9)'; g2.shadowBlur = 24; g2.beginPath(); g2.moveTo(Math.max(edge, lpx - 14), y); g2.lineTo(lpx, y); g2.stroke(); }
-        else {   // ECG side: the same short halo, but green and following the trace's slope so it never pokes out of the line
-          function traceY(xx) { var fi = Math.max(0, Math.min(n - 1, (xx - bw / 2) / bw)), i0 = Math.floor(fi), i1 = Math.min(n - 1, i0 + 1), ft = fi - i0; return y - (levels[i0] * (1 - ft) + levels[i1] * ft) * maxH; }
-          var x0 = Math.max(edge, lpx - 14);
-          g2.strokeStyle = 'rgba(' + GRN + ',.9)'; g2.shadowColor = 'rgba(' + GRN + ',.9)'; g2.shadowBlur = 24; g2.lineCap = 'round'; g2.beginPath(); g2.moveTo(x0, traceY(x0));
-          for (var hx = x0 + 3; hx < lpx; hx += 3) g2.lineTo(hx, traceY(hx)); g2.lineTo(lpx, traceY(lpx)); g2.stroke(); g2.lineCap = 'butt';
-        }
+        else { g2.strokeStyle = 'rgba(' + GRN + ',.9)'; g2.shadowColor = 'rgba(' + GRN + ',.9)'; g2.shadowBlur = 24; g2.beginPath(); g2.moveTo(Math.max(edge, lpx - 14), y); g2.lineTo(lpx, y); g2.stroke(); }   /* ECG side: the same plain horizontal halo, in green */
         g2.shadowBlur = 0;
       } else {
         g2.strokeStyle = 'rgba(' + AMB + ',.28)'; g2.shadowBlur = 0;
