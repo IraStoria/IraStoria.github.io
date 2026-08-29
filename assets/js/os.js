@@ -237,7 +237,7 @@
   // notes JSON (built from content/midi/<id>.mid by build.py) is fetched when the track changes; the clock is the player's own position
   // (frozen while paused). Pitched lanes share the spectrum's log-frequency X so a note lands on the bars it lights up; drum / fx lanes
   // are fixed columns on the left, the beat lane is the rightmost column. A note keeps falling past the line, greyed and fading.
-  var LOOKAHEAD_S = 4, TAIL_FRAC = 0.32, LATENCY_S = 0, WF_CHANCE = 1;   /* WF_CHANCE: probability (per track load) that the waterfall shows at all — easter-egg gate, 1 = always */
+  var LOOKAHEAD_S = 4, TAIL_FRAC = 0.32, LATENCY_S = 0, WF_CHANCE = 1, BEND_SMOOTH_S = 0.3;   /* WF_CHANCE: probability (per track load) that the waterfall shows at all — easter-egg gate, 1 = always */
   function makeWaterfall() {
     var url = '', data = null, pending = null, FLASH_S = 0.3, anim = null, lastPos = 0, ANIM_IN_MS = 1600, ANIM_SWAP_IN_MS = 600, ANIM_OUT_MS = 450, next = null;
     function hex(h) { var v = parseInt(h.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255].join(','); }
@@ -273,9 +273,9 @@
     // MIDI bends often jump within a few ms (dives, slides): smooth them over ±150 ms so the ribbon bends in an S instead of a flat step
     function bendSmooth(nt, f, dur, semi, xPitch) {
       if (nt.length <= 4 || typeof nt[4] === 'number') return bendPx(nt, f, semi, xPitch);
-      var d = 0.075 / Math.max(0.05, dur), acc = 0, wts = [1, 2, 3, 2, 1];
-      for (var k = -2; k <= 2; k++) acc += wts[k + 2] * bendPx(nt, Math.max(0, Math.min(1, f + k * d)), semi, xPitch);
-      return acc / 9;
+      var d = BEND_SMOOTH_S / 4 / Math.max(0.05, dur), acc = 0, wts = [1, 2, 3, 4, 5, 4, 3, 2, 1];   /* 9 taps over ±BEND_SMOOTH_S: hand-drawn wobble is ironed out, the slide itself stays */
+      for (var k = -4; k <= 4; k++) acc += wts[k + 4] * bendPx(nt, Math.max(0, Math.min(1, f + k * d)), semi, xPitch);
+      return acc / 25;
     }
     // draw(g2, W, H, y, st, nowMs): notes are drawn over the bars (under the line); pitched X shares the bars' log-frequency mapping
     function draw(g2, W, H, y, st, nowMs) {
