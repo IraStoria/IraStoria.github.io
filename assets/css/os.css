@@ -323,7 +323,14 @@ body[data-lang="zh"] .ph-ls .ls-knob{transform:translateX(26px)}
 .spot-msg{margin:0;border-top:1px solid rgba(255,255,255,.08);padding:.6rem 1rem;font:12px/1.6 var(--mono);color:var(--dim);white-space:pre-wrap}
 .papp .spot-host,.papp .spot-box{position:static;transform:none;width:auto}
 
-/* heartbeat egg: name / intro / 'now playing' label cross-fade to ECG green; the track name switches without transition (it slides out/in) */
-.hero-text h1,.hero-text p,.np-cap .np-lbl,.ph-hero b,.ph-hero span{transition:color .7s ease,text-shadow .7s ease}
-body.hb .hero-text h1,body.hb .hero-text p:not(.hint),body.hb .np-cap .np-lbl,body.hb .ph-hero b,body.hb .ph-hero span{color:#3dff7a;text-shadow:0 0 14px rgba(61,255,122,.55)}
+/* heartbeat egg (hb): every text and icon in the shell turns ECG green with a glow, cross-fading in and out (.7 s) —
+   except the sticky note and the track name (that one swaps mid-slide, yellow out / green in, via body.hb-t). */
+.hero-text h1{transition:transform 2.4s cubic-bezier(.2,.7,.2,1),color .7s ease,text-shadow .7s ease}
+.ls-track{transition:background .25s,border-color .7s ease}.ls-knob{transition:transform .3s cubic-bezier(.2,.7,.2,1),background .7s ease,box-shadow .7s ease}
+.desktop *:not(.desktop>*,.hero-text h1,.sticky,.sticky *,.np-title,.np-title *,.ls-track,.ls-knob,.fx-clip,.fx-clip *,canvas),
+.phone *:not(.ph-grid,.ph-hero,.ph-dock,.ph-ls,.ph-status,.ph-veil,.ph-power-scr,.ph-power-scr *,.np-title,.np-title *,.np-lbl,canvas){transition:color .7s ease,text-shadow .7s ease,border-color .7s ease,filter .7s ease}
+body.hb .desktop *:not(.sticky,.sticky *,.np-title,.np-title *,canvas),
+body.hb .phone *:not(.np-title,.np-title *,canvas){color:#3dff7a;text-shadow:0 0 12px rgba(61,255,122,.45);border-color:rgba(61,255,122,.35)}
+body.hb .desktop .glyph,body.hb .phone .glyph{filter:grayscale(1) sepia(1) saturate(6) hue-rotate(85deg) brightness(1.15) drop-shadow(0 0 6px rgba(61,255,122,.7))}
+body.hb .ls-knob{background:#3dff7a;box-shadow:0 0 8px rgba(61,255,122,.8)}body.hb .ls-track{border-color:rgba(61,255,122,.6)}
 body.hb-t .np-cap .np-title{color:#3dff7a;text-shadow:0 0 14px rgba(61,255,122,.6),0 2px 10px rgba(0,0,0,.6)}
