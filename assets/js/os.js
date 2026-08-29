@@ -246,6 +246,7 @@
   // are fixed columns on the left, the beat lane is the rightmost column. A note keeps falling past the line, greyed and fading.
   var LOOKAHEAD_S = 4, TAIL_FRAC = 0.32, LATENCY_S = 0, WF_CHANCE = 0.1, BEND_SMOOTH_S = 0.3;   /* WF_CHANCE: probability that this page load shows the waterfall at all (rolled once, every track follows); EE_midi forces it */
   var WF_ON = null; function wfOn() { if (WF_ON === null) WF_ON = !!EE.midi || !!EE_TRACK || Math.random() < WF_CHANCE; return WF_ON; }
+  var HB_CHANCE = 0.01, HB_ON = null; function hbOn() { if (HB_ON === null) HB_ON = !!EE.hb || Math.random() < HB_CHANCE; return HB_ON; }   /* heartbeat egg: the beat lane becomes a vertical ECG trace (EE_hb forces it) */
   function makeWaterfall() {
     var url = '', data = null, pending = null, FLASH_S = 0.3, anim = null, lastPos = 0, ANIM_IN_MS = 1600, ANIM_SWAP_IN_MS = 600, ANIM_OUT_MS = 450, BOOT_FADE_MS = 3000, next = null, pre = null;
     // pre-roll (boot): the clock runs from -lead s while the connect lines grow, so the first notes fall the full height before the music starts
@@ -308,13 +309,42 @@
       var narrow = W < 700, colW = narrow ? Math.max(7, Math.min(10, semi * 2)) : Math.max(14, Math.min(22, semi * 1.5)), colGap = colW * 1.9, left = narrow ? W * 0.04 : Math.max(120, W * 0.085), beatX = narrow ? W * 0.9 : W * 0.8;   /* columns sit inward, not glued to the edges; the phone packs them tighter */
       var pShift = data.shift_semitones || 0;   /* map.json shift_semitones: slides the whole pitched layout along the log axis (+ = right) */
       function xPitch(p) { var f = 440 * Math.pow(2, (p + pShift - 69) / 12), bin = f / nyq * 1024; return W * Math.log(Math.max(1, bin)) / Math.log(hiBin); }
+      // vertical ECG: the trace runs down the beat column with time (same clock as the falling notes); every note is a P-QRS-T complex
+      // whose R spike crosses the line exactly at the note's onset — the pulse "jumps" as the beat hits
+      function ecg(t, cx, amp) {
+        var notes = t.notes, tTop = now + LOOKAHEAD_S, tBot = now - tail, step = 2 / pps;   /* one sample per 2 px */
+        function qrs(dt) {   /* dt = seconds after onset; classic shape, ~0.45 s long */
+          if (dt < -0.18 || dt > 0.3) return 0;
+          if (dt < -0.08) return 0.12 * Math.sin((dt + 0.18) / 0.10 * Math.PI);          /* P */
+          if (dt < -0.03) return 0;
+          if (dt < -0.01) return -0.15 * ((dt + 0.03) / 0.02);                              /* Q */
+          if (dt < 0.00) return -0.15 + 1.15 * ((dt + 0.01) / 0.01);                        /* R up */
+          if (dt < 0.02) return 1 - 1.4 * (dt / 0.02);                                      /* R down to S */
+          if (dt < 0.05) return -0.4 * (1 - (dt - 0.02) / 0.03);                            /* S back */
+          if (dt < 0.10) return 0;
+          return 0.22 * Math.sin((dt - 0.10) / 0.20 * Math.PI);                             /* T */
+        }
+        g2.save(); g2.lineWidth = 2; g2.lineCap = 'round'; g2.lineJoin = 'round';
+        g2.strokeStyle = 'rgba(' + t.rgb + ',.95)'; g2.shadowColor = 'rgba(' + t.rgb + ',.9)'; g2.shadowBlur = 10;
+        g2.beginPath(); var first = true, j0 = firstAt(notes, tBot - 0.35);
+        for (var ts = tBot; ts <= tTop; ts += step) {   /* bottom (past) upward, so the note pointer j0 only ever advances */
+          var v = 0; for (var j = j0; j < notes.length && notes[j][0] < ts + 0.2; j++) { if (notes[j][0] < ts - 0.35) { j0 = j + 1; continue; } v += qrs(ts - notes[j][0]); }
+          var yy = y - (ts - now) * pps, xx = cx + amp * v, past = ts < now;
+          if (first) { g2.moveTo(xx, yy); first = false; } else g2.lineTo(xx, yy);
+        }
+        g2.stroke();
+        var beat = 0, k = firstAt(notes, now + 1e-6) - 1; if (k >= 0) beat = Math.exp(-(now - notes[k][0]) / 0.18);   /* the dot on the line pulses on each beat */
+        g2.fillStyle = 'rgba(' + t.rgb + ',' + (0.6 + 0.4 * beat).toFixed(2) + ')'; g2.shadowBlur = 8 + 18 * beat;
+        g2.beginPath(); g2.arc(cx + amp * (function () { var vv = 0; for (var j = firstAt(notes, now - 0.35); j < notes.length && notes[j][0] < now + 0.2; j++) vv += qrs(now - notes[j][0]); return vv; })(), y, 3 + 3 * beat, 0, Math.PI * 2); g2.fill();
+        g2.restore();
+      }
       g2.save(); g2.lineWidth = 1; g2.lineJoin = 'round';
       if (shift) g2.translate(0, shift);
       if (alpha < 1) g2.globalAlpha = alpha;   /* layer fades in with the glide (and out with the exit) */
       data.tracks.forEach(function (t) {
         var notes = t.notes, i = firstAt(notes, now - tail - t.maxDur), end = now + LOOKAHEAD_S, x, w, col = t.lane !== 'pitch';
         if (t.lane === 'drum' || t.lane === 'fx') { x = left + (t.row || 0) * colGap; w = colW; }
-        else if (t.lane === 'beat') { x = beatX; w = colW; }
+        else if (t.lane === 'beat') { x = beatX; w = colW; if (hbOn()) { ecg(t, x + w / 2, colW * 3); return; } }   /* heartbeat egg: trace instead of blocks */
         for (; i < notes.length && notes[i][0] < end; i++) {
           var nt = notes[i], t0 = nt[0], t1 = nt[1]; if (t.lane === 'drum' || t.lane === 'beat') t1 = Math.min(t1, t0 + 0.18);   /* hits read as short blocks whatever the MIDI length */
           if (t1 < now - tail) continue;
@@ -959,7 +989,7 @@
       if (!a) return '';
       var eggs = toks.filter(function (t) { return /^EE_/i.test(t); }).map(function (t) { return t.replace(/^EE_/i, '').toLowerCase(); }), wantRestart = toks.some(function (t) { return t.toLowerCase() === 'restart'; });
       if (eggs.length || wantRestart) {
-        var bad = eggs.filter(function (k) { return k !== 'cat' && k !== 'midi' && SECRET_IDS.indexOf(k) < 0; });   /* EE_<secret track id>, e.g. EE_ADE */
+        var bad = eggs.filter(function (k) { return k !== 'cat' && k !== 'midi' && k !== 'hb' && SECRET_IDS.indexOf(k) < 0; });   /* EE_<secret track id>, e.g. EE_ADE */
         if (bad.length) return U.term_unknown + 'EE_' + bad.join(', EE_');
         if (!wantRestart) return U.spot_need_restart;
         try { if (eggs.length) sessionStorage.setItem('ee', eggs.join(',')); } catch (e) {}
