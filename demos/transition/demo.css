@@ -1,8 +1,8 @@
 :root{--bg:#0f1115;--bg2:#171a21;--fg:#e8e6e1;--dim:#9a9890;--accent:#e0b04a;--border:#2a2e38}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,"Noto Sans TC","Microsoft JhengHei",sans-serif;line-height:1.6}
-.top{display:flex;justify-content:space-between;align-items:center;padding:.8rem 1.2rem;border-bottom:1px solid var(--border)}
-.back{color:var(--dim);text-decoration:none}.back:hover{color:var(--fg)}
+.top{display:flex;justify-content:flex-end;align-items:center;padding:.8rem 1.2rem;border-bottom:1px solid var(--border)}
+
 .langs button{background:none;border:1px solid var(--border);color:var(--dim);border-radius:999px;padding:.2rem .7rem;cursor:pointer;font:inherit;font-size:.85rem}
 .langs button.active{color:var(--fg);border-color:var(--accent)}
 main{max-width:1000px;margin:0 auto;padding:1.5rem 1.2rem 4rem}
