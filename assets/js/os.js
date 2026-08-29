@@ -478,7 +478,7 @@
         if (levels.length !== n) levels = new Array(n).fill(0);
         g2.shadowBlur = 0;
         // the whole spectrum doubles as the progress bar: bars/baseline left of the play head are amber, the unplayed part is a quiet grey (frac frozen while paused)
-        var st = ext.state(), px = W * Math.max(0, Math.min(1, st.frac || 0));
+        var st = ext.state(), px = W * Math.max(0, Math.min(1, st.frac || 0)), px0 = px;   /* px0: true progress — the ECG side ignores the clearing sweep (it read as a line being erased) */
         // right after the line joins, a grey sweep runs right→left over the amber line ("clearing" the progress bar) before real progress takes over
         // unplayed bars are a solid cool slate (not translucent white — that reads as fog on the dark wallpaper); gradients only dim the foot near the line
         var gAmb = grad(y, y - maxH, LC, 0.35, 0.95), gGrey = grad(y, y - maxH, UC, 0.45, 0.95),
@@ -523,8 +523,8 @@
             for (var k = 0; k < n; k++) { var cx = k * bw + bw / 2; if (cx < from - bw || cx > to + bw) continue; var yy = y - levels[k] * maxH; if (!started) { g2.moveTo(Math.max(from, cx), yy); started = true; } else g2.lineTo(cx, yy); }
             if (started) g2.stroke();
           }
-          g2.save(); g2.beginPath(); g2.rect(0, 0, Math.max(0, Math.min(px, edge)), H); g2.clip(); trace(0, px, GRN, 0.95, 12); g2.restore();
-          if (edge > px) { g2.save(); g2.beginPath(); g2.rect(px, 0, edge - px, H); g2.clip(); trace(px, W, DIMG, 0.7, 0); g2.restore(); }
+          g2.save(); g2.beginPath(); g2.rect(0, 0, Math.max(0, Math.min(px0, edge)), H); g2.clip(); trace(0, px0, GRN, 0.95, 12); g2.restore();
+          if (edge > px0) { g2.save(); g2.beginPath(); g2.rect(px0, 0, edge - px0, H); g2.clip(); trace(px0, W, DIMG, 0.7, 0); g2.restore(); }
           g2.restore();
         }
         if (wf) wf.draw(g2, W, H, y, st, now);   /* waterfall: over the bars, under the line */
@@ -541,8 +541,8 @@
         if (lpx > edge) { g2.strokeStyle = 'rgba(' + AMB + ',' + (0.28 + 0.62 * glow).toFixed(3) + ')'; g2.shadowColor = 'rgba(' + AMB + ',.6)'; g2.shadowBlur = 18 * glow; g2.beginPath(); g2.moveTo(edge, y); g2.lineTo(lpx, y); g2.stroke(); }
         var ux = Math.max(lpx, edge); if (ux < W) { g2.strokeStyle = 'rgba(255,255,255,.22)'; g2.shadowBlur = 0; g2.beginPath(); g2.moveTo(ux, y); g2.lineTo(W, y); g2.stroke(); }
         // play head: same amber as the line (no highlight), just a stronger halo at the amber/grey boundary
-        if (lpx >= edge) { g2.strokeStyle = 'rgba(' + AMB + ',.9)'; g2.shadowColor = 'rgba(' + AMB + ',.9)'; g2.shadowBlur = 24; g2.beginPath(); g2.moveTo(Math.max(edge, lpx - 14), y); g2.lineTo(lpx, y); g2.stroke(); }
-        else { g2.strokeStyle = 'rgba(' + GRN + ',.9)'; g2.shadowColor = 'rgba(' + GRN + ',.9)'; g2.shadowBlur = 24; g2.beginPath(); g2.moveTo(Math.max(edge, lpx - 14), y); g2.lineTo(lpx, y); g2.stroke(); }   /* ECG side: the same plain horizontal halo, in green */
+        if (px0 >= edge) { g2.strokeStyle = 'rgba(' + AMB + ',.9)'; g2.shadowColor = 'rgba(' + AMB + ',.9)'; g2.shadowBlur = 24; g2.beginPath(); g2.moveTo(Math.max(edge, lpx - 14), y); g2.lineTo(lpx, y); g2.stroke(); }
+        else { g2.strokeStyle = 'rgba(' + GRN + ',.9)'; g2.shadowColor = 'rgba(' + GRN + ',.9)'; g2.shadowBlur = 24; g2.beginPath(); g2.moveTo(Math.max(0, px0 - 14), y); g2.lineTo(px0, y); g2.stroke(); }   /* ECG side: the same plain horizontal halo, in green */
         g2.shadowBlur = 0;
       } else {
         g2.strokeStyle = 'rgba(' + AMB + ',.28)'; g2.shadowBlur = 0;
