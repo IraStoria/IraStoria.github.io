@@ -1075,6 +1075,7 @@
       var toks = c.trim().split(/\s+/).map(function (t) { return t.replace(/^-+/, ''); }).filter(function (t) { return t; }), a = (toks[0] || '').toLowerCase();   /* `--EE_midi --EE_cat restart` and `-- EE_midi restart` both parse: leading dashes are decoration */
       if (!a) return '';
       var eggs = toks.filter(function (t) { return /^EE_/i.test(t); }).map(function (t) { return t.replace(/^EE_/i, '').toLowerCase(); }), wantRestart = toks.some(function (t) { return t.toLowerCase() === 'restart'; });
+      if (eggs.indexOf('@') >= 0) { eggs = eggs.filter(function (k) { return k !== '@'; }); ['cat', 'midi', 'hb'].forEach(function (k) { if (eggs.indexOf(k) < 0) eggs.push(k); }); }   /* EE_@ = every chance-gated egg at 100% for the next boot (one-shots included); a secret track can still ride along as EE_<id> */
       if (eggs.length || wantRestart) {
         var bad = eggs.filter(function (k) { return k !== 'cat' && k !== 'midi' && k !== 'hb' && SECRET_IDS.indexOf(k) < 0; });   /* EE_<secret track id>, e.g. EE_ADE */
         if (bad.length) return U.term_unknown + 'EE_' + bad.join(', EE_');
