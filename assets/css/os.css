@@ -90,7 +90,7 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 @media(max-width:699px){.updates{display:none}}
 /* language swap choreography (in place, no reload):
    out = apps + updates panel slide left & fade, tagline flips, sticky fades, now-playing label/title slide left & fade (name + buttons stay);
-   in  = apps + updates panel slide in from the left, tagline flips back, sticky fades in, now-playing label/title travel in from the RIGHT edge (inline transform set by JS) */
+   in  = apps + updates panel slide in from the left, dock drops out below and rises back from below, tagline flips back, sticky fades in, now-playing label/title travel in from the RIGHT edge (inline transform set by JS) */
 .desktop.swap>:not(.wave):not(.veil){transition:opacity .6s ease,transform .6s cubic-bezier(.4,0,.6,1)!important}
 .desktop.swap .hero-text p,.desktop.swap .sticky-text{transition:opacity .6s ease,transform .6s cubic-bezier(.4,0,.6,1)}
 .desktop.swap .menubar-mid{transition:opacity .6s ease}
@@ -102,10 +102,12 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .np-cap .np-title .np-rest{font-weight:inherit}
 .hero-text{perspective:600px}
 .desktop.swap-out>.icons,.desktop.swap-out>.updates{transform:translateX(-140px);opacity:0}
+.desktop.swap-out>.dock{transform:translate(-50%,120px);opacity:0}   /* dock: same idea as the app column, but it drops out below and comes back from below */
 .desktop.swap-out .hero-text p{transform:rotateX(90deg);opacity:0}
 .desktop.swap-out .sticky-text{opacity:0}
 .desktop.swap-out .menubar-mid{opacity:0}
 .desktop.swap-in>.icons,.desktop.swap-in>.updates{transform:translateX(-140px);opacity:0;transition:none!important}
+.desktop.swap-in>.dock{transform:translate(-50%,120px);opacity:0;transition:none!important}
 .desktop.swap-in .sticky-text{opacity:0;transition:none!important}
 .desktop.swap-in .menubar-mid{opacity:0;transition:none!important}
 .desktop.swap-in .hero-text p{transform:rotateX(-90deg);opacity:0;transition:none}
