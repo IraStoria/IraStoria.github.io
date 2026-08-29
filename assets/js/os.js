@@ -269,6 +269,13 @@
           var nt = notes[i], t0 = nt[0], t1 = nt[1]; if (t.lane === 'drum' || t.lane === 'beat') t1 = Math.min(t1, t0 + 0.18);   /* hits read as short blocks whatever the MIDI length */
           if (t1 < now - tail) continue;
           if (!col) { w = semi * 1.25; x = xPitch(nt[2]) - w / 2; }   /* user's call: bigger notes over strict non-overlap (rims keep neighbours readable) */
+          // hand-annotated bend (nt[4] = target pitch, nt[5] = optional start fraction): the note falls straight at its start pitch,
+          // then while it is held the whole block and its flash drift sideways to the target; the grey tail stays where it ended up
+          if (!col && nt.length > 4) {
+            var bf = now < nt[0] ? 0 : Math.min(1, (Math.min(now, nt[1]) - nt[0]) / (nt[1] - nt[0])), bs = nt.length > 5 ? nt[5] : 0;
+            bf = Math.max(0, Math.min(1, (bf - bs) / Math.max(1e-6, 1 - bs)));
+            x += (xPitch(nt[4]) - xPitch(nt[2])) * bf;
+          }
           var yTop = y - (t1 - now) * pps, yBot = y - (t0 - now) * pps, vel = nt[3] / 127;
           if (yBot - yTop < 6) yTop = yBot - 6;
           var live = t0 <= now && now < t1, above = Math.min(yBot, y), below = Math.max(yTop, y);
@@ -814,11 +821,12 @@
     function remember(i) { history.push(i); if (history.length > 8) history.shift(); }
     function prev() { var i = pickRandom(); remember(i); load(i, true); }
     function next() { var i = pickRandom(); remember(i); load(i, true); }
-    return { onTrack: function (fn) { trackListeners.push(fn); }, duck: duck, unduck: unduck, unlock: unlock, mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state, autoplay: autoplay, prepare: prepare, restore: restore, prev: prev, next: next, toggleMute: toggleMute, setVolume: setVolume,
+    return { seek: function (sec) { if (audio && !list[cur].synth) { audio.currentTime = sec; if (pausedAt !== null) pausedAt = sec; } }, onTrack: function (fn) { trackListeners.push(fn); }, duck: duck, unduck: unduck, unlock: unlock, mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state, autoplay: autoplay, prepare: prepare, restore: restore, prev: prev, next: next, toggleMute: toggleMute, setVolume: setVolume,
              analyser: function () { return analyser; }, isPlaying: function () { return playing; },
              debug: function () { return { ctx: actx ? actx.state : '-', playing: playing, started: started, ducked: ducked, muted: muted, vol: vol, cur: cur, unlocked: !!(audio && audio._unlocked), wired: !!(audio && audio._wired),
                paused: audio ? audio.paused : '-', rs: audio ? audio.readyState : '-', ns: audio ? audio.networkState : '-', t: audio ? audio.currentTime.toFixed(1) : '-', err: audio && audio.error ? audio.error.code : 0, gain: master ? master.gain.value.toFixed(3) : '-', out: out ? out.gain.value.toFixed(2) : '-' }; } };
   })();
+  if (/[?&]debug/.test(location.search)) window.__player = player;   /* ?debug: console access for testing (seek / state) */
   player.onTrack(function (fromFrac) { wave.sweep(true, fromFrac); phoneWave.sweep(true, fromFrac); });   // new track: sweep the amber off the line and the bars
 
   // ============================================================ terminal app (playful nav)

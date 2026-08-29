@@ -3,7 +3,7 @@
 usage: python tools/midi2notes.py in.mid out.json [--map map.json] [--list]
   --list   print tracks (index, name, channel, note count, range) and exit
   --map    per-track layout: {"tracks": {"<name>": {"lane": "drum|fx|pitch|beat", "color": "#hex", "show": true}}, "offset_ms": 0}
-output: {"ppq":..., "duration": s, "tracks":[{"name","lane","color","notes":[[t_on, t_off, pitch, vel], ...]}]}
+output: {"ppq":..., "duration": s, "tracks":[{"name","lane","color","notes":[[t_on, t_off, pitch, vel, (bend_to_pitch, (bend_start_frac))], ...]}]}
 Tempo map is expanded (SMPTE not supported). Times are seconds relative to MIDI tick 0.
 """
 import json, struct, sys
@@ -79,6 +79,17 @@ def main(a):
     mp = {}
     if '--map' in a: mp = json.load(open(a[a.index('--map') + 1], encoding='utf-8'))
     tm = mp.get('tracks', {}); keep = []
+    # manual bends: {"track", "at" (seconds, ±5 ms), "to" (target pitch), "start" (optional 0..1 fraction of the note where the bend begins)}
+    for b in mp.get('bends', []):
+        hit = 0
+        for t in m['tracks']:
+            if t['name'] != b['track']: continue
+            for n in t['notes']:
+                if abs(n[0] - b['at']) <= 0.005:
+                    del n[4:]; n.append(int(b['to']))
+                    if 'start' in b: n.append(float(b['start']))
+                    hit += 1
+        if not hit: raise SystemExit('bend annotation matched no note: %r' % b)
     for t in m['tracks']:
         cfg = tm.get(t['name'])
         if tm and (cfg is None or cfg.get('show') is False): continue
