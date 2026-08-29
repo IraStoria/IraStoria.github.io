@@ -247,7 +247,7 @@
   var LOOKAHEAD_S = 4, TAIL_FRAC = 0.32, LATENCY_S = 0, WF_CHANCE = 0.1, BEND_SMOOTH_S = 0.3;   /* WF_CHANCE: probability that this page load shows the waterfall at all (rolled once, every track follows); EE_midi forces it */
   var WF_ON = null; function wfOn() { if (WF_ON === null) WF_ON = !!EE.midi || !!EE_TRACK || Math.random() < WF_CHANCE; return WF_ON; }
   function makeWaterfall() {
-    var url = '', data = null, pending = null, FLASH_S = 0.3, anim = null, lastPos = 0, ANIM_IN_MS = 1600, ANIM_SWAP_IN_MS = 600, ANIM_OUT_MS = 450, next = null, pre = null;
+    var url = '', data = null, pending = null, FLASH_S = 0.3, anim = null, lastPos = 0, ANIM_IN_MS = 1600, ANIM_SWAP_IN_MS = 600, ANIM_OUT_MS = 450, next = null, pre = null, preEnd = 0;
     // pre-roll (boot): the clock runs from -lead s while the connect lines grow, so the first notes fall the full height before the music starts
     function preroll(t0, lead) { pre = { t0: t0, lead: lead }; ensure(ext.state(), t0); }
     function hex(h) { var v = parseInt(h.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255].join(','); }
@@ -300,7 +300,8 @@
       }
       if (!data) return;
       var pos;
-      if (pre) { if (st.started && st.pos > 0.05) pre = null; else pos = -pre.lead + (nowMs - pre.t0) / 1000; }   /* pre-roll until the audio clock really moves */
+      if (pre) { if (st.started && st.pos > 0.05) { pre = null; preEnd = nowMs; } else pos = -pre.lead + (nowMs - pre.t0) / 1000; }   /* pre-roll until the audio clock really moves */
+      var fadeW = pre ? 1 : (preEnd ? Math.max(0, 1 - (nowMs - preEnd) / (LOOKAHEAD_S * 1000)) : 0);   /* boot only: notes fade in as they fall; the effect eases off once the opening batch has landed */
       if (pos === undefined) { if (!st.started) return; pos = (anim && anim.mode === 'out') ? anim.pos : st.pos; }
       lastPos = pos;
       var now = pos + (data.offset_ms || 0) / 1000 + LATENCY_S, pps = y / LOOKAHEAD_S, tail = H * TAIL_FRAC / pps;
@@ -326,7 +327,7 @@
           var live = t0 <= now && now < t1, above = Math.min(yBot, y), below = Math.max(yTop, y);
           if (above > yTop) {   // still above the line: filled + outlined, brighter as it nears the line; the sounding note glows; a soft dark drop shadow lifts it off the bars
             var near = 1 - Math.min(1, (y - above) / y), fa = 0.32 + 0.45 * (0.5 + 0.5 * vel) * (0.35 + 0.65 * near);
-            g2.globalAlpha = alpha * (live ? 1 : Math.pow(near, 0.8));   /* the note fades in as it falls: fully opaque only when its leading edge touches the line */
+            if (fadeW && !live) g2.globalAlpha = alpha * (1 - fadeW * (1 - Math.pow(near, 0.8)));   /* opening fall: opaque only when the leading edge touches the line */
             rrect(g2, x + 0.5, yTop + 0.5, w - 1, above - yTop - 1, 3);
             if (live) { g2.shadowColor = 'rgba(' + t.rgb + ',.95)'; g2.shadowBlur = 16; fa = 0.95; }
             else { g2.shadowColor = 'rgba(0,0,0,.8)'; g2.shadowBlur = 8; g2.shadowOffsetY = 2; }
