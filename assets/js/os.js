@@ -268,7 +268,7 @@
         for (; i < notes.length && notes[i][0] < end; i++) {
           var nt = notes[i], t0 = nt[0], t1 = nt[1]; if (t.lane === 'drum' || t.lane === 'beat') t1 = Math.min(t1, t0 + 0.18);   /* hits read as short blocks whatever the MIDI length */
           if (t1 < now - tail) continue;
-          if (!col) { w = semi * 1.25; x = xPitch(nt[2]) - w / 2; }
+          if (!col) { w = semi * 0.86; x = xPitch(nt[2]) - w / 2; }   /* < one semitone so neighbouring pitches never overlap */
           var yTop = y - (t1 - now) * pps, yBot = y - (t0 - now) * pps, vel = nt[3] / 127;
           if (yBot - yTop < 6) yTop = yBot - 6;
           var live = t0 <= now && now < t1, above = Math.min(yBot, y), below = Math.max(yTop, y);
@@ -285,10 +285,14 @@
             gg.addColorStop(0, 'rgba(150,158,176,' + (0.22 * (1 - d)).toFixed(3) + ')'); gg.addColorStop(1, 'rgba(150,158,176,' + (0.22 * (1 - d2)).toFixed(3) + ')');
             rrect(g2, x + 0.5, below + 0.5, w - 1, yBot - below - 1, 3); g2.fillStyle = gg; g2.fill(); g2.strokeStyle = 'rgba(150,158,176,' + (0.35 * (1 - d)).toFixed(3) + ')'; g2.stroke();
           }
-          // "cleared" flash: the moment the head hits the line a bright, wider spark blooms and fades over FLASH_S
-          var age = now - t0;
-          if (age >= 0 && age < FLASH_S) {
-            var k = 1 - age / FLASH_S, ex = w * (0.6 + 1.2 * (1 - k)), fh = 3 + 5 * k;
+          // "cleared" flash: bright spark at the line while the note is held (attack burst, then a steady glow), fading out after release
+          var age = now - t0, k = 0;
+          if (age >= 0) {
+            if (now < t1) k = 0.55 + 0.45 * Math.max(0, 1 - age / FLASH_S);   /* held: burst on the attack, then a steady 55 % */
+            else if (now - t1 < FLASH_S) k = 0.55 * (1 - (now - t1) / FLASH_S);   /* released: fade */
+          }
+          if (k > 0) {
+            var ex = w * (0.6 + 1.2 * (1 - k)), fh = 3 + 5 * k;
             g2.shadowColor = 'rgba(' + t.rgb + ',1)'; g2.shadowBlur = 28 * k;
             g2.fillStyle = 'rgba(255,255,255,' + (0.85 * k).toFixed(3) + ')'; g2.fillRect(x - ex / 2, y - fh / 2, w + ex, fh);
             g2.fillStyle = 'rgba(' + t.rgb + ',' + (0.6 * k).toFixed(3) + ')'; g2.fillRect(x - ex, y - fh, w + ex * 2, fh * 2);
