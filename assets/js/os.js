@@ -245,10 +245,12 @@
   // (frozen while paused). Pitched lanes share the spectrum's log-frequency X so a note lands on the bars it lights up; drum / fx lanes
   // are fixed columns on the left, the beat lane is the rightmost column. A note keeps falling past the line, greyed and fading.
   var LOOKAHEAD_S = 4, TAIL_FRAC = 0.32, LATENCY_S = 0, WF_CHANCE = 0.1, BEND_SMOOTH_S = 0.3;   /* WF_CHANCE: probability that this page load shows the waterfall at all (rolled once, every track follows); EE_midi forces it */
-  var WF_ON = null; function wfOn() { if (WF_ON === null) WF_ON = !!EE.midi || !!EE_TRACK || Math.random() < WF_CHANCE; return WF_ON; }
-  var HB_CHANCE = 0.01, HB_ON = null; function hbOn() { if (HB_ON === null) HB_ON = !!EE.hb || Math.random() < HB_CHANCE; return HB_ON; }   /* heartbeat egg: the beat lane becomes a vertical ECG trace (EE_hb forces it) */
+  var WF_ON = null; function wfOn() { if (WF_ON === null) WF_ON = !!EE.midi || !!EE.hb || !!EE_TRACK || Math.random() < WF_CHANCE; return WF_ON; }
+  // heartbeat egg: rolled once per track change (1%); EE_hb forces the first roll only. Only tracks with a beat lane can win (elcirtnev).
+  var HB_CHANCE = 0.01, HB_URL = null, HB_ON = false, HB_FORCE = !!EE.hb;
+  function hbFor(url, hasBeat) { if (url !== HB_URL) { HB_URL = url; HB_ON = !!hasBeat && (HB_FORCE || Math.random() < HB_CHANCE); HB_FORCE = false; } return HB_ON && !!hasBeat; }
   function makeWaterfall() {
-    var url = '', data = null, pending = null, FLASH_S = 0.3, anim = null, lastPos = 0, ANIM_IN_MS = 1600, ANIM_SWAP_IN_MS = 600, ANIM_OUT_MS = 450, BOOT_FADE_MS = 3000, next = null, pre = null;
+    var url = '', data = null, pending = null, FLASH_S = 0.3, anim = null, lastPos = 0, ANIM_IN_MS = 1600, ANIM_SWAP_IN_MS = 600, ANIM_OUT_MS = 450, BOOT_FADE_MS = 3000, next = null, pre = null, hb = false;
     // pre-roll (boot): the clock runs from -lead s while the connect lines grow, so the first notes fall the full height before the music starts
     function preroll(t0, lead) { pre = { t0: t0, lead: lead }; ensure(ext.state(), t0); }
     function hex(h) { var v = parseInt(h.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255].join(','); }
@@ -259,13 +261,13 @@
     // track change: the current layer slides up and out, the new one (once fetched) slides in from the top edge; the very first layer glides in slowly (boot)
     function ensure(st, now) {
       var u = st.notes || '';
-      if (u === url) return; url = u;
+      if (u === url) return; url = u; hb = false;
       var show = !!u && wfOn();
       if (data) { anim = { mode: 'out', t0: now, ms: ANIM_OUT_MS, pos: lastPos }; next = null; }   /* the leaving layer keeps the old track's clock so its notes do not jump */
       pending = null;
       if (!show) return;
       var req = pending = fetch('../' + u).then(function (r) { return r.json(); }).then(function (j) {
-        if (req !== pending) return; j = prep(j);
+        if (req !== pending) return; j = prep(j); hb = hbFor(u, j.tracks.some(function (t) { return t.lane === 'beat'; }));
         if (anim && anim.mode === 'out') next = j;                                   /* wait for the exit to finish */
         else { data = j; anim = { mode: 'in', t0: performance.now(), ms: ANIM_IN_MS, fadeMs: BOOT_FADE_MS }; }   /* boot: glide in, fade in like the wallpaper */
       }).catch(function () {});
@@ -345,7 +347,7 @@
       data.tracks.forEach(function (t) {
         var notes = t.notes, i = firstAt(notes, now - tail - t.maxDur), end = now + LOOKAHEAD_S, x, w, col = t.lane !== 'pitch';
         if (t.lane === 'drum' || t.lane === 'fx') { x = left + (t.row || 0) * colGap; w = colW; }
-        else if (t.lane === 'beat') { x = beatX; w = colW; if (hbOn()) { ecg(t, narrow ? x + w / 2 : W * 0.905, colW * 3); return; } }   /* ECG sits further right on desktop (between the o and r of the name) */   /* heartbeat egg: trace instead of blocks */
+        else if (t.lane === 'beat') { x = beatX; w = colW; if (hb) { ecg(t, narrow ? x + w / 2 : W * 0.905, colW * 3); return; } }   /* ECG sits further right on desktop (between the o and r of the name) */   /* heartbeat egg: trace instead of blocks */
         for (; i < notes.length && notes[i][0] < end; i++) {
           var nt = notes[i], t0 = nt[0], t1 = nt[1]; if (t.lane === 'drum' || t.lane === 'beat') t1 = Math.min(t1, t0 + 0.18);   /* hits read as short blocks whatever the MIDI length */
           if (t1 < now - tail) continue;
@@ -437,22 +439,27 @@
       g2.restore(); return true;
     }
     var st_started = false;
-    return { draw: function (g2, W, H, y, st, nowMs) { st_started = !!st.started; return draw(g2, W, H, y, st, nowMs); }, preroll: preroll, overlay: overlay, lights: lights };
+    return { draw: function (g2, W, H, y, st, nowMs) { st_started = !!st.started; return draw(g2, W, H, y, st, nowMs); }, preroll: preroll, overlay: overlay, lights: lights, hb: function () { return hb && !!data && !(anim && anim.mode === 'out'); } };
   }
   function makeWave(cv, yRatio, withNotes) {
     var wf = withNotes ? makeWaterfall() : null;
-    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000;   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
+    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000, hbMix = 0, HB_MORPH_MS = 700, AMB = '224,176,74', GRN = '61,255,122', SLATE = '96,104,122', DIMG = '30,120,62';   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
     function grad(y0, y1, rgb, a0, a1) { var g = g2.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + rgb + ',' + a0 + ')'); g.addColorStop(1, 'rgba(' + rgb + ',' + a1 + ')'); return g; }
     function size() { if (cv.width !== cv.clientWidth || cv.height !== cv.clientHeight) { cv.width = cv.clientWidth; cv.height = cv.clientHeight; } }
     function ease(x) { return 1 - Math.pow(1 - x, 3); }
+    function lerpCol(a, b, t) { if (t <= 0) return a; if (t >= 1) return b; a = a.split(','); b = b.split(','); return a.map(function (v, i) { return Math.round(+v + (+b[i] - +v) * t); }).join(','); }
     function draw() {
       raf = requestAnimationFrame(draw); size();
-      var now = performance.now(), dk = decayFactor(lastT ? now - lastT : 16); lastT = now;
+      var now = performance.now(), dk = decayFactor(lastT ? now - lastT : 16), prevT = lastT; lastT = now;
       var W = cv.width, H = cv.height, y = H * yRatio; g2.clearRect(0, 0, W, H);
-      g2.lineWidth = 2; g2.strokeStyle = 'rgba(224,176,74,.85)'; g2.shadowColor = 'rgba(224,176,74,.6)'; g2.shadowBlur = 12;
+      // heartbeat egg look: everything amber turns ECG green and the bars morph into a trace; snaps during the connect stage (boot), eases on a track change
+      var hbT = wf && wf.hb() ? 1 : 0, dtm = prevT ? now - prevT : 16;
+      if (mode === 'connect') hbMix = hbT; else hbMix = hbT > hbMix ? Math.min(hbT, hbMix + dtm / HB_MORPH_MS) : Math.max(hbT, hbMix - dtm / HB_MORPH_MS);
+      var m = ease(hbMix), LC = lerpCol(AMB, GRN, m), UC = lerpCol(SLATE, DIMG, m);
+      g2.lineWidth = 2; g2.strokeStyle = 'rgba(' + LC + ',.85)'; g2.shadowColor = 'rgba(' + LC + ',.6)'; g2.shadowBlur = 12;
       if (mode === 'connect') {
         var p = Math.min(1, (performance.now() - connectT0) / CONNECT_MS), e = ease(p), half = W / 2 * e;
-        if (wf) { g2.shadowBlur = 0; wf.draw(g2, W, H, y, ext.state(), now); g2.shadowColor = 'rgba(224,176,74,.6)'; g2.shadowBlur = 12; }   /* pre-rolling notes fall while the lines grow */
+        if (wf) { g2.shadowBlur = 0; wf.draw(g2, W, H, y, ext.state(), now); g2.shadowColor = 'rgba(' + LC + ',.6)'; g2.shadowBlur = 12; }   /* pre-rolling notes fall while the lines grow */
         g2.beginPath(); g2.moveTo(0, y); g2.lineTo(half, y); g2.moveTo(W, y); g2.lineTo(W - half, y); g2.stroke();
         if (p >= 1) { mode = 'live'; sweep(false); if (onConnected) { var cb = onConnected; onConnected = null; cb(); } }
         return;
@@ -468,8 +475,9 @@
         var st = ext.state(), px = W * Math.max(0, Math.min(1, st.frac || 0));
         // right after the line joins, a grey sweep runs right→left over the amber line ("clearing" the progress bar) before real progress takes over
         // unplayed bars are a solid cool slate (not translucent white — that reads as fog on the dark wallpaper); gradients only dim the foot near the line
-        var gAmb = grad(y, y - maxH, '224,176,74', 0.35, 0.95), gGrey = grad(y, y - maxH, '96,104,122', 0.45, 0.95),
-            gAmbR = grad(y, y + maxH * 0.45, '224,176,74', 0.16, 0), gGreyR = grad(y, y + maxH * 0.45, '96,104,122', 0.18, 0);
+        var gAmb = grad(y, y - maxH, LC, 0.35, 0.95), gGrey = grad(y, y - maxH, UC, 0.45, 0.95),
+            gAmbR = grad(y, y + maxH * 0.45, LC, 0.16, 0), gGreyR = grad(y, y + maxH * 0.45, UC, 0.18, 0);
+        var barK = 1 - m;   /* hb morph: bars collapse into the baseline while the trace grows out of it */
         // clearing sweep (right→left): after the line joins it touches the baseline only; on a track change it takes the bars with it
         var lit = wf ? wf.lights(g2, W, H, y) : false;   /* stage lights behind the bars; when lit, each bar punches the light out under itself so it reads as solid */
         var lpx = px;
@@ -477,7 +485,7 @@
         for (var i = 0; i < n; i++) {
           var target = lv[i];   // follows the real signal, so the fade-out and the bars fall together
           levels[i] = target > levels[i] ? target : Math.max(target, levels[i] * dk);
-          var h = levels[i] * maxH, x = i * bw + 1, w = bw - 2; if (h > 0.5) any = true;
+          var h = levels[i] * maxH * barK, x = i * bw + 1, w = bw - 2; if (levels[i] * maxH > 0.5) any = true;
           // the play head wipes each bar from its left edge: grey underneath, amber over the part left of px
           // vertical gradients: bars are dim where they meet the baseline and brighten upward (reflection fades downward),
           // so the line reads as its own element without a gap; no per-bar shadow (it smears)
@@ -487,23 +495,35 @@
           var aw = Math.min(w, px - x);
           if (aw > 0) { g2.fillStyle = gAmb; g2.fillRect(x, y - h, aw, h); g2.fillStyle = gAmbR; g2.fillRect(x, y, aw, h * 0.45); }
         }
+        if (m > 0) {   // ECG-style trace: the spectrum as one continuous line (played part bright, unplayed dim), amplitude grows with the morph
+          g2.save(); g2.lineWidth = 2; g2.lineJoin = 'round'; g2.lineCap = 'round';
+          function trace(from, to, col, al, blur) {
+            g2.strokeStyle = 'rgba(' + col + ',' + al + ')'; g2.shadowColor = 'rgba(' + col + ',.8)'; g2.shadowBlur = blur; g2.beginPath();
+            var started = false;
+            for (var k = 0; k < n; k++) { var cx = k * bw + bw / 2; if (cx < from - bw || cx > to + bw) continue; var yy = y - levels[k] * maxH * m; if (!started) { g2.moveTo(Math.max(from, cx), yy); started = true; } else g2.lineTo(cx, yy); }
+            if (started) g2.stroke();
+          }
+          g2.save(); g2.beginPath(); g2.rect(0, 0, Math.max(0, px), H); g2.clip(); trace(0, px, GRN, 0.95, 12 * m); g2.restore();
+          g2.save(); g2.beginPath(); g2.rect(px, 0, W - px, H); g2.clip(); trace(px, W, DIMG, 0.7, 0); g2.restore();
+          g2.restore();
+        }
         if (wf) wf.draw(g2, W, H, y, st, now);   /* waterfall: over the bars, under the line */
         if (wf) { var ov = wf.overlay(g2, W, H), dark = ov.dark;   /* lighting cues: dim / flash over wallpaper, bars and notes — drawn before the baseline, so the line stays bright */
           if (dark > 0) {   // in the dark the bars keep a faint amber glow (drawn over the veil so they show through it); it throbs on the scene's pulse track
-            g2.save(); g2.globalAlpha = Math.min(1, dark * (0.35 + 0.65 * ov.pulse)); g2.shadowColor = 'rgba(224,176,74,.9)'; g2.shadowBlur = 14 + 16 * ov.pulse; g2.fillStyle = 'rgba(224,176,74,.55)';
-            for (var gi = 0; gi < n; gi++) { var gh = levels[gi] * maxH; if (gh > 0.5) g2.fillRect(gi * bw + 1, y - gh, bw - 2, gh); }
+            g2.save(); g2.globalAlpha = Math.min(1, dark * (0.35 + 0.65 * ov.pulse)); g2.shadowColor = 'rgba(' + LC + ',.9)'; g2.shadowBlur = 14 + 16 * ov.pulse; g2.fillStyle = 'rgba(' + LC + ',.55)';
+            for (var gi = 0; gi < n; gi++) { var gh = levels[gi] * maxH * barK; if (gh > 0.5) g2.fillRect(gi * bw + 1, y - gh, bw - 2, gh); }
             g2.restore();
           }
         }
         // baseline glow eases between 'sound' (1) and 'silence' (.55) instead of snapping — no more glow dropping out when a track starts quietly
         glow += ((any ? 1 : 0.55) - glow) * 0.05;
-        g2.strokeStyle = 'rgba(224,176,74,' + (0.28 + 0.62 * glow).toFixed(3) + ')'; g2.shadowColor = 'rgba(224,176,74,.6)'; g2.shadowBlur = 18 * glow; g2.beginPath(); g2.moveTo(0, y); g2.lineTo(lpx, y); g2.stroke();
+        g2.strokeStyle = 'rgba(' + LC + ',' + (0.28 + 0.62 * glow).toFixed(3) + ')'; g2.shadowColor = 'rgba(' + LC + ',.6)'; g2.shadowBlur = 18 * glow; g2.beginPath(); g2.moveTo(0, y); g2.lineTo(lpx, y); g2.stroke();
         if (lpx < W) { g2.strokeStyle = 'rgba(255,255,255,.22)'; g2.shadowBlur = 0; g2.beginPath(); g2.moveTo(lpx, y); g2.lineTo(W, y); g2.stroke(); }
         // play head: same amber as the line (no highlight), just a stronger halo at the amber/grey boundary
-        g2.strokeStyle = 'rgba(224,176,74,.9)'; g2.shadowColor = 'rgba(224,176,74,.9)'; g2.shadowBlur = 24;
+        g2.strokeStyle = 'rgba(' + LC + ',.9)'; g2.shadowColor = 'rgba(' + LC + ',.9)'; g2.shadowBlur = 24;
         g2.beginPath(); g2.moveTo(Math.max(0, lpx - 14), y); g2.lineTo(lpx, y); g2.stroke(); g2.shadowBlur = 0;
       } else {
-        g2.strokeStyle = 'rgba(224,176,74,.28)'; g2.shadowBlur = 0;
+        g2.strokeStyle = 'rgba(' + LC + ',.28)'; g2.shadowBlur = 0;
         g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
       }
     }
