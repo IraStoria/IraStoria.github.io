@@ -260,8 +260,20 @@
     var slew = null, SLEW_MS = 500;
     function preroll(t0, lead) { pre = { t0: t0, lead: lead }; ensure(ext.state(), t0); }
     function hex(h) { var v = parseInt(h.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255].join(','); }
+    // phone: pitch notes within a semitone of each other that touch in time fuse into one block (fewer, fatter shapes on a screen where a semitone is ~3 px); bent notes stay as they are
+    var MERGE_GAP_S = 0.06, MERGE_SEMI = 1;
+    function mergeNarrow(notes) {
+      var out = [];
+      for (var i = 0; i < notes.length; i++) {
+        var n = notes[i], hit = null;
+        if (n.length <= 4) for (var k = out.length - 1; k >= 0 && k >= out.length - 12; k--) { var o = out[k]; if (o.length <= 4 && Math.abs(o[2] - n[2]) <= MERGE_SEMI && o[1] + MERGE_GAP_S >= n[0]) { hit = o; break; } }
+        if (hit) { if (n[1] > hit[1]) hit[1] = n[1]; if (n[3] > hit[3]) hit[3] = n[3]; }
+        else out.push(n.slice());
+      }
+      return out;
+    }
     function prep(j) {
-      j.tracks.forEach(function (t) { t.rgb = t.rgb0 = hex(t.color || '#e0b04a'); var md = 0; t.notes.forEach(function (n) { if (n[1] - n[0] > md) md = n[1] - n[0]; }); t.maxDur = md; });
+      j.tracks.forEach(function (t) { t.rgb = t.rgb0 = hex(t.color || '#e0b04a'); var md = 0; t.notes.forEach(function (n) { if (n[1] - n[0] > md) md = n[1] - n[0]; }); t.maxDur = md; t.notesN = t.lane === 'pitch' ? mergeNarrow(t.notes) : t.notes; });
       return j;
     }
     // track change: the current layer slides up and out, the new one (once fetched) slides in from the top edge; the very first layer glides in slowly (boot)
@@ -353,14 +365,14 @@
       if (alpha < 1) g2.globalAlpha = alpha;   /* layer fades in with the glide (and out with the exit) */
       data.tracks.forEach(function (t) {
         t.rgb = hb ? '61,255,122' : t.rgb0;   /* heartbeat egg: every note goes ECG green */
-        var notes = t.notes, i = firstAt(notes, now - tail - t.maxDur), end = now + LOOKAHEAD_S, x, w, col = t.lane !== 'pitch';
+        var notes = narrow && t.notesN ? t.notesN : t.notes, i = firstAt(notes, now - tail - t.maxDur), end = now + LOOKAHEAD_S, x, w, col = t.lane !== 'pitch';
         if (t.lane === 'drum' || t.lane === 'fx') { x = left + (t.row || 0) * colGap; w = colW; }
         else if (t.lane === 'beat') { x = beatX; w = colW; if (hb) { ecg(t, narrow ? x + w / 2 : W * 0.905, colW * 3); return; } }   /* ECG sits further right on desktop (between the o and r of the name) */   /* heartbeat egg: trace instead of blocks */
         for (; i < notes.length && notes[i][0] < end; i++) {
           var nt = notes[i], t0 = nt[0], t1 = nt[1]; if (t.lane === 'drum' || t.lane === 'beat') t1 = Math.min(t1, t0 + 0.18);   /* hits read as short blocks whatever the MIDI length */
           if (t1 < now - tail) continue;
           var bx = 0, bent = !col && nt.length > 4;
-          if (!col) { w = Math.max(5, semi * 1.25); bx = xPitch(nt[2]) - w / 2; x = bx; }   /* user's call: bigger notes over strict non-overlap (rims keep neighbours readable); >=5px on narrow screens */
+          if (!col) { w = narrow ? Math.max(9, semi * 2.5) : Math.max(5, semi * 1.25); bx = xPitch(nt[2]) - w / 2; x = bx; }   /* phone: ~2.5 semitones wide (>= 9 px) — fat blocks, overlap allowed */   /* user's call: bigger notes over strict non-overlap (rims keep neighbours readable); >=5px on narrow screens */
           var dur = nt[1] - nt[0], bf = now < t0 ? 0 : Math.min(1, (Math.min(now, nt[1]) - t0) / dur);
           if (bent) x = bx + bendSmooth(nt, bf, dur, semi, xPitch);   /* the block (and its flash) sits where the pitch currently is */
           var yTop = y - (t1 - now) * pps, yBot = y - (t0 - now) * pps, vel = nt[3] / 127;
@@ -506,10 +518,12 @@
         var lit = wf ? wf.lights(g2, W, H, y) : false;   /* stage lights behind the bars; when lit, each bar punches the light out under itself so it reads as solid */
         var lpx = px;
         if (clearT0) { var cp = (now - clearT0) / CLEAR_MS; if (cp >= 1) clearT0 = 0; else { var sx = W * clearFrom * (1 - ease(cp)); lpx = Math.max(px, sx); if (clearBars) px = Math.max(px, sx); } }
+        var areaMode = W < 700 && m <= 0;   /* phone: bars and MIDI blocks are both thin sticks and blur together — the spectrum becomes one smooth filled silhouette instead */
         for (var i = 0; i < n; i++) {
           var target = lv[i];   // follows the real signal, so the fade-out and the bars fall together
           levels[i] = target > levels[i] ? target : Math.max(target, levels[i] * dk);
           var h = levels[i] * maxH * (1 - hbAt(i * bw + bw / 2)), x = i * bw + 1, w = bw - 2; if (levels[i] * maxH > 0.5) any = true;
+          if (areaMode) continue;
           // the play head wipes each bar from its left edge: grey underneath, amber over the part left of px
           // vertical gradients: bars are dim where they meet the baseline and brighten upward (reflection fades downward),
           // so the line reads as its own element without a gap; no per-bar shadow (it smears)
@@ -518,6 +532,26 @@
           g2.fillStyle = gGreyR; g2.fillRect(x, y, w, h * 0.45);
           var aw = Math.min(w, px - x);
           if (aw > 0) { g2.fillStyle = gAmb; g2.fillRect(x, y - h, aw, h); g2.fillStyle = gAmbR; g2.fillRect(x, y, aw, h * 0.45); }
+        }
+        if (areaMode) {
+          // smoothed silhouette through the bar tops (3-tap average, quadratic through midpoints); played part amber via a clip, the rest slate; mirrored reflection below the line
+          function areaPath() {
+            g2.beginPath(); g2.moveTo(0, y); var px_ = 0, py_ = y - sm(0);
+            g2.lineTo(px_, py_);
+            for (var k = 1; k < n; k++) { var cx_ = k * bw + bw / 2, cy_ = y - sm(k); g2.quadraticCurveTo(px_, py_, (px_ + cx_) / 2, (py_ + cy_) / 2); px_ = cx_; py_ = cy_; }
+            g2.lineTo(W, py_); g2.lineTo(W, y); g2.closePath();
+          }
+          function sm(k) { var a = levels[Math.max(0, k - 1)], b = levels[k], c = levels[Math.min(n - 1, k + 1)]; return (a + 2 * b + c) / 4 * maxH * 0.9; }
+          function fillArea(gUp, gDown, clipTo) {
+            g2.save(); if (clipTo != null) { g2.beginPath(); g2.rect(0, 0, clipTo, H); g2.clip(); }
+            areaPath(); g2.fillStyle = gUp; g2.fill();
+            g2.translate(0, y); g2.scale(1, -0.45); g2.translate(0, -y); areaPath(); g2.fillStyle = gDown; g2.fill();
+            g2.restore();
+          }
+          if (lit) { g2.globalCompositeOperation = 'destination-out'; fillArea('#000', '#000', null); g2.globalCompositeOperation = 'source-over'; }
+          var gAmbA = grad(y, y - maxH, LC, 0.30, 0.80), gGreyA = grad(y, y - maxH, UC, 0.35, 0.75), gAmbAR = grad(y, y - maxH, LC, 0.14, 0), gGreyAR = grad(y, y - maxH, UC, 0.16, 0);   /* reflection gradients are expressed in the flipped space */
+          fillArea(gGreyA, gGreyAR, null);
+          if (px > 0) fillArea(gAmbA, gAmbAR, px);
         }
         if (m > 0) {   // ECG-style trace: the spectrum as one continuous line (played part bright, unplayed dim), amplitude grows with the morph
           g2.save(); g2.lineWidth = 2; g2.lineJoin = 'round'; g2.lineCap = 'round';
