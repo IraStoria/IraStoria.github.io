@@ -24,7 +24,7 @@
       e3: '自動接手：到決策點若沒有選擇，由「隨機」或「順序」接手（順序＝照段落自然順序一路到 I）。I loop 沒被指定下一段時會自我循環。',
       e4: '接續規則：每段允許接哪些段由設定檔定義；不允許的按鈕會變灰。',
       e5: '每段自帶前導與尾音：下一段的前導與上一段的尾音重疊，接縫仍落在小節線上；決策點（進度條白線）依候選段的前導自動提前。',
-      note: '素材為 IraStoria 原創曲的段落切片。'
+      note: 'Full on V6 - by Shiou Hsu'
     },
     en: {
       title: 'Interactive Section Player',
@@ -40,7 +40,7 @@
       e3: 'Auto hand-over: with nothing queued at the decision point, Random or In-order takes over (in order = the natural section order through to I). I loop repeats itself when nothing else is queued.',
       e4: 'Rules: the config restricts which sections may follow which; disallowed buttons grey out.',
       e5: 'Every section carries its own lead-in and tail: the next lead-in overlaps the previous tail while the seam stays on the barline; the decision point (white marker) moves earlier by the candidates\' lead-ins.',
-      note: 'Material: section slices of original IraStoria tracks.'
+      note: 'Full on V6 - by Shiou Hsu'
     }
   };
   var lang = 'zh';
