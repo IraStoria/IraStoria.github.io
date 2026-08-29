@@ -233,7 +233,62 @@
     analyser: function () { var a = ext.api(); return a ? a.analyser() : player.analyser(); },
     state: function () { var a = ext.api(); return a ? a.state() : player.state(); }
   };
-  function makeWave(cv, yRatio) {
+  // ============================================================ waterfall: MIDI piano roll falling onto the spectrum line (IDEA-004)
+  // notes JSON (built from content/midi/<id>.mid by build.py) is fetched when the track changes; the clock is the player's own position
+  // (frozen while paused). Pitched lanes share the spectrum's log-frequency X so a note lands on the bars it lights up; drum / fx lanes
+  // are fixed columns on the left, the beat lane is the rightmost column. A note keeps falling past the line, greyed and fading.
+  var LOOKAHEAD_S = 4, TAIL_FRAC = 0.32, LATENCY_S = 0;
+  function makeWaterfall() {
+    var url = '', data = null, pending = null;
+    function hex(h) { var v = parseInt(h.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255].join(','); }
+    function ensure(st) {
+      var u = st.notes || '';
+      if (u === url) return; url = u; data = null;
+      if (!u) return;
+      var req = pending = fetch('../' + u).then(function (r) { return r.json(); }).then(function (j) {
+        if (req !== pending) return;
+        j.tracks.forEach(function (t) { t.rgb = hex(t.color || '#e0b04a'); var md = 0; t.notes.forEach(function (n) { if (n[1] - n[0] > md) md = n[1] - n[0]; }); t.maxDur = md; });
+        j.cols = j.tracks.filter(function (t) { return t.lane === 'drum' || t.lane === 'fx'; }).reduce(function (m, t) { return Math.max(m, (t.row || 0) + 1); }, 0);
+        data = j;
+      }).catch(function () {});
+    }
+    function firstAt(notes, t) { var lo = 0, hi = notes.length; while (lo < hi) { var m = (lo + hi) >> 1; if (notes[m][0] < t) lo = m + 1; else hi = m; } return lo; }
+    // draw(g2, W, H, y, st, n): n = bar count so pitched X matches the bars exactly
+    function draw(g2, W, H, y, st, n) {
+      ensure(st); if (!data || !st.started) return;
+      var now = st.pos + (data.offset_ms || 0) / 1000 + LATENCY_S, pps = y / LOOKAHEAD_S, tail = H * TAIL_FRAC / pps;
+      var bw = W / n, hiBin = 1023, nyq = st.sr / 2, colW = Math.max(10, Math.min(16, bw)), colGap = colW * 1.6, left = 112;   /* left columns start right of the app icon column (≈90px) */
+      function xPitch(p) { var f = 440 * Math.pow(2, (p - 69) / 12), bin = f / nyq * 1024; return W * Math.log(Math.max(1, bin)) / Math.log(hiBin); }
+      g2.save(); g2.lineWidth = 1;
+      data.tracks.forEach(function (t) {
+        var notes = t.notes, i = firstAt(notes, now - tail - t.maxDur), end = now + LOOKAHEAD_S, x, w;
+        if (t.lane === 'drum' || t.lane === 'fx') { x = left + (t.row || 0) * colGap; w = colW; }
+        else if (t.lane === 'beat') { x = W - 18 - colW; w = colW; }
+        for (; i < notes.length && notes[i][0] < end; i++) {
+          var nt = notes[i], t0 = nt[0], t1 = nt[1]; if (t.lane === 'drum' || t.lane === 'beat') t1 = Math.min(t1, t0 + 0.18);   /* hits read as short blocks whatever the MIDI length */
+          if (t1 < now - tail) continue;
+          if (t.lane === 'pitch') { x = xPitch(nt[2]) - bw * 0.45; w = Math.max(3, bw * 0.9); }
+          var yTop = y - (t1 - now) * pps, yBot = y - (t0 - now) * pps, vel = nt[3] / 127;
+          if (yBot - yTop < 4) yTop = yBot - 4;
+          var live = t0 <= now && now < t1, above = Math.min(yBot, y), below = Math.max(yTop, y);
+          if (above > yTop) {   // part still above the line: coloured, brighter as it nears the line
+            var near = 1 - Math.min(1, (y - above) / y);
+            g2.fillStyle = 'rgba(' + t.rgb + ',' + (0.28 + 0.5 * vel * (0.4 + 0.6 * near)).toFixed(3) + ')'; g2.fillRect(x, yTop, w, above - yTop);
+            if (live) { g2.shadowColor = 'rgba(' + t.rgb + ',.9)'; g2.shadowBlur = 14; g2.fillStyle = 'rgba(' + t.rgb + ',.95)'; g2.fillRect(x, Math.max(yTop, y - 6), w, Math.min(6, y - yTop)); g2.shadowBlur = 0; }
+          }
+          if (yBot > below) {   // past the line: grey, fading with distance
+            var d = Math.min(1, (below - y) / (H * TAIL_FRAC)), gg = g2.createLinearGradient(0, below, 0, yBot);
+            gg.addColorStop(0, 'rgba(150,158,176,' + (0.26 * (1 - d)).toFixed(3) + ')'); gg.addColorStop(1, 'rgba(150,158,176,' + (0.26 * Math.max(0, 1 - Math.min(1, (yBot - y) / (H * TAIL_FRAC)))).toFixed(3) + ')');
+            g2.fillStyle = gg; g2.fillRect(x, below, w, yBot - below);
+          }
+        }
+      });
+      g2.restore();
+    }
+    return { draw: draw };
+  }
+  function makeWave(cv, yRatio, withNotes) {
+    var wf = withNotes ? makeWaterfall() : null;
     var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000;   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
     function grad(y0, y1, rgb, a0, a1) { var g = g2.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + rgb + ',' + a0 + ')'); g.addColorStop(1, 'rgba(' + rgb + ',' + a1 + ')'); return g; }
     function size() { if (cv.width !== cv.clientWidth || cv.height !== cv.clientHeight) { cv.width = cv.clientWidth; cv.height = cv.clientHeight; } }
@@ -264,6 +319,7 @@
             gAmbR = grad(y, y + maxH * 0.45, '224,176,74', 0.16, 0), gGreyR = grad(y, y + maxH * 0.45, '96,104,122', 0.18, 0);
         // clearing sweep (right→left): after the line joins it touches the baseline only; on a track change it takes the bars with it
         var lpx = px;
+        if (wf) wf.draw(g2, W, H, y, st, n);   /* waterfall sits under the bars and the line */
         if (clearT0) { var cp = (now - clearT0) / CLEAR_MS; if (cp >= 1) clearT0 = 0; else { var sx = W * clearFrom * (1 - ease(cp)); lpx = Math.max(px, sx); if (clearBars) px = Math.max(px, sx); } }
         for (var i = 0; i < n; i++) {
           var target = lv[i];   // follows the real signal, so the fade-out and the bars fall together
@@ -294,7 +350,7 @@
     function sweep(bars, fromFrac) { clearT0 = performance.now(); clearBars = !!bars; clearFrom = (fromFrac == null) ? 1 : Math.max(0, Math.min(1, fromFrac)); }
     return { start: start, connect: connect, sweep: sweep };
   }
-  var wave = makeWave($('#wave'), 0.58), phoneWave = makeWave($('#ph-wave'), 0.47);  // phone: slightly above centre
+  var wave = makeWave($('#wave'), 0.58, true), phoneWave = makeWave($('#ph-wave'), 0.47, false);   /* waterfall: desktop only for now */  // phone: slightly above centre
 
   // caption: fades in over CONNECT_MS (same as the line), follows the current track
   var caption = (function () {
@@ -705,7 +761,7 @@
       var mutedNow = muted || vol === 0;
       if (t.synth && playing && actx) { pos = (actx.currentTime - synthStart) % SYNTH_LEN; dur = SYNTH_LEN; }
       else if (audio && !t.synth) { pos = pausedAt !== null ? pausedAt : audio.currentTime; dur = audio.duration || 0; }
-      return { title: t.title || '', id: t.id || '', pos: pos, playing: playing, started: cur >= 0 && (started || playing || pos > 0), frac: dur ? pos / dur : 0, muted: mutedNow, vol: vol };
+      return { title: t.title || '', id: t.id || '', pos: pos, playing: playing, started: cur >= 0 && (started || playing || pos > 0), frac: dur ? pos / dur : 0, muted: mutedNow, vol: vol, notes: (t.media && t.media.notes) || '', sr: actx ? actx.sampleRate : 48000 };
     }
     function autoplay() { ensureCtx(); prepare(); if (!playing) play(); }
     /* gesture-time unlock: the AudioContext is created (=resumed) inside the gesture and the single <audio> element gets its first play()

@@ -160,10 +160,12 @@ def load_works():
         media = w.get("media") or {}
         if not isinstance(media, dict):
             raise BuildError(f"{p} ({wid}): 'media' must be an object")
-        allowed = {"youtube", "soundcloud", "local", "demo"}
+        allowed = {"youtube", "soundcloud", "local", "demo", "notes"}
         bad = set(media) - allowed
         if bad:
             raise BuildError(f"{p} ({wid}): unknown media key(s) {sorted(bad)}; allowed {sorted(allowed)}")
+        if "notes" in media and ("local" not in media or not (ROOT / media["notes"]).exists()):
+            raise BuildError(f"{p} ({wid}): media.notes needs media.local and an existing file ({media['notes']})")
         if "local" in media:
             lp = ROOT / media["local"]
             if not lp.exists():
@@ -424,7 +426,8 @@ def build_pages(site, works, demos, articles):
 
         # home = desktop OS shell (client renders apps from embedded JSON; sub-pages remain as deep links)
         def loc_media(m):
-            return dict(m, local=local_versioned(m["local"])) if "local" in m else m
+            m = dict(m, local=local_versioned(m["local"])) if "local" in m else m
+            return dict(m, notes=local_versioned(m["notes"])) if "notes" in m else m
 
         def loc(w):
             return {"id": w["id"], "type": w["type"], "year": w["year"], "featured": bool(w.get("featured")),
@@ -500,10 +503,31 @@ def build_pages(site, works, demos, articles):
 
 
 # ---------------------------------------------------------------- main
+def build_notes(check_only):
+    """content/midi/<id>.mid + <id>.map.json -> assets/notes/<id>.json (piano-waterfall data, IDEA-004)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("midi2notes", ROOT / "tools" / "midi2notes.py")
+    mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+    out = []
+    for mid in sorted((ROOT / "content" / "midi").glob("*.mid")):
+        mp = mid.with_name(mid.stem + ".map.json")
+        if not mp.exists():
+            raise BuildError(f"{mid.relative_to(ROOT)} has no {mp.name} (track layout required)")
+        dest = ROOT / "assets" / "notes" / (mid.stem + ".json")
+        if not check_only:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            mod.main([None, str(mid), str(dest), "--map", str(mp)])
+        elif not dest.exists():
+            raise BuildError(f"{dest.relative_to(ROOT)} missing — run build.py without --check first")
+        out.append(dest)
+    return out
+
+
 def main(argv):
     check_only = "--check" in argv
     print("build.py — validating content (fail-closed)")
     try:
+        build_notes(check_only)
         site = load_site()
         works = load_works()
         demos = load_demos(works)

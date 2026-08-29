@@ -13,7 +13,8 @@
       "en": "Original track (2026)."
     },
     "media": {
-      "local": "assets/audio/elcirtnev.mp3"
+      "local": "assets/audio/elcirtnev.mp3",
+      "notes": "assets/notes/elcirtnev.json"
     },
     "platform": "all",
     "links": [],
