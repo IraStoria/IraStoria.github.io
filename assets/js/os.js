@@ -70,7 +70,7 @@
     var ul = $('#upd-log'); if (ul) ul.innerHTML = (D.updates || []).length ? D.updates.map(function (u) { return '<div class="msg"><time>' + esc(u.date) + '</time><p>' + esc(u.text) + '</p></div>'; }).join('') : '<p class="note">' + esc(U.updates_empty) + '</p>';
     document.querySelectorAll('.np-cap .np-lbl').forEach(function (l) { var stt = l.querySelector('.np-state'); l.textContent = U.player_now + (stt ? ' · ' : ''); if (stt) l.appendChild(stt); });
     caption.reset();
-    Object.keys(wins).forEach(function (a) { var w = wins[a]; if (!TITLES[a]) return; w.setAttribute('aria-label', TITLES[a]); var tt = w.querySelector('.win-title'); if (tt) tt.innerHTML = GLYPH[a] + ' ' + esc(TITLES[a]); var ft = w.querySelector('.win-foot a'); if (ft) ft.textContent = U.open_page; if (RENDER[a]) RENDER[a](w.querySelector('.win-body'), w); });
+    Object.keys(wins).forEach(function (a) { var w = wins[a]; if (!TITLES[a]) return; w.setAttribute('aria-label', TITLES[a]); var tt = w.querySelector('.win-title'); if (tt) tt.innerHTML = '<span class="wg">' + GLYPH[a] + '</span> ' + esc(TITLES[a]); var ft = w.querySelector('.win-foot a'); if (ft) ft.textContent = U.open_page; if (RENDER[a]) RENDER[a](w.querySelector('.win-body'), w); });
   }
 
   // ============================================================ boot sequence
@@ -733,7 +733,7 @@
     var x = Math.max(110, Math.min(vw - W - 20, 140 + (spawn % 5) * 40)), y = Math.max(8, Math.min(vh - H - 90, 30 + (spawn % 5) * 32)); spawn++;
     w.style.cssText = 'left:' + x + 'px;top:' + y + 'px;width:' + W + 'px;height:' + H + 'px;z-index:' + (++z);
     w.innerHTML = '<div class="win-bar"><span class="dots"><button class="close" title="' + esc(U.win_close) + '"></button><button class="min" title="' + esc(U.win_min) + '"></button><button class="max"></button></span>' +
-      '<span class="win-title">' + glyph + ' ' + esc(title) + '</span></div><div class="win-body"></div>' +
+      '<span class="win-title">' + '<span class="wg">' + glyph + '</span> ' + esc(title) + '</span></div><div class="win-body"></div>' +
       ((opts.page || PAGES[app]) ? '<div class="win-foot"><span></span><a href="' + esc(opts.page || PAGES[app]) + '">' + esc(U.open_page) + '</a></div>' : '');
     $('.close', w).addEventListener('click', function () { closeApp(app); });
     $('.min', w).addEventListener('click', function () { minimize(app); });
