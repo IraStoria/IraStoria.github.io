@@ -164,9 +164,12 @@
     initDesktop();
     // stage 2: two lines grow from the edges and meet in the middle; the instant they connect: music starts,
     // stage 3: wallpaper colours, now-playing caption, icons and dock fade in together
-    wave.connect(function () { try { player.autoplay(); } catch (e) {} caption.arm(); desktop.classList.remove('dark'); });
+    var lead = wfLead();
+    wave.connect(function () { desktop.classList.remove('dark'); setTimeout(function () { try { player.autoplay(); } catch (e) {} caption.arm(); }, Math.max(0, lead * 1000 - CONNECT_MS)); }, lead);   /* caption arms with the music, so it never reads 'paused' during the pre-roll */
     });
   }
+  // waterfall pre-roll: with the waterfall on, notes start falling when the lines start and the music waits until the first ones reach the line
+  function wfLead() { try { return (wfOn() && player.state().notes) ? LOOKAHEAD_S : 0; } catch (e) { return 0; } }
   function typeLine(text, cb) {
     var i = 0, span = document.createElement('span'); span.className = 'p'; log.appendChild(span);
     var cur = document.createElement('span'); cur.className = 'cursor'; log.appendChild(cur);
@@ -245,7 +248,9 @@
   var LOOKAHEAD_S = 4, TAIL_FRAC = 0.32, LATENCY_S = 0, WF_CHANCE = 0.1, BEND_SMOOTH_S = 0.3;   /* WF_CHANCE: probability that this page load shows the waterfall at all (rolled once, every track follows); EE_midi forces it */
   var WF_ON = null; function wfOn() { if (WF_ON === null) WF_ON = !!EE.midi || !!EE_TRACK || Math.random() < WF_CHANCE; return WF_ON; }
   function makeWaterfall() {
-    var url = '', data = null, pending = null, FLASH_S = 0.3, anim = null, lastPos = 0, ANIM_IN_MS = 1600, ANIM_SWAP_IN_MS = 600, ANIM_OUT_MS = 450, next = null;
+    var url = '', data = null, pending = null, FLASH_S = 0.3, anim = null, lastPos = 0, ANIM_IN_MS = 1600, ANIM_SWAP_IN_MS = 600, ANIM_OUT_MS = 450, next = null, pre = null;
+    // pre-roll (boot): the clock runs from -lead s while the connect lines grow, so the first notes fall the full height before the music starts
+    function preroll(t0, lead) { pre = { t0: t0, lead: lead }; ensure(ext.state(), t0); }
     function hex(h) { var v = parseInt(h.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255].join(','); }
     function prep(j) {
       j.tracks.forEach(function (t) { t.rgb = hex(t.color || '#e0b04a'); var md = 0; t.notes.forEach(function (n) { if (n[1] - n[0] > md) md = n[1] - n[0]; }); t.maxDur = md; });
@@ -294,8 +299,11 @@
           if (p >= 1) { data = next; next = null; anim = data ? { mode: 'in', t0: nowMs, ms: ANIM_SWAP_IN_MS } : null; shift = data ? -H : 0; }
         } else { shift = -H * (1 - ease(p)); if (p >= 1) { anim = null; shift = 0; } }
       }
-      if (!data || !st.started) return;
-      var pos = (anim && anim.mode === 'out') ? anim.pos : st.pos; lastPos = pos;
+      if (!data) return;
+      var pos;
+      if (pre) { if (st.started && st.pos > 0.05) pre = null; else pos = -pre.lead + (nowMs - pre.t0) / 1000; }   /* pre-roll until the audio clock really moves */
+      if (pos === undefined) { if (!st.started) return; pos = (anim && anim.mode === 'out') ? anim.pos : st.pos; }
+      lastPos = pos;
       var now = pos + (data.offset_ms || 0) / 1000 + LATENCY_S, pps = y / LOOKAHEAD_S, tail = H * TAIL_FRAC / pps;
       var hiBin = 1023, nyq = st.sr / 2, semi = W * Math.log(Math.pow(2, 1 / 12)) / Math.log(hiBin);   /* one semitone in px (constant on the log axis) */
       var narrow = W < 700, colW = narrow ? Math.max(7, Math.min(10, semi * 2)) : Math.max(14, Math.min(22, semi * 1.5)), colGap = colW * 1.9, left = narrow ? W * 0.04 : Math.max(120, W * 0.085), beatX = narrow ? W * 0.9 : W * 0.8;   /* columns sit inward, not glued to the edges; the phone packs them tighter */
@@ -363,7 +371,7 @@
       });
       g2.restore();
     }
-    return { draw: draw };
+    return { draw: draw, preroll: preroll };
   }
   function makeWave(cv, yRatio, withNotes) {
     var wf = withNotes ? makeWaterfall() : null;
@@ -378,6 +386,7 @@
       g2.lineWidth = 2; g2.strokeStyle = 'rgba(224,176,74,.85)'; g2.shadowColor = 'rgba(224,176,74,.6)'; g2.shadowBlur = 12;
       if (mode === 'connect') {
         var p = Math.min(1, (performance.now() - connectT0) / CONNECT_MS), e = ease(p), half = W / 2 * e;
+        if (wf) { g2.shadowBlur = 0; wf.draw(g2, W, H, y, ext.state(), now); g2.shadowColor = 'rgba(224,176,74,.6)'; g2.shadowBlur = 12; }   /* pre-rolling notes fall while the lines grow */
         g2.beginPath(); g2.moveTo(0, y); g2.lineTo(half, y); g2.moveTo(W, y); g2.lineTo(W - half, y); g2.stroke();
         if (p >= 1) { mode = 'live'; sweep(false); if (onConnected) { var cb = onConnected; onConnected = null; cb(); } }
         return;
@@ -424,7 +433,7 @@
       }
     }
     function start(m) { if (!cv) return; mode = m || 'idle'; if (!raf) draw(); }
-    function connect(cb) { if (!cv) { cb(); return; } onConnected = cb; connectT0 = performance.now(); start('connect'); }
+    function connect(cb, lead) { if (!cv) { cb(); return; } onConnected = cb; connectT0 = performance.now(); if (wf && lead) wf.preroll(connectT0, lead); start('connect'); }   /* lead: waterfall pre-roll seconds */
     function sweep(bars, fromFrac) { clearT0 = performance.now(); clearBars = !!bars; clearFrom = (fromFrac == null) ? 1 : Math.max(0, Math.min(1, fromFrac)); }
     return { start: start, connect: connect, sweep: sweep };
   }
@@ -1031,7 +1040,8 @@
         if (instant) { phoneWave.start('live'); caption.arm(); return; }
         // three-stage reveal (as on the desktop): black veil with only the line -> the halves join and the music starts -> icons / name / dock fade + slide in
         root.classList.add('dark');
-        phoneWave.connect(function () { try { player.autoplay(); } catch (e) {} caption.arm(); root.classList.remove('dark'); });
+        var lead = wfLead();
+        phoneWave.connect(function () { root.classList.remove('dark'); setTimeout(function () { try { player.autoplay(); } catch (e) {} caption.arm(); }, Math.max(0, lead * 1000 - CONNECT_MS)); }, lead);
       }
       if (instant) go(); else fx.click(go);   // easter egg first, then the home screen
     }
