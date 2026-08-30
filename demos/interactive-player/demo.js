@@ -1,3 +1,4 @@
+/* © 2026 IraStoria (https://irastoria.github.io/). All rights reserved. See /LICENSE. */
 /* Interactive Section Player. Written from scratch (ADR-004), Web Audio only.
    Every section is a decoded AudioBuffer; playback = sample-accurate AudioBufferSourceNode.start(t).
    File model (from the file name Theme_Section_pickupBars_tailBars_Info):

@@ -1,3 +1,4 @@
+# © 2026 IraStoria (https://irastoria.github.io/). All rights reserved. See /LICENSE.
 """midi2notes.py — zero-dependency MIDI -> notes JSON for the desktop piano waterfall (IDEA-004).
 
 usage: python tools/midi2notes.py in.mid out.json [--map map.json] [--list]

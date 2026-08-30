@@ -1,3 +1,4 @@
+/* © 2026 IraStoria (https://irastoria.github.io/). All rights reserved. See /LICENSE. */
 :root{--bg:#0f1115;--bg2:#171a21;--fg:#e8e6e1;--dim:#9a9890;--accent:#e0b04a;--border:#2a2e38}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,"Noto Sans TC","Microsoft JhengHei",sans-serif;line-height:1.6}

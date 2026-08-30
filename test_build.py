@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# © 2026 IraStoria (https://irastoria.github.io/). All rights reserved. See /LICENSE.
 """Self-tests for build.py — run: python test_build.py
 Covers: fail-closed rules (ADR-002/003/004/005), internal link integrity, bilingual page pairing."""
 import copy

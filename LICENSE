@@ -1,0 +1,64 @@
+Copyright © 2026 IraStoria — https://irastoria.github.io/
+All rights reserved.  /  版權所有，保留一切權利。
+
+== English ==
+
+This repository is published publicly so that GitHub Pages can serve the
+website at https://irastoria.github.io/. Public visibility is NOT a grant of license.
+
+Unless explicitly stated otherwise in an individual file, ALL material in this
+repository — including but not limited to source code (HTML, CSS, JavaScript,
+Python), design, layout, animations, text, artwork, MIDI data, note maps, and
+all audio recordings and musical compositions under assets/audio and
+assets/notes — is the original work of IraStoria and is protected by copyright
+and related rights.
+
+You MAY:
+  * view the website in a browser and read the source for personal study.
+
+You MAY NOT, without prior written permission from the author:
+  * copy, reproduce, redistribute, or republish any part of this repository;
+  * use the code, design, or media as a basis for another website or product;
+  * remove or alter copyright notices, attribution, or identifying marks;
+  * present any part of this work as your own.
+
+Musical works ("elcirtnev>", "Summer - 立夏", "Rainbow - 虹",
+"Asymmetric Dissonant II" and others) are separately protected as musical
+compositions and sound recordings. No streaming, sampling, remixing, or
+re-upload is permitted.
+
+Third-party material (where present) remains the property of its respective
+owners and is used with permission or under its own terms; it is excluded from
+the claims above. See CREDITS notes in the relevant files.
+
+Authorship and priority are evidenced by the signed commit history of this
+repository (github.com/IraStoria/IraStoria.github.io).
+
+== 中文 ==
+
+本儲存庫公開僅為了讓 GitHub Pages 能提供 https://irastoria.github.io/ 網站服務，
+「公開可見」不等於授權。
+
+除個別檔案另有明示外，本儲存庫的一切內容——包含但不限於原始碼（HTML、CSS、
+JavaScript、Python）、設計、版面、動畫、文字、圖像、MIDI 資料、音符對映，
+以及 assets/audio、assets/notes 下的全部錄音與音樂作品——均為 IraStoria 的
+原創作品，受著作權及相關權利保護。
+
+您可以：
+  * 以瀏覽器瀏覽本網站，並為個人學習目的閱讀原始碼。
+
+未經作者事前書面同意，您不得：
+  * 複製、重製、散布或重新發布本儲存庫任何部分；
+  * 以本站的程式碼、設計或媒體作為其他網站或產品的基礎；
+  * 移除或竄改版權聲明、署名或識別標記；
+  * 將本作品任何部分宣稱為自己的作品。
+
+音樂作品（《elcirtnev>》《Summer - 立夏》《Rainbow - 虹》
+《Asymmetric Dissonant II》等）另受「音樂著作」與「錄音著作」保護，
+不得串流、取樣、混音或重新上傳。
+
+第三方素材（如有）仍屬各權利人所有，係經授權或依其條款使用，不在上述主張範圍內；
+詳見相關檔案內的 CREDITS 註記。
+
+著作人身分與創作先後，以本儲存庫經簽章的 commit 歷史為證
+（github.com/IraStoria/IraStoria.github.io）。

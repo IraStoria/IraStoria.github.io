@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# © 2026 IraStoria (https://irastoria.github.io/). All rights reserved. See /LICENSE.
 """
 IraStoria site builder — zero third-party dependencies (ADR-001).
 

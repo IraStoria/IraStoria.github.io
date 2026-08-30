@@ -1,3 +1,4 @@
+/* © 2026 IraStoria (https://irastoria.github.io/). All rights reserved. See /LICENSE. */
 /* Music Transition Concept Demo — written from scratch, Web Audio only, no external assets.
    Concept level only (ADR-004): shows *when* a section switch is allowed to happen, nothing else. */
 (function () {

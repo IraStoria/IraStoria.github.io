@@ -1,3 +1,4 @@
+/* © 2026 IraStoria (https://irastoria.github.io/). All rights reserved. See /LICENSE. */
 /* IraStoria site script — zero dependencies */
 (function () {
   'use strict';
