@@ -937,15 +937,16 @@
         g2.globalCompositeOperation = 'source-over';
         /* black-hole look: the disc is a dark hole; its rim is the brightest ring (white-orange) and the light falls off outward; the wave
            pushes that rim outward, so the body is brightest at the disc edge and fades toward the peaks. A wide additive halo sits behind. */
-        var shape = function (s) { return r0 + sm(s); }, a0 = 0.5 + 0.35 * rel + 0.15 * lvl;
-        g2.globalCompositeOperation = 'lighter'; g2.fillStyle = 'rgba(255,150,60,' + (0.08 + 0.12 * rel + 0.14 * pk).toFixed(3) + ')'; g2.shadowColor = 'rgba(255,160,70,.9)'; g2.shadowBlur = STAGE_HALO + 30 * rel + 40 * pk;
+        var shape = function (s) { return r0 + sm(s); }, a0 = 0.28 + 0.3 * rel + 0.12 * lvl;   /* M87-style: soft orange ring, never white-hot */
+        g2.globalCompositeOperation = 'lighter'; g2.fillStyle = 'rgba(255,140,50,' + (0.06 + 0.10 * rel + 0.12 * pk).toFixed(3) + ')'; g2.shadowColor = 'rgba(255,150,60,.8)'; g2.shadowBlur = STAGE_HALO + 30 * rel + 40 * pk;
         arc(shape); g2.fill();   /* halo */
         var grd = g2.createRadialGradient(x, y, r0, x, y, r0 + Math.max(1, amp));
-        grd.addColorStop(0, 'rgba(255,245,225,' + Math.min(1, a0 * 1.1).toFixed(3) + ')'); grd.addColorStop(0.18, 'rgba(255,190,90,' + (a0 * 0.85).toFixed(3) + ')'); grd.addColorStop(0.6, 'rgba(230,120,40,' + (a0 * 0.35).toFixed(3) + ')'); grd.addColorStop(1, 'rgba(200,80,30,0)');
-        g2.fillStyle = grd; g2.shadowColor = 'rgba(255,200,120,.8)'; g2.shadowBlur = 10 + 10 * rel + 16 * pk;
-        arc(shape); g2.fill(); g2.shadowBlur = 0;
-        g2.globalCompositeOperation = 'source-over'; g2.fillStyle = 'rgba(4,5,8,' + (0.78 * grow).toFixed(3) + ')'; arc(function () { return r0 * 0.985; }); g2.fill();   /* the hole */
-        var rim = g2.createRadialGradient(x, y, r0 * 0.9, x, y, r0 * 1.02); rim.addColorStop(0, 'rgba(255,240,210,0)'); rim.addColorStop(0.85, 'rgba(255,240,210,' + (0.5 + 0.4 * rel).toFixed(3) + ')'); rim.addColorStop(1, 'rgba(255,240,210,0)');
+        grd.addColorStop(0, 'rgba(255,200,120,' + a0.toFixed(3) + ')'); grd.addColorStop(0.25, 'rgba(255,160,70,' + (a0 * 0.8).toFixed(3) + ')'); grd.addColorStop(0.65, 'rgba(220,100,40,' + (a0 * 0.3).toFixed(3) + ')'); grd.addColorStop(1, 'rgba(180,70,30,0)');
+        g2.fillStyle = grd; g2.shadowColor = 'rgba(255,170,90,.7)'; g2.shadowBlur = 18 + 12 * rel + 16 * pk;
+        try { g2.filter = 'blur(' + (6 + 4 * rel).toFixed(0) + 'px)'; } catch (e) {}   /* the ring itself is fuzzy, like the EHT image */
+        arc(shape); g2.fill(); g2.shadowBlur = 0; try { g2.filter = 'none'; } catch (e) {}
+        g2.globalCompositeOperation = 'source-over'; g2.fillStyle = 'rgba(11,13,18,' + (0.97 * grow).toFixed(3) + ')'; arc(function () { return r0 * 0.985; }); g2.fill();   /* the hole: the desktop's own background colour */
+        var rim = g2.createRadialGradient(x, y, r0 * 0.9, x, y, r0 * 1.02); rim.addColorStop(0, 'rgba(255,190,110,0)'); rim.addColorStop(0.85, 'rgba(255,190,110,' + (0.18 + 0.22 * rel).toFixed(3) + ')'); rim.addColorStop(1, 'rgba(255,190,110,0)');
         g2.fillStyle = rim; arc(function () { return r0 * 1.02; }); g2.fill();   /* the event-horizon ring */
       });
       g2.globalCompositeOperation = 'source-over';
