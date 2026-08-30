@@ -785,7 +785,7 @@
      ensemble, no drift, no media elements); a limiter at the end keeps four full stems from clipping. ~75 MB of RAM per decoded stem, desktop only.
      Leaving: circles shrink -> line glides back down -> the OS music resumes and the play head runs to the left edge and slides back out. ---- */
   var STAGE_NEAR = 1.0, STAGE_MID = 0.75, STAGE_FAR = 0.10, STAGE_UMAX = 2.4, STAGE_K_IN = 1.3, STAGE_K_OUT = 1.4, STAGE_PAN_MAX = 0.8, STAGE_LP_MIN = 2500, STAGE_LP_MAX = 8000, STAGE_SPAN = 0.42;
-  var STAGE_LEAD_S = 6 * (60 / 120 / 2), STAGE_GROW_MS = 800, STAGE_GROW_DELAY_MS = 750, STAGE_REACH = 0.8, STAGE_GLOW_MIN = 90, STAGE_GLOW_MAX = 360, STAGE_BAR_MIN = 24, STAGE_BANDS = 64, STAGE_SPAN_X = 0.42, STAGE_SPAN_Y = 0.36, STAGE_LVL_GAIN = 2.2, STAGE_FLOOR_LV = 0.22;   /* FLOOR_LV: band level treated as silence (the desktop bars keep a −96 dB floor; here an empty band must read as empty) */
+  var STAGE_LEAD_S = 6 * (60 / 120 / 2), STAGE_GROW_MS = 800, STAGE_GROW_DELAY_MS = 750, STAGE_REACH = 0.8, STAGE_GLOW_MIN = 90, STAGE_GLOW_MAX = 360, STAGE_BAR_MIN = 24, STAGE_BANDS = 64, STAGE_SPAN_X = 0.42, STAGE_SPAN_Y = 0.36, STAGE_LVL_GAIN = 2.2, STAGE_FLOOR_LV = 0.22, STAGE_SMOOTH = 0.3, STAGE_RELEASE = 0.84;   /* SMOOTH: analyser smoothing (0.8 on the desktop bars — here low so hits jump); RELEASE: per-frame fall after a hit */   /* FLOOR_LV: band level treated as silence (the desktop bars keep a −96 dB floor; here an empty band must read as empty) */
   /* LEAD: one 6/8 bar at quarter = 120 (six eighths of 0.25 s). GROW_DELAY: the glows appear only once the bars have sunk and the line has moved up.
      REACH: at 100 % the silhouette's tip gets this far along the way from its edge to the centre line. SPAN_X/Y: half-width of a silhouette along its edge (fraction of W / H). */
   var stage = (function () {
@@ -836,7 +836,7 @@
       var mine = ch = { playing: false, t0: 0, dur: 0, piece: p };
       KEYS.forEach(function (k) {
         var g = ctx.createGain(), pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null, lp = ctx.createBiquadFilter(), an = ctx.createAnalyser();
-        lp.type = 'lowpass'; lp.frequency.value = 20000; lp.Q.value = 0.5; g.gain.value = 0.0001; an.fftSize = 2048; an.minDecibels = -96; an.maxDecibels = 6; an.smoothingTimeConstant = 0.8;   /* same window as the main spectrum */
+        lp.type = 'lowpass'; lp.frequency.value = 20000; lp.Q.value = 0.5; g.gain.value = 0.0001; an.fftSize = 2048; an.minDecibels = -96; an.maxDecibels = 6; an.smoothingTimeConstant = STAGE_SMOOTH;   /* same dB window as the main spectrum, much less smoothing: accents must jump */
         if (pan) { g.connect(pan); pan.connect(lp); } else g.connect(lp); lp.connect(an); an.connect(ctx.__out);   /* analyser after gain + filter: the silhouette shows what you actually hear from that piano */
         mine[k] = { g: g, pan: pan, lp: lp, an: an, td: new Uint8Array(1024), bands: [], lvl: 0, rel: 0, buf: null, src: null, done: 0, total: 0 };
         fetchStem('../' + p.stems[k], mine[k], function (ab) {
@@ -889,7 +889,7 @@
         /* live level (RMS of what this piano is putting out): fast attack, slower release, so the glow breathes with the playing */
         c.an.getByteTimeDomainData(c.td); var s = 0; for (var i = 0; i < c.td.length; i++) { var v = (c.td[i] - 128) / 128; s += v * v; }
         var rms = Math.min(1, Math.sqrt(s / c.td.length) * STAGE_LVL_GAIN); c.lvl = rms > c.lvl ? rms : c.lvl * 0.9;
-        var lv = barLevels(c.an, STAGE_BANDS); for (var q = 0; q < lv.length; q++) { var z = (lv[q] - STAGE_FLOOR_LV) / (1 - STAGE_FLOOR_LV); lv[q] = z > 0 ? Math.pow(z, 1.5) : 0; } if (c.bands.length !== STAGE_BANDS) c.bands = lv; else for (var b = 0; b < STAGE_BANDS; b++) c.bands[b] = lv[b] > c.bands[b] ? lv[b] : Math.max(lv[b], c.bands[b] * 0.93);   /* same fall-off feel as the desktop bars */
+        var lv = barLevels(c.an, STAGE_BANDS); for (var q = 0; q < lv.length; q++) { var z = (lv[q] - STAGE_FLOOR_LV) / (1 - STAGE_FLOOR_LV); lv[q] = z > 0 ? Math.pow(z, 1.5) : 0; } if (c.bands.length !== STAGE_BANDS) c.bands = lv; else for (var b = 0; b < STAGE_BANDS; b++) c.bands[b] = lv[b] > c.bands[b] ? lv[b] : Math.max(lv[b], c.bands[b] * STAGE_RELEASE);   /* instant attack, quick release: a sforzando reads as a jump */
       });
       /* canvas: per piano, from its screen edge — a radial glow at the edge midpoint (size = volume, pumped by the live level) and the
          spectrum as a stroke-less glow silhouette rising toward the centre: lows at the midpoint, highs toward the corners, mirrored.
@@ -915,13 +915,13 @@
           g2.lineTo(x - tx * S, y - ty * S); g2.closePath();
         }
         var top = amp, lin = g2.createLinearGradient(x, y, x + nx_ * top, y + ny_ * top);
-        var a0 = 0.16 + 0.30 * rel + 0.10 * lvl;
-        lin.addColorStop(0, 'rgba(232,190,90,' + a0.toFixed(3) + ')'); lin.addColorStop(0.5, 'rgba(232,190,90,' + (a0 * 0.5).toFixed(3) + ')'); lin.addColorStop(1, 'rgba(240,214,140,' + (a0 * 0.12).toFixed(3) + ')');
+        var a0 = 0.10 + 0.22 * rel + 0.10 * lvl;   /* translucent even at the edge: the wallpaper and icons stay visible through the light */
+        lin.addColorStop(0, 'rgba(232,190,90,' + a0.toFixed(3) + ')'); lin.addColorStop(0.45, 'rgba(232,190,90,' + (a0 * 0.45).toFixed(3) + ')'); lin.addColorStop(1, 'rgba(240,214,140,' + (a0 * 0.08).toFixed(3) + ')');
         g2.fillStyle = lin;
-        try { g2.filter = 'blur(' + (16 + 18 * rel).toFixed(0) + 'px)'; } catch (e) {}   /* wide halo pass */
+        try { g2.filter = 'blur(' + (22 + 22 * rel).toFixed(0) + 'px)'; } catch (e) {}   /* wide halo pass */
         path(); g2.fill();
-        try { g2.filter = 'blur(2.5px)'; } catch (e) {}   /* tighter body pass: the outline is readable but never a hard line */
-        g2.globalAlpha = 0.65; path(); g2.fill(); g2.globalAlpha = 1;
+        try { g2.filter = 'blur(6px)'; } catch (e) {}   /* softer body pass: the outline is readable but never a hard line, never a solid fill */
+        g2.globalAlpha = 0.4; path(); g2.fill(); g2.globalAlpha = 1;
         try { g2.filter = 'none'; } catch (e) {}
       });
       g2.globalCompositeOperation = 'source-over';
