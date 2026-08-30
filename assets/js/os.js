@@ -785,7 +785,7 @@
      ensemble, no drift, no media elements); a limiter at the end keeps four full stems from clipping. ~75 MB of RAM per decoded stem, desktop only.
      Leaving: circles shrink -> line glides back down -> the OS music resumes and the play head runs to the left edge and slides back out. ---- */
   var STAGE_NEAR = 1.0, STAGE_MID = 0.75, STAGE_FAR = 0.10, STAGE_UMAX = 2.4, STAGE_K_IN = 1.3, STAGE_K_OUT = 1.4, STAGE_PAN_MAX = 0.8, STAGE_LP_MIN = 2500, STAGE_LP_MAX = 8000, STAGE_SPAN = 0.42;
-  var STAGE_LEAD_S = 6 * (60 / 120 / 2), STAGE_GROW_MS = 800, STAGE_GROW_DELAY_MS = 750, STAGE_REACH_X = 0.92, STAGE_REACH_Y = 0.8, STAGE_GLOW_MIN = 60, STAGE_GLOW_MAX = 220, STAGE_BAR_MIN = 24, STAGE_BANDS = 64, STAGE_SPAN_X = 0.5, STAGE_SPAN_Y = 0.5, STAGE_LVL_GAIN = 2.2, STAGE_FLOOR_LV = 0.14, STAGE_SMOOTH = 0.15, STAGE_RELEASE = 0.7, STAGE_LVL_RELEASE = 0.8, STAGE_PUNCH_RELEASE = 0.8, STAGE_PUNCH = 0.6, STAGE_BAND_GAMMA = 2.4, STAGE_F_LO = 45, STAGE_F_HI = 2500, STAGE_TOP_INSET = 30, STAGE_MIN_H = 0.05;   /* TOP_INSET: the top edge's baseline sits under the menubar; MIN_H: the range never collapses below this share of its full height (always a mountain) */   /* PUNCH: extra height when the instant level jumps above its slow average (an accent); BAND_GAMMA: band contrast */   /* SMOOTH: analyser smoothing (0.8 on the desktop bars — here low so hits jump); RELEASE: per-frame fall after a hit */   /* FLOOR_LV: band level treated as silence (the desktop bars keep a −96 dB floor; here an empty band must read as empty) */
+  var STAGE_LEAD_S = 6 * (60 / 120 / 2), STAGE_GROW_MS = 800, STAGE_GROW_DELAY_MS = 750, STAGE_REACH_X = 0.92, STAGE_REACH_Y = 0.8, STAGE_GLOW_MIN = 60, STAGE_GLOW_MAX = 220, STAGE_BAR_MIN = 24, STAGE_BANDS = 64, STAGE_SPAN_X = 0.5, STAGE_SPAN_Y = 0.5, STAGE_LVL_GAIN = 2.2, STAGE_FLOOR_LV = 0.14, STAGE_SMOOTH = 0.15, STAGE_RELEASE = 0.7, STAGE_LVL_RELEASE = 0.8, STAGE_PUNCH_RELEASE = 0.8, STAGE_PUNCH = 0.6, STAGE_BAND_GAMMA = 2.4, STAGE_F_LO = 45, STAGE_F_HI = 2500, STAGE_TOP_INSET = 30, STAGE_MIN_H = 0;   /* TOP_INSET: the top edge's base sits under the menubar; MIN_H: 0 = with no sound the edge shows nothing at all (the range is built only from real band levels) */   /* PUNCH: extra height when the instant level jumps above its slow average (an accent); BAND_GAMMA: band contrast */   /* SMOOTH: analyser smoothing (0.8 on the desktop bars — here low so hits jump); RELEASE: per-frame fall after a hit */   /* FLOOR_LV: band level treated as silence (the desktop bars keep a −96 dB floor; here an empty band must read as empty) */
   /* LEAD: one 6/8 bar at quarter = 120 (six eighths of 0.25 s). GROW_DELAY: the glows appear only once the bars have sunk and the line has moved up.
      REACH_X/Y: at 100 % the left/right (top/bottom) silhouette's tip gets this far along the way from its edge to the centre. SPAN_X/Y: half-width of a silhouette along its edge (fraction of W / H).
      F_LO..F_HI: the band range shown (no top octaves — a piano has nothing there); lows sit at the two ends of an edge, the busiest upper mids at its midpoint.
@@ -919,11 +919,7 @@
       g2.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0); g2.clearRect(0, 0, geo.W, geo.H);
       KEYS.forEach(function (k) {
         var c = ch && ch[k], u = UNIT[k], x = geo.cx + u[0] * geo.ex, y = geo.cy + u[1] * geo.ey + (k === 'C' ? STAGE_TOP_INSET : 0), rel = c ? c.rel : 0, lvl = c ? c.lvl : 0;
-        var pk = c ? (c.punch || 0) : 0, R = (STAGE_GLOW_MIN + (STAGE_GLOW_MAX - STAGE_GLOW_MIN) * rel) * (0.7 + 0.5 * lvl) * (1 + 0.5 * pk) * grow, a = 0.06 + 0.14 * rel + 0.1 * lvl + 0.25 * pk;   /* a faint base light at the edge midpoint; an accent flares it */
-        if (R < 1) return;
-        g2.globalCompositeOperation = 'lighter';
-        var grd = g2.createRadialGradient(x, y, 0, x, y, R); grd.addColorStop(0, 'rgba(224,176,74,' + a.toFixed(3) + ')'); grd.addColorStop(0.3, 'rgba(224,176,74,' + (a * 0.45).toFixed(3) + ')'); grd.addColorStop(1, 'rgba(224,176,74,0)');
-        g2.fillStyle = grd; g2.fillRect(x - R, y - R, 2 * R, 2 * R);
+        var pk = c ? (c.punch || 0) : 0;   /* accents flare the range's own glow below; there is no separate light on the edge */
         if (!c || !c.bands.length) return;
         var horiz = !!u[0], dist = horiz ? geo.ex : geo.ey, S = horiz ? geo.H * STAGE_SPAN_Y : geo.W * STAGE_SPAN_X;   /* S: half-width along the edge */
         var amp = (STAGE_BAR_MIN + ((horiz ? STAGE_REACH_X : STAGE_REACH_Y) * dist - STAGE_BAR_MIN) * rel) * grow * (1 + STAGE_PUNCH * (c.punch || 0)), n = STAGE_BANDS, nx_ = -u[0], ny_ = -u[1], tx = horiz ? 0 : 1, ty = horiz ? -1 : 0;   /* (nx_,ny_): inward normal; (tx,ty): along the edge from the lows end — bottom->top on the side edges, left->right on the top/bottom edges */
@@ -940,9 +936,8 @@
            thin baseline along the edge so the range visibly stands on the edge instead of floating */
         var top = amp, lin = g2.createLinearGradient(x, y, x + nx_ * top, y + ny_ * top), a0 = 0.32 + 0.35 * rel + 0.12 * lvl;
         lin.addColorStop(0, 'rgba(224,176,74,' + (a0 * 0.35).toFixed(3) + ')'); lin.addColorStop(1, 'rgba(240,214,140,' + a0.toFixed(3) + ')');
-        g2.globalCompositeOperation = 'source-over'; g2.fillStyle = lin; g2.shadowColor = 'rgba(224,176,74,.7)'; g2.shadowBlur = 14 + 12 * rel;
+        g2.globalCompositeOperation = 'source-over'; g2.fillStyle = lin; g2.shadowColor = 'rgba(224,176,74,.7)'; g2.shadowBlur = 14 + 12 * rel + 16 * pk;
         path(); g2.fill(); g2.shadowBlur = 0;
-        g2.strokeStyle = 'rgba(224,176,74,' + (0.35 + 0.45 * rel).toFixed(3) + ')'; g2.lineWidth = 1.5; g2.beginPath(); g2.moveTo(x + tx * S, y + ty * S); g2.lineTo(x - tx * S, y - ty * S); g2.stroke();
       });
       g2.globalCompositeOperation = 'source-over';
       raf = requestAnimationFrame(tick);
