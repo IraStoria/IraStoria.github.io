@@ -390,9 +390,6 @@ body.hb .phone *:not(.np-title,.np-title *,canvas){text-shadow:0 0 8px rgba(61,2
 .stage{position:absolute;inset:0;z-index:4;pointer-events:none;opacity:0;transition:opacity .6s}
 .stage.in{opacity:1}
 .stage .st-cv{position:absolute;inset:0;width:100%;height:100%}
-.stage .st-dot{position:absolute;left:0;top:0;width:0;height:0;--core:.35;transform:scale(0)}   /* grows out of its point on open, shrinks back into it on close (driven per frame) */
-.stage .st-dot i{position:absolute;left:0;top:0;width:16px;height:16px;border-radius:50%;transform:translate(-50%,-50%);background:#1a2030;border:1px solid rgba(255,255,255,.3);box-shadow:0 0 14px 3px rgba(224,176,74,var(--core)),inset 0 0 6px rgba(224,176,74,var(--core))}
-.stage .st-dot b{position:absolute;left:0;top:14px;transform:translateX(-50%);font:600 10px/1 var(--mono);letter-spacing:.14em;color:var(--dim);white-space:nowrap}
 .stage .st-hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);width:min(70vw,520px);text-align:center;color:var(--dim);font:12px/1.7 var(--mono);transition:opacity .6s}
 .stage .st-hint.gone{opacity:0}
 .stage .st-head{position:absolute;top:38px;right:16px;display:flex;align-items:center;gap:.9rem;font:12px/1.4 var(--mono);color:var(--fg);pointer-events:auto}

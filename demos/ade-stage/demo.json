@@ -2,8 +2,8 @@
   "id": "ade-stage",
   "year": 2026,
   "title": {
-    "zh": "ADE ─ 四鋼琴環繞",
-    "en": "ADE — Four-Piano Surround"
+    "zh": "Asymmetric Dissonant ─ 四鋼琴環繞",
+    "en": "Asymmetric Dissonant — Four-Piano Surround"
   },
   "desc": {
     "zh": "ADE 樂章寫給四台鋼琴：前、後、左、右各一台，觀眾站在中間。四台同時演奏各自的內容，合起來才是一首曲子；站的位置不同，聽到的重點、音量與方位也不同。這裡的桌面就是場地，滑鼠就是你——移動滑鼠，混音跟著改變。",
@@ -15,8 +15,8 @@
     {
       "id": "ade",
       "title": {
-        "zh": "ADE",
-        "en": "ADE"
+        "zh": "Asymmetric Dissonant -《非和諧不等式》",
+        "en": "Asymmetric Dissonant"
       },
       "stems": {
         "L": "assets/audio/ade/L.mp3",

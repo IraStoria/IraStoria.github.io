@@ -777,39 +777,38 @@
      Volume: 75 % for all four at the centre, 100 % right at a dot, sliding to 10 % at the far edge — and once the listener is past the
      centre the fall-off speeds up (the piano behind you drops away). Pan = direction of each dot from the listener; the back piano is
      low-passed the further away it is (the listener always faces the front).
-     Look: each dot wears a soft glow (size = volume, pumped by its live level) and its spectrum drawn as ONE closed line — ECG style —
-     mirrored across the axis to the centre, lows facing the centre, the (usually empty) highs facing outward; at 100 % the silhouette
-     reaches ~80 % of the way to the centre line. Circles grow out of their dot when the stage opens and shrink back into it when it closes.
+     Look (LOG-099): no circles — each piano is one of the four screen edges. Its spectrum rises from that edge toward the centre as a soft,
+     stroke-less glow silhouette (an ECG-like outline made only of light), lows at the edge's midpoint, the (usually empty) highs toward the
+     corners, mirrored; at 100 % the tip reaches ~80 % of the way to the centre line. A radial glow at the edge midpoint marks the piano.
+     The glows rise out of their edge only after the bars have sunk and the line has moved up, and sink back before the line returns.
      Engine: stems downloaded whole, decoded into AudioBuffers and started on one clock after a one-bar 6/8 @ 120 count-in (sample-accurate
      ensemble, no drift, no media elements); a limiter at the end keeps four full stems from clipping. ~75 MB of RAM per decoded stem, desktop only.
      Leaving: circles shrink -> line glides back down -> the OS music resumes and the play head runs to the left edge and slides back out. ---- */
   var STAGE_NEAR = 1.0, STAGE_MID = 0.75, STAGE_FAR = 0.10, STAGE_UMAX = 2.4, STAGE_K_IN = 1.3, STAGE_K_OUT = 1.4, STAGE_PAN_MAX = 0.8, STAGE_LP_MIN = 2500, STAGE_LP_MAX = 8000, STAGE_SPAN = 0.42;
-  var STAGE_LEAD_S = 6 * (60 / 120 / 2), STAGE_GROW_MS = 800, STAGE_REACH = 0.8, STAGE_GLOW_MIN = 70, STAGE_GLOW_MAX = 300, STAGE_RING_MIN = 14, STAGE_RING_MAX = 60, STAGE_BAR_MIN = 20, STAGE_BANDS = 72, STAGE_LVL_GAIN = 2.2;
-  /* LEAD: one 6/8 bar at quarter = 120 (six eighths of 0.25 s). REACH: at 100 % the silhouette's tip gets this far along the way to the centre line. */
+  var STAGE_LEAD_S = 6 * (60 / 120 / 2), STAGE_GROW_MS = 800, STAGE_GROW_DELAY_MS = 750, STAGE_REACH = 0.8, STAGE_GLOW_MIN = 90, STAGE_GLOW_MAX = 360, STAGE_BAR_MIN = 24, STAGE_BANDS = 64, STAGE_SPAN_X = 0.42, STAGE_SPAN_Y = 0.36, STAGE_LVL_GAIN = 2.2, STAGE_FLOOR_LV = 0.22;   /* FLOOR_LV: band level treated as silence (the desktop bars keep a −96 dB floor; here an empty band must read as empty) */
+  /* LEAD: one 6/8 bar at quarter = 120 (six eighths of 0.25 s). GROW_DELAY: the glows appear only once the bars have sunk and the line has moved up.
+     REACH: at 100 % the silhouette's tip gets this far along the way from its edge to the centre line. SPAN_X/Y: half-width of a silhouette along its edge (fraction of W / H). */
   var stage = (function () {
-    var KEYS = ['C', 'B', 'L', 'R'], UNIT = { C: [0, -1], B: [0, 1], L: [-1, 0], R: [1, 0] };   /* stage space: the centre is (0,0), every dot one unit out along its axis */
-    var el = null, cv = null, g2 = null, ctx = null, ch = null, pieces = [], idx = -1, active = false, ducked = false, lx = -1, ly = -1, raf = 0, moved = false, hint = null, dots = null, ttl = null, geo = null, growT0 = 0, growDir = 1, grow = 0, demo = null, master = null;
-    function lbl(k) { var t = (U.stage_pos || '前|後|左|右').split('|'); return { C: t[0], B: t[1], L: t[2], R: t[3] }[k]; }
+    var KEYS = ['C', 'B', 'L', 'R'], UNIT = { C: [0, -1], B: [0, 1], L: [-1, 0], R: [1, 0] };   /* stage space: the centre is (0,0), every piano one unit out along its axis = on its screen edge */
+    var el = null, cv = null, g2 = null, ctx = null, ch = null, pieces = [], idx = -1, active = false, ducked = false, lx = -1, ly = -1, raf = 0, moved = false, hint = null, ttl = null, geo = null, growT0 = 0, growDir = 1, grow = 0, demo = null, master = null;
     function build(d) {
       el = document.createElement('div'); el.className = 'stage'; el.setAttribute('aria-label', d.title);
-      el.innerHTML = '<canvas class="st-cv" aria-hidden="true"></canvas>' + KEYS.map(function (k) { return '<div class="st-dot" data-k="' + k + '"><i></i><b>' + esc(lbl(k)) + '</b></div>'; }).join('') +
+      el.innerHTML = '<canvas class="st-cv" aria-hidden="true"></canvas>' +
         '<div class="st-hint">' + esc(U.stage_loading) + '</div>' +
         '<div class="st-head"><span class="ttl">' + esc(d.title) + '<small></small></span><button class="st-exit" type="button">' + esc(U.stage_exit) + '</button></div>';
-      hint = $('.st-hint', el); ttl = $('.st-head small', el); dots = {}; cv = $('.st-cv', el); g2 = cv.getContext('2d');
-      KEYS.forEach(function (k) { dots[k] = $('.st-dot[data-k="' + k + '"]', el); });
+      hint = $('.st-hint', el); ttl = $('.st-head small', el); cv = $('.st-cv', el); g2 = cv.getContext('2d');
       $('.st-exit', el).addEventListener('click', stop);
       desktop.appendChild(el); requestAnimationFrame(function () { el.classList.add('in'); });
       desktop.addEventListener('pointermove', onMove); desktop.addEventListener('click', onClick);
       window.addEventListener('resize', layout); layout();
-      growT0 = performance.now(); growDir = 1; grow = 0; if (!raf) raf = requestAnimationFrame(tick);
+      growT0 = performance.now() + STAGE_GROW_DELAY_MS; growDir = 1; grow = 0; if (!raf) raf = requestAnimationFrame(tick);   /* the glows wait for the line */
     }
     function onMove(e) { var r = desktop.getBoundingClientRect(); lx = e.clientX - r.left; ly = e.clientY - r.top; if (!moved) { moved = true; if (hint && ch && ch.playing) hint.classList.add('gone'); } }
     function onClick() { if (ctx && ctx.state !== 'running') ctx.resume().then(playing); }   /* autoplay refused (deep link without a gesture): first click starts it */
     function layout() {
       if (!el) return; var W = desktop.clientWidth, H = desktop.clientHeight, by = wave.baseY() || H * 0.5;
-      geo = { W: W, H: H, cx: W / 2, cy: by, ex: W * STAGE_SPAN, ey: Math.min(by, H - by) - H * 0.12 };   /* ex/ey: one stage unit in px (horizontal / vertical) */
+      geo = { W: W, H: H, cx: W / 2, cy: by, ex: W / 2, ey: Math.min(by, H - by) };   /* ex/ey: one stage unit in px = from the centre to the left/right edge, to the top/bottom edge */
       var DPR = Math.min(2, window.devicePixelRatio || 1); cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR); geo.dpr = DPR;
-      KEYS.forEach(function (k) { var u = UNIT[k]; dots[k].style.left = (geo.cx + u[0] * geo.ex) + 'px'; dots[k].style.top = (geo.cy + u[1] * geo.ey) + 'px'; });
       hint.style.top = (by - 34) + 'px';
       if (lx < 0) { lx = geo.cx; ly = geo.cy; }
     }
@@ -878,8 +877,7 @@
     function easeOut(x) { return 1 - Math.pow(1 - x, 3); }
     function tick() {
       raf = 0; if (!el || !geo) return;
-      var now = performance.now(), gp = Math.min(1, (now - growT0) / STAGE_GROW_MS); grow = growDir > 0 ? easeOut(gp) : 1 - easeOut(gp);
-      KEYS.forEach(function (k) { dots[k].style.transform = 'scale(' + grow.toFixed(3) + ')'; });
+      var now = performance.now(), gp = Math.max(0, Math.min(1, (now - growT0) / STAGE_GROW_MS)); grow = growDir > 0 ? easeOut(gp) : 1 - easeOut(gp);
       if (!active && gp >= 1) { g2.clearRect(0, 0, geo.W, geo.H); return; }   /* shrunk away: the exit choreography continues on its timers */
       var nx = (lx - geo.cx) / geo.ex, ny = (ly - geo.cy) / geo.ey, t = ctx ? ctx.currentTime : 0;
       if (ch && ctx) KEYS.forEach(function (k) {
@@ -891,33 +889,42 @@
         /* live level (RMS of what this piano is putting out): fast attack, slower release, so the glow breathes with the playing */
         c.an.getByteTimeDomainData(c.td); var s = 0; for (var i = 0; i < c.td.length; i++) { var v = (c.td[i] - 128) / 128; s += v * v; }
         var rms = Math.min(1, Math.sqrt(s / c.td.length) * STAGE_LVL_GAIN); c.lvl = rms > c.lvl ? rms : c.lvl * 0.9;
-        var lv = barLevels(c.an, STAGE_BANDS); if (c.bands.length !== STAGE_BANDS) c.bands = lv; else for (var b = 0; b < STAGE_BANDS; b++) c.bands[b] = lv[b] > c.bands[b] ? lv[b] : Math.max(lv[b], c.bands[b] * 0.93);   /* same fall-off feel as the desktop bars */
-        dots[k].style.setProperty('--core', (0.3 + 0.7 * Math.max(c.rel, c.lvl)).toFixed(3));
+        var lv = barLevels(c.an, STAGE_BANDS); for (var q = 0; q < lv.length; q++) { var z = (lv[q] - STAGE_FLOOR_LV) / (1 - STAGE_FLOOR_LV); lv[q] = z > 0 ? Math.pow(z, 1.5) : 0; } if (c.bands.length !== STAGE_BANDS) c.bands = lv; else for (var b = 0; b < STAGE_BANDS; b++) c.bands[b] = lv[b] > c.bands[b] ? lv[b] : Math.max(lv[b], c.bands[b] * 0.93);   /* same fall-off feel as the desktop bars */
       });
-      /* canvas: a big soft glow per piano (size = volume, pumped by the live level) and its spectrum as one closed line around the dot,
-         mirrored across the axis to the centre: lows face the centre, highs face outward; everything scales with `grow` */
+      /* canvas: per piano, from its screen edge — a radial glow at the edge midpoint (size = volume, pumped by the live level) and the
+         spectrum as a stroke-less glow silhouette rising toward the centre: lows at the midpoint, highs toward the corners, mirrored.
+         Two blurred passes (wide + tight) make it read as light, not as a drawn line; everything scales with `grow` */
       g2.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0); g2.clearRect(0, 0, geo.W, geo.H);
       KEYS.forEach(function (k) {
         var c = ch && ch[k], u = UNIT[k], x = geo.cx + u[0] * geo.ex, y = geo.cy + u[1] * geo.ey, rel = c ? c.rel : 0, lvl = c ? c.lvl : 0;
-        var R = (STAGE_GLOW_MIN + (STAGE_GLOW_MAX - STAGE_GLOW_MIN) * rel) * (0.7 + 0.5 * lvl) * grow, a = 0.22 + 0.5 * rel + 0.25 * lvl;
+        var R = (STAGE_GLOW_MIN + (STAGE_GLOW_MAX - STAGE_GLOW_MIN) * rel) * (0.7 + 0.5 * lvl) * grow, a = 0.14 + 0.3 * rel + 0.2 * lvl;
         if (R < 1) return;
+        g2.globalCompositeOperation = 'lighter';
         var grd = g2.createRadialGradient(x, y, 0, x, y, R); grd.addColorStop(0, 'rgba(224,176,74,' + a.toFixed(3) + ')'); grd.addColorStop(0.3, 'rgba(224,176,74,' + (a * 0.45).toFixed(3) + ')'); grd.addColorStop(1, 'rgba(224,176,74,0)');
-        g2.globalCompositeOperation = 'lighter'; g2.fillStyle = grd; g2.fillRect(x - R, y - R, 2 * R, 2 * R);
+        g2.fillStyle = grd; g2.fillRect(x - R, y - R, 2 * R, 2 * R);
         if (!c || !c.bands.length) return;
-        var reach = STAGE_REACH * (u[0] ? geo.ex : geo.ey), r0 = (STAGE_RING_MIN + (STAGE_RING_MAX - STAGE_RING_MIN) * rel) * grow, amp = (STAGE_BAR_MIN + (reach - STAGE_RING_MAX - STAGE_BAR_MIN) * rel) * grow, n = STAGE_BANDS;
-        var e1 = u, e2 = [-u[1], u[0]];   /* e1: from the centre outward (lows -> highs sweep); e2: the two mirrored sides */
-        g2.globalCompositeOperation = 'source-over'; g2.lineJoin = 'round'; g2.lineWidth = 1.5; g2.strokeStyle = 'rgba(240,214,140,' + (0.55 + 0.45 * rel).toFixed(3) + ')'; g2.shadowColor = 'rgba(224,176,74,.85)'; g2.shadowBlur = 8 + 10 * rel;
-        g2.beginPath();
-        [1, -1].forEach(function (sgn) {   /* one side lows -> highs, the mirror side highs -> lows: a single closed silhouette */
-          for (var s = 0; s < n; s++) {
-            var i = sgn > 0 ? s : n - 1 - s, psi = (i + 0.5) / n * Math.PI, ca = -Math.cos(psi), sa = Math.sin(psi);   /* psi 0 = toward the centre (lows) -> pi = outward (highs) */
-            var dx = ca * e1[0] + sa * sgn * e2[0], dy = ca * e1[1] + sa * sgn * e2[1], rr = r0 + c.bands[i] * amp;
-            var px = x + dx * rr, py = y + dy * rr; if (sgn > 0 && s === 0) g2.moveTo(px, py); else g2.lineTo(px, py);
+        var horiz = !!u[0], dist = horiz ? geo.ex : geo.ey, S = horiz ? geo.H * STAGE_SPAN_Y : geo.W * STAGE_SPAN_X;   /* S: half-width along the edge */
+        var amp = (STAGE_BAR_MIN + (STAGE_REACH * dist - STAGE_BAR_MIN) * rel) * grow, n = STAGE_BANDS, nx_ = -u[0], ny_ = -u[1], tx = -u[1], ty = u[0];   /* (nx_,ny_): inward normal; (tx,ty): along the edge */
+        function sm(i) { i = Math.max(0, Math.min(n - 1, i)); var p = c.bands[Math.max(0, i - 1)], q = c.bands[i], r = c.bands[Math.min(n - 1, i + 1)]; return (p + 2 * q + r) / 4 * amp; }
+        function path() {   /* from one end of the edge over the band tops to the other end, closed along the edge; band 0 (lows) sits at the midpoint */
+          g2.beginPath(); g2.moveTo(x + tx * S, y + ty * S);
+          for (var s = 0; s <= 2 * n; s++) {
+            var i = Math.abs(s - n), off = (s - n) / n * S, h = sm(i);   /* s runs -n..n along the edge; band index mirrors around the midpoint */
+            g2.lineTo(x + tx * off + nx_ * h, y + ty * off + ny_ * h);
           }
-        });
-        g2.closePath(); g2.stroke();
-        g2.shadowBlur = 0; g2.fillStyle = 'rgba(224,176,74,' + (0.05 + 0.08 * rel).toFixed(3) + ')'; g2.fill();
+          g2.lineTo(x - tx * S, y - ty * S); g2.closePath();
+        }
+        var top = amp, lin = g2.createLinearGradient(x, y, x + nx_ * top, y + ny_ * top);
+        var a0 = 0.16 + 0.30 * rel + 0.10 * lvl;
+        lin.addColorStop(0, 'rgba(232,190,90,' + a0.toFixed(3) + ')'); lin.addColorStop(0.5, 'rgba(232,190,90,' + (a0 * 0.5).toFixed(3) + ')'); lin.addColorStop(1, 'rgba(240,214,140,' + (a0 * 0.12).toFixed(3) + ')');
+        g2.fillStyle = lin;
+        try { g2.filter = 'blur(' + (16 + 18 * rel).toFixed(0) + 'px)'; } catch (e) {}   /* wide halo pass */
+        path(); g2.fill();
+        try { g2.filter = 'blur(2.5px)'; } catch (e) {}   /* tighter body pass: the outline is readable but never a hard line */
+        g2.globalAlpha = 0.65; path(); g2.fill(); g2.globalAlpha = 1;
+        try { g2.filter = 'none'; } catch (e) {}
       });
+      g2.globalCompositeOperation = 'source-over';
       raf = requestAnimationFrame(tick);
     }
     function unload() {
