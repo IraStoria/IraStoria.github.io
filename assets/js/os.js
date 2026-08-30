@@ -719,7 +719,7 @@
   var GLYPH = { works: '🎼', demos: '🎛️', player: '▶️', articles: '📝', about: '👤', terminal: '🔍', updates: '💬' };   /* desktop shell + window titles */
   /* phone shell: monochrome line icons instead of emoji (one tile colour, white stroke) */
   var ICON = {
-    works: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>',
+    works: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18M3 12h18M3 17h18"/><circle cx="14" cy="15.5" r="2.3" fill="#0b0d12"/><path d="M16.3 15.5V5.5"/></svg>',
     demos: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2" fill="#0b0d12"/><circle cx="15" cy="12" r="2" fill="#0b0d12"/><circle cx="8" cy="18" r="2" fill="#0b0d12"/></svg>',
     player: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" stroke-linejoin="round"/></svg>',
     articles: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke-linejoin="round"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>',
@@ -932,9 +932,11 @@
 
   var RENDER = {
     works: function (body) {
-      var types = ['music', 'game', 'tool', 'demo'].filter(function (t) { return D.works.some(function (w) { return w.type === t; }); });
-      body.innerHTML = '<div class="filter"><button class="on" data-f="all">' + esc(U.filter_all) + '</button>' + types.map(function (t) { return '<button data-f="' + t + '">' + esc(U['type_' + t]) + '</button>'; }).join('') + '</div>' +
-        '<ul class="list">' + D.works.filter(function (w) { return !w.secret; }).map(workItem).join('') + '</ul>';
+      /* the transcriptions app: music lives in the player, demos in the design app — only the remaining work types are listed here */
+      var items = D.works.filter(function (w) { return !w.secret && w.type !== 'music' && w.type !== 'demo' && !(w.media && w.media.demo); });
+      var types = ['game', 'tool'].filter(function (t) { return items.some(function (w) { return w.type === t; }); });
+      body.innerHTML = (types.length > 1 ? '<div class="filter"><button class="on" data-f="all">' + esc(U.filter_all) + '</button>' + types.map(function (t) { return '<button data-f="' + t + '">' + esc(U['type_' + t]) + '</button>'; }).join('') + '</div>' : '') +
+        (items.length ? '<ul class="list">' + items.map(workItem).join('') + '</ul>' : '<p class="d">' + esc(U.works_empty) + '</p>');
       apWire(body);
       body.addEventListener('click', function (e) {
         var f = e.target.closest('[data-f]'); if (f) { body.querySelectorAll('[data-f]').forEach(function (b) { b.classList.toggle('on', b === f); }); body.querySelectorAll('.list li').forEach(function (li) { li.hidden = !(f.dataset.f === 'all' || li.dataset.type === f.dataset.f); }); }
@@ -1247,8 +1249,8 @@
   var phone = (function () {
     var root = $('#phone'), lock = $('#ph-lock'), home = $('#ph-home'), grid = $('#ph-grid'), dockEl = $('#ph-dock'), appsEl = $('#ph-apps'), notes = $('#ph-notes'), power = $('#ph-power'), powerScr = $('#ph-power-scr'), langPick = $('#ph-lang'), ls = $('#ph-ls');
     var stack = [], unlocked = false, powered = false, swappingPh = false;
-    var HOME_APPS = ['articles', 'updates', 'terminal', 'lang'];   /* home grid = only what the dock does not already carry (works / demos / player / about live in the dock) */
-    var DOCK_APPS = ['works', 'demos', 'player', 'about'];
+    var HOME_APPS = ['works', 'demos', 'player', 'articles'];   /* home grid = only what the dock does not already carry; language switching is the EN/中 slider, no tile */
+    var DOCK_APPS = ['terminal', 'about', 'updates'];
     function label(a) { return a === 'lang' ? U.lang_switch : TITLES[a]; }
     function glyph(a) { return a === 'lang' ? (lang === 'zh' ? 'EN' : '中') : (ICON[a] || GLYPH[a]); }
     function fill(b) { var a = b.getAttribute('data-app'); b.innerHTML = '<span class="ic ' + (a === 'updates' ? 'upd' : a) + '"><span class="wg">' + glyph(a) + '</span></span><span>' + esc(label(a)) + '</span>'; }

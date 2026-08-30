@@ -172,12 +172,16 @@
       "en": "or press Enter ⏎ · tap anywhere"
     },
     "app_works": {
-      "zh": "作品",
-      "en": "Works"
+      "zh": "採譜",
+      "en": "Transcriptions"
+    },
+    "works_empty": {
+      "zh": "採譜作品整理中，敬請期待。",
+      "en": "Transcriptions are being prepared — coming soon."
     },
     "app_demos": {
-      "zh": "互動展示",
-      "en": "Demos"
+      "zh": "設計",
+      "en": "Design"
     },
     "app_articles": {
       "zh": "文章",
