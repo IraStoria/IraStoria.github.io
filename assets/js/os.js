@@ -792,7 +792,7 @@
      RELEASE / LVL_RELEASE / PUNCH_RELEASE: per-frame fall of the bands / the glow level / the accent boost — lower = snappier, accents stand out more. */
   var stage = (function () {
     var KEYS = ['C', 'B', 'L', 'R'], UNIT = { C: [0, -1], B: [0, 1], L: [-1, 0], R: [1, 0] };   /* stage space: the centre is (0,0), every piano one unit out along its axis = on its screen edge */
-    var el = null, cv = null, g2 = null, ctx = null, ch = null, pieces = [], idx = -1, active = false, ducked = false, lx = -1, ly = -1, raf = 0, moved = false, hint = null, ttl = null, geo = null, growT0 = 0, growDir = 1, grow = 0, demo = null, master = null;
+    var el = null, cv = null, g2 = null, ctx = null, ch = null, vis = {}, pieces = [], idx = -1, active = false, ducked = false, lx = -1, ly = -1, raf = 0, moved = false, hint = null, ttl = null, geo = null, growT0 = 0, growDir = 1, grow = 0, demo = null, master = null;
     function build(d) {
       el = document.createElement('div'); el.className = 'stage'; el.setAttribute('aria-label', d.title);
       el.innerHTML = '<canvas class="st-cv" aria-hidden="true"></canvas>' +
@@ -815,7 +815,7 @@
       if (lx < 0) { lx = geo.cx; ly = geo.cy; }
     }
     function start(d) {
-      if (active) stop(true); active = true; moved = false; lx = ly = -1; demo = d;
+      if (active) stop(true); active = true; moved = false; lx = ly = -1; demo = d; vis = {};
       pieces = d.pieces || []; idx = -1; wave.squash(true); wave.centre(true); build(d);   /* centre first: layout() reads the line's target height */
       if (player.isPlaying()) { ducked = true; player.duck(true); }
       document.addEventListener('keydown', onKey); next();
@@ -901,7 +901,7 @@
       var now = performance.now(), gp = Math.max(0, Math.min(1, (now - growT0) / STAGE_GROW_MS)); grow = growDir > 0 ? easeOut(gp) : 1 - easeOut(gp);
       if (!active && gp >= 1) { g2.clearRect(0, 0, geo.W, geo.H); return; }   /* shrunk away: the exit choreography continues on its timers */
       var nx = (lx - geo.cx) / geo.ex, ny = (ly - geo.cy) / geo.ey, t = ctx ? ctx.currentTime : 0;
-      if (ch && ctx) KEYS.forEach(function (k) {
+      if (ch && ctx) KEYS.forEach(function (k) {   /* audio side + a visual snapshot (vis[k]) that outlives the audio for the shrink-out */
         var c = ch[k], u = UNIT[k], d = Math.hypot(u[0] - nx, u[1] - ny), g = volume(d);
         c.g.gain.setTargetAtTime(g, t, 0.05);
         if (c.pan) c.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, u[0] - nx)) * STAGE_PAN_MAX, t, 0.05);
@@ -912,13 +912,14 @@
         var rms = Math.min(1, Math.sqrt(s / c.td.length) * STAGE_LVL_GAIN); c.lvl = rms > c.lvl ? rms : c.lvl * STAGE_LVL_RELEASE;
         c.avg = (c.avg || 0) * 0.97 + rms * 0.03; var pk = Math.max(0, Math.min(1, (rms - c.avg) * 3)); c.punch = pk > (c.punch || 0) ? pk : (c.punch || 0) * STAGE_PUNCH_RELEASE;   /* accent detector: instant level well above its slow average */
         var lv = stageBands(c.an, STAGE_BANDS); for (var q = 0; q < lv.length; q++) { var z = (lv[q] - STAGE_FLOOR_LV) / (1 - STAGE_FLOOR_LV); lv[q] = z > 0 ? Math.pow(z, STAGE_BAND_GAMMA) : 0; } if (c.bands.length !== STAGE_BANDS) c.bands = lv; else for (var b = 0; b < STAGE_BANDS; b++) c.bands[b] = lv[b] > c.bands[b] ? lv[b] : Math.max(lv[b], c.bands[b] * STAGE_RELEASE);   /* instant attack, quick release: a sforzando reads as a jump */
+        vis[k] = { rel: c.rel, lvl: c.lvl, punch: c.punch || 0, bands: c.bands };
       });
       /* canvas: per piano, from its screen edge — a radial glow at the edge midpoint (size = volume, pumped by the live level) and the
          spectrum as a stroke-less glow silhouette rising toward the centre: lows at the midpoint, highs toward the corners, mirrored.
          Two blurred passes (wide + tight) make it read as light, not as a drawn line; everything scales with `grow` */
       g2.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0); g2.clearRect(0, 0, geo.W, geo.H);
       KEYS.forEach(function (k) {
-        var c = ch && ch[k], u = UNIT[k], x = geo.cx + u[0] * geo.ex, y = geo.cy + u[1] * geo.ey + (k === 'C' ? STAGE_TOP_INSET : 0), rel = c ? c.rel : 0, lvl = c ? c.lvl : 0;
+        var c = vis[k], u = UNIT[k], x = geo.cx + u[0] * geo.ex, y = geo.cy + u[1] * geo.ey + (k === 'C' ? STAGE_TOP_INSET : 0), rel = c ? c.rel : 0, lvl = c ? c.lvl : 0;
         var pk = c ? (c.punch || 0) : 0;   /* accents flare the range's own glow below; there is no separate light on the edge */
         if (!c || !c.bands.length) return;
         /* half-disc on the edge (diameter on the edge, centred on its midpoint); the spectrum runs along the arc from one end to the other
@@ -934,15 +935,18 @@
           g2.closePath();
         }
         g2.globalCompositeOperation = 'source-over';
-        /* club look: an additive wide glow pass first (the halo), then the body — dim gold at the disc edge rising to a bright, almost white
-           highlight at the peaks; accents widen the halo */
-        var a0 = 0.32 + 0.35 * rel + 0.12 * lvl, grd = g2.createRadialGradient(x, y, r0, x, y, r0 + Math.max(1, amp));
-        grd.addColorStop(0, 'rgba(224,176,74,' + (a0 * 0.35).toFixed(3) + ')'); grd.addColorStop(0.7, 'rgba(240,206,120,' + (a0 * 0.9).toFixed(3) + ')'); grd.addColorStop(1, 'rgba(255,240,200,' + Math.min(1, a0 * 1.15).toFixed(3) + ')');
-        var shape = function (s) { return r0 + sm(s); };
-        g2.globalCompositeOperation = 'lighter'; g2.fillStyle = 'rgba(224,176,74,' + (0.10 + 0.14 * rel + 0.12 * pk).toFixed(3) + ')'; g2.shadowColor = 'rgba(224,176,74,.9)'; g2.shadowBlur = STAGE_HALO + 30 * rel + 40 * pk;
-        arc(shape); g2.fill();
-        g2.globalCompositeOperation = 'source-over'; g2.fillStyle = grd; g2.shadowColor = 'rgba(240,206,120,.8)'; g2.shadowBlur = 16 + 12 * rel + 16 * pk;
+        /* black-hole look: the disc is a dark hole; its rim is the brightest ring (white-orange) and the light falls off outward; the wave
+           pushes that rim outward, so the body is brightest at the disc edge and fades toward the peaks. A wide additive halo sits behind. */
+        var shape = function (s) { return r0 + sm(s); }, a0 = 0.5 + 0.35 * rel + 0.15 * lvl;
+        g2.globalCompositeOperation = 'lighter'; g2.fillStyle = 'rgba(255,150,60,' + (0.08 + 0.12 * rel + 0.14 * pk).toFixed(3) + ')'; g2.shadowColor = 'rgba(255,160,70,.9)'; g2.shadowBlur = STAGE_HALO + 30 * rel + 40 * pk;
+        arc(shape); g2.fill();   /* halo */
+        var grd = g2.createRadialGradient(x, y, r0, x, y, r0 + Math.max(1, amp));
+        grd.addColorStop(0, 'rgba(255,245,225,' + Math.min(1, a0 * 1.1).toFixed(3) + ')'); grd.addColorStop(0.18, 'rgba(255,190,90,' + (a0 * 0.85).toFixed(3) + ')'); grd.addColorStop(0.6, 'rgba(230,120,40,' + (a0 * 0.35).toFixed(3) + ')'); grd.addColorStop(1, 'rgba(200,80,30,0)');
+        g2.fillStyle = grd; g2.shadowColor = 'rgba(255,200,120,.8)'; g2.shadowBlur = 10 + 10 * rel + 16 * pk;
         arc(shape); g2.fill(); g2.shadowBlur = 0;
+        g2.globalCompositeOperation = 'source-over'; g2.fillStyle = 'rgba(4,5,8,' + (0.78 * grow).toFixed(3) + ')'; arc(function () { return r0 * 0.985; }); g2.fill();   /* the hole */
+        var rim = g2.createRadialGradient(x, y, r0 * 0.9, x, y, r0 * 1.02); rim.addColorStop(0, 'rgba(255,240,210,0)'); rim.addColorStop(0.85, 'rgba(255,240,210,' + (0.5 + 0.4 * rel).toFixed(3) + ')'); rim.addColorStop(1, 'rgba(255,240,210,0)');
+        g2.fillStyle = rim; arc(function () { return r0 * 1.02; }); g2.fill();   /* the event-horizon ring */
       });
       g2.globalCompositeOperation = 'source-over';
       raf = requestAnimationFrame(tick);
