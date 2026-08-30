@@ -578,7 +578,7 @@
           g2.fillStyle = gGrey; g2.fillRect(x, y - h, w, h);
           g2.fillStyle = gGreyR; g2.fillRect(x, y, w, h * 0.45);
           var aw = Math.min(w, px - x);
-          if (aw > 0) { g2.fillStyle = gAmb; g2.fillRect(x, y - h, aw, h); g2.fillStyle = gAmbR; g2.fillRect(x, y, aw, h * 0.45); }
+          if (aw > 0) { if (tg > 0) { g2.shadowColor = 'rgba(' + tintShadow + ',' + (0.85 * tg).toFixed(2) + ')'; g2.shadowBlur = TINT_BLUR * tg; } g2.fillStyle = gAmb; g2.fillRect(x, y - h, aw, h); g2.shadowBlur = 0; g2.fillStyle = gAmbR; g2.fillRect(x, y, aw, h * 0.45); }   /* tinted: the played bars glow like the eclipsed rings, and the glow fades with the tint */
         }
         if (areaMode) {
           // smoothed silhouette through the bar tops (3-tap average, quadratic through midpoints); played part amber via a clip, the rest slate; mirrored reflection below the line
@@ -836,7 +836,7 @@
     function start(d) {
       if (active) stop(true); active = true; moved = false; lx = ly = -1; demo = d; vis = {}; ann = {}; lastT = 0; redHold = null; flS = 0; trails = false; trailT0 = 0;
       var carry = false; if (exitPending) { exitPending.timers.forEach(clearTimeout); if (exitPending.e0) exitPending.e0.remove(); carry = exitPending.wasDucked; exitPending = null; wave.reflowCancel(); }   /* re-entered mid-exit: drop the pending restore; the music stays ducked and is released by this run's exit */
-      pieces = d.pieces || []; idx = -1; wave.squash(true); wave.centre(true); wave.tint(STAGE_ECL_LINE, STAGE_ECL_COL); build(d);   /* centre first: layout() reads the line's target height */
+      pieces = d.pieces || []; idx = -1; wave.sweep(true, player.state().frac || 0); wave.squash(true); wave.centre(true); wave.tint(STAGE_ECL_LINE, STAGE_ECL_COL); build(d);   /* the music's played part (line and bars) sweeps off from where it was, like a track change */   /* centre first: layout() reads the line's target height */
       if (player.isPlaying()) { ducked = true; player.duck(true); } else if (carry) ducked = true;
       document.addEventListener('keydown', onKey); next();
     }
