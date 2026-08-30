@@ -23,7 +23,10 @@
         "R": "assets/audio/ade1/R.mp3",
         "C": "assets/audio/ade1/C.mp3",
         "B": "assets/audio/ade1/B.mp3"
-      }
+      },
+      "veil": [
+        "B"
+      ]
     },
     {
       "id": "ade",

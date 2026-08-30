@@ -221,6 +221,9 @@ def load_demos(works):
                 for ch in ("L", "R", "C", "B"):
                     if not (ROOT / (pc.get("stems") or {}).get(ch, "")).is_file():
                         raise BuildError(f"{rel}/demo.json: piece {pc.get('id')!r} stem {ch} missing")
+                for ch in pc.get("veil") or []:   # pianos that stay invisible until they first sound (performance design per piece)
+                    if ch not in ("L", "R", "C", "B"):
+                        raise BuildError(f"{rel}/demo.json: piece {pc.get('id')!r} veil {ch!r} is not a stem key")
             if not meta.get("pieces"):
                 raise BuildError(f"{rel}/demo.json: native demo needs at least one piece")
         if rel not in referenced:
@@ -482,7 +485,7 @@ def build_pages(site, works, demos, articles):
             "works": [loc(w) for w in works],
             "updates": [{"date": u["date"], "text": u[lang]} for u in load_updates()],
             "demos": [{"path": rel, "title": m["title"][lang], "desc": m["desc"][lang], "platform": m["platform"], "year": m.get("year", ""), "ver": demo_ver(rel), "native": m.get("native", ""),
-                       "pieces": [{"id": p["id"], "title": p["title"][lang], "stems": p["stems"]} for p in m.get("pieces", [])]} for rel, m in demos.items()],
+                       "pieces": [{"id": p["id"], "title": p["title"][lang], "stems": p["stems"], "veil": p.get("veil", [])} for p in m.get("pieces", [])]} for rel, m in demos.items()],
             "articles": [{"slug": a["slug"], "title": a[lang]["meta"]["title"], "date": a[lang]["meta"]["date"]} for a in articles],
           }
         other = "en" if lang == "zh" else "zh"

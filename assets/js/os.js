@@ -499,7 +499,9 @@
   }
   function makeWave(cv, yRatio, withNotes) {
     var wf = withNotes ? makeWaterfall() : null;
-    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000, squash = 1, squashTo = 1, SQUASH_MS = 600, yCur = yRatio, yTo = yRatio, Y_MS = 700, reflowT0 = 0, reflowFrom = 0, REFLOW_MS = 1100, hbMix = 0, HB_MORPH_MS = 700, liveT0 = 0, GRID_FADE_MS = 3000, AMB = '224,176,74', GRN = '61,255,122', SLATE = '96,104,122', DIMG = '30,120,62';   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
+    var headPx = -1;
+    var tintCol = null, tintLast = '224,176,74', tintMix = 0, TINT_MS = 900, TINT_BLUR = 22, TINT_W = 1.2, TINT_A = 1.0, TINT_CORONA = 32, TINT_CORONA_A = 0.40, tintShadow = '255,110,90';   /* tint = the stage's eclipsed ring: STAGE_RING_W, its brightness, STAGE_ECL_BLUR corona in STAGE_ECL_COL */
+    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000, squash = 1, squashTo = 1, SQUASH_MS = 600, yCur = yRatio, yTo = yRatio, Y_MS = 700, reflowT0 = 0, reflowFrom = 0, REFLOW_MS = 1100, hbMix = 0, HB_MORPH_MS = 700, liveT0 = 0, GRID_FADE_MS = 3000, AMB0 = '224,176,74', GRN = '61,255,122', SLATE = '96,104,122', DIMG = '30,120,62';   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
     function grad(y0, y1, rgb, a0, a1) { var g = g2.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + rgb + ',' + a0 + ')'); g.addColorStop(1, 'rgba(' + rgb + ',' + a1 + ')'); return g; }
     var DPR = 1;   /* backing store at device resolution (capped at 2x): at 1x an iPhone upscales the layer 3x and the label text, note rims and the line go soft */
     function size() { DPR = Math.min(2, Math.max(1, window.devicePixelRatio || 1)); var pw = Math.round(cv.clientWidth * DPR), ph = Math.round(cv.clientHeight * DPR); if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; } }
@@ -513,6 +515,7 @@
       var W = cv.clientWidth, H = cv.clientHeight, y = H * yCur; g2.setTransform(DPR, 0, 0, DPR, 0, 0); g2.clearRect(0, 0, W, H);   /* all drawing stays in CSS px; the transform maps it onto the hi-res store */
       // heartbeat egg look: everything amber turns ECG green and the bars morph into a trace; snaps during the connect stage (boot), eases on a track change
       var hbT = wf && wf.hb() ? 1 : 0, dtm = prevT ? now - prevT : 16;
+      tintMix = tintCol ? Math.min(1, tintMix + dtm / TINT_MS) : Math.max(0, tintMix - dtm / TINT_MS); var tg = ease(tintMix), AMB = tintMix > 0 ? lerpCol(AMB0, tintCol || tintLast, tg) : AMB0;   /* stage tint: the line (played part, baseline, play head) in the eclipse red, eased both ways */
       squash = squashTo < squash ? Math.max(squashTo, squash - dtm / SQUASH_MS) : Math.min(squashTo, squash + dtm / SQUASH_MS);   /* stage mode: the bars sink into the baseline and rise again after */
       if (mode === 'connect') hbMix = hbT; else hbMix = hbT > hbMix ? Math.min(hbT, hbMix + dtm / HB_MORPH_MS) : Math.max(hbT, hbMix - dtm / HB_MORPH_MS);
       // the ECG look lives left of `edge`, the normal look right of it: entering sweeps the edge left→right, leaving sweeps it right→left; boot snaps it to W
@@ -560,7 +563,7 @@
           g2.restore();
         }
         var lit = wf ? wf.lights(g2, W, H, y) : false;   /* stage lights behind the bars; when lit, each bar punches the light out under itself so it reads as solid */
-        var lpx = px;
+        var lpx = px; headPx = px;
         if (clearT0) { var cp = (now - clearT0) / CLEAR_MS; if (cp >= 1) clearT0 = 0; else { var sx = W * clearFrom * (1 - ease(cp)); lpx = Math.max(px, sx); if (clearBars) px = Math.max(px, sx); } }
         var areaMode = PHONE_AREA && W < 700 && m <= 0;   /* phone: bars and MIDI blocks are both thin sticks and blur together — the spectrum becomes one smooth filled silhouette instead */
         for (var i = 0; i < n; i++) {
@@ -620,10 +623,17 @@
         // baseline glow eases between 'sound' (1) and 'silence' (.55) instead of snapping — no more glow dropping out when a track starts quietly
         glow += ((any ? 1 : 0.55) - glow) * 0.05;
         // hb mode: the trace IS the line — the flat baseline fades out with the morph so there is only one line
-        if (lpx > edge) { g2.strokeStyle = 'rgba(' + AMB + ',' + (0.28 + 0.62 * glow).toFixed(3) + ')'; g2.shadowColor = 'rgba(' + AMB + ',.6)'; g2.shadowBlur = 18 * glow; g2.beginPath(); g2.moveTo(edge, y); g2.lineTo(lpx, y); g2.stroke(); }
-        var ux = Math.max(lpx, edge); if (ux < W) { g2.strokeStyle = 'rgba(255,255,255,.22)'; g2.shadowBlur = 0; g2.beginPath(); g2.moveTo(ux, y); g2.lineTo(W, y); g2.stroke(); }
+        if (lpx > edge && tg > 0) {   /* corona: a wide soft band of the eclipse colour under the line (vertical falloff) with a radial cap of the same falloff at the play head — one pass, no blur, so there is no seam */
+          g2.save(); g2.globalCompositeOperation = 'lighter';
+          var cg = g2.createLinearGradient(0, y - TINT_CORONA, 0, y + TINT_CORONA); cg.addColorStop(0, 'rgba(' + tintShadow + ',0)'); cg.addColorStop(0.25, 'rgba(' + tintShadow + ',' + (TINT_CORONA_A * 0.22 * tg).toFixed(3) + ')'); cg.addColorStop(0.5, 'rgba(' + tintShadow + ',' + (TINT_CORONA_A * tg).toFixed(3) + ')'); cg.addColorStop(0.75, 'rgba(' + tintShadow + ',' + (TINT_CORONA_A * 0.22 * tg).toFixed(3) + ')'); cg.addColorStop(1, 'rgba(' + tintShadow + ',0)');   /* hollow-ish: bright only near the line, a long thin tail */
+          g2.fillStyle = cg; g2.fillRect(edge, y - TINT_CORONA, lpx - edge, TINT_CORONA * 2);
+          var cc = g2.createRadialGradient(lpx, y, 0, lpx, y, TINT_CORONA); cc.addColorStop(0, 'rgba(' + tintShadow + ',' + (TINT_CORONA_A * tg).toFixed(3) + ')'); cc.addColorStop(0.5, 'rgba(' + tintShadow + ',' + (TINT_CORONA_A * 0.22 * tg).toFixed(3) + ')'); cc.addColorStop(1, 'rgba(' + tintShadow + ',0)');
+          g2.fillStyle = cc; g2.fillRect(lpx, y - TINT_CORONA, TINT_CORONA, TINT_CORONA * 2); g2.restore();
+        }
+        if (lpx > edge) { g2.lineWidth = 2 + (TINT_W - 2) * tg; g2.strokeStyle = 'rgba(' + AMB + ',' + ((0.28 + 0.62 * glow) * (1 - tg) + TINT_A * tg).toFixed(3) + ')'; g2.shadowColor = 'rgba(' + lerpCol(AMB, tintShadow, tg) + ',' + (0.6 + 0.35 * tg).toFixed(2) + ')'; g2.shadowBlur = 18 * glow * (1 - tg) + TINT_BLUR * tg;   /* tinted: the same line as the eclipsed rings — thin warm stroke, red corona */ g2.beginPath(); g2.moveTo(edge, y); g2.lineTo(lpx, y); g2.stroke(); }
+        var ux = Math.max(lpx, edge); if (ux < W) { g2.lineWidth = 2; g2.strokeStyle = 'rgba(255,255,255,.22)'; g2.shadowBlur = 0; g2.beginPath(); g2.moveTo(ux, y); g2.lineTo(W, y); g2.stroke(); }
         // play head: same amber as the line (no highlight), just a stronger halo at the amber/grey boundary
-        if (px0 >= edge) { g2.strokeStyle = 'rgba(' + AMB + ',.9)'; g2.shadowColor = 'rgba(' + AMB + ',.9)'; g2.shadowBlur = 24; g2.beginPath(); g2.moveTo(Math.max(edge, lpx - 14), y); g2.lineTo(lpx, y); g2.stroke(); }
+        if (px0 >= edge) { g2.lineWidth = 2 + (TINT_W - 2) * tg; g2.strokeStyle = 'rgba(' + AMB + ',.9)'; g2.shadowColor = 'rgba(' + lerpCol(AMB, tintShadow, tg) + ',.9)'; g2.shadowBlur = 24 * (1 - tg) + TINT_BLUR * tg; g2.beginPath(); g2.moveTo(Math.max(edge, lpx - 14), y); g2.lineTo(lpx, y); g2.stroke(); }
         /* ECG side: no play-head halo — the bright/dim split of the trace is the play head */   /* ECG side: the same plain horizontal halo, in green */
         g2.shadowBlur = 0;
       } else {
@@ -634,7 +644,7 @@
     function start(m) { if (!cv) return; mode = m || 'idle'; if (!raf) draw(); }
     function connect(cb, lead) { if (!cv) { cb(); return; } onConnected = cb; connectT0 = performance.now(); if (wf && lead) wf.preroll(connectT0, lead); start('connect'); }   /* lead: waterfall pre-roll seconds */
     function sweep(bars, fromFrac) { clearT0 = performance.now(); clearBars = !!bars; clearFrom = (fromFrac == null) ? 1 : Math.max(0, Math.min(1, fromFrac)); }
-    return { start: start, connect: connect, sweep: sweep, hb: function () { return !!(wf && wf.hb()); }, squash: function (on) { squashTo = on ? 0 : 1; }, centre: function (on) { yTo = on ? 0.5 : yRatio; }, reflow: function (fromFrac) { reflowT0 = performance.now(); reflowFrom = Math.max(0, Math.min(1, fromFrac || 0)); }, baseY: function () { return cv ? cv.clientHeight * yTo : 0; } };
+    return { start: start, connect: connect, sweep: sweep, hb: function () { return !!(wf && wf.hb()); }, squash: function (on) { squashTo = on ? 0 : 1; }, centre: function (on) { yTo = on ? 0.5 : yRatio; }, head: function () { return headPx; }, tint: function (col, shadow) { if (col) tintLast = col; if (shadow) tintShadow = shadow; tintCol = col || null; }, reflow: function (fromFrac) { reflowT0 = performance.now(); reflowFrom = Math.max(0, Math.min(1, fromFrac || 0)); }, baseY: function () { return cv ? cv.clientHeight * yTo : 0; } };
   }
   var wave = makeWave($('#wave'), 0.58, true), phoneWave = makeWave($('#ph-wave'), 0.47, true);   /* waterfall on both shells */  // phone: slightly above centre
 
@@ -685,23 +695,25 @@
       tEl.innerHTML = '<span class="np-tag"></span><span class="np-sep">|</span><span class="np-rest"></span>';
       tEl.querySelector('.np-tag').textContent = parts.tag; tEl.querySelector('.np-rest').textContent = parts.rest;
     }
+    function flipSpan(el, text) {   /* a changed half flips over its horizontal axis (down, swap, up); a change landing mid-flip is queued */
+      if (el.dataset.flipping) { el.dataset.next = text; return; }
+      if (el.textContent === text) return;
+      el.dataset.flipping = '1'; el.dataset.next = text;
+      el.style.transition = 'transform .22s ease-in'; el.style.transform = 'rotateX(90deg)';
+      setTimeout(function () {
+        el.textContent = el.dataset.next; delete el.dataset.next;
+        el.style.transition = 'none'; el.style.transform = 'rotateX(-90deg)'; void el.offsetWidth;
+        el.style.transition = 'transform .26s ease-out'; el.style.transform = 'rotateX(0deg)';
+        setTimeout(function () {
+          delete el.dataset.flipping; el.style.transition = '';
+          if (el.dataset.next) { var n = el.dataset.next; delete el.dataset.next; flipSpan(el, n); }
+        }, 280);
+      }, 230);
+    }
     function renderParts(tEl, parts) {
       var tag = tEl.querySelector('.np-tag'), rest = tEl.querySelector('.np-rest');
       if (!tag || !rest) { setParts(tEl, parts); return; }
-      rest.textContent = parts.rest;
-      if (tag.dataset.flipping) { tag.dataset.next = parts.tag; return; }
-      if (tag.textContent === parts.tag) return;
-      tag.dataset.flipping = '1'; tag.dataset.next = parts.tag;
-      tag.style.transition = 'transform .22s ease-in'; tag.style.transform = 'rotateX(90deg)';
-      setTimeout(function () {
-        tag.textContent = tag.dataset.next; delete tag.dataset.next;
-        tag.style.transition = 'none'; tag.style.transform = 'rotateX(-90deg)'; void tag.offsetWidth;
-        tag.style.transition = 'transform .26s ease-out'; tag.style.transform = 'rotateX(0deg)';
-        setTimeout(function () {
-          delete tag.dataset.flipping; tag.style.transition = '';
-          if (tag.dataset.next) { var n = tag.dataset.next; delete tag.dataset.next; renderParts(tEl, { tag: n, rest: rest.textContent }); }
-        }, 280);
-      }, 230);
+      flipSpan(tag, parts.tag); flipSpan(rest, parts.rest);
     }
     function slideTitle(tEl, title) {
       var r = tEl.getBoundingClientRect();
@@ -785,19 +797,21 @@
      ensemble, no drift, no media elements); a limiter at the end keeps four full stems from clipping. ~75 MB of RAM per decoded stem, desktop only.
      Leaving: circles shrink -> line glides back down -> the OS music resumes and the play head runs to the left edge and slides back out. ---- */
   var STAGE_NEAR = 1.0, STAGE_MID = 0.75, STAGE_FAR = 0.10, STAGE_UMAX = 2.4, STAGE_K_IN = 1.3, STAGE_K_OUT = 1.4, STAGE_PAN_MAX = 0.8, STAGE_LP_MIN = 2500, STAGE_LP_MAX = 8000, STAGE_SPAN = 0.42;
-  var STAGE_LEAD_S = 6 * (60 / 120 / 2), STAGE_GROW_MS = 800, STAGE_GROW_DELAY_MS = 750, STAGE_REACH_X = 0.92, STAGE_REACH_Y = 0.8, STAGE_GLOW_MIN = 60, STAGE_GLOW_MAX = 220, STAGE_BAR_MIN = 24, STAGE_BANDS = 64, STAGE_SPAN_X = 0.5, STAGE_SPAN_Y = 0.5, STAGE_LVL_GAIN = 2.2, STAGE_FLOOR_LV = 0.14, STAGE_SMOOTH = 0.15, STAGE_RELEASE = 0.7, STAGE_LVL_RELEASE = 0.8, STAGE_PUNCH_RELEASE = 0.8, STAGE_PUNCH = 0.6, STAGE_BAND_GAMMA = 2.4, STAGE_F_LO = 45, STAGE_F_HI = 2500, STAGE_TOP_INSET = 30, STAGE_SQUARE = false, STAGE_MIN_H = 0, STAGE_HALO = 40, STAGE_RING_IN = 0.93, STAGE_RING_A = 0.22, STAGE_RING_R = 0.6, STAGE_RING_W = 1.2, STAGE_WAVE_PTS = 512, STAGE_WAVE_A = 0.28, STAGE_MOUND = 1.6,   /* MOUND: height multiplier of the spectrum field (1 = the outer ring at full band level) */ STAGE_RINGS = [[0.50, 1.4], [0.60, 1.8], [0.65, 1.95]], STAGE_SIGIL_ON = 0.75, STAGE_SIGIL_OFF = 0.70, STAGE_ECLIPSE = 0.50, STAGE_ECLIPSE_END = 0.20, STAGE_ECLIPSE_GLOW = 0.10, STAGE_EPS = 0.006, STAGE_HIT_A = 0.9, STAGE_ECL_BLUR = 22,   /* ECL_BLUR: how far the eclipsed rings bleed at 10 % */ STAGE_GLOW_BASE = 0.11, STAGE_GLOW_PUNCH = 1.6, STAGE_LIT_AT = 0.035,   /* LIT_AT: the live level that counts as "this piano has started" — from then on its glow stays on */   /* GLOW_BASE: resting glow alpha; GLOW_PUNCH: how much an accent multiplies it (1.6 = up to 2.6x) */ STAGE_SPIN = 0.25,   /* rings leave from the outside in as the volume falls (outer below 65 %, middle below 60 %, inner below 50 %); the sigil shows from 75 % and leaves below 70 %; eclipse: from 50 % the wave ring sinks, at 20 % it sits on the inner ring, from 10 % they glow. EPS: tolerance so the exact centre (75 %) counts. HIT_A: flash of the outer ring when an accent drives the mound into it */ STAGE_CROSS = 7, STAGE_STARS = 260, STAGE_STARS_A = 0.9,   /* from the centre (75 %) on, rings and sigil are all present; SPIN: sigil rotation at 100 %, radians per second */ STAGE_RING_FROM = 2.6, STAGE_RING_MS = 220, STAGE_OVERLAP_A = 0.35,   /* RINGS: [volume threshold, radius as share of r0] — spacing = the inner-ring/wave-ring gap (0.4 r0); OVERLAP_A: extra brightness when the wave ring meets the inner ring */ STAGE_NODE_R = 3, STAGE_DASH_GAP = 10, STAGE_TICK_L2 = 16, STAGE_GLOW_AT = 0.975,   /* GLOW_AT: from this volume up the sigil brightens to its full glow at 100 % */ STAGE_PAUSE_DECAY = 0.965,   /* PAUSE_DECAY: per-frame fall of the visuals while paused (~2 s to settle) */   /* RING_A / RING_R: brightness and radius (share of r0) of the soft inner ring */   /* RING_IN: inner radius of the ring as a share of r0 — the sphere's edge stays visible (and shrinks out visibly) even when the wave is at zero */ STAGE_R0 = 0.415;   /* R0: half-disc radius as a share of the horizontal edge-to-centre distance (same for all four edges; diameter on the edge) */   /* TOP_INSET: the top edge's base sits under the menubar; MIN_H: 0 = with no sound the edge shows nothing at all (the range is built only from real band levels) */   /* PUNCH: extra height when the instant level jumps above its slow average (an accent); BAND_GAMMA: band contrast */   /* SMOOTH: analyser smoothing (0.8 on the desktop bars — here low so hits jump); RELEASE: per-frame fall after a hit */   /* FLOOR_LV: band level treated as silence (the desktop bars keep a −96 dB floor; here an empty band must read as empty) */
+  var STAGE_LEAD_S = 6 * (60 / 120 / 2), STAGE_GROW_MS = 800, STAGE_GROW_DELAY_MS = 750, STAGE_REACH_X = 0.92, STAGE_REACH_Y = 0.8, STAGE_GLOW_MIN = 60, STAGE_GLOW_MAX = 220, STAGE_BAR_MIN = 24, STAGE_BANDS = 64, STAGE_SPAN_X = 0.5, STAGE_SPAN_Y = 0.5, STAGE_LVL_GAIN = 2.2, STAGE_FLOOR_LV = 0.14, STAGE_SMOOTH = 0.15, STAGE_RELEASE = 0.7, STAGE_LVL_RELEASE = 0.8, STAGE_PUNCH_RELEASE = 0.8, STAGE_PUNCH = 0.6, STAGE_BAND_GAMMA = 2.4, STAGE_F_LO = 45, STAGE_F_HI = 2500, STAGE_TOP_INSET = 30, STAGE_SQUARE = false, STAGE_MIN_H = 0, STAGE_HALO = 40, STAGE_RING_IN = 0.93, STAGE_RING_A = 0.22, STAGE_RING_R = 0.6, STAGE_RING_W = 1.2, STAGE_WAVE_PTS = 512, STAGE_WAVE_A = 0.28, STAGE_MOUND = 1.6,   /* MOUND: height multiplier of the spectrum field (1 = the outer ring at full band level) */ STAGE_RINGS = [[0.50, 1.4], [0.60, 1.8], [0.65, 1.95]], STAGE_SIGIL_ON = 0.75, STAGE_SIGIL_OFF = 0.70, STAGE_ECLIPSE = 0.50, STAGE_ECLIPSE_END = 0.20, STAGE_ECLIPSE_GLOW = 0.10, STAGE_EPS = 0.006, STAGE_HIT_A = 0.9, STAGE_ECL_BLUR = 22,   /* ECL_BLUR: how far the eclipsed rings bleed at 10 % */ STAGE_GLOW_BASE = 0.11, STAGE_GLOW_PUNCH = 1.6, STAGE_LIT_AT = 0.035,   /* LIT_AT: the live level that counts as "this piano has started" — from then on its glow stays on */   /* GLOW_BASE: resting glow alpha; GLOW_PUNCH: how much an accent multiplies it (1.6 = up to 2.6x) */ STAGE_SPIN = 0.25,   /* rings leave from the outside in as the volume falls (outer below 65 %, middle below 60 %, inner below 50 %); the sigil shows from 75 % and leaves below 70 %; eclipse: from 50 % the wave ring sinks, at 20 % it sits on the inner ring, from 10 % they glow. EPS: tolerance so the exact centre (75 %) counts. HIT_A: flash of the outer ring when an accent drives the mound into it */ STAGE_CROSS = 7, STAGE_TICK = 4, STAGE_TICKS = [0.5, 0.2, 0.1],   /* axis ticks (volume of the piano you are leaving) either side of the centre */ STAGE_STARS = 260, STAGE_STARS_A = 0.9, STAGE_STAR_SPIN = Math.PI * 2 / 1200, STAGE_TRAIL_CHANCE = 0.10, STAGE_TRAIL_RAD = 0.32, STAGE_TRAIL_A = 0.55,   /* STAR_SPIN: clockwise about the screen centre, 20 min per turn. Star-trail egg (its flag, or TRAIL_CHANCE per stage start): long-exposure arcs of TRAIL_RAD radians behind each star */   /* from the centre (75 %) on, rings and sigil are all present; SPIN: sigil rotation at 100 %, radians per second */ STAGE_RING_FROM = 2.6, STAGE_RING_MS = 220, STAGE_OVERLAP_A = 0.35,   /* RINGS: [volume threshold, radius as share of r0] — spacing = the inner-ring/wave-ring gap (0.4 r0); OVERLAP_A: extra brightness when the wave ring meets the inner ring */ STAGE_NODE_R = 3, STAGE_DASH_GAP = 10, STAGE_TICK_L2 = 16, STAGE_GLOW_AT = 0.975,   /* GLOW_AT: from this volume up the sigil brightens to its full glow at 100 % */ STAGE_PAUSE_DECAY = 0.965, STAGE_XFADE_MS = 3200, STAGE_VEIL_MS = 300, STAGE_ABSORB_S = 4, STAGE_FLOOR_A = 0.35, STAGE_FLOOR_FADE = 0.55, STAGE_FIRST_LV = 0.02, STAGE_ECL_COL = '255,110,90', STAGE_ECL_LINE = '255,232,200', STAGE_RING_COL = '255,200,120', STAGE_RING_COL2 = '255,190,110', STAGE_RED_GLOW = 0.7, STAGE_RED_A = 0.85, STAGE_RED_FEATHER = 90,  STAGE_TITLE_COL = '255,120,100', STAGE_RED_FADE_MS = 1400, STAGE_FLOOR_MS = 1600,   /* RED_FADE_MS: on a piece change the red fades out in place (it does not follow the line's sweep); FLOOR_MS: the floor fades in when a veiled piece comes back */   /* RED_FEATHER: px over which the effects blend from red to warm at the play head; TITLE_COL: the caption's colour at the end of the piece */   /* RED_A: how fully the effects behind the play head take the eclipse colour */   /* RING_COL(2): the effects' line colours (rings, sigil / inner ring, ember); behind the play head they turn ECL_COL with RED_GLOW x ECL_BLUR of glow */   /* ECL_LINE: the eclipsed ring's own stroke colour (the corona is ECL_COL) */ STAGE_FLOOR_DARK = 0.62, STAGE_FLOOR_COL = '9,9,12', STAGE_FLOOR_TOP = 0.45, STAGE_ABSORB_R = 2.7,   /* ABSORB_R: pool radius (in r0) at which the veiled disc shows = the first sound; the pool goes on shrinking to the centre */   /* FLOOR_TOP: share of FLOOR_DARK right under the line (the floor deepens toward the bottom instead of a flat slab) */   /* the pool shrinks linearly over ABSORB_S and reaches the disc's outer-ring radius exactly at the first sound — that is when the disc shows; FLOOR_DARK/COL: the floor paints over the wallpaper (its blue tint would read as an uncovered patch) */   /* while the bottom piano is veiled the lower half is a floor: no stars, a faint mirror of the upper half (FLOOR_A, fading out over FLOOR_FADE of the half height); ABSORB_S seconds before that piano first sounds (FIRST_LV: sample amplitude that counts, scanned from its buffer) the floor's dark is drawn into the disc's centre, then the disc appears. ECL_COL: the eclipse glow (10 %) */   /* XFADE_MS: between two pieces the glow of a piano that has played fades out over this long instead of cutting; VEIL_MS: a veiled piano (piece.veil) is not drawn at all until it first sounds, then appears over this long */   /* PAUSE_DECAY: per-frame fall of the visuals while paused (~2 s to settle) */   /* RING_A / RING_R: brightness and radius (share of r0) of the soft inner ring */   /* RING_IN: inner radius of the ring as a share of r0 — the sphere's edge stays visible (and shrinks out visibly) even when the wave is at zero */ STAGE_R0 = 0.415;   /* R0: half-disc radius as a share of the horizontal edge-to-centre distance (same for all four edges; diameter on the edge) */   /* TOP_INSET: the top edge's base sits under the menubar; MIN_H: 0 = with no sound the edge shows nothing at all (the range is built only from real band levels) */   /* PUNCH: extra height when the instant level jumps above its slow average (an accent); BAND_GAMMA: band contrast */   /* SMOOTH: analyser smoothing (0.8 on the desktop bars — here low so hits jump); RELEASE: per-frame fall after a hit */   /* FLOOR_LV: band level treated as silence (the desktop bars keep a −96 dB floor; here an empty band must read as empty) */
   /* LEAD: one 6/8 bar at quarter = 120 (six eighths of 0.25 s). GROW_DELAY: the glows appear only once the bars have sunk and the line has moved up.
      REACH_X/Y: at 100 % the left/right (top/bottom) silhouette's tip gets this far along the way from its edge to the centre. SPAN_X/Y: half-width of a silhouette along its edge (fraction of W / H).
      F_LO..F_HI: the band range shown (no top octaves — a piano has nothing there); lows sit at the two ends of an edge, the busiest upper mids at its midpoint.
      RELEASE / LVL_RELEASE / PUNCH_RELEASE: per-frame fall of the bands / the glow level / the accent boost — lower = snappier, accents stand out more. */
   var stage = (function () {
     var KEYS = ['C', 'B', 'L', 'R'], UNIT = { C: [0, -1], B: [0, 1], L: [-1, 0], R: [1, 0] };   /* stage space: the centre is (0,0), every piano one unit out along its axis = on its screen edge */
+    var langSeen = null, redHold = null, flS = 0, trails = false, trailT0 = 0;   /* trails: star-trail egg for this stage run */   /* redHold: {x, t0} while the red fades out in place; flS: smoothed floor */
+    var fxc = null, fxg = null, fxr = null, fxrg = null, trc = null, trg = null;   /* effects layer + its red copy (see tick) */
     var el = null, head = null, cv = null, g2 = null, ctx = null, ch = null, vis = {}, ann = {}, lastT = 0, stars = [], pieces = [], idx = -1, active = false, ducked = false, lx = -1, ly = -1, raf = 0, moved = false, hint = null, ttl = null, geo = null, growT0 = 0, growDir = 1, grow = 0, demo = null, master = null;
     function build(d) {
       el = document.createElement('div'); el.className = 'stage'; el.setAttribute('aria-label', d.title);
       el.innerHTML = '<canvas class="st-cv" aria-hidden="true"></canvas>';
       head = document.createElement('div'); head.className = 'stage-ui'; head.innerHTML = '<div class="st-hint">' + esc(U.stage_loading) + '</div>' +
-        '<div class="st-head"><span class="ttl">' + esc(d.title) + '<small></small></span><button class="st-exit" type="button">' + esc(U.stage_exit) + '</button></div>';   /* hint + exit live above the desktop; the spheres live below it */
+        '<div class="st-head"><button class="st-exit" type="button">' + esc(U.stage_exit) + '</button></div>';   /* no title here: the now-playing caption carries design and piece */   /* hint + exit live above the desktop; the spheres live below it */
       hint = $('.st-hint', head); ttl = $('.st-head small', head); cv = $('.st-cv', el); g2 = cv.getContext('2d');
       $('.st-exit', head).addEventListener('click', function () { stop(false); });   /* not `stop` directly: the click event would be read as `immediate` and skip the exit choreography */
       var waveEl = $('#wave'); if (waveEl) desktop.insertBefore(el, waveEl); else desktop.appendChild(el);   /* under the spectrum line, the icons, notes and windows */
@@ -815,19 +829,20 @@
       hint.style.top = (by - 34) + 'px';
       if (lx < 0) { lx = geo.cx; ly = geo.cy; }
       /* star field: fixed pseudo-random positions (seeded, so it is the same sky every time), a few brighter ones, slow twinkle */
-      stars = []; var sd = 7; for (var si = 0; si < STAGE_STARS; si++) { sd = (sd * 16807) % 2147483647; var sx = sd / 2147483647; sd = (sd * 16807) % 2147483647; var sy = sd / 2147483647; sd = (sd * 16807) % 2147483647; var sz = sd / 2147483647; stars.push({ x: sx * W, y: sy * H, r: sz < 0.08 ? 1.6 : sz < 0.3 ? 1.1 : 0.7, a: 0.25 + 0.6 * sz, ph: sz * 6.28, sp: 0.3 + sz * 0.9 }); }
+      stars = []; var sd = 7, sR = Math.hypot(W, H) / 2, sN = Math.round(STAGE_STARS * (4 * sR * sR) / (W * H));   /* the sky is a square that covers the screen at every rotation angle (same density) */
+      for (var si = 0; si < sN; si++) { sd = (sd * 16807) % 2147483647; var sx = sd / 2147483647; sd = (sd * 16807) % 2147483647; var sy = sd / 2147483647; sd = (sd * 16807) % 2147483647; var sz = sd / 2147483647; stars.push({ x0: (sx * 2 - 1) * sR, y0: (sy * 2 - 1) * sR, rad: Math.hypot((sx * 2 - 1) * sR, (sy * 2 - 1) * sR), ang: Math.atan2((sy * 2 - 1) * sR, (sx * 2 - 1) * sR), x: 0, y: 0, r: sz < 0.08 ? 1.6 : sz < 0.3 ? 1.1 : 0.7, a: 0.25 + 0.6 * sz, ph: sz * 6.28, sp: 0.3 + sz * 0.9 }); }
     }
     function start(d) {
-      if (active) stop(true); active = true; moved = false; lx = ly = -1; demo = d; vis = {}; ann = {}; lastT = 0;
-      pieces = d.pieces || []; idx = -1; wave.squash(true); wave.centre(true); build(d);   /* centre first: layout() reads the line's target height */
+      if (active) stop(true); active = true; moved = false; lx = ly = -1; demo = d; vis = {}; ann = {}; lastT = 0; redHold = null; flS = 0; trails = false; trailT0 = 0;
+      pieces = d.pieces || []; idx = -1; wave.squash(true); wave.centre(true); wave.tint(STAGE_ECL_LINE, STAGE_ECL_COL); build(d);   /* centre first: layout() reads the line's target height */
       if (player.isPlaying()) { ducked = true; player.duck(true); }
       document.addEventListener('keydown', onKey); next();
     }
     function onKey(e) { if (e.key === 'Escape') stop(); }
     function next() {
-      unload(); idx++;
+      var was = ch; if (was && was.playing) { wave.sweep(true, src.state().frac); redHold = { x: redHold ? redHold.x : wave.head(), t0: performance.now(), k0: redHold ? redK() : 1 }; } unload(); idx++;   /* same as a desktop track change: the played line sweeps off right-to-left from where it was */
       if (idx >= pieces.length) return stop();   /* playlist exhausted -> leave the stage, music comes back */
-      load(pieces[idx]);
+      ch = was; load(pieces[idx]);   /* load() reads the previous channel's lit state, then replaces it */
     }
     function load(p) {
       if (!ctx) {
@@ -837,18 +852,25 @@
         lim.connect(master); master.connect(ctx.destination); ctx.__out = lim;
       }
       if (ctx.state === 'suspended') ctx.resume();
-      if (ttl) ttl.textContent = p.title || '';
-      var mine = ch = { playing: false, paused: false, t0: 0, dur: 0, piece: p };
+      if (ttl) ttl.textContent = p.title || ''; langSeen = D.lang;
+      if (!trails && (EE.st || Math.random() < STAGE_TRAIL_CHANCE)) { trails = true; trailT0 = performance.now(); }   /* star-trail egg: rolled at each piece start until it fires; then it stays until the stage is left */
+      var prev = ch, veil = p.veil || [], mine = ch = { playing: false, paused: false, t0: 0, dur: 0, piece: p };
       KEYS.forEach(function (k) {
         var g = ctx.createGain(), pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null, lp = ctx.createBiquadFilter(), an = ctx.createAnalyser();
         lp.type = 'lowpass'; lp.frequency.value = 20000; lp.Q.value = 0.5; g.gain.value = 0.0001; an.fftSize = 2048; an.minDecibels = -96; an.maxDecibels = 6; an.smoothingTimeConstant = STAGE_SMOOTH;   /* same dB window as the main spectrum, much less smoothing: accents must jump */
         if (pan) { g.connect(pan); pan.connect(lp); } else g.connect(lp); lp.connect(an); an.connect(ctx.__out);   /* analyser after gain + filter: the silhouette shows what you actually hear from that piano */
-        mine[k] = { g: g, pan: pan, lp: lp, an: an, td: new Uint8Array(1024), bands: [], lvl: 0, rel: 0, buf: null, src: null, done: 0, total: 0 };
+        var was = prev && prev[k] ? prev[k] : null, veiled = veil.indexOf(k) >= 0;
+        mine[k] = { g: g, pan: pan, lp: lp, an: an, td: new Uint8Array(1024), bands: [], lvl: 0, rel: 0, buf: null, src: null, done: 0, total: 0, lit: veiled ? 0 : (was ? was.lit || 0 : 0), app: was ? (was.app == null ? 1 : was.app) : (veiled ? 0 : 1), veil: veiled };   /* presence carried over: a disc that was hidden fades in, one that is veiled again fades out */   /* lit: 0..1 glow gate, carried over so the last piece's glow can fade out; app: 0..1 presence (a veiled piano is invisible until it first sounds) */
         fetchStem('../' + p.stems[k], mine[k], function (ab) {
           if (ch !== mine) return;   /* stage left / piece changed while downloading */
-          ctx.decodeAudioData(ab, function (buf) { if (ch !== mine) return; mine[k].buf = buf; if (KEYS.every(function (x) { return mine[x].buf; })) playAll(); }, fail);
+          ctx.decodeAudioData(ab, function (buf) { if (ch !== mine) return; mine[k].buf = buf; mine[k].firstAt = firstSound(buf); if (KEYS.every(function (x) { return mine[x].buf; })) playAll(); }, fail);
         });
       });
+    }
+    function firstSound(buf) {   /* first time (s) any sample exceeds STAGE_FIRST_LV — lets the stage prepare a piano's entrance before it happens */
+      var n = buf.numberOfChannels, best = buf.duration;
+      for (var c = 0; c < n; c++) { var d = buf.getChannelData(c); for (var i = 0; i < d.length; i += 8) { if (Math.abs(d[i]) >= STAGE_FIRST_LV) { if (i / buf.sampleRate < best) best = i / buf.sampleRate; break; } } }
+      return best;
     }
     function fail() { if (hint) { hint.textContent = 'audio error'; hint.classList.remove('gone'); } }
     function fetchStem(url, c, done) {
@@ -874,8 +896,13 @@
     }
     /* transport: pause = suspend the context (the clock stops, so pos and sync are kept); prev = restart this piece; next = next piece or leave */
     function toggle() { if (!ctx || !ch || !ch.playing) return; if (ch.paused) { ch.paused = false; ctx.resume(); } else { ch.paused = true; ctx.suspend(); } }
+    function prev() {   /* the previous piece; on the first one, back to its start */
+      if (!ctx || !ch || !ch.playing) return;
+      if (idx > 0) { idx -= 2; next(); return; }   /* the previous piece (next() moves idx forward by one); like the desktop player's ⏮, no back-to-start rule */
+      restart();
+    }
     function restart() {
-      if (!ctx || !ch || !ch.playing) return; var mine = ch, t0 = ctx.currentTime + 0.1; if (mine.paused) { mine.paused = false; ctx.resume(); }
+      if (!ctx || !ch || !ch.playing) return; var mine = ch, t0 = ctx.currentTime + 0.1; wave.sweep(true, src.state().frac); redHold = { x: redHold ? redHold.x : wave.head(), t0: performance.now(), k0: redHold ? redK() : 1 }; if (mine.paused) { mine.paused = false; ctx.resume(); }
       KEYS.forEach(function (k) { var c = mine[k]; if (c.src) { c.src.onended = null; try { c.src.stop(); } catch (e) {} } var s = ctx.createBufferSource(); s.buffer = c.buf; s.connect(c.g); s.start(t0); c.src = s; if (k === 'C') s.onended = function () { if (ch === mine) next(); }; });
       mine.t0 = t0;
     }
@@ -887,6 +914,30 @@
       var q = Math.min(1, (u - 1) / ((umax || STAGE_UMAX) - 1)); return STAGE_MID - (STAGE_MID - STAGE_FAR) * Math.pow(q, STAGE_K_OUT);
     }
     function easeOut(x) { return 1 - Math.pow(1 - x, 3); }
+    function redComposite(hx, alpha, RK, srcCv) {
+      srcCv = srcCv || fxc;   /* fxc (the warm layer) onto the main canvas; over it the same layer turned eclipse-red, masked to the played side with a soft edge, with the eclipse glow */
+      g2.save(); g2.globalCompositeOperation = 'source-over'; g2.globalAlpha = alpha; g2.drawImage(srcCv, 0, 0, geo.W, geo.H);
+      if (hx > 0 && RK > 0) {
+        if (!fxr) { fxr = document.createElement('canvas'); fxrg = fxr.getContext('2d'); } if (fxr.width !== cv.width || fxr.height !== cv.height) { fxr.width = cv.width; fxr.height = cv.height; }
+        fxrg.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0); fxrg.globalCompositeOperation = 'source-over'; fxrg.clearRect(0, 0, geo.W, geo.H); fxrg.drawImage(srcCv, 0, 0, geo.W, geo.H);
+        fxrg.globalCompositeOperation = 'source-atop'; fxrg.fillStyle = 'rgba(' + STAGE_ECL_COL + ',' + (STAGE_RED_A * RK).toFixed(3) + ')'; fxrg.fillRect(0, 0, geo.W, geo.H);
+        var fm = fxrg.createLinearGradient(hx - STAGE_RED_FEATHER, 0, hx + STAGE_RED_FEATHER * 0.35, 0); fm.addColorStop(0, 'rgba(0,0,0,1)'); fm.addColorStop(1, 'rgba(0,0,0,0)');
+        fxrg.globalCompositeOperation = 'destination-in'; fxrg.fillStyle = fm; fxrg.fillRect(0, 0, geo.W, geo.H); fxrg.globalCompositeOperation = 'source-over';
+        g2.globalAlpha = alpha * RK; g2.shadowColor = 'rgba(' + STAGE_ECL_COL + ',.9)'; g2.shadowBlur = STAGE_ECL_BLUR * STAGE_RED_GLOW * RK; g2.drawImage(fxr, 0, 0, geo.W, geo.H);
+      }
+      g2.restore();
+    }
+    function trailLayer() {   /* the star trails' own layer: it must survive the piano layers, the floor mirrors it */
+      if (!trc) { trc = document.createElement('canvas'); trg = trc.getContext('2d'); } if (trc.width !== cv.width || trc.height !== cv.height) { trc.width = cv.width; trc.height = cv.height; }
+      trg.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0); trg.clearRect(0, 0, geo.W, geo.H); trg.globalAlpha = 1; trg.globalCompositeOperation = 'source-over'; return trg;
+    }
+    function fxLayer() {   /* the offscreen layer, cleared, ready to draw into (same size/transform as the stage canvas) */
+      if (!fxc) { fxc = document.createElement('canvas'); fxg = fxc.getContext('2d'); } if (fxc.width !== cv.width || fxc.height !== cv.height) { fxc.width = cv.width; fxc.height = cv.height; }
+      fxg.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0); fxg.clearRect(0, 0, geo.W, geo.H); fxg.globalAlpha = 1; fxg.globalCompositeOperation = 'source-over'; return fxg;
+    }
+    function redK() { if (!redHold) return 1; var k = redHold.k0 * (1 - (performance.now() - redHold.t0) / STAGE_RED_FADE_MS); if (k <= 0) { redHold = null; return 1; } return k; }   /* red strength: 1 normally; fading in place after a piece change */
+    function redX() { return redHold ? redHold.x : wave.head(); }   /* where the red ends: the play head, or frozen while fading */
+    function mixCol(a, b, t) { if (t <= 0) return a; if (t >= 1) return b; a = a.split(','); b = b.split(','); return a.map(function (v, i) { return Math.round(+v + (+b[i] - +v) * t); }).join(','); }
     /* log-spaced bands between STAGE_F_LO and STAGE_F_HI (peak per band, interpolated when narrower than a bin); index 0 = lowest */
     function stageBands(an, n) {
       var data = new Uint8Array(an.frequencyBinCount); an.getByteFrequencyData(data);
@@ -917,15 +968,18 @@
         if (ch.paused) {   /* paused: nothing is read — the glow settles down like the desktop bars do, instead of freezing mid-air */
           c.lvl *= STAGE_PAUSE_DECAY; c.punch = (c.punch || 0) * STAGE_PAUSE_DECAY; for (var pb = 0; pb < c.bands.length; pb++) c.bands[pb] *= STAGE_PAUSE_DECAY;
           for (var pt_ = 0; pt_ < c.td.length; pt_++) { var dv = (c.td[pt_] - 128) * STAGE_PAUSE_DECAY; c.td[pt_] = Math.abs(dv) < 1 ? 128 : Math.round(128 + dv); }   /* the waveform settles to flat too (rounded: plain truncation left the negative half frozen) */
-          vis[k] = { rel: c.rel, lvl: c.lvl, punch: c.punch, bands: c.bands, td: c.td, lit: c.lit }; return;
+          vis[k] = { rel: c.rel, lvl: c.lvl, punch: c.punch, bands: c.bands, td: c.td, lit: c.lit, app: c.app }; return;
         }
         /* live level (RMS of what this piano is putting out): fast attack, slower release, so the glow breathes with the playing */
         c.an.getByteTimeDomainData(c.td); var s = 0; for (var i = 0; i < c.td.length; i++) { var v = (c.td[i] - 128) / 128; s += v * v; }
         var rms = Math.min(1, Math.sqrt(s / c.td.length) * STAGE_LVL_GAIN); c.lvl = rms > c.lvl ? rms : c.lvl * STAGE_LVL_RELEASE;
-        if (!c.lit && c.lvl >= STAGE_LIT_AT) c.lit = true;   /* the glow stays dark only until this piano first sounds; after that it keeps its resting brightness */
+        if (c.lvl >= STAGE_LIT_AT) c.lit = 1;   /* the glow stays dark only until this piano first sounds; after that it keeps its resting brightness */
+        else if (!ch.playing || t < ch.t0) c.lit = Math.max(0, c.lit - dtm / STAGE_XFADE_MS);   /* between pieces (download + count-in) the carried-over glow fades out slowly instead of cutting */
+        if (c.veil && c.firstAt != null && ch.playing) c.lit = t - ch.t0 >= c.firstAt ? 1 : 0;   /* veiled + entrance known from the buffer: the clock decides, so the disc shows at the exact instant the absorb ends (the analyser would lag) */
+        if (c.veil) c.app = c.lit > 0 ? Math.min(1, c.app + dtm / STAGE_VEIL_MS) : Math.max(0, c.app - dtm / STAGE_FLOOR_MS); else if (c.app < 1) c.app = Math.min(1, c.app + dtm / STAGE_FLOOR_MS);   /* veiled again (back to this piece): it fades out */   /* a veiled piano appears (once) the moment it first sounds */
         c.avg = (c.avg || 0) * 0.97 + rms * 0.03; var pk = Math.max(0, Math.min(1, (rms - c.avg) * 3)); c.punch = pk > (c.punch || 0) ? pk : (c.punch || 0) * STAGE_PUNCH_RELEASE;   /* accent detector: instant level well above its slow average */
         var lv = stageBands(c.an, STAGE_BANDS); for (var q = 0; q < lv.length; q++) { var z = (lv[q] - STAGE_FLOOR_LV) / (1 - STAGE_FLOOR_LV); lv[q] = z > 0 ? Math.pow(z, STAGE_BAND_GAMMA) : 0; } if (c.bands.length !== STAGE_BANDS) c.bands = lv; else for (var b = 0; b < STAGE_BANDS; b++) c.bands[b] = lv[b] > c.bands[b] ? lv[b] : Math.max(lv[b], c.bands[b] * STAGE_RELEASE);   /* instant attack, quick release: a sforzando reads as a jump */
-        vis[k] = { rel: c.rel, lvl: c.lvl, punch: c.punch || 0, bands: c.bands, td: c.td, lit: c.lit };
+        vis[k] = { rel: c.rel, lvl: c.lvl, punch: c.punch || 0, bands: c.bands, td: c.td, lit: c.lit, app: c.app };
       });
       /* canvas: per piano, from its screen edge — a radial glow at the edge midpoint (size = volume, pumped by the live level) and the
          spectrum as a stroke-less glow silhouette rising toward the centre: lows at the midpoint, highs toward the corners, mirrored.
@@ -933,11 +987,27 @@
       g2.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0); g2.clearRect(0, 0, geo.W, geo.H);
       /* the sky behind everything: fades in with the stage, out with it */
       g2.globalCompositeOperation = 'source-over'; var tw = now / 1000;
-      for (var s0 = 0; s0 < stars.length; s0++) { var stc = stars[s0], sa = stc.a * (0.65 + 0.35 * Math.sin(tw * stc.sp + stc.ph)) * STAGE_STARS_A * grow; if (sa <= 0.01) continue; g2.fillStyle = 'rgba(232,226,214,' + sa.toFixed(3) + ')'; g2.beginPath(); g2.arc(stc.x, stc.y, stc.r, 0, Math.PI * 2); g2.fill(); }
-      KEYS.forEach(function (k) {
-        var c = vis[k], u = UNIT[k], x = geo.cx + u[0] * geo.ax, y = geo.cy + u[1] * geo.ey + (k === 'C' ? STAGE_TOP_INSET : 0), rel = c ? c.rel : 0, lvl = c ? c.lvl : 0, gate = c && c.lit ? 1 : 0;   /* hard gate: dark until the first sound, then always on (no flicker while it is still quiet) */
+      var RK = redK(), RX = redX();   /* the red's reach and strength this frame */
+      var vb = ch && ch.B && ch.B.veil ? ch.B : null, ab = 0, fl = 0;   /* floor: the bottom piano is veiled and has not appeared yet */
+      var Rfull = Math.hypot(geo.W / 2, geo.H - geo.cy), Rdisc = STAGE_R0 * geo.ey * STAGE_ABSORB_R;   /* pool: from covering the lower half down to a point; the disc's outer ring is where the entrance happens */
+      if (vb) { var tp = ch.playing ? t - ch.t0 : -1e9, fa = vb.firstAt == null ? 1e9 : vb.firstAt, tEnd = fa + STAGE_ABSORB_S * (Rdisc / Rfull); ab = Math.max(0, Math.min(1, (tp - (tEnd - STAGE_ABSORB_S)) / STAGE_ABSORB_S)); fl = 1 - ab; }
+      flS = fl > flS ? Math.min(fl, flS + dtm / STAGE_FLOOR_MS) : (vb ? fl : Math.max(fl, flS - dtm / STAGE_FLOOR_MS)); fl = flS;   /* ...and fades out when the next piece has no veil (the absorb drives it otherwise) */   /* the floor fades in (coming back to a veiled piece); it leaves with the absorb */
+      var sra = tw * STAGE_STAR_SPIN, sco = Math.cos(sra), ssi = Math.sin(sra), scx = geo.W / 2, scy = geo.H / 2;   /* the sky turns very slowly, clockwise, about the screen centre */
+      if (trails) {   /* long exposure: from the moment the egg fired, every star drags the arc it has travelled about the centre (fading toward its tail); behind the play head the trails turn red like the effects */
+        var gM = g2, tl = Math.min(Math.PI * 2, (now - trailT0) / 1000 * STAGE_STAR_SPIN); g2 = trailLayer(); g2.lineCap = 'round';
+        if (tl > 0.002) for (var s5 = 0; s5 < stars.length; s5++) { var st5 = stars[s5], a1 = st5.ang + sra, ta = st5.a * STAGE_TRAIL_A * grow; if (st5.rad < 1) continue; var vx = scx + st5.rad * Math.cos(a1), vy = scy + st5.rad * Math.sin(a1); if (vx < -st5.rad || vy < -st5.rad || vx > geo.W + st5.rad || vy > geo.H + st5.rad) continue; if (vy > geo.cy) ta *= 1 - fl;
+          for (var seg = 0; seg < 3; seg++) { var f0 = seg / 3, f1 = (seg + 1) / 3, aa = ta * (1 - f0 * 0.85); if (aa <= 0.01) continue; g2.strokeStyle = 'rgba(232,226,214,' + aa.toFixed(3) + ')'; g2.lineWidth = st5.r * 1.3; g2.beginPath(); g2.arc(scx, scy, st5.rad, a1 - tl * f1, a1 - tl * f0); g2.stroke(); }
+        }
+        if (fl > 0) { g2.globalCompositeOperation = 'destination-out'; g2.fillStyle = 'rgba(0,0,0,' + fl.toFixed(3) + ')'; g2.fillRect(0, geo.cy, geo.W, geo.H - geo.cy); g2.globalCompositeOperation = 'source-over'; }   /* the floor hides whatever is below the line — a star peeking over it does not drag its tail through */
+        g2.lineCap = 'butt'; g2 = gM; redComposite(Math.max(0, Math.min(geo.W, RX)), 1, RK, trc);
+      }
+      for (var s0 = 0; s0 < stars.length; s0++) { var stc = stars[s0]; stc.x = scx + stc.x0 * sco - stc.y0 * ssi; stc.y = scy + stc.x0 * ssi + stc.y0 * sco; if (stc.x < -2 || stc.y < -2 || stc.x > geo.W + 2 || stc.y > geo.H + 2) continue; var sa = stc.a * (0.65 + 0.35 * Math.sin(tw * stc.sp + stc.ph)) * STAGE_STARS_A * grow; if (stc.y > geo.cy) sa *= 1 - fl; if (sa <= 0.01) continue; g2.fillStyle = 'rgba(232,226,214,' + sa.toFixed(3) + ')'; g2.beginPath(); g2.arc(stc.x, stc.y, stc.r, 0, Math.PI * 2); g2.fill(); }
+      var drawPiano = function (k) {
+        var c = vis[k], u = UNIT[k], x = geo.cx + u[0] * geo.ax, y = geo.cy + u[1] * geo.ey + (k === 'C' ? STAGE_TOP_INSET : 0), rel = c ? c.rel : 0, lvl = c ? c.lvl : 0, gate = c ? c.lit || 0 : 0, app = c ? (c.app == null ? 1 : c.app) : 0;   /* gate: dark until the first sound, then on (1) — only fades between pieces; app: presence (veiled piano) */
         var pk = c ? (c.punch || 0) : 0;   /* accents flare the range's own glow below; there is no separate light on the edge */
-        if (!c || !c.bands.length) return;
+        if (!c || !c.bands.length || app <= 0.001) return;
+        g2.globalAlpha = easeOut(app);
+        var RC = STAGE_RING_COL, RC2 = STAGE_RING_COL2, RCH = '255,230,170', RG = 0;   /* the effects' line colours; the part behind the play head is turned red when the layer is composited (below) */   /* everything of this piano — halo, field, wave ring, star-chart rings, sigil — through its presence */
         /* half-disc on the edge (diameter on the edge, centred on its midpoint); the spectrum runs along the arc from one end to the other
            (lows -> highs, not mirrored) and pushes the arc outward by each band's level. Same look as the desktop bars: dim at the base,
            brighter toward the tips, a soft glow around it (stronger on accents) */
@@ -971,9 +1041,14 @@
         /* sound wave line, independent of the mound: it sits on its own base circle. At 75 % (the centre) the base is the sphere radius r0;
            below that it shrinks toward the inner ring and meets it at the volume floor. Above 85 % / 95 % a star-chart ring snaps in from
            outside (and leaves again when the volume drops); at 100 % that ring shows its tick marks. */
+        /* effects layer: wave ring, star-chart rings, accent flash and sigil are drawn offscreen, then composited — the part left of the play head
+           tinted eclipse-red with a red glow, the rest as is (the desktop bars turn amber behind the play head the same way). The inner ring and the
+           ember stay on the main canvas: they never turn red */
+        var gMain = g2; g2 = fxLayer();
         var gv = STAGE_FAR + (STAGE_NEAR - STAGE_FAR) * rel, st = ann[k] || (ann[k] = { r: [0, 0, 0], t: 0, rot: 0, on: false }), step = dtm / STAGE_RING_MS;
-        for (var ri = 0; ri < STAGE_RINGS.length; ri++) st.r[ri] = gv + STAGE_EPS >= STAGE_RINGS[ri][0] ? Math.min(1, st.r[ri] + step) : Math.max(0, st.r[ri] - step);
-        st.on = st.on ? gv + STAGE_EPS >= STAGE_SIGIL_OFF : gv + STAGE_EPS >= STAGE_SIGIL_ON;   /* hysteresis: appears at 75, leaves below 70 */
+        if (app < 0.999) step *= app;   /* while a veiled piano is still appearing its rings ease in with it */
+        for (var ri = 0; ri < STAGE_RINGS.length; ri++) st.r[ri] = !trails && gv + STAGE_EPS >= STAGE_RINGS[ri][0] ? Math.min(1, st.r[ri] + step) : Math.max(0, st.r[ri] - step);   /* under the star-trail egg the disc stops at the wave ring */
+        st.on = !trails && (st.on ? gv + STAGE_EPS >= STAGE_SIGIL_OFF : gv + STAGE_EPS >= STAGE_SIGIL_ON);   /* hysteresis: appears at 75, leaves below 70 */
         st.t = st.on ? Math.min(1, st.t + step * 0.6) : Math.max(0, st.t - step * 0.6);
         var rIn = r0 * STAGE_RING_R, rw = gv + STAGE_EPS >= STAGE_ECLIPSE ? r0 : rIn + (r0 - rIn) * Math.max(0, Math.min(1, (gv - STAGE_ECLIPSE_END) / (STAGE_ECLIPSE - STAGE_ECLIPSE_END)));   /* eclipse: 50 -> 20 % the wave ring sinks onto the inner ring and stays there */
         var ov = Math.max(0, Math.min(1, (STAGE_ECLIPSE_GLOW + 0.03 - gv) / 0.03));   /* from 10 % the eclipsed rings glow */
@@ -982,28 +1057,28 @@
         g2.globalCompositeOperation = 'source-over'; g2.lineWidth = STAGE_RING_W; g2.lineJoin = 'round'; g2.shadowBlur = 0;
         var td = c.td || [], tn = td.length || 1, m4 = STAGE_WAVE_PTS, wa = r0 * STAGE_WAVE_A * (0.3 + 1.4 * lvl);   /* the waveform must read at a glance: scaled up with the live level */
         if (ov > 0) {   /* solar eclipse at 10 %: a soft corona bleeds out around the merged rings */
-          var cor = g2.createRadialGradient(x, y, rIn * 0.8, x, y, rIn * 1.45); cor.addColorStop(0, 'rgba(255,220,160,0)'); cor.addColorStop(0.3, 'rgba(255,220,160,' + (0.35 * ov).toFixed(3) + ')'); cor.addColorStop(1, 'rgba(255,200,120,0)');
+          var cor = g2.createRadialGradient(x, y, rIn * 0.8, x, y, rIn * 1.45); cor.addColorStop(0, 'rgba(' + STAGE_ECL_COL + ',0)'); cor.addColorStop(0.3, 'rgba(' + STAGE_ECL_COL + ',' + (0.35 * ov).toFixed(3) + ')'); cor.addColorStop(1, 'rgba(' + STAGE_ECL_COL + ',0)');
           g2.save(); try { g2.filter = 'blur(6px)'; } catch (e) {} g2.globalCompositeOperation = 'lighter'; g2.fillStyle = cor; arc(function () { return rIn * 1.45; }, rIn * 0.8); g2.fill(); g2.restore(); g2.globalCompositeOperation = 'source-over';
-          g2.shadowColor = 'rgba(255,220,160,.95)'; g2.shadowBlur = STAGE_ECL_BLUR * ov; g2.lineWidth = STAGE_RING_W;
+          g2.shadowColor = 'rgba(' + STAGE_ECL_COL + ',.95)'; g2.shadowBlur = STAGE_ECL_BLUR * ov; g2.lineWidth = STAGE_RING_W;
         }
-        g2.strokeStyle = 'rgba(255,200,120,' + Math.min(1, STAGE_RING_A * (0.7 + 0.5 * rel) + 0.15 * pk + STAGE_OVERLAP_A * ov).toFixed(3) + ')';
+        g2.strokeStyle = 'rgba(' + RC + ',' + Math.min(1, STAGE_RING_A * (0.7 + 0.5 * rel) + 0.15 * pk + STAGE_OVERLAP_A * ov).toFixed(3) + ')';
         g2.beginPath(); for (var s4 = 0; s4 < m4; s4++) { var v4 = tn > 1 ? (td[Math.floor(s4 / (m4 - 1) * (tn - 1))] - 128) / 128 : 0, p4 = pt(Math.PI * s4 / (m4 - 1), rw + v4 * wa); if (s4) g2.lineTo(p4[0], p4[1]); else g2.moveTo(p4[0], p4[1]); } g2.stroke(); g2.shadowBlur = 0; g2.lineWidth = STAGE_RING_W; try { g2.filter = 'none'; } catch (e) {}
         /* star-chart rings (evenly spaced by the inner-ring/wave-ring gap; the third hugs the second like an astrolabe's double rim): ease in from outside */
         var Rr = [];
         STAGE_RINGS.forEach(function (rg, i) {
           var e = easeOut(st.r[i]); Rr[i] = r0 * (rg[1] + (STAGE_RING_FROM - rg[1]) * (1 - e)); if (e <= 0) return;
-          g2.strokeStyle = 'rgba(255,200,120,' + (STAGE_RING_A * e).toFixed(3) + ')'; ringPath(Rr[i]); g2.stroke();
+          g2.strokeStyle = 'rgba(' + RC + ',' + (STAGE_RING_A * e).toFixed(3) + ')'; g2.shadowColor = 'rgba(' + STAGE_ECL_COL + ',.9)'; g2.shadowBlur = RG * e; ringPath(Rr[i]); g2.stroke(); g2.shadowBlur = 0;
         });
         if (hit > 0 && st.r[2] > 0) {   /* accent impact: the outer ring flares where the mound breaks through */
-          g2.strokeStyle = 'rgba(255,230,170,' + (STAGE_HIT_A * hit * easeOut(st.r[2])).toFixed(3) + ')'; g2.lineWidth = STAGE_RING_W + 1.5 * hit; g2.shadowColor = 'rgba(255,200,120,.9)'; g2.shadowBlur = 18 * hit; ringPath(Rr[2]); g2.stroke(); g2.shadowBlur = 0; g2.lineWidth = STAGE_RING_W;
+          g2.strokeStyle = 'rgba(' + RCH + ',' + (STAGE_HIT_A * hit * easeOut(st.r[2])).toFixed(3) + ')'; g2.lineWidth = STAGE_RING_W + 1.5 * hit; g2.shadowColor = 'rgba(' + RC + ',.9)'; g2.shadowBlur = 18 * hit; ringPath(Rr[2]); g2.stroke(); g2.shadowBlur = 0; g2.lineWidth = STAGE_RING_W;
         }
         if (st.t > 0) {   /* the sigil of this piano (>= 95 %): alchemy circle / astrolabe / compass / moon dial; at 100 % it glows */
           var Rh = r0 * STAGE_RINGS[1][1], Ro = r0 * STAGE_RINGS[2][1], gl = Math.max(0, Math.min(1, (gv - STAGE_GLOW_AT) / (STAGE_NEAR - STAGE_GLOW_AT))), ta = STAGE_RING_A * easeOut(st.t) * (1 + 0.9 * gl), BIG = 4000;
           g2.save(); g2.beginPath(); g2.moveTo(x + tx * BIG, y + ty * BIG); g2.lineTo(x - tx * BIG, y - ty * BIG); g2.lineTo(x - tx * BIG + nx_ * BIG, y - ty * BIG + ny_ * BIG); g2.lineTo(x + tx * BIG + nx_ * BIG, y + ty * BIG + ny_ * BIG); g2.closePath(); g2.clip();   /* only the half facing the centre */
           st.rot += dtm / 1000 * STAGE_SPIN * gl;   /* at 100 % the sigil turns slowly: the inner pattern one way, the outer frame (scales, dashed rims, script) the other */
           var spin = function (dir, fn) { g2.save(); g2.translate(x, y); g2.rotate(st.rot * dir * (u[0] || u[1])); g2.translate(-x, -y); fn(); g2.restore(); };
-          var col = 'rgba(255,200,120,' + Math.min(1, ta).toFixed(3) + ')';
-          g2.strokeStyle = col; g2.fillStyle = col; g2.lineWidth = STAGE_RING_W; g2.shadowColor = 'rgba(255,200,120,.9)'; g2.shadowBlur = 16 * gl;   /* the glow at 100 % */
+          var col = 'rgba(' + RC + ',' + Math.min(1, ta).toFixed(3) + ')';
+          g2.strokeStyle = col; g2.fillStyle = col; g2.lineWidth = STAGE_RING_W; g2.shadowColor = 'rgba(' + RC + ',.9)'; g2.shadowBlur = 16 * gl + RG;   /* the glow at 100 % */
           var poly = function (idx, R, off) { g2.beginPath(); idx.forEach(function (vi, i) { var p = pt(Math.PI * vi / 3 + (off || 0), R); if (i) g2.lineTo(p[0], p[1]); else g2.moveTo(p[0], p[1]); }); g2.stroke(); };
           var spokes = function (n_, R0, R1, off) { g2.beginPath(); for (var si = 0; si < n_; si++) { var th_ = Math.PI * 2 * si / n_ + (off || 0), q0 = pt(th_, R0), q1 = pt(th_, R1); g2.moveTo(q0[0], q0[1]); g2.lineTo(q1[0], q1[1]); } g2.stroke(); };
           var ticks = function (stepDeg, R, sLen, lLen, every) { g2.beginPath(); for (var dg = 0; dg < 360; dg += stepDeg) { var th_ = Math.PI * dg / 180, len = dg % every === 0 ? lLen : sLen, q0 = pt(th_, R), q1 = pt(th_, R + len); g2.moveTo(q0[0], q0[1]); g2.lineTo(q1[0], q1[1]); } g2.stroke(); };
@@ -1112,27 +1187,72 @@
           }
           g2.shadowBlur = 0; g2.restore();
         }
+        g2 = gMain; var hx = Math.max(0, Math.min(geo.W, RX));
+        redComposite(hx, easeOut(app), RK); g2.globalAlpha = easeOut(app);
         /* thin, crisp, no glow (except in eclipse, when it shares the corona's blur) */
         var ra = Math.min(1, STAGE_RING_A * (0.6 + 0.4 * rel) + 0.1 * pk + STAGE_OVERLAP_A * ov), rr = r0 * STAGE_RING_R;   /* brightens too when the wave ring lands on it */
-        g2.globalCompositeOperation = 'source-over'; g2.strokeStyle = 'rgba(255,190,110,' + ra.toFixed(3) + ')'; g2.lineWidth = STAGE_RING_W; g2.shadowColor = 'rgba(255,220,160,.95)'; g2.shadowBlur = STAGE_ECL_BLUR * ov;
+        g2.globalCompositeOperation = 'source-over'; g2.strokeStyle = 'rgba(' + RC2 + ',' + ra.toFixed(3) + ')'; g2.lineWidth = STAGE_RING_W; g2.shadowColor = 'rgba(' + STAGE_ECL_COL + ',.95)'; g2.shadowBlur = Math.max(STAGE_ECL_BLUR * ov, RG);
         g2.beginPath(); for (var s3 = 0; s3 < n; s3++) { var th3 = Math.PI * s3 / (n - 1), dx3 = -Math.cos(th3) * tx + Math.sin(th3) * nx_, dy3 = -Math.cos(th3) * ty + Math.sin(th3) * ny_; if (s3) g2.lineTo(x + dx3 * rr, y + dy3 * rr); else g2.moveTo(x + dx3 * rr, y + dy3 * rr); } g2.stroke(); g2.shadowBlur = 0; g2.lineWidth = STAGE_RING_W; try { g2.filter = 'none'; } catch (e) {}
         /* the small centre dot from the first version: desktop-coloured, faint rim, sits on the edge midpoint */
         var dr = 7 * grow; g2.globalCompositeOperation = 'source-over';
         g2.beginPath(); g2.arc(x, y, dr, 0, Math.PI * 2); g2.fillStyle = 'rgba(26,32,48,.95)'; g2.fill();
         g2.lineWidth = 1; g2.strokeStyle = 'rgba(255,255,255,' + (0.25 + 0.2 * rel).toFixed(3) + ')'; g2.stroke();
-        g2.beginPath(); g2.arc(x, y, dr * 0.45, 0, Math.PI * 2); g2.fillStyle = 'rgba(255,190,110,' + (0.25 + 0.5 * lvl).toFixed(3) + ')'; g2.fill();   /* a tiny ember that breathes with the level */
-        g2.globalCompositeOperation = 'source-over';
-      });
+        g2.beginPath(); g2.arc(x, y, dr * 0.45, 0, Math.PI * 2); g2.fillStyle = 'rgba(' + RC2 + ',' + (0.25 + 0.5 * lvl).toFixed(3) + ')'; g2.fill();   /* a tiny ember that breathes with the level */
+        g2.globalCompositeOperation = 'source-over'; g2.globalAlpha = 1;
+      };
+      var under = vb && vb.lit <= 0 && vb.app > 0 ? 'B' : null;   /* the veiled disc on its way out is drawn first: the floor fades in over it */
+      if (under) drawPiano(under);
+      if (fl > 0) { var fd = g2.createLinearGradient(0, geo.cy, 0, geo.H); fd.addColorStop(0, 'rgba(' + STAGE_FLOOR_COL + ',' + (STAGE_FLOOR_DARK * STAGE_FLOOR_TOP * fl * grow).toFixed(3) + ')'); fd.addColorStop(1, 'rgba(' + STAGE_FLOOR_COL + ',' + (STAGE_FLOOR_DARK * fl * grow).toFixed(3) + ')'); g2.fillStyle = fd; g2.fillRect(0, geo.cy, geo.W, geo.H - geo.cy); }   /* the floor itself: near-black over the wallpaper, under the pianos (the side discs still straddle the line) */
+      KEYS.forEach(function (k) { if (k !== under) drawPiano(k); });
       g2.globalCompositeOperation = 'source-over';
-      /* centre mark: a small vertical tick on the line at the true centre (fades with the stage) and, while playing, the four current volumes around it */
-      g2.globalCompositeOperation = 'source-over'; g2.strokeStyle = 'rgba(224,176,74,' + (0.55 * grow).toFixed(3) + ')'; g2.lineWidth = 1;
-      g2.beginPath(); g2.moveTo(geo.cx + 0.5, geo.cy - STAGE_CROSS); g2.lineTo(geo.cx + 0.5, geo.cy + STAGE_CROSS); g2.stroke();
-      if (ch && ch.playing && grow > 0.5) {
-        g2.font = '11px ' + (getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace'); g2.fillStyle = 'rgba(224,176,74,' + (0.6 * grow).toFixed(3) + ')'; g2.textBaseline = 'middle';
-        var pc = function (k) { var v = vis[k]; return v ? Math.round((STAGE_FAR + (STAGE_NEAR - STAGE_FAR) * v.rel) * 100) + '%' : ''; };
-        g2.textAlign = 'center'; g2.fillText(pc('C'), geo.cx, geo.cy - STAGE_CROSS - 9); g2.fillText(pc('B'), geo.cx, geo.cy + STAGE_CROSS + 9);
-        g2.textAlign = 'right'; g2.fillText(pc('L'), geo.cx - STAGE_CROSS - 6, geo.cy); g2.textAlign = 'left'; g2.fillText(pc('R'), geo.cx + STAGE_CROSS + 6, geo.cy);
+      if (fl > 0) {   /* floor: below the line the sky is mirrored — only the stars and a faint pool of the top piano's light; the rings and sigils do not reflect */
+        var hh = geo.H - geo.cy, fa_ = STAGE_FLOOR_A * fl * grow;
+        g2.save(); g2.beginPath(); g2.rect(0, geo.cy, geo.W, hh); g2.clip();
+        for (var s1 = 0; s1 < stars.length; s1++) { var st1 = stars[s1]; if (st1.y > geo.cy || st1.y < -2 || st1.x < -2 || st1.x > geo.W + 2) continue; var my = 2 * geo.cy - st1.y, dep = (my - geo.cy) / (hh * STAGE_FLOOR_FADE); if (dep >= 1) continue; var sa1 = st1.a * (0.65 + 0.35 * Math.sin(tw * st1.sp + st1.ph)) * STAGE_STARS_A * fa_ * (1 - dep); if (sa1 <= 0.01) continue; g2.fillStyle = 'rgba(232,226,214,' + sa1.toFixed(3) + ')'; g2.beginPath(); g2.arc(st1.x, my, st1.r, 0, Math.PI * 2); g2.fill(); }
+        if (trails && trc) {   /* the trails reflect too: the upper half of the trail layer, faded with depth, flipped under the line */
+          if (!fxr) { fxr = document.createElement('canvas'); fxrg = fxr.getContext('2d'); } if (fxr.width !== cv.width || fxr.height !== cv.height) { fxr.width = cv.width; fxr.height = cv.height; }
+          fxrg.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0); fxrg.globalCompositeOperation = 'source-over'; fxrg.clearRect(0, 0, geo.W, geo.H); fxrg.drawImage(trc, 0, 0, geo.W, geo.H);
+          var dg = fxrg.createLinearGradient(0, geo.cy - hh * STAGE_FLOOR_FADE, 0, geo.cy); dg.addColorStop(0, 'rgba(0,0,0,0)'); dg.addColorStop(1, 'rgba(0,0,0,1)');
+          fxrg.globalCompositeOperation = 'destination-in'; fxrg.fillStyle = dg; fxrg.fillRect(0, 0, geo.W, geo.H); fxrg.globalCompositeOperation = 'source-over';
+          g2.save(); g2.translate(0, 2 * geo.cy); g2.scale(1, -1); g2.globalAlpha = fa_; g2.drawImage(fxr, 0, 0, geo.W, geo.H); g2.restore();
+        }
+        var vc = vis.C, cl = vc ? (vc.lit || 0) * (0.35 + 0.65 * vc.lvl) : 0;   /* the top piano's glow lands on the floor as a soft pool under the line */
+        if (cl > 0.01) { var pl = g2.createRadialGradient(geo.cx, geo.cy, 0, geo.cx, geo.cy, geo.ey * 0.9); pl.addColorStop(0, 'rgba(255,170,90,' + (0.10 * cl * fl * grow).toFixed(3) + ')'); pl.addColorStop(1, 'rgba(255,170,90,0)'); g2.globalCompositeOperation = 'lighter'; g2.fillStyle = pl; g2.fillRect(0, geo.cy, geo.W, hh); }
+        g2.restore();
       }
+      if (ab > 0 && ab < 1) {   /* the entrance: the lower half's dark is drawn into the bottom disc's centre — a black pool shrinking to a point, its rim faintly lit — then the disc rises from there */
+        var bx = geo.cx, by = geo.cy + geo.ey, Rp = Rfull * (1 - ab);
+        g2.save(); g2.beginPath(); g2.rect(0, geo.cy, geo.W, geo.H - geo.cy); g2.clip();
+        var pool = g2.createRadialGradient(bx, by, 0, bx, by, Math.max(1, Rp)); pool.addColorStop(0, 'rgba(0,0,0,1)'); pool.addColorStop(0.85, 'rgba(0,0,0,' + (0.9 * grow).toFixed(3) + ')'); pool.addColorStop(1, 'rgba(0,0,0,0)');
+        g2.fillStyle = pool; g2.fillRect(0, geo.cy, geo.W, geo.H - geo.cy);
+        g2.globalCompositeOperation = 'lighter'; g2.strokeStyle = 'rgba(255,170,90,' + (0.18 * Math.sin(Math.PI * ab) * grow).toFixed(3) + ')'; g2.lineWidth = 1.5; g2.shadowColor = 'rgba(255,150,60,.8)'; g2.shadowBlur = 24;
+        g2.beginPath(); g2.arc(bx, by, Math.max(1, Rp), Math.PI, Math.PI * 2); g2.stroke(); g2.shadowBlur = 0; g2.restore();
+      }
+      /* centre mark: a small vertical tick on the line at the true centre (fades with the stage) and, while playing, the four current volumes around it */
+      var hxc = RX, cr = Math.max(0, Math.min(1, (hxc - geo.cx + STAGE_RED_FEATHER * 0.5) / STAGE_RED_FEATHER)) * RK, cc_ = mixCol('224,176,74', STAGE_ECL_COL, cr);   /* the centre mark and its readouts redden as the play head passes the centre */
+      g2.globalCompositeOperation = 'source-over'; g2.strokeStyle = 'rgba(' + cc_ + ',' + ((0.55 + 0.3 * cr) * grow).toFixed(3) + ')'; g2.lineWidth = 1; g2.shadowColor = 'rgba(' + STAGE_ECL_COL + ',.9)'; g2.shadowBlur = STAGE_ECL_BLUR * STAGE_RED_GLOW * cr;
+      g2.beginPath(); g2.moveTo(geo.cx + 0.5, geo.cy - STAGE_CROSS); g2.lineTo(geo.cx + 0.5, geo.cy + STAGE_CROSS); g2.stroke(); g2.shadowBlur = 0;
+      /* axis ticks: where the piano you are walking away from falls to 50 / 20 / 10 % (the centre is 75 %); mirrored on both sides */
+      var rInU_ = STAGE_R0 * geo.ey * STAGE_RING_R / geo.ex, hx0 = RX;
+      g2.font = '10px ' + (getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace'); g2.textAlign = 'center'; g2.textBaseline = 'top';
+      STAGE_TICKS.forEach(function (v) {
+        var q = Math.pow((STAGE_MID - v) / (STAGE_MID - STAGE_FAR), 1 / STAGE_K_OUT), dU = 1 + q, nxT = dU * (1 - rInU_) + rInU_ - 1, off = nxT * geo.ex;   /* volume() inverted: distance from the inner ring in stage units -> x */
+        [geo.cx + off, geo.cx - off].forEach(function (tx_) { tx_ = Math.round(tx_) + 0.5; var tr = Math.max(0, Math.min(1, (hx0 - tx_ + STAGE_RED_FEATHER * 0.5) / STAGE_RED_FEATHER)) * RK, tc = mixCol('224,176,74', STAGE_ECL_COL, tr);   /* behind the play head the tick and its label turn red and glow */
+          g2.shadowColor = 'rgba(' + STAGE_ECL_COL + ',.9)'; g2.shadowBlur = STAGE_ECL_BLUR * STAGE_RED_GLOW * tr;
+          g2.strokeStyle = 'rgba(' + tc + ',' + ((0.45 + 0.35 * tr) * grow).toFixed(3) + ')'; g2.beginPath(); g2.moveTo(tx_, geo.cy - STAGE_TICK); g2.lineTo(tx_, geo.cy + STAGE_TICK); g2.stroke(); g2.fillStyle = 'rgba(' + tc + ',' + ((0.5 + 0.4 * tr) * grow).toFixed(3) + ')'; g2.fillText(Math.round(v * 100) + '%', tx_, geo.cy + STAGE_TICK + 3); g2.shadowBlur = 0; });
+      });
+      if (ch && grow > 0.5) {   /* also while the next piece loads: the readouts keep the last values instead of blinking out */
+        g2.font = '11px ' + (getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace'); g2.fillStyle = 'rgba(' + cc_ + ',' + ((0.6 + 0.3 * cr) * grow).toFixed(3) + ')'; g2.textBaseline = 'middle'; g2.shadowColor = 'rgba(' + STAGE_ECL_COL + ',.9)'; g2.shadowBlur = STAGE_ECL_BLUR * STAGE_RED_GLOW * cr;
+        var pc = function (k) { var v = vis[k]; return v ? Math.round((STAGE_FAR + (STAGE_NEAR - STAGE_FAR) * v.rel) * 100) + '%' : ''; }, pa = function (k) { var v = vis[k]; return v && v.app != null ? easeOut(v.app) : 1; };   /* a veiled piano's readout fades with its disc: below, there is nothing */
+        var ptext = function (k, x_, y_) { var a_ = pa(k); if (a_ <= 0.01) return; var ga = g2.globalAlpha; g2.globalAlpha = ga * a_; g2.fillText(pc(k), x_, y_); g2.globalAlpha = ga; };
+        g2.textAlign = 'center'; ptext('C', geo.cx, geo.cy - STAGE_CROSS - 9); ptext('B', geo.cx, geo.cy + STAGE_CROSS + 9);
+        g2.textAlign = 'right'; ptext('L', geo.cx - STAGE_CROSS - 6, geo.cy); g2.textAlign = 'left'; ptext('R', geo.cx + STAGE_CROSS + 6, geo.cy); g2.shadowBlur = 0;
+      }
+      var tEl = document.querySelector('#np-desktop .np-title'); if (tEl) {   /* the caption reddens from left to right as the play head crosses it: each half is a gradient clipped to its glyphs (per span — a clip on the parent double-paints its transformed children), glowing with the covered share */
+        var hxT = RX, tcol = mixCol('224,176,74', STAGE_TITLE_COL, RK), sp = tEl.querySelectorAll('.np-tag, .np-rest'); if (!sp.length) sp = [tEl]; else if (tEl.style.backgroundImage) { tEl.style.backgroundImage = ''; tEl.style.webkitBackgroundClip = ''; tEl.style.backgroundClip = ''; tEl.style.color = ''; tEl.style.textShadow = ''; }   /* once the halves exist the parent must carry nothing (a clip on both paints the text twice) */
+        for (var si_ = 0; si_ < sp.length; si_++) { var e_ = sp[si_], r_ = e_.getBoundingClientRect(), w_ = Math.max(1, r_.width), p_ = (hxT - r_.left) / w_, f_ = STAGE_RED_FEATHER / w_, a_ = Math.max(0, Math.min(1, p_ + f_ * 0.35)), b_ = Math.max(0, Math.min(1, p_ - f_ * 0.65)), cov = Math.max(0, Math.min(1, p_));
+          e_.style.backgroundImage = 'linear-gradient(90deg, rgb(' + tcol + ') 0%, rgb(' + tcol + ') ' + (b_ * 100).toFixed(1) + '%, rgb(224,176,74) ' + (a_ * 100).toFixed(1) + '%, rgb(224,176,74) 100%)';
+          e_.style.webkitBackgroundClip = 'text'; e_.style.backgroundClip = 'text'; e_.style.color = 'transparent'; e_.style.textShadow = '0 0 ' + Math.round(STAGE_ECL_BLUR * cov * RK) + 'px rgba(' + STAGE_ECL_COL + ',' + (0.7 * cov * RK).toFixed(2) + ')'; } }
       raf = requestAnimationFrame(tick);
     }
     function unload() {
@@ -1141,7 +1261,7 @@
       ch = null;
     }
     function stop(immediate) {
-      if (!active) return; active = false;
+      if (!active) return; active = false; wave.tint(null); var tEl0 = document.querySelector('#np-desktop .np-title'); if (tEl0) { [tEl0].concat(Array.prototype.slice.call(tEl0.querySelectorAll('.np-tag, .np-rest'))).forEach(function (e_) { e_.style.color = ''; e_.style.textShadow = ''; e_.style.backgroundImage = ''; e_.style.webkitBackgroundClip = ''; e_.style.backgroundClip = ''; }); }
       unload(); if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; master = null; }
       document.removeEventListener('keydown', onKey); window.removeEventListener('resize', layout); desktop.removeEventListener('pointermove', onMove); desktop.removeEventListener('click', onClick);
       var e0 = el, wasDucked = ducked; ducked = false;
@@ -1158,11 +1278,15 @@
       state: function () {
         var p = ch && ch.piece, pos = 0, dur = ch ? ch.dur : 0;
         if (ch && ch.playing && ctx) pos = Math.max(0, Math.min(dur, ctx.currentTime - ch.t0));
-        return { title: TITLES.demos + ' - ' + (demo ? demo.title : '') + ' | ' + (p ? p.title : ''), id: 'stage', pos: pos, dur: dur, playing: !!(ch && ch.playing && !ch.paused), started: true, frac: dur ? pos / dur : 0, muted: false, vol: 1, notes: '', sr: ctx ? ctx.sampleRate : 48000, active: true };
+        var dNow = demo ? (D.demos.filter(function (x) { return x.path === demo.path; })[0] || demo) : null, pNow = p && dNow && dNow.pieces ? (dNow.pieces.filter(function (q) { return q.id === p.id; })[0] || p) : p;   /* titles in the current language (D is swapped on a language switch) */
+        var dt = (dNow ? dNow.title : '').split(/\s+[-\u2013\u2212]\s+/), dh = dt[0] || '', dtl = dt.slice(1).join(' - ');   /* "四鋼琴環繞 - 非和諧不等式" -> head | tail: the bar replaces the design title's own dash */
+        var tag = TITLES.demos + ' - ' + dh, rest = (dtl ? dtl + ' ' : '') + (pNow ? pNow.title : '');
+        if (head && D.lang !== langSeen) { langSeen = D.lang; var xb = head.querySelector('.st-exit'); if (xb) xb.textContent = U.stage_exit; }   /* the stage header follows the language too */
+        return { title: tag + ' | ' + rest, parts: { tag: tag, rest: rest }, id: 'stage', pos: pos, dur: dur, playing: !!(ch && ch.playing && !ch.paused), started: true, frac: dur ? pos / dur : 0, muted: false, vol: 1, notes: '', sr: ctx ? ctx.sampleRate : 48000, active: true };
       },
       analyser: function () { return master; }
     };
-    return { start: start, stop: function () { stop(false); }, active: function () { return active; }, src: function () { return src; }, toggle: toggle, prev: restart, next: function () { if (active) next(); },
+    return { start: start, stop: function () { stop(false); }, active: function () { return active; }, src: function () { return src; }, toggle: toggle, prev: prev, next: function () { if (active) next(); },
              debug: function () { var o = { active: active, ctx: ctx ? ctx.state : '-', idx: idx, playing: !!(ch && ch.playing), pos: ch && ch.playing && ctx ? +(ctx.currentTime - ch.t0).toFixed(2) : 0, dur: ch ? +ch.dur.toFixed(1) : 0, grow: +grow.toFixed(2), lx: Math.round(lx), ly: Math.round(ly), geo: geo }; if (ch) KEYS.forEach(function (k) { var c = ch[k]; o[k] = { buf: !!c.buf, g: +c.g.gain.value.toFixed(3), pan: c.pan ? +c.pan.pan.value.toFixed(2) : null, lp: Math.round(c.lp.frequency.value) }; }); return o; } };
   })();
 
@@ -1592,7 +1716,7 @@
       var toks = c.trim().split(/\s+/).map(function (t) { return t.replace(/^-+/, ''); }).filter(function (t) { return t; }), a = (toks[0] || '').toLowerCase();   /* leading dashes are decoration */
       if (!a) return '';
       var eggs = toks.filter(function (t) { return /^EE_/i.test(t); }).map(function (t) { return t.replace(/^EE_/i, '').toLowerCase(); }), wantRestart = toks.some(function (t) { return t.toLowerCase() === 'restart'; });
-      if (eggs.indexOf('@') >= 0) { eggs = eggs.filter(function (k) { return k !== '@'; }); ['cat', 'midi', 'hb'].forEach(function (k) { if (eggs.indexOf(k) < 0) eggs.push(k); }); }   /* '@' = every chance-gated one at 100% for the next boot (one-shots included) */
+      if (eggs.indexOf('@') >= 0) { eggs = eggs.filter(function (k) { return k !== '@'; }); ['cat', 'midi', 'hb', 'st'].forEach(function (k) { if (eggs.indexOf(k) < 0) eggs.push(k); }); }   /* '@' = every chance-gated one at 100% for the next boot (one-shots included) */
       if (eggs.length || wantRestart) {
         var bad = eggs.filter(function (k) { return k !== 'cat' && k !== 'midi' && k !== 'hb' && SECRET_IDS.indexOf(k) < 0; });
         if (bad.length || !wantRestart) return U.term_unknown + c.trim();   /* never hint at the syntax: malformed = unknown command */
