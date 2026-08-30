@@ -865,7 +865,7 @@
     var m = w.media || {};
     if (m.youtube) return '<iframe class="media" src="https://www.youtube-nocookie.com/embed/' + esc(m.youtube) + '" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen title="' + esc(w.title) + '"></iframe>';
     if (m.soundcloud) return '<iframe class="media" src="https://w.soundcloud.com/player/?url=' + esc(m.soundcloud) + '&color=%23e0b04a" loading="lazy" title="' + esc(w.title) + '"></iframe>';
-    if (m.local) return '<audio class="media" style="aspect-ratio:auto;height:40px;background:none" controls preload="none" src="../' + esc(m.local) + '"></audio>';
+    if (m.local) return '<audio class="media" style="aspect-ratio:auto;height:40px;background:none" controls controlsList="nodownload noplaybackrate" oncontextmenu="return false" preload="none" src="../' + esc(m.local) + '"></audio>';
     return '';
   }
   function workItem(w) {
