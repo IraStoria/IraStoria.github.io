@@ -774,7 +774,7 @@
      Engine: stems downloaded whole, decoded into AudioBuffers and started on one clock (sample-accurate ensemble, no drift, no media
      elements); a limiter at the end keeps four full stems from clipping. ~75 MB of RAM per decoded stem, desktop only.
      The OS music ducks while the stage runs and comes back when the playlist runs out or the stage is left. ---- */
-  var STAGE_NEAR = 1.0, STAGE_MID = 0.75, STAGE_FAR = 0.10, STAGE_UMAX = 2.4, STAGE_K_IN = 1.3, STAGE_K_OUT = 1.4, STAGE_PAN_MAX = 0.8, STAGE_LP_MIN = 2500, STAGE_LP_MAX = 8000, STAGE_LEAD_S = 0.15, STAGE_SPAN = 0.42, STAGE_GLOW_MIN = 70, STAGE_GLOW_MAX = 300, STAGE_RING_MIN = 14, STAGE_RING_MAX = 70, STAGE_BAR_MIN = 20, STAGE_BAR_MAX = 190, STAGE_BARS = 40, STAGE_LVL_GAIN = 2.2;   /* glow radius / spectrum-ring inner radius / max bar length, px at the floor -> at full volume; bars per half circle; how hard the live level pumps the glow */
+  var STAGE_NEAR = 1.0, STAGE_MID = 0.75, STAGE_FAR = 0.10, STAGE_UMAX = 2.4, STAGE_K_IN = 1.3, STAGE_K_OUT = 1.4, STAGE_PAN_MAX = 0.8, STAGE_LP_MIN = 2500, STAGE_LP_MAX = 8000, STAGE_LEAD_S = 0.15, STAGE_SPAN = 0.42, STAGE_GLOW_MIN = 70, STAGE_GLOW_MAX = 300, STAGE_RING_MIN = 14, STAGE_RING_MAX = 70, STAGE_BAR_MIN = 20, STAGE_BAR_MAX = 190, STAGE_BARS = 72, STAGE_LVL_GAIN = 2.2;   /* glow radius / spectrum-ring inner radius / max bar length, px at the floor -> at full volume; bars per half circle; how hard the live level pumps the glow */
   var stage = (function () {
     var KEYS = ['C', 'B', 'L', 'R'], UNIT = { C: [0, -1], B: [0, 1], L: [-1, 0], R: [1, 0] };   /* stage space: the centre is (0,0), every dot one unit out along its axis */
     var el = null, cv = null, g2 = null, ctx = null, ch = null, pieces = [], idx = -1, active = false, ducked = false, lx = -1, ly = -1, raf = 0, moved = false, hint = null, dots = null, ttl = null, geo = null;
@@ -884,16 +884,19 @@
         var R = (STAGE_GLOW_MIN + (STAGE_GLOW_MAX - STAGE_GLOW_MIN) * rel) * (0.7 + 0.5 * lvl), a = 0.22 + 0.5 * rel + 0.25 * lvl;
         var grd = g2.createRadialGradient(x, y, 0, x, y, R); grd.addColorStop(0, 'rgba(224,176,74,' + a.toFixed(3) + ')'); grd.addColorStop(0.3, 'rgba(224,176,74,' + (a * 0.45).toFixed(3) + ')'); grd.addColorStop(1, 'rgba(224,176,74,0)');
         g2.globalCompositeOperation = 'lighter'; g2.fillStyle = grd; g2.fillRect(x - R, y - R, 2 * R, 2 * R);
-        /* radial spectrum: the piano's frequency bands (low at the bottom, high at the top) as bars around the dot, mirrored left/right;
-           bar length = that band's level, scaled by the volume you hear from this position */
+        /* radial spectrum: the piano's frequency bands as thin lines around the dot, mirrored across the axis that points at the stage
+           centre — so the mid band of every piano faces the middle of the screen (L/R: lows down, highs up, mirrored left/right;
+           C/B: lows left, highs right, mirrored up/down); line length = that band's level, scaled by the volume you hear from here */
         var r0 = STAGE_RING_MIN + (STAGE_RING_MAX - STAGE_RING_MIN) * rel, amp = STAGE_BAR_MIN + (STAGE_BAR_MAX - STAGE_BAR_MIN) * rel, n = STAGE_BARS;
-        g2.globalCompositeOperation = 'source-over'; g2.lineCap = 'round'; g2.lineWidth = Math.max(2, (Math.PI * r0 / n) * 0.9); g2.shadowColor = 'rgba(224,176,74,.7)'; g2.shadowBlur = 8 + 10 * rel;
+        g2.globalCompositeOperation = 'source-over'; g2.lineCap = 'round'; g2.lineWidth = 1.2; g2.shadowColor = 'rgba(224,176,74,.7)'; g2.shadowBlur = 6 + 8 * rel;
+        var e1 = u[0] ? [0, -1] : [1, 0], e2 = u[0] ? [1, 0] : [0, 1];   /* e1: lows -> highs sweep; e2: the two mirrored sides (toward / away from the centre) */
         for (var i = 0; i < n; i++) {
           var len = c.bars[i] * amp; if (len < 0.6) continue;
-          var psi = (i + 0.5) / n * Math.PI, dy = Math.cos(psi), dx = Math.sin(psi);   /* psi 0 = straight down (lows) -> pi = straight up (highs) */
+          var psi = (i + 0.5) / n * Math.PI, ca = -Math.cos(psi), sa = Math.sin(psi);   /* psi 0 = -e1 (lows) -> pi = +e1 (highs) */
           var a0 = (0.35 + 0.4 * rel).toFixed(3), a1 = (0.7 + 0.3 * rel).toFixed(3);
           [1, -1].forEach(function (sgn) {
-            var x0 = x + dx * sgn * r0, y0 = y + dy * r0, x1 = x + dx * sgn * (r0 + len), y1 = y + dy * (r0 + len);
+            var dx = ca * e1[0] + sa * sgn * e2[0], dy = ca * e1[1] + sa * sgn * e2[1];
+            var x0 = x + dx * r0, y0 = y + dy * r0, x1 = x + dx * (r0 + len), y1 = y + dy * (r0 + len);
             var grd2 = g2.createLinearGradient(x0, y0, x1, y1); grd2.addColorStop(0, 'rgba(224,176,74,' + a0 + ')'); grd2.addColorStop(1, 'rgba(240,214,140,' + a1 + ')');
             g2.strokeStyle = grd2; g2.beginPath(); g2.moveTo(x0, y0); g2.lineTo(x1, y1); g2.stroke();
           });
