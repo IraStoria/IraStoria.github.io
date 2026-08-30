@@ -13,6 +13,19 @@
   "native": "stage",
   "pieces": [
     {
+      "id": "ade1",
+      "title": {
+        "zh": "《第1樂章：前奏》",
+        "en": "I. Prelude"
+      },
+      "stems": {
+        "L": "assets/audio/ade1/L.mp3",
+        "R": "assets/audio/ade1/R.mp3",
+        "C": "assets/audio/ade1/C.mp3",
+        "B": "assets/audio/ade1/B.mp3"
+      }
+    },
+    {
       "id": "ade",
       "title": {
         "zh": "《第2樂章：過飽和》",
@@ -28,5 +41,5 @@
   ],
   "concept_level_checked": true,
   "concept_level_note": "ADR-004 self-check 2026-08-30: distance/direction mixing of four synchronized stems, written from scratch (Web Audio: gain + stereo panner + lowpass per stem). Audio = the user's own original ADE stems.",
-  "dependencies": "none (Web Audio API only); assets/audio/ade/*.mp3 (~13 MB, loaded only when the stage starts)"
+  "dependencies": "none (Web Audio API only); assets/audio/ade1/*.mp3 + assets/audio/ade/*.mp3 (~20 MB, loaded only when the stage starts)"
 }
