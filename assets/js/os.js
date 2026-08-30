@@ -222,7 +222,7 @@
   }
 
   // ============================================================ background wave + now-playing caption
-  var CONNECT_MS = 1100, DECAY_PER_SEC = 0.55, FADE_SEC = 3;   // bars keep 55%/s when paused (~7 s to silence); audio fades out over FADE_SEC on pause
+  var CONNECT_MS = 1100, DECAY_PER_SEC = 0.55, FADE_SEC = 3, RESUME_RAMP_S = 0.08;   /* RESUME_RAMP_S: gain rise on play()/resume (no snap → no click) */   // bars keep 55%/s when paused (~7 s to silence); audio fades out over FADE_SEC on pause
   // log-frequency bar levels with sub-bin interpolation: bars never share one FFT bin (no flat plateau in the bass),
   // and the analyser's dB window is widened so loud lows do not clip to a flat top
   function barLevels(an, n) {
@@ -1037,7 +1037,7 @@
         if (pausedAt !== null) { try { audio.currentTime = pausedAt; } catch (e) {} pausedAt = null; }   // resume from where pause was pressed, not where the fade ended
         else if (audio._silent) { try { audio.currentTime = 0; } catch (e) {} }   /* the gesture-time unlock may still be running silently (lock screen can sit for minutes): the real start is always from 0 */
         audio._silent = false;
-        master.gain.cancelScheduledValues(0); master.gain.setValueAtTime(1, actx.currentTime);
+        var t0 = actx.currentTime; master.gain.cancelScheduledValues(0); master.gain.setValueAtTime(0.0001, t0); master.gain.exponentialRampToValueAtTime(1, t0 + RESUME_RAMP_S);   /* rise over ~80 ms instead of snapping to 1: the snap (plus the seek back to pausedAt) was an audible click on resume, worst on the phone */
         var tok = ++playSeq, pr = audio.play(); if (pr && pr.catch) pr.catch(function () { if (tok !== playSeq) return; playing = false; refresh(); caption.refresh(); });   // autoplay blocked → show ▶ again (only if this is still the current play request)
       } else return;
       playing = true; started = true; ducked = false; refresh();
