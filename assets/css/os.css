@@ -102,6 +102,7 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .desktop.swap>:not(.wave):not(.veil){transition:opacity .6s ease,transform .6s cubic-bezier(.4,0,.6,1)!important}
 .desktop.swap .hero-text p,.desktop.swap .sticky-text{transition:opacity .6s ease,transform .6s cubic-bezier(.4,0,.6,1)}
 .desktop.swap .menubar-mid{transition:opacity .6s ease}
+.desktop.swap .win-body:not(.frame){transition:opacity .45s ease}   /* window contents cross-fade on a language switch (demo frames fade on their own) */
 .sticky-text{transition:opacity .6s ease}
 #np-desktop .np-lbl{display:inline-block}
 #np-desktop .np-title{will-change:transform}
@@ -114,10 +115,12 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .desktop.swap-out .hero-text p{transform:rotateX(90deg);opacity:0}
 .desktop.swap-out .sticky-text{opacity:0}
 .desktop.swap-out .menubar-mid{opacity:0}
+.desktop.swap-out .win-body:not(.frame){opacity:0}
 .desktop.swap-in>.icons,.desktop.swap-in>.updates{transform:translateX(-140px);opacity:0;transition:none!important}
 .desktop.swap-in>.dock{transform:translate(-50%,120px);opacity:0;transition:none!important}
 .desktop.swap-in .sticky-text{opacity:0;transition:none!important}
 .desktop.swap-in .menubar-mid{opacity:0;transition:none!important}
+.desktop.swap-in .win-body:not(.frame){opacity:0;transition:none!important}
 .desktop.swap-in .hero-text p{transform:rotateX(-90deg);opacity:0;transition:none}
 
 /* ---------- windows ---------- */
