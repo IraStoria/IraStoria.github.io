@@ -243,6 +243,7 @@
   var extFrames = [];
   var ext = {
     api: function () {
+      if (typeof stage !== 'undefined' && stage && stage.active()) return stage.src();   /* ADE stage: caption and progress follow the four stems */
       for (var i = extFrames.length - 1; i >= 0; i--) {
         var f = extFrames[i]; if (!f.isConnected) { extFrames.splice(i, 1); continue; }
         try { var a = f.contentWindow && f.contentWindow.sectionPlayer; if (a && a.state().active) return a; } catch (e) {}
@@ -498,7 +499,7 @@
   }
   function makeWave(cv, yRatio, withNotes) {
     var wf = withNotes ? makeWaterfall() : null;
-    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000, squash = 1, squashTo = 1, SQUASH_MS = 600, yCur = yRatio, yTo = yRatio, Y_MS = 700, hbMix = 0, HB_MORPH_MS = 700, liveT0 = 0, GRID_FADE_MS = 3000, AMB = '224,176,74', GRN = '61,255,122', SLATE = '96,104,122', DIMG = '30,120,62';   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
+    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000, squash = 1, squashTo = 1, SQUASH_MS = 600, yCur = yRatio, yTo = yRatio, Y_MS = 700, reflowT0 = 0, reflowFrom = 0, REFLOW_MS = 1100, hbMix = 0, HB_MORPH_MS = 700, liveT0 = 0, GRID_FADE_MS = 3000, AMB = '224,176,74', GRN = '61,255,122', SLATE = '96,104,122', DIMG = '30,120,62';   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
     function grad(y0, y1, rgb, a0, a1) { var g = g2.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + rgb + ',' + a0 + ')'); g.addColorStop(1, 'rgba(' + rgb + ',' + a1 + ')'); return g; }
     var DPR = 1;   /* backing store at device resolution (capped at 2x): at 1x an iPhone upscales the layer 3x and the label text, note rims and the line go soft */
     function size() { DPR = Math.min(2, Math.max(1, window.devicePixelRatio || 1)); var pw = Math.round(cv.clientWidth * DPR), ph = Math.round(cv.clientHeight * DPR); if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; } }
@@ -532,7 +533,11 @@
         if (levels.length !== n) levels = new Array(n).fill(0);
         g2.shadowBlur = 0;
         // the whole spectrum doubles as the progress bar: bars/baseline left of the play head are amber, the unplayed part is a quiet grey (frac frozen while paused)
-        var st = ext.state(), px = W * Math.max(0, Math.min(1, st.frac || 0)), px0 = px;   /* px0: true progress — the ECG side ignores the clearing sweep (it read as a line being erased) */
+        var st = ext.state(), fracNow = Math.max(0, Math.min(1, st.frac || 0));
+        if (reflowT0) {   /* after the stage: the play head runs back to the left edge, then slides out again to where the track really is */
+          var rp = (now - reflowT0) / REFLOW_MS; if (rp >= 1) reflowT0 = 0; else fracNow = rp < 0.45 ? reflowFrom * (1 - ease(rp / 0.45)) : fracNow * ease((rp - 0.45) / 0.55);
+        }
+        var px = W * fracNow, px0 = px;   /* px0: true progress — the ECG side ignores the clearing sweep (it read as a line being erased) */
         // right after the line joins, a grey sweep runs right→left over the amber line ("clearing" the progress bar) before real progress takes over
         // unplayed bars are a solid cool slate (not translucent white — that reads as fog on the dark wallpaper); gradients only dim the foot near the line
         var gAmb = grad(y, y - maxH, LC, 0.35, 0.95), gGrey = grad(y, y - maxH, UC, 0.45, 0.95),
@@ -629,7 +634,7 @@
     function start(m) { if (!cv) return; mode = m || 'idle'; if (!raf) draw(); }
     function connect(cb, lead) { if (!cv) { cb(); return; } onConnected = cb; connectT0 = performance.now(); if (wf && lead) wf.preroll(connectT0, lead); start('connect'); }   /* lead: waterfall pre-roll seconds */
     function sweep(bars, fromFrac) { clearT0 = performance.now(); clearBars = !!bars; clearFrom = (fromFrac == null) ? 1 : Math.max(0, Math.min(1, fromFrac)); }
-    return { start: start, connect: connect, sweep: sweep, hb: function () { return !!(wf && wf.hb()); }, squash: function (on) { squashTo = on ? 0 : 1; }, centre: function (on) { yTo = on ? 0.5 : yRatio; }, baseY: function () { return cv ? cv.clientHeight * yTo : 0; } };
+    return { start: start, connect: connect, sweep: sweep, hb: function () { return !!(wf && wf.hb()); }, squash: function (on) { squashTo = on ? 0 : 1; }, centre: function (on) { yTo = on ? 0.5 : yRatio; }, reflow: function (fromFrac) { reflowT0 = performance.now(); reflowFrom = Math.max(0, Math.min(1, fromFrac || 0)); }, baseY: function () { return cv ? cv.clientHeight * yTo : 0; } };
   }
   var wave = makeWave($('#wave'), 0.58, true), phoneWave = makeWave($('#ph-wave'), 0.47, true);   /* waterfall on both shells */  // phone: slightly above centre
 
@@ -766,18 +771,24 @@
     updateDock();
   }
 
-  /* ---- ADE stage (LOG-096/097): four synchronized stems — L / R / C (front) / B (back) — as four dots on the desktop itself; the pointer is the listener.
-     No overlay: the spectrum bars sink into the baseline and that line becomes the stage's X axis (L and R sit on it, C above, B below).
+  /* ---- ADE stage (LOG-096/097/098): four synchronized stems — L / R / C (front) / B (back) — as four dots on the desktop itself; the pointer is the listener.
+     No overlay: the spectrum bars sink into the baseline, the line glides to the true centre and becomes the stage's X axis (L and R sit on it,
+     C above, B below). While the stage runs it is the "now playing" source: caption = "<design app> - <design> | <piece>", progress runs on the line.
      Volume: 75 % for all four at the centre, 100 % right at a dot, sliding to 10 % at the far edge — and once the listener is past the
      centre the fall-off speeds up (the piano behind you drops away). Pan = direction of each dot from the listener; the back piano is
-     low-passed the further away it is (the listener always faces the front). Each dot wears a halo whose size/brightness is its volume.
-     Engine: stems downloaded whole, decoded into AudioBuffers and started on one clock (sample-accurate ensemble, no drift, no media
-     elements); a limiter at the end keeps four full stems from clipping. ~75 MB of RAM per decoded stem, desktop only.
-     The OS music ducks while the stage runs and comes back when the playlist runs out or the stage is left. ---- */
-  var STAGE_NEAR = 1.0, STAGE_MID = 0.75, STAGE_FAR = 0.10, STAGE_UMAX = 2.4, STAGE_K_IN = 1.3, STAGE_K_OUT = 1.4, STAGE_PAN_MAX = 0.8, STAGE_LP_MIN = 2500, STAGE_LP_MAX = 8000, STAGE_LEAD_S = 0.15, STAGE_SPAN = 0.42, STAGE_GLOW_MIN = 70, STAGE_GLOW_MAX = 300, STAGE_RING_MIN = 14, STAGE_RING_MAX = 70, STAGE_BAR_MIN = 20, STAGE_BAR_MAX = 190, STAGE_BARS = 72, STAGE_LVL_GAIN = 2.2;   /* glow radius / spectrum-ring inner radius / max bar length, px at the floor -> at full volume; bars per half circle; how hard the live level pumps the glow */
+     low-passed the further away it is (the listener always faces the front).
+     Look: each dot wears a soft glow (size = volume, pumped by its live level) and its spectrum drawn as ONE closed line — ECG style —
+     mirrored across the axis to the centre, lows facing the centre, the (usually empty) highs facing outward; at 100 % the silhouette
+     reaches ~80 % of the way to the centre line. Circles grow out of their dot when the stage opens and shrink back into it when it closes.
+     Engine: stems downloaded whole, decoded into AudioBuffers and started on one clock after a one-bar 6/8 @ 120 count-in (sample-accurate
+     ensemble, no drift, no media elements); a limiter at the end keeps four full stems from clipping. ~75 MB of RAM per decoded stem, desktop only.
+     Leaving: circles shrink -> line glides back down -> the OS music resumes and the play head runs to the left edge and slides back out. ---- */
+  var STAGE_NEAR = 1.0, STAGE_MID = 0.75, STAGE_FAR = 0.10, STAGE_UMAX = 2.4, STAGE_K_IN = 1.3, STAGE_K_OUT = 1.4, STAGE_PAN_MAX = 0.8, STAGE_LP_MIN = 2500, STAGE_LP_MAX = 8000, STAGE_SPAN = 0.42;
+  var STAGE_LEAD_S = 6 * (60 / 120 / 2), STAGE_GROW_MS = 800, STAGE_REACH = 0.8, STAGE_GLOW_MIN = 70, STAGE_GLOW_MAX = 300, STAGE_RING_MIN = 14, STAGE_RING_MAX = 60, STAGE_BAR_MIN = 20, STAGE_BANDS = 72, STAGE_LVL_GAIN = 2.2;
+  /* LEAD: one 6/8 bar at quarter = 120 (six eighths of 0.25 s). REACH: at 100 % the silhouette's tip gets this far along the way to the centre line. */
   var stage = (function () {
     var KEYS = ['C', 'B', 'L', 'R'], UNIT = { C: [0, -1], B: [0, 1], L: [-1, 0], R: [1, 0] };   /* stage space: the centre is (0,0), every dot one unit out along its axis */
-    var el = null, cv = null, g2 = null, ctx = null, ch = null, pieces = [], idx = -1, active = false, ducked = false, lx = -1, ly = -1, raf = 0, moved = false, hint = null, dots = null, ttl = null, geo = null;
+    var el = null, cv = null, g2 = null, ctx = null, ch = null, pieces = [], idx = -1, active = false, ducked = false, lx = -1, ly = -1, raf = 0, moved = false, hint = null, dots = null, ttl = null, geo = null, growT0 = 0, growDir = 1, grow = 0, demo = null, master = null;
     function lbl(k) { var t = (U.stage_pos || '前|後|左|右').split('|'); return { C: t[0], B: t[1], L: t[2], R: t[3] }[k]; }
     function build(d) {
       el = document.createElement('div'); el.className = 'stage'; el.setAttribute('aria-label', d.title);
@@ -790,6 +801,7 @@
       desktop.appendChild(el); requestAnimationFrame(function () { el.classList.add('in'); });
       desktop.addEventListener('pointermove', onMove); desktop.addEventListener('click', onClick);
       window.addEventListener('resize', layout); layout();
+      growT0 = performance.now(); growDir = 1; grow = 0; if (!raf) raf = requestAnimationFrame(tick);
     }
     function onMove(e) { var r = desktop.getBoundingClientRect(); lx = e.clientX - r.left; ly = e.clientY - r.top; if (!moved) { moved = true; if (hint && ch && ch.playing) hint.classList.add('gone'); } }
     function onClick() { if (ctx && ctx.state !== 'running') ctx.resume().then(playing); }   /* autoplay refused (deep link without a gesture): first click starts it */
@@ -802,7 +814,7 @@
       if (lx < 0) { lx = geo.cx; ly = geo.cy; }
     }
     function start(d) {
-      if (active) stop(); active = true; moved = false; lx = ly = -1;
+      if (active) stop(true); active = true; moved = false; lx = ly = -1; demo = d;
       pieces = d.pieces || []; idx = -1; wave.squash(true); wave.centre(true); build(d);   /* centre first: layout() reads the line's target height */
       if (player.isPlaying()) { ducked = true; player.duck(true); }
       document.addEventListener('keydown', onKey); next();
@@ -816,16 +828,18 @@
     function load(p) {
       if (!ctx) {
         ctx = new (window.AudioContext || window.webkitAudioContext)();
-        var lim = ctx.createDynamicsCompressor(); lim.threshold.value = -3; lim.knee.value = 6; lim.ratio.value = 12; lim.attack.value = 0.003; lim.release.value = 0.15; lim.connect(ctx.destination); ctx.__out = lim;
+        var lim = ctx.createDynamicsCompressor(); lim.threshold.value = -3; lim.knee.value = 6; lim.ratio.value = 12; lim.attack.value = 0.003; lim.release.value = 0.15;
+        master = ctx.createAnalyser(); master.fftSize = 2048; master.minDecibels = -96; master.maxDecibels = 6; master.smoothingTimeConstant = 0.8;
+        lim.connect(master); master.connect(ctx.destination); ctx.__out = lim;
       }
       if (ctx.state === 'suspended') ctx.resume();
       if (ttl) ttl.textContent = p.title || '';
-      var mine = ch = { playing: false, t0: 0, dur: 0 };
+      var mine = ch = { playing: false, t0: 0, dur: 0, piece: p };
       KEYS.forEach(function (k) {
         var g = ctx.createGain(), pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null, lp = ctx.createBiquadFilter(), an = ctx.createAnalyser();
-        lp.type = 'lowpass'; lp.frequency.value = 20000; lp.Q.value = 0.5; g.gain.value = 0.0001; an.fftSize = 2048; an.minDecibels = -96; an.maxDecibels = 6; an.smoothingTimeConstant = 0.8;   /* same window as the main spectrum, so the rings read like the desktop bars */
-        if (pan) { g.connect(pan); pan.connect(lp); } else g.connect(lp); lp.connect(an); an.connect(ctx.__out);   /* analyser after gain + filter: the halo shows what you actually hear from that piano */
-        mine[k] = { g: g, pan: pan, lp: lp, an: an, td: new Uint8Array(1024), bars: [], lvl: 0, buf: null, src: null, done: 0, total: 0 };
+        lp.type = 'lowpass'; lp.frequency.value = 20000; lp.Q.value = 0.5; g.gain.value = 0.0001; an.fftSize = 2048; an.minDecibels = -96; an.maxDecibels = 6; an.smoothingTimeConstant = 0.8;   /* same window as the main spectrum */
+        if (pan) { g.connect(pan); pan.connect(lp); } else g.connect(lp); lp.connect(an); an.connect(ctx.__out);   /* analyser after gain + filter: the silhouette shows what you actually hear from that piano */
+        mine[k] = { g: g, pan: pan, lp: lp, an: an, td: new Uint8Array(1024), bands: [], lvl: 0, rel: 0, buf: null, src: null, done: 0, total: 0 };
         fetchStem('../' + p.stems[k], mine[k], function (ab) {
           if (ch !== mine) return;   /* stage left / piece changed while downloading */
           ctx.decodeAudioData(ab, function (buf) { if (ch !== mine) return; mine[k].buf = buf; if (KEYS.every(function (x) { return mine[x].buf; })) playAll(); }, fail);
@@ -846,7 +860,7 @@
     }
     function playAll() {
       if (!ch || !ctx || ch.playing) return; ch.playing = true;
-      var mine = ch, t0 = ctx.currentTime + STAGE_LEAD_S; mine.t0 = t0; mine.dur = 0;
+      var mine = ch, t0 = ctx.currentTime + STAGE_LEAD_S; mine.t0 = t0; mine.dur = 0;   /* count-in: one 6/8 bar of silence, then all four together */
       KEYS.forEach(function (k) {
         var c = mine[k], s = ctx.createBufferSource(); s.buffer = c.buf; s.connect(c.g); s.start(t0); c.src = s; if (c.buf.duration > mine.dur) mine.dur = c.buf.duration;
         if (k === 'C') s.onended = function () { if (ch === mine) next(); };
@@ -861,65 +875,79 @@
       if (u <= 1) return STAGE_NEAR - (STAGE_NEAR - STAGE_MID) * Math.pow(u, STAGE_K_IN);
       var q = Math.min(1, (u - 1) / (STAGE_UMAX - 1)); return STAGE_MID - (STAGE_MID - STAGE_FAR) * Math.pow(q, STAGE_K_OUT);
     }
+    function easeOut(x) { return 1 - Math.pow(1 - x, 3); }
     function tick() {
-      raf = 0; if (!active || !ch || !ctx || !el || !geo) return;
-      var nx = (lx - geo.cx) / geo.ex, ny = (ly - geo.cy) / geo.ey, t = ctx.currentTime;
-      KEYS.forEach(function (k) {
+      raf = 0; if (!el || !geo) return;
+      var now = performance.now(), gp = Math.min(1, (now - growT0) / STAGE_GROW_MS); grow = growDir > 0 ? easeOut(gp) : 1 - easeOut(gp);
+      KEYS.forEach(function (k) { dots[k].style.transform = 'scale(' + grow.toFixed(3) + ')'; });
+      if (!active && gp >= 1) { g2.clearRect(0, 0, geo.W, geo.H); return; }   /* shrunk away: the exit choreography continues on its timers */
+      var nx = (lx - geo.cx) / geo.ex, ny = (ly - geo.cy) / geo.ey, t = ctx ? ctx.currentTime : 0;
+      if (ch && ctx) KEYS.forEach(function (k) {
         var c = ch[k], u = UNIT[k], d = Math.hypot(u[0] - nx, u[1] - ny), g = volume(d);
         c.g.gain.setTargetAtTime(g, t, 0.05);
         if (c.pan) c.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, u[0] - nx)) * STAGE_PAN_MAX, t, 0.05);
         if (k === 'B') c.lp.frequency.setTargetAtTime(STAGE_LP_MAX - (STAGE_LP_MAX - STAGE_LP_MIN) * Math.min(1, d / STAGE_UMAX), t, 0.05);
-        var rel = (g - STAGE_FAR) / (STAGE_NEAR - STAGE_FAR);   /* 0 at the floor, 1 at full */
+        c.rel = (g - STAGE_FAR) / (STAGE_NEAR - STAGE_FAR);   /* 0 at the floor, 1 at full */
         /* live level (RMS of what this piano is putting out): fast attack, slower release, so the glow breathes with the playing */
         c.an.getByteTimeDomainData(c.td); var s = 0; for (var i = 0; i < c.td.length; i++) { var v = (c.td[i] - 128) / 128; s += v * v; }
-        var rms = Math.min(1, Math.sqrt(s / c.td.length) * STAGE_LVL_GAIN); c.lvl = rms > c.lvl ? rms : c.lvl * 0.9; c.rel = rel;
-        var lv = barLevels(c.an, STAGE_BARS); if (c.bars.length !== STAGE_BARS) c.bars = lv; else for (var b = 0; b < STAGE_BARS; b++) c.bars[b] = lv[b] > c.bars[b] ? lv[b] : Math.max(lv[b], c.bars[b] * 0.93);   /* same fall-off feel as the desktop bars */
-        dots[k].style.setProperty('--core', (0.3 + 0.7 * Math.max(rel, c.lvl)).toFixed(3));
+        var rms = Math.min(1, Math.sqrt(s / c.td.length) * STAGE_LVL_GAIN); c.lvl = rms > c.lvl ? rms : c.lvl * 0.9;
+        var lv = barLevels(c.an, STAGE_BANDS); if (c.bands.length !== STAGE_BANDS) c.bands = lv; else for (var b = 0; b < STAGE_BANDS; b++) c.bands[b] = lv[b] > c.bands[b] ? lv[b] : Math.max(lv[b], c.bands[b] * 0.93);   /* same fall-off feel as the desktop bars */
+        dots[k].style.setProperty('--core', (0.3 + 0.7 * Math.max(c.rel, c.lvl)).toFixed(3));
       });
-      /* canvas: a big soft glow per piano (size = volume, pumped by the live level) and its waveform wrapped into a ring around the dot —
-         the ring's radius and the wave's amplitude both grow toward 100 % */
+      /* canvas: a big soft glow per piano (size = volume, pumped by the live level) and its spectrum as one closed line around the dot,
+         mirrored across the axis to the centre: lows face the centre, highs face outward; everything scales with `grow` */
       g2.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0); g2.clearRect(0, 0, geo.W, geo.H);
       KEYS.forEach(function (k) {
-        var c = ch[k], u = UNIT[k], x = geo.cx + u[0] * geo.ex, y = geo.cy + u[1] * geo.ey, rel = c.rel, lvl = c.lvl;
-        var R = (STAGE_GLOW_MIN + (STAGE_GLOW_MAX - STAGE_GLOW_MIN) * rel) * (0.7 + 0.5 * lvl), a = 0.22 + 0.5 * rel + 0.25 * lvl;
+        var c = ch && ch[k], u = UNIT[k], x = geo.cx + u[0] * geo.ex, y = geo.cy + u[1] * geo.ey, rel = c ? c.rel : 0, lvl = c ? c.lvl : 0;
+        var R = (STAGE_GLOW_MIN + (STAGE_GLOW_MAX - STAGE_GLOW_MIN) * rel) * (0.7 + 0.5 * lvl) * grow, a = 0.22 + 0.5 * rel + 0.25 * lvl;
+        if (R < 1) return;
         var grd = g2.createRadialGradient(x, y, 0, x, y, R); grd.addColorStop(0, 'rgba(224,176,74,' + a.toFixed(3) + ')'); grd.addColorStop(0.3, 'rgba(224,176,74,' + (a * 0.45).toFixed(3) + ')'); grd.addColorStop(1, 'rgba(224,176,74,0)');
         g2.globalCompositeOperation = 'lighter'; g2.fillStyle = grd; g2.fillRect(x - R, y - R, 2 * R, 2 * R);
-        /* radial spectrum: the piano's frequency bands as thin lines around the dot, mirrored across the axis that points at the stage
-           centre — so the mid band of every piano faces the middle of the screen (L/R: lows down, highs up, mirrored left/right;
-           C/B: lows left, highs right, mirrored up/down); line length = that band's level, scaled by the volume you hear from here */
-        var r0 = STAGE_RING_MIN + (STAGE_RING_MAX - STAGE_RING_MIN) * rel, amp = STAGE_BAR_MIN + (STAGE_BAR_MAX - STAGE_BAR_MIN) * rel, n = STAGE_BARS;
-        g2.globalCompositeOperation = 'source-over'; g2.lineCap = 'round'; g2.lineWidth = 1.2; g2.shadowColor = 'rgba(224,176,74,.7)'; g2.shadowBlur = 6 + 8 * rel;
-        var e1 = u[0] ? [0, -1] : [1, 0], e2 = u[0] ? [1, 0] : [0, 1];   /* e1: lows -> highs sweep; e2: the two mirrored sides (toward / away from the centre) */
-        for (var i = 0; i < n; i++) {
-          var len = c.bars[i] * amp; if (len < 0.6) continue;
-          var psi = (i + 0.5) / n * Math.PI, ca = -Math.cos(psi), sa = Math.sin(psi);   /* psi 0 = -e1 (lows) -> pi = +e1 (highs) */
-          var a0 = (0.35 + 0.4 * rel).toFixed(3), a1 = (0.7 + 0.3 * rel).toFixed(3);
-          [1, -1].forEach(function (sgn) {
-            var dx = ca * e1[0] + sa * sgn * e2[0], dy = ca * e1[1] + sa * sgn * e2[1];
-            var x0 = x + dx * r0, y0 = y + dy * r0, x1 = x + dx * (r0 + len), y1 = y + dy * (r0 + len);
-            var grd2 = g2.createLinearGradient(x0, y0, x1, y1); grd2.addColorStop(0, 'rgba(224,176,74,' + a0 + ')'); grd2.addColorStop(1, 'rgba(240,214,140,' + a1 + ')');
-            g2.strokeStyle = grd2; g2.beginPath(); g2.moveTo(x0, y0); g2.lineTo(x1, y1); g2.stroke();
-          });
-        }
-        g2.shadowBlur = 0;
+        if (!c || !c.bands.length) return;
+        var reach = STAGE_REACH * (u[0] ? geo.ex : geo.ey), r0 = (STAGE_RING_MIN + (STAGE_RING_MAX - STAGE_RING_MIN) * rel) * grow, amp = (STAGE_BAR_MIN + (reach - STAGE_RING_MAX - STAGE_BAR_MIN) * rel) * grow, n = STAGE_BANDS;
+        var e1 = u, e2 = [-u[1], u[0]];   /* e1: from the centre outward (lows -> highs sweep); e2: the two mirrored sides */
+        g2.globalCompositeOperation = 'source-over'; g2.lineJoin = 'round'; g2.lineWidth = 1.5; g2.strokeStyle = 'rgba(240,214,140,' + (0.55 + 0.45 * rel).toFixed(3) + ')'; g2.shadowColor = 'rgba(224,176,74,.85)'; g2.shadowBlur = 8 + 10 * rel;
+        g2.beginPath();
+        [1, -1].forEach(function (sgn) {   /* one side lows -> highs, the mirror side highs -> lows: a single closed silhouette */
+          for (var s = 0; s < n; s++) {
+            var i = sgn > 0 ? s : n - 1 - s, psi = (i + 0.5) / n * Math.PI, ca = -Math.cos(psi), sa = Math.sin(psi);   /* psi 0 = toward the centre (lows) -> pi = outward (highs) */
+            var dx = ca * e1[0] + sa * sgn * e2[0], dy = ca * e1[1] + sa * sgn * e2[1], rr = r0 + c.bands[i] * amp;
+            var px = x + dx * rr, py = y + dy * rr; if (sgn > 0 && s === 0) g2.moveTo(px, py); else g2.lineTo(px, py);
+          }
+        });
+        g2.closePath(); g2.stroke();
+        g2.shadowBlur = 0; g2.fillStyle = 'rgba(224,176,74,' + (0.05 + 0.08 * rel).toFixed(3) + ')'; g2.fill();
       });
       raf = requestAnimationFrame(tick);
     }
     function unload() {
       if (!ch) return;
       KEYS.forEach(function (k) { var c = ch[k]; if (!c) return; if (c.src) { c.src.onended = null; try { c.src.stop(); } catch (e) {} } try { c.lp.disconnect(); c.an.disconnect(); } catch (e) {} c.buf = null; });
-      ch = null; if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      ch = null;
     }
-    function stop() {
+    function stop(immediate) {
       if (!active) return; active = false;
-      unload(); if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; }
+      unload(); if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; master = null; }
       document.removeEventListener('keydown', onKey); window.removeEventListener('resize', layout); desktop.removeEventListener('pointermove', onMove); desktop.removeEventListener('click', onClick);
-      wave.squash(false); wave.centre(false);
-      if (el) { var e0 = el; el = null; e0.classList.remove('in'); setTimeout(function () { e0.remove(); }, 500); }
-      if (ducked) { ducked = false; player.unduck(); }
+      var e0 = el, wasDucked = ducked; ducked = false;
+      if (immediate) { if (e0) e0.remove(); el = null; if (raf) { cancelAnimationFrame(raf); raf = 0; } wave.squash(false); wave.centre(false); if (wasDucked) player.unduck(); return; }
+      /* exit choreography: 1) circles shrink back into their dots  2) the line glides back down  3) the music resumes and the play head
+         runs to the left edge, then slides back out to the track's real position (the bars rise with it) */
+      growT0 = performance.now(); growDir = -1; if (!raf) raf = requestAnimationFrame(tick);
+      setTimeout(function () { if (e0) e0.remove(); if (el === e0) el = null; wave.centre(false); }, STAGE_GROW_MS);
+      setTimeout(function () { wave.squash(false); if (wasDucked) player.unduck(); wave.reflow(player.state().frac || 0); }, STAGE_GROW_MS + 750);
     }
-    return { start: start, stop: stop, active: function () { return active; },
-             debug: function () { var o = { active: active, ctx: ctx ? ctx.state : '-', idx: idx, playing: !!(ch && ch.playing), pos: ch && ch.playing && ctx ? +(ctx.currentTime - ch.t0).toFixed(2) : 0, dur: ch ? +ch.dur.toFixed(1) : 0, lx: Math.round(lx), ly: Math.round(ly), geo: geo }; if (ch) KEYS.forEach(function (k) { var c = ch[k]; o[k] = { buf: !!c.buf, g: +c.g.gain.value.toFixed(3), pan: c.pan ? +c.pan.pan.value.toFixed(2) : null, lp: Math.round(c.lp.frequency.value) }; }); return o; } };
+    /* now-playing source while the stage runs (caption + progress line + analyser for the desktop spectrum) */
+    var src = {
+      state: function () {
+        var p = ch && ch.piece, pos = 0, dur = ch ? ch.dur : 0;
+        if (ch && ch.playing && ctx) pos = Math.max(0, Math.min(dur, ctx.currentTime - ch.t0));
+        return { title: TITLES.demos + ' - ' + (demo ? demo.title : '') + ' | ' + (p ? p.title : ''), id: 'stage', pos: pos, dur: dur, playing: !!(ch && ch.playing), started: true, frac: dur ? pos / dur : 0, muted: false, vol: 1, notes: '', sr: ctx ? ctx.sampleRate : 48000, active: true };
+      },
+      analyser: function () { return master; }
+    };
+    return { start: start, stop: function () { stop(false); }, active: function () { return active; }, src: function () { return src; },
+             debug: function () { var o = { active: active, ctx: ctx ? ctx.state : '-', idx: idx, playing: !!(ch && ch.playing), pos: ch && ch.playing && ctx ? +(ctx.currentTime - ch.t0).toFixed(2) : 0, dur: ch ? +ch.dur.toFixed(1) : 0, grow: +grow.toFixed(2), lx: Math.round(lx), ly: Math.round(ly), geo: geo }; if (ch) KEYS.forEach(function (k) { var c = ch[k]; o[k] = { buf: !!c.buf, g: +c.g.gain.value.toFixed(3), pan: c.pan ? +c.pan.pan.value.toFixed(2) : null, lp: Math.round(c.lp.frequency.value) }; }); return o; } };
   })();
 
   function openApp(app) {
