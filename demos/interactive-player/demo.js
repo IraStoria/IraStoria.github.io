@@ -355,7 +355,17 @@
   })();
 
   startBtn.addEventListener('click', function () { running ? stop() : start(); });
-  document.querySelectorAll('[data-lang]').forEach(function (b) { b.addEventListener('click', function () { lang = b.getAttribute('data-lang'); try { localStorage.setItem('lang', lang); } catch (e) {} buildThemes(); buildButtons(); render(); }); });
+  /* language switch: cross-fade instead of a hard swap — text fades out (LANG_FADE_MS), the strings are replaced, then it fades back in */
+  var LANG_FADE_MS = 220, langFading = false;
+  document.querySelectorAll('[data-lang]').forEach(function (b) { b.addEventListener('click', function () {
+    var next = b.getAttribute('data-lang'); if (next === lang || langFading) return;
+    langFading = true; document.body.classList.add('lang-fade');
+    setTimeout(function () {
+      lang = next; try { localStorage.setItem('lang', lang); } catch (e) {}
+      buildThemes(); buildButtons(); render();
+      requestAnimationFrame(function () { document.body.classList.remove('lang-fade'); langFading = false; });
+    }, LANG_FADE_MS);
+  }); });
   [optExclude, optRules].forEach(function (o) { o.addEventListener('change', render); });
   /* keyboard: a letter queues that group's first version; the same letter again cycles through its versions; O = outro */
   document.addEventListener('keydown', function (e) {
