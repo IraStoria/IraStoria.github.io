@@ -501,7 +501,7 @@
     var wf = withNotes ? makeWaterfall() : null;
     var headPx = -1;
     var tintCol = null, tintLast = '224,176,74', tintMix = 0, TINT_MS = 900, TINT_BLUR = 22, TINT_W = 1.2, TINT_A = 1.0, TINT_CORONA = 32, TINT_CORONA_A = 0.40, tintShadow = '255,110,90';   /* tint = the stage's eclipsed ring: STAGE_RING_W, its brightness, STAGE_ECL_BLUR corona in STAGE_ECL_COL */
-    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000, squash = 1, squashTo = 1, SQUASH_MS = 600, yCur = yRatio, yTo = yRatio, Y_MS = 700, reflowT0 = 0, reflowFrom = 0, REFLOW_MS = 1100, hbMix = 0, HB_MORPH_MS = 700, liveT0 = 0, GRID_FADE_MS = 3000, AMB0 = '224,176,74', GRN = '61,255,122', SLATE = '96,104,122', DIMG = '30,120,62';   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
+    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000, squash = 1, squashTo = 1, SQUASH_MS = 600, yCur = yRatio, yTo = yRatio, Y_MS = 700, reflowT0 = 0, reflowFrom = 0, REFLOW_IN_MS = 900, REFLOW_OUT_MS = 650, reflowHold = 0, hbMix = 0, HB_MORPH_MS = 700, liveT0 = 0, GRID_FADE_MS = 3000, AMB0 = '224,176,74', GRN = '61,255,122', SLATE = '96,104,122', DIMG = '30,120,62';   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
     function grad(y0, y1, rgb, a0, a1) { var g = g2.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + rgb + ',' + a0 + ')'); g.addColorStop(1, 'rgba(' + rgb + ',' + a1 + ')'); return g; }
     var DPR = 1;   /* backing store at device resolution (capped at 2x): at 1x an iPhone upscales the layer 3x and the label text, note rims and the line go soft */
     function size() { DPR = Math.min(2, Math.max(1, window.devicePixelRatio || 1)); var pw = Math.round(cv.clientWidth * DPR), ph = Math.round(cv.clientHeight * DPR); if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; } }
@@ -538,7 +538,7 @@
         // the whole spectrum doubles as the progress bar: bars/baseline left of the play head are amber, the unplayed part is a quiet grey (frac frozen while paused)
         var st = ext.state(), fracNow = Math.max(0, Math.min(1, st.frac || 0));
         if (reflowT0) {   /* after the stage: the play head runs back to the left edge, then slides out again to where the track really is */
-          var rp = (now - reflowT0) / REFLOW_MS; if (rp >= 1) reflowT0 = 0; else fracNow = rp < 0.45 ? reflowFrom * (1 - ease(rp / 0.45)) : fracNow * ease((rp - 0.45) / 0.55);
+          var rel_ = now - reflowT0; if (rel_ >= reflowHold + REFLOW_OUT_MS) reflowT0 = 0; else if (rel_ < REFLOW_IN_MS) fracNow = reflowFrom * (1 - ease(rel_ / REFLOW_IN_MS)); else if (rel_ < reflowHold) fracNow = 0; else fracNow = fracNow * ease((rel_ - reflowHold) / REFLOW_OUT_MS);   /* retreat to the left edge (with the colour change), wait for the line to glide down, then slide out to where the track is */
         }
         var px = W * fracNow, px0 = px;   /* px0: true progress — the ECG side ignores the clearing sweep (it read as a line being erased) */
         // right after the line joins, a grey sweep runs right→left over the amber line ("clearing" the progress bar) before real progress takes over
@@ -644,7 +644,7 @@
     function start(m) { if (!cv) return; mode = m || 'idle'; if (!raf) draw(); }
     function connect(cb, lead) { if (!cv) { cb(); return; } onConnected = cb; connectT0 = performance.now(); if (wf && lead) wf.preroll(connectT0, lead); start('connect'); }   /* lead: waterfall pre-roll seconds */
     function sweep(bars, fromFrac) { clearT0 = performance.now(); clearBars = !!bars; clearFrom = (fromFrac == null) ? 1 : Math.max(0, Math.min(1, fromFrac)); }
-    return { start: start, connect: connect, sweep: sweep, hb: function () { return !!(wf && wf.hb()); }, squash: function (on) { squashTo = on ? 0 : 1; }, centre: function (on) { yTo = on ? 0.5 : yRatio; }, head: function () { return headPx; }, tint: function (col, shadow) { if (col) tintLast = col; if (shadow) tintShadow = shadow; tintCol = col || null; }, reflow: function (fromFrac) { reflowT0 = performance.now(); reflowFrom = Math.max(0, Math.min(1, fromFrac || 0)); }, baseY: function () { return cv ? cv.clientHeight * yTo : 0; } };
+    return { start: start, connect: connect, sweep: sweep, hb: function () { return !!(wf && wf.hb()); }, squash: function (on) { squashTo = on ? 0 : 1; }, centre: function (on) { yTo = on ? 0.5 : yRatio; }, head: function () { return headPx; }, tint: function (col, shadow) { if (col) tintLast = col; if (shadow) tintShadow = shadow; tintCol = col || null; }, reflowCancel: function () { reflowT0 = 0; }, reflow: function (fromFrac, holdMs) { reflowT0 = performance.now(); reflowFrom = Math.max(0, Math.min(1, fromFrac || 0)); reflowHold = Math.max(REFLOW_IN_MS, holdMs || REFLOW_IN_MS); }, baseY: function () { return cv ? cv.clientHeight * yTo : 0; } };
   }
   var wave = makeWave($('#wave'), 0.58, true), phoneWave = makeWave($('#ph-wave'), 0.47, true);   /* waterfall on both shells */  // phone: slightly above centre
 
@@ -804,6 +804,7 @@
      RELEASE / LVL_RELEASE / PUNCH_RELEASE: per-frame fall of the bands / the glow level / the accent boost — lower = snappier, accents stand out more. */
   var stage = (function () {
     var KEYS = ['C', 'B', 'L', 'R'], UNIT = { C: [0, -1], B: [0, 1], L: [-1, 0], R: [1, 0] };   /* stage space: the centre is (0,0), every piano one unit out along its axis = on its screen edge */
+    var exitPending = null;   /* {e0, wasDucked, timers} while the exit choreography runs — a quick re-entry must cancel it (or its unduck would bring the music back under the stage) */
     var langSeen = null, redHold = null, flS = 0, trails = false, trailT0 = 0;   /* trails: star-trail egg for this stage run */   /* redHold: {x, t0} while the red fades out in place; flS: smoothed floor */
     var fxc = null, fxg = null, fxr = null, fxrg = null, trc = null, trg = null;   /* effects layer + its red copy (see tick) */
     var el = null, head = null, cv = null, g2 = null, ctx = null, ch = null, vis = {}, ann = {}, lastT = 0, stars = [], pieces = [], idx = -1, active = false, ducked = false, lx = -1, ly = -1, raf = 0, moved = false, hint = null, ttl = null, geo = null, growT0 = 0, growDir = 1, grow = 0, demo = null, master = null;
@@ -834,8 +835,9 @@
     }
     function start(d) {
       if (active) stop(true); active = true; moved = false; lx = ly = -1; demo = d; vis = {}; ann = {}; lastT = 0; redHold = null; flS = 0; trails = false; trailT0 = 0;
+      var carry = false; if (exitPending) { exitPending.timers.forEach(clearTimeout); if (exitPending.e0) exitPending.e0.remove(); carry = exitPending.wasDucked; exitPending = null; wave.reflowCancel(); }   /* re-entered mid-exit: drop the pending restore; the music stays ducked and is released by this run's exit */
       pieces = d.pieces || []; idx = -1; wave.squash(true); wave.centre(true); wave.tint(STAGE_ECL_LINE, STAGE_ECL_COL); build(d);   /* centre first: layout() reads the line's target height */
-      if (player.isPlaying()) { ducked = true; player.duck(true); }
+      if (player.isPlaying()) { ducked = true; player.duck(true); } else if (carry) ducked = true;
       document.addEventListener('keydown', onKey); next();
     }
     function onKey(e) { if (e.key === 'Escape') stop(); }
@@ -1261,7 +1263,7 @@
       ch = null;
     }
     function stop(immediate) {
-      if (!active) return; active = false; wave.tint(null); var tEl0 = document.querySelector('#np-desktop .np-title'); if (tEl0) { [tEl0].concat(Array.prototype.slice.call(tEl0.querySelectorAll('.np-tag, .np-rest'))).forEach(function (e_) { e_.style.color = ''; e_.style.textShadow = ''; e_.style.backgroundImage = ''; e_.style.webkitBackgroundClip = ''; e_.style.backgroundClip = ''; }); }
+      if (!active) return; active = false; var exitFrac = src.state().frac || 0; wave.tint(null); var tEl0 = document.querySelector('#np-desktop .np-title'); if (tEl0) { [tEl0].concat(Array.prototype.slice.call(tEl0.querySelectorAll('.np-tag, .np-rest'))).forEach(function (e_) { e_.style.color = ''; e_.style.textShadow = ''; e_.style.backgroundImage = ''; e_.style.webkitBackgroundClip = ''; e_.style.backgroundClip = ''; }); }
       unload(); if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; master = null; }
       document.removeEventListener('keydown', onKey); window.removeEventListener('resize', layout); desktop.removeEventListener('pointermove', onMove); desktop.removeEventListener('click', onClick);
       var e0 = el, wasDucked = ducked; ducked = false;
@@ -1270,8 +1272,10 @@
       /* exit choreography: 1) circles shrink back into their dots  2) the line glides back down  3) the music resumes and the play head
          runs to the left edge, then slides back out to the track's real position (the bars rise with it) */
       growT0 = performance.now(); growDir = -1; if (!raf) raf = requestAnimationFrame(tick);
-      setTimeout(function () { if (e0) e0.remove(); if (el === e0) el = null; wave.centre(false); }, STAGE_GROW_MS);
-      setTimeout(function () { wave.squash(false); if (wasDucked) player.unduck(); wave.reflow(player.state().frac || 0); }, STAGE_GROW_MS + 750);
+      var pendA = setTimeout(function () { if (e0) e0.remove(); if (el === e0) el = null; wave.centre(false); }, STAGE_GROW_MS);
+      wave.reflow(exitFrac, STAGE_GROW_MS + 750);   /* the played line retreats to the left edge now, as it turns amber; it slides back out once the line is down */
+      var pend = exitPending = { e0: e0, wasDucked: wasDucked, timers: [pendA] };
+      pend.timers.push(setTimeout(function () { wave.squash(false); if (wasDucked) player.unduck(); if (exitPending === pend) exitPending = null; }, STAGE_GROW_MS + 750));
     }
     /* now-playing source while the stage runs (caption + progress line + analyser for the desktop spectrum) */
     var src = {
