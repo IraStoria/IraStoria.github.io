@@ -855,7 +855,7 @@
       }
       if (ctx.state === 'suspended') ctx.resume();
       if (ttl) ttl.textContent = p.title || ''; langSeen = D.lang;
-      if (!trails && (EE.st || Math.random() < STAGE_TRAIL_CHANCE)) { trails = true; trailT0 = performance.now(); }   /* star-trail egg: rolled at each piece start until it fires; then it stays until the stage is left */
+      if (!trails && (EE.st || Math.random() < STAGE_TRAIL_CHANCE)) { trails = true; trailT0 = performance.now(); EE.st = false; }   /* the forced flag is one-shot, like the heartbeat's: it fires once, then the odds are back to normal */   /* star-trail egg: rolled at each piece start until it fires; then it stays until the stage is left */
       var prev = ch, veil = p.veil || [], mine = ch = { playing: false, paused: false, t0: 0, dur: 0, piece: p };
       KEYS.forEach(function (k) {
         var g = ctx.createGain(), pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null, lp = ctx.createBiquadFilter(), an = ctx.createAnalyser();
