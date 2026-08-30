@@ -926,8 +926,8 @@
         function sm(i) { i = Math.max(0, Math.min(n - 1, i)); var B = c.bands, p2 = B[Math.max(0, i - 2)], p = B[Math.max(0, i - 1)], q = B[i], r = B[Math.min(n - 1, i + 1)], r2 = B[Math.min(n - 1, i + 2)]; return (STAGE_MIN_H + (1 - STAGE_MIN_H) * (p2 + 2 * p + 3 * q + 2 * r + r2) / 9) * amp; }   /* 5-tap smoothing: a mountain range, not spikes */
         function path() {   /* one mountain range per edge: the whole band range laid along the edge (lows at one end, highs at the other), closed along the edge */
           g2.beginPath(); g2.moveTo(x - tx * S, y - ty * S);
-          for (var s = 0; s < n; s++) {
-            var off = ((s + 0.5) / n * 2 - 1) * S, h = sm(s);
+          for (var s = 0; s < n; s++) {   /* first band exactly at one end, last band at the other: the ends drop straight down onto the edge, no slant */
+            var off = (s / (n - 1) * 2 - 1) * S, h = sm(s);
             g2.lineTo(x + tx * off + nx_ * h, y + ty * off + ny_ * h);
           }
           g2.lineTo(x + tx * S, y + ty * S); g2.closePath();
