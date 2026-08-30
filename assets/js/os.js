@@ -1229,7 +1229,7 @@
   var phone = (function () {
     var root = $('#phone'), lock = $('#ph-lock'), home = $('#ph-home'), grid = $('#ph-grid'), dockEl = $('#ph-dock'), appsEl = $('#ph-apps'), notes = $('#ph-notes'), power = $('#ph-power'), powerScr = $('#ph-power-scr'), langPick = $('#ph-lang'), ls = $('#ph-ls');
     var stack = [], unlocked = false, powered = false, swappingPh = false;
-    var HOME_APPS = ['works', 'demos', 'player', 'articles', 'updates', 'about', 'terminal', 'lang'];
+    var HOME_APPS = ['articles', 'updates', 'terminal', 'lang'];   /* home grid = only what the dock does not already carry (works / demos / player / about live in the dock) */
     var DOCK_APPS = ['works', 'demos', 'player', 'about'];
     function label(a) { return a === 'lang' ? U.lang_switch : TITLES[a]; }
     function glyph(a) { return a === 'lang' ? (lang === 'zh' ? 'EN' : '中') : (ICON[a] || GLYPH[a]); }
