@@ -500,7 +500,7 @@
   function makeWave(cv, yRatio, withNotes) {
     var wf = withNotes ? makeWaterfall() : null;
     var headPx = -1;
-    var tintCol = null, tintLast = '224,176,74', tintMix = 0, TINT_MS = 900, TINT_OUT_MS = 2200, TINT_BLUR = 22, TINT_W = 1.2, TINT_A = 1.0, TINT_CORONA = 32, TINT_CORONA_A = 0.40, tintShadow = '255,110,90';   /* tint = the stage's eclipsed ring: STAGE_RING_W, its brightness, STAGE_ECL_BLUR corona in STAGE_ECL_COL */
+    var tintFrom = ['224,176,74', '224,176,74'], tintTo = ['224,176,74', '224,176,74'], tintT0 = 0, tintDur = 1, tintCur = ['224,176,74', '224,176,74'], TINT_MS = 900, TINT_OUT_MS = 2200, TINT_BLUR = 22, TINT_W = 1.2, TINT_A = 1.0, TINT_CORONA = 32, TINT_CORONA_A = 0.40, tintShadow = '255,110,90';   /* tint = the stage's eclipsed ring: STAGE_RING_W, its brightness, STAGE_ECL_BLUR corona in STAGE_ECL_COL */
     var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000, squash = 1, squashTo = 1, SQUASH_MS = 600, yCur = yRatio, yTo = yRatio, Y_MS = 700, reflowT0 = 0, reflowFrom = 0, REFLOW_IN_MS = 900, REFLOW_OUT_MS = 650, reflowHold = 0, hbMix = 0, HB_MORPH_MS = 700, liveT0 = 0, GRID_FADE_MS = 3000, AMB0 = '224,176,74', GRN = '61,255,122', SLATE = '96,104,122', DIMG = '30,120,62';   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
     function grad(y0, y1, rgb, a0, a1) { var g = g2.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + rgb + ',' + a0 + ')'); g.addColorStop(1, 'rgba(' + rgb + ',' + a1 + ')'); return g; }
     var DPR = 1;   /* backing store at device resolution (capped at 2x): at 1x an iPhone upscales the layer 3x and the label text, note rims and the line go soft */
@@ -515,11 +515,11 @@
       var W = cv.clientWidth, H = cv.clientHeight, y = H * yCur; g2.setTransform(DPR, 0, 0, DPR, 0, 0); g2.clearRect(0, 0, W, H);   /* all drawing stays in CSS px; the transform maps it onto the hi-res store */
       // heartbeat egg look: everything amber turns ECG green and the bars morph into a trace; snaps during the connect stage (boot), eases on a track change
       var hbT = wf && wf.hb() ? 1 : 0, dtm = prevT ? now - prevT : 16;
-      tintMix = tintCol ? Math.min(1, tintMix + dtm / TINT_MS) : Math.max(0, tintMix - dtm / TINT_OUT_MS);   /* in quickly, out slowly */ var tg = ease(tintMix), AMB = tintMix > 0 ? lerpCol(AMB0, tintCol || tintLast, tg) : AMB0;   /* stage tint: the line (played part, baseline, play head) in the eclipse red, eased both ways */
+      var tp_ = tintT0 ? Math.max(0, Math.min(1, (now - tintT0) / tintDur)) : 1, tg = 1, AMB = lerpCol(tintFrom[0], tintTo[0], ease(tp_)), tintShadow = lerpCol(tintFrom[1], tintTo[1], ease(tp_)); tintCur = [AMB, tintShadow];   /* the line always wears the corona; tint() cross-fades its colour (amber <-> the stage's eclipse red) */   /* stage tint: the line (played part, baseline, play head) in the eclipse red, eased both ways */
       squash = squashTo < squash ? Math.max(squashTo, squash - dtm / SQUASH_MS) : Math.min(squashTo, squash + dtm / SQUASH_MS);   /* stage mode: the bars sink into the baseline and rise again after */
       if (mode === 'connect') hbMix = hbT; else hbMix = hbT > hbMix ? Math.min(hbT, hbMix + dtm / HB_MORPH_MS) : Math.max(hbT, hbMix - dtm / HB_MORPH_MS);
       // the ECG look lives left of `edge`, the normal look right of it: entering sweeps the edge left→right, leaving sweeps it right→left; boot snaps it to W
-      var m = ease(hbMix), edge = W * m, LC = m >= 1 ? GRN : AMB, UC = SLATE;
+      var m = ease(hbMix), edge = W * m, LC = m >= 1 ? GRN : AMB, UC = SLATE; if (m > 0) tintShadow = lerpCol(tintShadow, GRN, m);   /* heartbeat egg: the corona goes green with the line */
       g2.lineWidth = 2; g2.strokeStyle = 'rgba(' + LC + ',.85)'; g2.shadowColor = 'rgba(' + LC + ',.6)'; g2.shadowBlur = 12;
       if (mode === 'connect') {
         var p = Math.min(1, (performance.now() - connectT0) / CONNECT_MS), e = ease(p), half = W / 2 * e;
@@ -644,7 +644,7 @@
     function start(m) { if (!cv) return; mode = m || 'idle'; if (!raf) draw(); }
     function connect(cb, lead) { if (!cv) { cb(); return; } onConnected = cb; connectT0 = performance.now(); if (wf && lead) wf.preroll(connectT0, lead); start('connect'); }   /* lead: waterfall pre-roll seconds */
     function sweep(bars, fromFrac) { clearT0 = performance.now(); clearBars = !!bars; clearFrom = (fromFrac == null) ? 1 : Math.max(0, Math.min(1, fromFrac)); }
-    return { start: start, connect: connect, sweep: sweep, hb: function () { return !!(wf && wf.hb()); }, squash: function (on) { squashTo = on ? 0 : 1; }, centre: function (on) { yTo = on ? 0.5 : yRatio; }, head: function () { return headPx; }, tint: function (col, shadow) { if (col) tintLast = col; if (shadow) tintShadow = shadow; tintCol = col || null; }, reflowCancel: function () { reflowT0 = 0; }, reflow: function (fromFrac, holdMs) { reflowT0 = performance.now(); reflowFrom = Math.max(0, Math.min(1, fromFrac || 0)); reflowHold = Math.max(REFLOW_IN_MS, holdMs || REFLOW_IN_MS); }, baseY: function () { return cv ? cv.clientHeight * yTo : 0; } };
+    return { start: start, connect: connect, sweep: sweep, hb: function () { return !!(wf && wf.hb()); }, squash: function (on) { squashTo = on ? 0 : 1; }, centre: function (on) { yTo = on ? 0.5 : yRatio; }, head: function () { return headPx; }, tint: function (col, shadow) { tintFrom = tintCur.slice(); tintTo = [col || AMB0, shadow || AMB0]; tintT0 = performance.now(); tintDur = col ? TINT_MS : TINT_OUT_MS; },   /* null = back to amber, slowly */ reflowCancel: function () { reflowT0 = 0; }, reflow: function (fromFrac, holdMs) { reflowT0 = performance.now(); reflowFrom = Math.max(0, Math.min(1, fromFrac || 0)); reflowHold = Math.max(REFLOW_IN_MS, holdMs || REFLOW_IN_MS); }, baseY: function () { return cv ? cv.clientHeight * yTo : 0; } };
   }
   var wave = makeWave($('#wave'), 0.58, true), phoneWave = makeWave($('#ph-wave'), 0.47, true);   /* waterfall on both shells */  // phone: slightly above centre
 
