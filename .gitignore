@@ -11,3 +11,7 @@
 __pycache__/
 .DS_Store
 Thumbs.db
+
+# MIDI sources stay on this machine only (the site loads the reduced assets/notes/*.json built from them)
+*.mid
+content/midi/
