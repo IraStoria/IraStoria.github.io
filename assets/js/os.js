@@ -785,7 +785,7 @@
      ensemble, no drift, no media elements); a limiter at the end keeps four full stems from clipping. ~75 MB of RAM per decoded stem, desktop only.
      Leaving: circles shrink -> line glides back down -> the OS music resumes and the play head runs to the left edge and slides back out. ---- */
   var STAGE_NEAR = 1.0, STAGE_MID = 0.75, STAGE_FAR = 0.10, STAGE_UMAX = 2.4, STAGE_K_IN = 1.3, STAGE_K_OUT = 1.4, STAGE_PAN_MAX = 0.8, STAGE_LP_MIN = 2500, STAGE_LP_MAX = 8000, STAGE_SPAN = 0.42;
-  var STAGE_LEAD_S = 6 * (60 / 120 / 2), STAGE_GROW_MS = 800, STAGE_GROW_DELAY_MS = 750, STAGE_REACH = 0.8, STAGE_GLOW_MIN = 90, STAGE_GLOW_MAX = 360, STAGE_BAR_MIN = 24, STAGE_BANDS = 64, STAGE_SPAN_X = 0.42, STAGE_SPAN_Y = 0.36, STAGE_LVL_GAIN = 2.2, STAGE_FLOOR_LV = 0.22, STAGE_SMOOTH = 0.3, STAGE_RELEASE = 0.84;   /* SMOOTH: analyser smoothing (0.8 on the desktop bars — here low so hits jump); RELEASE: per-frame fall after a hit */   /* FLOOR_LV: band level treated as silence (the desktop bars keep a −96 dB floor; here an empty band must read as empty) */
+  var STAGE_LEAD_S = 6 * (60 / 120 / 2), STAGE_GROW_MS = 800, STAGE_GROW_DELAY_MS = 750, STAGE_REACH = 0.8, STAGE_GLOW_MIN = 90, STAGE_GLOW_MAX = 360, STAGE_BAR_MIN = 24, STAGE_BANDS = 64, STAGE_SPAN_X = 0.42, STAGE_SPAN_Y = 0.36, STAGE_LVL_GAIN = 2.2, STAGE_FLOOR_LV = 0.22, STAGE_SMOOTH = 0.15, STAGE_RELEASE = 0.8, STAGE_PUNCH = 0.6, STAGE_BAND_GAMMA = 1.8;   /* PUNCH: extra height when the instant level jumps above its slow average (an accent); BAND_GAMMA: band contrast */   /* SMOOTH: analyser smoothing (0.8 on the desktop bars — here low so hits jump); RELEASE: per-frame fall after a hit */   /* FLOOR_LV: band level treated as silence (the desktop bars keep a −96 dB floor; here an empty band must read as empty) */
   /* LEAD: one 6/8 bar at quarter = 120 (six eighths of 0.25 s). GROW_DELAY: the glows appear only once the bars have sunk and the line has moved up.
      REACH: at 100 % the silhouette's tip gets this far along the way from its edge to the centre line. SPAN_X/Y: half-width of a silhouette along its edge (fraction of W / H). */
   var stage = (function () {
@@ -889,7 +889,8 @@
         /* live level (RMS of what this piano is putting out): fast attack, slower release, so the glow breathes with the playing */
         c.an.getByteTimeDomainData(c.td); var s = 0; for (var i = 0; i < c.td.length; i++) { var v = (c.td[i] - 128) / 128; s += v * v; }
         var rms = Math.min(1, Math.sqrt(s / c.td.length) * STAGE_LVL_GAIN); c.lvl = rms > c.lvl ? rms : c.lvl * 0.9;
-        var lv = barLevels(c.an, STAGE_BANDS); for (var q = 0; q < lv.length; q++) { var z = (lv[q] - STAGE_FLOOR_LV) / (1 - STAGE_FLOOR_LV); lv[q] = z > 0 ? Math.pow(z, 1.5) : 0; } if (c.bands.length !== STAGE_BANDS) c.bands = lv; else for (var b = 0; b < STAGE_BANDS; b++) c.bands[b] = lv[b] > c.bands[b] ? lv[b] : Math.max(lv[b], c.bands[b] * STAGE_RELEASE);   /* instant attack, quick release: a sforzando reads as a jump */
+        c.avg = (c.avg || 0) * 0.97 + rms * 0.03; var pk = Math.max(0, Math.min(1, (rms - c.avg) * 3)); c.punch = pk > (c.punch || 0) ? pk : (c.punch || 0) * 0.85;   /* accent detector: instant level well above its slow average */
+        var lv = barLevels(c.an, STAGE_BANDS); for (var q = 0; q < lv.length; q++) { var z = (lv[q] - STAGE_FLOOR_LV) / (1 - STAGE_FLOOR_LV); lv[q] = z > 0 ? Math.pow(z, STAGE_BAND_GAMMA) : 0; } if (c.bands.length !== STAGE_BANDS) c.bands = lv; else for (var b = 0; b < STAGE_BANDS; b++) c.bands[b] = lv[b] > c.bands[b] ? lv[b] : Math.max(lv[b], c.bands[b] * STAGE_RELEASE);   /* instant attack, quick release: a sforzando reads as a jump */
       });
       /* canvas: per piano, from its screen edge — a radial glow at the edge midpoint (size = volume, pumped by the live level) and the
          spectrum as a stroke-less glow silhouette rising toward the centre: lows at the midpoint, highs toward the corners, mirrored.
@@ -904,7 +905,7 @@
         g2.fillStyle = grd; g2.fillRect(x - R, y - R, 2 * R, 2 * R);
         if (!c || !c.bands.length) return;
         var horiz = !!u[0], dist = horiz ? geo.ex : geo.ey, S = horiz ? geo.H * STAGE_SPAN_Y : geo.W * STAGE_SPAN_X;   /* S: half-width along the edge */
-        var amp = (STAGE_BAR_MIN + (STAGE_REACH * dist - STAGE_BAR_MIN) * rel) * grow, n = STAGE_BANDS, nx_ = -u[0], ny_ = -u[1], tx = -u[1], ty = u[0];   /* (nx_,ny_): inward normal; (tx,ty): along the edge */
+        var amp = (STAGE_BAR_MIN + (STAGE_REACH * dist - STAGE_BAR_MIN) * rel) * grow * (1 + STAGE_PUNCH * (c.punch || 0)), n = STAGE_BANDS, nx_ = -u[0], ny_ = -u[1], tx = -u[1], ty = u[0];   /* (nx_,ny_): inward normal; (tx,ty): along the edge */
         function sm(i) { i = Math.max(0, Math.min(n - 1, i)); var p = c.bands[Math.max(0, i - 1)], q = c.bands[i], r = c.bands[Math.min(n - 1, i + 1)]; return (p + 2 * q + r) / 4 * amp; }
         function path() {   /* from one end of the edge over the band tops to the other end, closed along the edge; band 0 (lows) sits at the midpoint */
           g2.beginPath(); g2.moveTo(x + tx * S, y + ty * S);
