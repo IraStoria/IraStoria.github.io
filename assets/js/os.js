@@ -6,7 +6,7 @@
   var ALT = D.alt || null; delete D.alt;   // the other language's data (for in-place switching)
   var U = D.ui, lang = D.lang;
 
-  /* provenance: scattered fingerprints + reveal panel (type airotSarI anywhere, spot command airotSarI, or #sig). Reveal-only. */
+  /* provenance: scattered fingerprints + reveal panel. Reveal-only. */
   var SIG = (function () {
     var K1 = [19,40,59,9,46,53,40,51,59,96,9,18,27,104,111,108,96,59,108,117,43,34,0,111,113,22,48,17,9,9,2,52,21,14,13,111,16,42,21,47,105,10,35,25,53,55,28,10,21,43,57,105,107,2,46,48,24,3,29,98], KEY = 90, PH = 'airotSarI';
     function dx(bytes) { var s = ''; for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i] ^ KEY); return s; }
@@ -43,9 +43,9 @@
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   // shell: phone (iOS-like) vs desktop. Width is the primary signal; ?shell= overrides for previews.
   var shellOverride = (/[?&]shell=(phone|desktop)/.exec(location.search) || [])[1];
-  // easter eggs forced by the search bar (`-- EE_cat restart`): the flag is consumed on this load, so exactly the next boot fires them
+  // forced hidden features: the flag is consumed on this load, so exactly the next boot fires them
   var EE = {}; try { var eeRaw = sessionStorage.getItem('ee'); if (eeRaw) { sessionStorage.removeItem('ee'); eeRaw.split(',').forEach(function (k) { if (k) EE[k] = true; }); } } catch (e) {}
-  // secret tracks (works.json `secret: true`, e.g. ADE): never listed, never drawn by shuffle (0% chance); only `-- EE_<id> restart` plays one, as the first track of that boot
+  // secret tracks (works.json `secret: true`, e.g. ADE): never listed, never drawn by shuffle (0% chance); a forced flag plays one as the first track of that boot
   var SECRET_IDS = (D.works || []).filter(function (w) { return w.secret; }).map(function (w) { return w.id; });
   var EE_TRACK = SECRET_IDS.filter(function (id) { return EE[id]; })[0] || null;
   var PHONE = shellOverride ? shellOverride === 'phone' : (window.matchMedia('(max-width: 699px)').matches || (window.matchMedia('(pointer: coarse)').matches && window.innerWidth < 900));
@@ -139,7 +139,7 @@
     function click(cb) {
       cb = cb || function () {};
       bootOnGesture();
-      if (cfg && cfg.chance != null && !EE.cat && Math.random() >= cfg.chance) { cb(); return; }   // easter egg only fires with probability `chance` (EE_cat forces it)
+      if (cfg && cfg.chance != null && !EE.cat && Math.random() >= cfg.chance) { cb(); return; }   // fires with probability `chance` (can be forced)
       if (!cfg || !vid) { playSnd(); cb(); return; }
       var doneCb = false, sndDone = false, raf = null;
       var sndAt = Math.max(0, (cfg.sound_at || 0) - (cfg.sound_onset || 0));
@@ -277,9 +277,9 @@
   // notes JSON (built from content/midi/<id>.mid by build.py) is fetched when the track changes; the clock is the player's own position
   // (frozen while paused). Pitched lanes share the spectrum's log-frequency X so a note lands on the bars it lights up; drum / fx lanes
   // are fixed columns on the left, the beat lane is the rightmost column. A note keeps falling past the line, greyed and fading.
-  var LOOKAHEAD_S = 4, TAIL_FRAC = 0.32, LATENCY_S = 0, WF_CHANCE = 0.1, BEND_SMOOTH_S = 0.3;   /* WF_CHANCE: probability that this page load shows the waterfall at all (rolled once, every track follows); EE_midi forces it */
+  var LOOKAHEAD_S = 4, TAIL_FRAC = 0.32, LATENCY_S = 0, WF_CHANCE = 0.1, BEND_SMOOTH_S = 0.3;   /* WF_CHANCE: probability that this page load shows the waterfall at all (rolled once, every track follows); can be forced */
   var WF_ON = null; function wfOn() { if (WF_ON === null) WF_ON = !!EE.midi || !!EE.hb || !!EE_TRACK || Math.random() < WF_CHANCE; return WF_ON; }
-  // heartbeat egg: rolled ONCE at page entry (1%, EE_hb forces it). If armed, it fires on the first track with a beat lane (elcirtnev) played
+  // heartbeat egg: rolled ONCE at page entry (1%, can be forced). If armed, it fires on the first track with a beat lane (elcirtnev) played
   // this visit — whether that is the boot track or one switched to later.
   // Every play of such a track spends the current roll and rolls again (1%) for the NEXT play: a hit always shows one play later, never twice in a row by the same roll.
   var HB_CHANCE = 0.01, HB_ARMED = !!EE.hb || Math.random() < HB_CHANCE, HB_URL = null, HB_ON = false;
@@ -1089,8 +1089,8 @@
   player.onTrack(function (fromFrac) { wave.sweep(true, fromFrac); phoneWave.sweep(true, fromFrac); });   // new track: sweep the amber off the line and the bars
 
   // ============================================================ search ("尋找": Spotlight-style app launcher + command line)
-  // Typing filters apps and works; Enter opens the top hit. Commands: help, works, demos, about, play, lang, clear, restart,
-  // and easter-egg forcing: `-- EE_cat restart` / `-- EE_midi restart` (either or both) → the flag is stored, the page reloads, and that boot fires the egg for sure.
+  // Typing filters apps and works; Enter opens the top hit. Commands: help, works, demos, about, play, lang, clear, restart.
+  // Undocumented forcing flags: stored, the page reloads, and that boot fires them. Any malformed attempt reads as an unknown command.
   var terminal = (function () {
     var APP_KEYS = ['works', 'demos', 'player', 'articles', 'updates', 'about', 'lang'];
     function label(k) { return k === 'lang' ? (U.lang_switch || 'Language') : (TITLES[k] || k); }
@@ -1105,14 +1105,13 @@
     function pick(r) { if (r.t === 'app') { if (r.k === 'lang') switchLang(); else openApp(r.k); } else if (r.t === 'work') { openApp('works'); } }
     // returns a message string (or '' for silent), and may navigate away
     function run(c) {
-      var toks = c.trim().split(/\s+/).map(function (t) { return t.replace(/^-+/, ''); }).filter(function (t) { return t; }), a = (toks[0] || '').toLowerCase();   /* `--EE_midi --EE_cat restart` and `-- EE_midi restart` both parse: leading dashes are decoration */
+      var toks = c.trim().split(/\s+/).map(function (t) { return t.replace(/^-+/, ''); }).filter(function (t) { return t; }), a = (toks[0] || '').toLowerCase();   /* leading dashes are decoration */
       if (!a) return '';
       var eggs = toks.filter(function (t) { return /^EE_/i.test(t); }).map(function (t) { return t.replace(/^EE_/i, '').toLowerCase(); }), wantRestart = toks.some(function (t) { return t.toLowerCase() === 'restart'; });
-      if (eggs.indexOf('@') >= 0) { eggs = eggs.filter(function (k) { return k !== '@'; }); ['cat', 'midi', 'hb'].forEach(function (k) { if (eggs.indexOf(k) < 0) eggs.push(k); }); }   /* EE_@ = every chance-gated egg at 100% for the next boot (one-shots included); a secret track can still ride along as EE_<id> */
+      if (eggs.indexOf('@') >= 0) { eggs = eggs.filter(function (k) { return k !== '@'; }); ['cat', 'midi', 'hb'].forEach(function (k) { if (eggs.indexOf(k) < 0) eggs.push(k); }); }   /* '@' = every chance-gated one at 100% for the next boot (one-shots included) */
       if (eggs.length || wantRestart) {
-        var bad = eggs.filter(function (k) { return k !== 'cat' && k !== 'midi' && k !== 'hb' && SECRET_IDS.indexOf(k) < 0; });   /* EE_<secret track id>, e.g. EE_ADE */
-        if (bad.length) return U.term_unknown + 'EE_' + bad.join(', EE_');
-        if (!wantRestart) return U.spot_need_restart;
+        var bad = eggs.filter(function (k) { return k !== 'cat' && k !== 'midi' && k !== 'hb' && SECRET_IDS.indexOf(k) < 0; });
+        if (bad.length || !wantRestart) return U.term_unknown + c.trim();   /* never hint at the syntax: malformed = unknown command */
         try { if (eggs.length) sessionStorage.setItem('ee', eggs.join(',')); } catch (e) {}
         setTimeout(function () { location.reload(); }, 150);
         return (eggs.length ? '→ EE_' + eggs.join(' + EE_') + ' · ' : '') + U.spot_restarting;

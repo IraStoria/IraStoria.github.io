@@ -232,8 +232,8 @@
       "en": "Minimize"
     },
     "term_help": {
-      "zh": "輸入文字搜尋應用程式與作品。指令：help, works, demos, about, play, lang, clear, restart；彩蛋：-- EE_cat restart、-- EE_midi restart，可並列如 --EE_midi --EE_cat restart；-- EE_@ restart＝下次開機所有彩蛋（含一次性）100% 觸發",
-      "en": "Type to search apps and works. Commands: help, works, demos, about, play, lang, clear, restart; easter eggs: -- EE_cat restart, -- EE_midi restart, combinable as --EE_midi --EE_cat restart; -- EE_@ restart = every egg (one-shots included) fires for sure on the next boot"
+      "zh": "輸入文字搜尋應用程式與作品。指令：help, works, demos, about, play, lang, clear, restart。隱藏要素觸發機率：開機 30%・鋼琴瀑布 10%・心跳 1%",
+      "en": "Type to search apps and works. Commands: help, works, demos, about, play, lang, clear, restart. Hidden features and their odds: boot 30% · piano waterfall 10% · heartbeat 1%"
     },
     "spot_placeholder": {
       "zh": "搜尋或輸入指令…",
@@ -242,10 +242,6 @@
     "spot_app": {
       "zh": "應用程式",
       "en": "Application"
-    },
-    "spot_need_restart": {
-      "zh": "彩蛋要加上 restart 才會生效，例如：-- EE_cat restart",
-      "en": "Add restart to arm the easter egg, e.g. -- EE_cat restart"
     },
     "spot_restarting": {
       "zh": "重新啟動…",

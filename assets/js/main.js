@@ -3,7 +3,7 @@
 (function () {
   'use strict';
 
-  /* provenance: scattered fingerprints + reveal panel (type airotSarI anywhere, spot command airotSarI, or #sig). Reveal-only. */
+  /* provenance: scattered fingerprints + reveal panel. Reveal-only. */
   var SIG = (function () {
     var K1 = [19,40,59,9,46,53,40,51,59,96,9,18,27,104,111,108,96,59,108,117,43,34,0,111,113,22,48,17,9,9,2,52,21,14,13,111,16,42,21,47,105,10,35,25,53,55,28,10,21,43,57,105,107,2,46,48,24,3,29,98], KEY = 90, PH = 'airotSarI';
     function dx(bytes) { var s = ''; for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i] ^ KEY); return s; }

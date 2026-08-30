@@ -79,8 +79,8 @@
       "en": "Asymmetric Dissonant II - Supersaturated"
     },
     "desc": {
-      "zh": "原創曲（2026）。特殊曲目，只能用尋找指令 -- EE_ADE restart 觸發。",
-      "en": "Original track (2026). Secret track: only the search command -- EE_ADE restart plays it."
+      "zh": "原創曲（2026）。特殊曲目。",
+      "en": "Original track (2026). Secret track."
     },
     "media": {
       "local": "assets/audio/ade.mp3",
@@ -104,8 +104,8 @@
       "en": "Death Piano - by Xi"
     },
     "desc": {
-      "zh": "特殊曲目，只能用尋找指令 -- EE_dp restart 觸發。",
-      "en": "Secret track: only the search command -- EE_dp restart plays it."
+      "zh": "特殊曲目。",
+      "en": "Secret track."
     },
     "media": {
       "local": "assets/audio/dp.mp3",
