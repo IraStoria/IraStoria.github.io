@@ -363,7 +363,9 @@ def media_block(w, root):
         return (f'<iframe class="media" src="https://w.soundcloud.com/player/?url={esc(m["soundcloud"])}&amp;color=%23e0b04a" '
                 f'title="{esc(w["title"]["en"])}" loading="lazy"></iframe>')
     if "local" in m:
-        return f'<audio class="media" controls controlsList="nodownload noplaybackrate" oncontextmenu="return false" preload="none" src="{root}{esc(local_versioned(m["local"]))}"></audio>'
+        return (f'<div class="ap" data-src="{root}{esc(local_versioned(m["local"]))}"><button class="ap-play" type="button" aria-label="play/pause">'
+                f'<svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg><svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>'
+                f'</button><div class="ap-seek" role="slider" aria-label="seek"><i></i></div><span class="ap-time">0:00 / 0:00</span></div>')
     return ""
 
 

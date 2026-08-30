@@ -40,7 +40,12 @@ h1{font-size:clamp(1.8rem,4vw,2.6rem)}h2{font-size:1.4rem;margin-top:1.5em}h3{fo
 .btn{display:inline-block;padding:.4rem .9rem;border-radius:6px;background:var(--accent);color:#14110a;font-weight:600;font-size:.9rem}
 .btn:hover{text-decoration:none;filter:brightness(1.08)}
 .media{aspect-ratio:16/9;width:100%;border:0;border-radius:6px;background:#000}
-audio.media{aspect-ratio:auto;height:40px;background:transparent}
+.ap{display:flex;align-items:center;gap:.6rem;padding:.45rem .6rem;border:1px solid var(--border);border-radius:999px;background:var(--bg);user-select:none}
+.ap-play{flex:none;width:32px;height:32px;border-radius:50%;border:0;background:var(--accent);color:#14110a;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.ap-play svg{width:1.05em;height:1.05em;fill:currentColor;display:block}.ap-play .i-pause,.ap.on .ap-play .i-play{display:none}.ap.on .ap-play .i-pause{display:block}
+.ap-seek{flex:1;height:6px;background:var(--border);border-radius:3px;position:relative;cursor:pointer;touch-action:none}
+.ap-seek i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--accent);border-radius:3px}
+.ap-time{font:.72rem ui-monospace,monospace;color:var(--fg-dim);min-width:80px;text-align:right}
 .filter-bar{display:flex;gap:.5rem;flex-wrap:wrap;margin:.5rem 0 1rem}
 .filter-bar button{background:transparent;border:1px solid var(--border);color:var(--fg-dim);border-radius:999px;padding:.3rem .9rem;cursor:pointer;font:inherit;font-size:.85rem}
 .filter-bar button.active{color:var(--fg);border-color:var(--accent)}

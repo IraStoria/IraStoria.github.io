@@ -3,6 +3,30 @@
 (function () {
   'use strict';
 
+  /* inline audio panels (.ap) on the static works page: play / seek / time, one playing at a time, no native chrome */
+  var apActive = null;
+  document.querySelectorAll('.ap').forEach(function (el) {
+    var a = null, seek = el.querySelector('.ap-seek'), bar = seek.querySelector('i'), time = el.querySelector('.ap-time'), btn = el.querySelector('.ap-play');
+    var fmt = function (s) { s = Math.max(0, s | 0); return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); };
+    var draw = function () { var d = a && isFinite(a.duration) ? a.duration : 0, p = a ? a.currentTime : 0; bar.style.width = (d ? p / d * 100 : 0) + '%'; time.textContent = fmt(p) + ' / ' + fmt(d); };
+    var ensure = function () {
+      if (a) return a;
+      a = new Audio(el.dataset.src); a.preload = 'metadata';
+      a.addEventListener('play', function () { if (apActive && apActive !== a) apActive.pause(); apActive = a; el.classList.add('on'); });
+      a.addEventListener('pause', function () { el.classList.remove('on'); });
+      a.addEventListener('ended', function () { el.classList.remove('on'); a.currentTime = 0; draw(); });
+      a.addEventListener('timeupdate', draw); a.addEventListener('loadedmetadata', draw); a.addEventListener('durationchange', draw);
+      return a;
+    };
+    btn.addEventListener('click', function () { var x = ensure(); if (x.paused) x.play().catch(function () {}); else x.pause(); });
+    var drag = false, at = function (ev) { var r = seek.getBoundingClientRect(); return Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)); };
+    var to = function (ev) { var x = ensure(); if (isFinite(x.duration) && x.duration) { x.currentTime = at(ev) * x.duration; draw(); } };
+    seek.addEventListener('pointerdown', function (ev) { drag = true; try { seek.setPointerCapture(ev.pointerId); } catch (e) {} to(ev); });
+    seek.addEventListener('pointermove', function (ev) { if (drag) to(ev); });
+    seek.addEventListener('pointerup', function () { drag = false; }); seek.addEventListener('pointercancel', function () { drag = false; });
+    el.addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
+  });
+
   /* provenance: scattered fingerprints + reveal panel. Reveal-only. */
   var SIG = (function () {
     var K1 = [19,40,59,9,46,53,40,51,59,96,9,18,27,104,111,108,96,59,108,117,43,34,0,111,113,22,48,17,9,9,2,52,21,14,13,111,16,42,21,47,105,10,35,25,53,55,28,10,21,43,57,105,107,2,46,48,24,3,29,98], KEY = 90, PH = 'airotSarI';

@@ -860,12 +860,43 @@
     handle.addEventListener('pointercancel', function () { dragging = false; });
   }
 
+  // ============================================================ inline audio panel (works app): site-styled play / seek / time instead of the native <audio controls> chrome
+  function apHTML(src) {
+    return '<div class="ap" data-src="' + src + '"><button class="ap-play" type="button" aria-label="play/pause"><svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg><svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button>' +
+      '<div class="ap-seek" role="slider" aria-label="seek"><i></i></div><span class="ap-time">0:00 / 0:00</span></div>';
+  }
+  var apActive = null;   /* the one inline panel currently playing (only one at a time; also stopped when the player app starts a track) */
+  function apStopAll() { if (apActive && apActive._a) { apActive._a.pause(); } }
+  function apWire(root) {
+    root.querySelectorAll('.ap').forEach(function (el) {
+      var a = null, seek = el.querySelector('.ap-seek'), bar = seek.querySelector('i'), time = el.querySelector('.ap-time'), btn = el.querySelector('.ap-play');
+      var fmt = function (s) { s = Math.max(0, s | 0); return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); };
+      var draw = function () { var d = a && isFinite(a.duration) ? a.duration : 0, p = a ? a.currentTime : 0; bar.style.width = (d ? p / d * 100 : 0) + '%'; time.textContent = fmt(p) + ' / ' + fmt(d); };
+      var ensure = function () {
+        if (a) return a;
+        a = new Audio(el.dataset.src); a.preload = 'metadata'; el._a = a;
+        a.addEventListener('play', function () { if (apActive && apActive !== el) apStopAll(); apActive = el; player.stop(); el.classList.add('on'); });
+        a.addEventListener('pause', function () { el.classList.remove('on'); });
+        a.addEventListener('ended', function () { el.classList.remove('on'); a.currentTime = 0; draw(); });
+        a.addEventListener('timeupdate', draw); a.addEventListener('loadedmetadata', draw); a.addEventListener('durationchange', draw);
+        return a;
+      };
+      btn.addEventListener('click', function () { var x = ensure(); if (x.paused) x.play().catch(function () {}); else x.pause(); });
+      var drag = false, at = function (ev) { var r = seek.getBoundingClientRect(); return Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)); };
+      var to = function (ev) { var x = ensure(); if (isFinite(x.duration) && x.duration) { x.currentTime = at(ev) * x.duration; draw(); } };
+      seek.addEventListener('pointerdown', function (ev) { drag = true; try { seek.setPointerCapture(ev.pointerId); } catch (e) {} to(ev); });
+      seek.addEventListener('pointermove', function (ev) { if (drag) to(ev); });
+      seek.addEventListener('pointerup', function () { drag = false; }); seek.addEventListener('pointercancel', function () { drag = false; });
+      el.addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
+    });
+  }
+
   // ============================================================ app renderers
   function mediaHTML(w) {
     var m = w.media || {};
     if (m.youtube) return '<iframe class="media" src="https://www.youtube-nocookie.com/embed/' + esc(m.youtube) + '" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen title="' + esc(w.title) + '"></iframe>';
     if (m.soundcloud) return '<iframe class="media" src="https://w.soundcloud.com/player/?url=' + esc(m.soundcloud) + '&color=%23e0b04a" loading="lazy" title="' + esc(w.title) + '"></iframe>';
-    if (m.local) return '<audio class="media" style="aspect-ratio:auto;height:40px;background:none" controls controlsList="nodownload noplaybackrate" oncontextmenu="return false" preload="none" src="../' + esc(m.local) + '"></audio>';
+    if (m.local) return apHTML('../' + esc(m.local));
     return '';
   }
   function workItem(w) {
@@ -884,6 +915,7 @@
       var types = ['music', 'game', 'tool', 'demo'].filter(function (t) { return D.works.some(function (w) { return w.type === t; }); });
       body.innerHTML = '<div class="filter"><button class="on" data-f="all">' + esc(U.filter_all) + '</button>' + types.map(function (t) { return '<button data-f="' + t + '">' + esc(U['type_' + t]) + '</button>'; }).join('') + '</div>' +
         '<ul class="list">' + D.works.filter(function (w) { return !w.secret; }).map(workItem).join('') + '</ul>';
+      apWire(body);
       body.addEventListener('click', function (e) {
         var f = e.target.closest('[data-f]'); if (f) { body.querySelectorAll('[data-f]').forEach(function (b) { b.classList.toggle('on', b === f); }); body.querySelectorAll('.list li').forEach(function (li) { li.hidden = !(f.dataset.f === 'all' || li.dataset.type === f.dataset.f); }); }
         var p = e.target.closest('[data-play]'); if (p) { openApp('player'); player.playId(p.dataset.play); }
@@ -1085,6 +1117,7 @@
              debug: function () { return { ctx: actx ? actx.state : '-', playing: playing, started: started, ducked: ducked, muted: muted, vol: vol, cur: cur, unlocked: !!(audio && audio._unlocked), wired: !!(audio && audio._wired),
                paused: audio ? audio.paused : '-', rs: audio ? audio.readyState : '-', ns: audio ? audio.networkState : '-', t: audio ? audio.currentTime.toFixed(1) : '-', err: audio && audio.error ? audio.error.code : 0, gain: master ? master.gain.value.toFixed(3) : '-', out: out ? out.gain.value.toFixed(2) : '-' }; } };
   })();
+  player.onTrack(function () { apStopAll(); });   /* player app takes over → inline works-app panel pauses */
   if (/[?&]debug/.test(location.search)) window.__player = player;   /* ?debug: console access for testing (seek / state) */
   player.onTrack(function (fromFrac) { wave.sweep(true, fromFrac); phoneWave.sweep(true, fromFrac); });   // new track: sweep the amber off the line and the bars
 
