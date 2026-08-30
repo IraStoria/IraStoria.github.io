@@ -217,8 +217,8 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .ph-app .ic.lang{font:600 20px/1 var(--font);letter-spacing:.02em}
 .ph-hero{margin-top:auto;padding:0 8px 14px;text-align:center;opacity:.85}
 .ph-hero b{display:block;font-size:22px;letter-spacing:.04em}.ph-hero span{font-size:12px;opacity:.8}
-.ph-dock{margin:0 0 calc(12px + env(safe-area-inset-bottom));background:rgba(255,255,255,.14);backdrop-filter:blur(20px);border-radius:28px;padding:12px 10px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.ph-dock .ph-app{font-size:0}
+.ph-dock{margin:0 0 calc(12px + env(safe-area-inset-bottom));background:rgba(255,255,255,.14);backdrop-filter:blur(20px);border-radius:28px;padding:10px 10px 8px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.ph-dock .ph-app{font-size:11px;gap:5px}   /* dock tiles carry their names like the home grid */
 /* window resize grips (desktop only) */
 .win .grip{position:absolute;z-index:5;pointer-events:auto}
 .win .grip.n,.win .grip.s{left:8px;right:8px;height:6px;cursor:ns-resize}.win .grip.n{top:0}.win .grip.s{bottom:0}

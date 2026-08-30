@@ -1035,6 +1035,8 @@
         if (!audio._wired) { var s = actx.createMediaElementSource(audio); s.connect(master); audio._wired = true; }
         if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = null; }
         if (pausedAt !== null) { try { audio.currentTime = pausedAt; } catch (e) {} pausedAt = null; }   // resume from where pause was pressed, not where the fade ended
+        else if (audio._silent) { try { audio.currentTime = 0; } catch (e) {} }   /* the gesture-time unlock may still be running silently (lock screen can sit for minutes): the real start is always from 0 */
+        audio._silent = false;
         master.gain.cancelScheduledValues(0); master.gain.setValueAtTime(1, actx.currentTime);
         var tok = ++playSeq, pr = audio.play(); if (pr && pr.catch) pr.catch(function () { if (tok !== playSeq) return; playing = false; refresh(); caption.refresh(); });   // autoplay blocked → show ▶ again (only if this is still the current play request)
       } else return;
@@ -1106,7 +1108,8 @@
         var t = list[cur]; if (!audio || !t || t.synth || audio._unlocked) return; audio._unlocked = true;
         if (!audio._wired) { var s = actx.createMediaElementSource(audio); s.connect(master); audio._wired = true; }
         master.gain.cancelScheduledValues(0); master.gain.setValueAtTime(0.0001, actx.currentTime);
-        var p = audio.play(); if (p && p.then) p.then(function () { if (!playing) { audio.pause(); try { audio.currentTime = 0; } catch (e) {} } }).catch(function () {});
+        audio._silent = true;
+        var p = audio.play(); if (p && p.then) p.then(function () { if (!playing) { audio.pause(); try { audio.currentTime = 0; } catch (e) {} audio._silent = false; } }).catch(function () { audio._silent = false; });
       } catch (e) {}
     }
     // continue the same track after a language switch (page reload): seek to the saved position, try to keep playing
