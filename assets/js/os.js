@@ -1723,7 +1723,7 @@
       var eggs = toks.filter(function (t) { return /^EE_/i.test(t); }).map(function (t) { return t.replace(/^EE_/i, '').toLowerCase(); }), wantRestart = toks.some(function (t) { return t.toLowerCase() === 'restart'; });
       if (eggs.indexOf('@') >= 0) { eggs = eggs.filter(function (k) { return k !== '@'; }); ['cat', 'midi', 'hb', 'st'].forEach(function (k) { if (eggs.indexOf(k) < 0) eggs.push(k); }); }   /* '@' = every chance-gated one at 100% for the next boot (one-shots included) */
       if (eggs.length || wantRestart) {
-        var bad = eggs.filter(function (k) { return k !== 'cat' && k !== 'midi' && k !== 'hb' && SECRET_IDS.indexOf(k) < 0; });
+        var bad = eggs.filter(function (k) { return k !== 'cat' && k !== 'midi' && k !== 'hb' && k !== 'st' && SECRET_IDS.indexOf(k) < 0; });
         if (bad.length || !wantRestart) return U.term_unknown + c.trim();   /* never hint at the syntax: malformed = unknown command */
         try { if (eggs.length) sessionStorage.setItem('ee', eggs.join(',')); } catch (e) {}
         setTimeout(function () { location.reload(); }, 150);
