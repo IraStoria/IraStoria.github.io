@@ -330,7 +330,8 @@ body[data-lang="zh"] .ph-ls .ls-knob{transform:translateX(26px)}
 .spot{position:absolute;inset:0;z-index:120}
 .spot-back{position:absolute;inset:0;background:rgba(6,8,12,.35)}
 .spot-host{position:absolute;left:50%;top:18%;transform:translateX(-50%);width:min(620px,92vw)}
-.phone .spot-host{top:calc(52px + env(safe-area-inset-top));width:calc(100% - 24px)}.phone .spot-q{font-size:18px}.phone .spot-back{background:rgba(6,8,12,.55)}
+.phone .spot-host{top:calc(52px + env(safe-area-inset-top));width:calc(100% - 24px)}.phone .spot-q{font-size:17px}.phone .spot-back{background:rgba(6,8,12,.55)}
+.phone .spot-box{border-radius:26px;background:rgba(40,43,54,.92)}.phone .spot-in{padding:.65rem 1.1rem;min-height:50px}.phone .spot-list{padding:.35rem .5rem .5rem}.phone .spot-hit{border-radius:16px}   /* iOS-style capsule search field */
 .ph-home{touch-action:none}
 .spot-box{background:rgba(32,35,46,.92);backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,.12);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.55);overflow:hidden}
 .spot-in{display:flex;align-items:center;gap:.7rem;padding:.75rem 1rem}
