@@ -169,6 +169,7 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .ap-seek{flex:1;height:6px;background:#2a2e38;border-radius:3px;position:relative;cursor:pointer;touch-action:none;transition:background .7s ease}
 .ap-seek i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--accent);border-radius:3px;transition:background .7s ease,box-shadow .7s ease}
 .ap-time{font:11px var(--mono);color:var(--dim);min-width:80px;text-align:right}
+.ap.cur{border-color:var(--accent)}body.hb .ap.cur{border-color:rgba(61,255,122,.6)}
 .player .pl li{cursor:pointer;padding:.45rem 0}
 .player .pl li.on .t{color:var(--accent)}
 .player .note{font-size:12px;color:var(--dim)}

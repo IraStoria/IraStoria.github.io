@@ -860,35 +860,44 @@
     handle.addEventListener('pointercancel', function () { dragging = false; });
   }
 
-  // ============================================================ inline audio panel (works app): site-styled play / seek / time instead of the native <audio controls> chrome
-  function apHTML(src) {
-    return '<div class="ap" data-src="' + src + '"><button class="ap-play" type="button" aria-label="play/pause"><svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg><svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button>' +
+  // ============================================================ inline panel (works app) = remote control for the main player
+  // one audio engine only: the panel never owns an <audio>; play/pause/seek go to `player`, progress is read back from player.state() each frame,
+  // so the corner control, spectrum line, waterfall and title stay in sync with what the list shows.
+  function apHTML(id) {
+    return '<div class="ap" data-id="' + id + '"><button class="ap-play" type="button" aria-label="play/pause"><svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg><svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button>' +
       '<div class="ap-seek" role="slider" aria-label="seek"><i></i></div><span class="ap-time">0:00 / 0:00</span></div>';
   }
-  var apActive = null;   /* the one inline panel currently playing (only one at a time; also stopped when the player app starts a track) */
-  function apStopAll() { if (apActive && apActive._a) { apActive._a.pause(); } }
   function apWire(root) {
-    root.querySelectorAll('.ap').forEach(function (el) {
-      var a = null, seek = el.querySelector('.ap-seek'), bar = seek.querySelector('i'), time = el.querySelector('.ap-time'), btn = el.querySelector('.ap-play');
-      var fmt = function (s) { s = Math.max(0, s | 0); return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); };
-      var draw = function () { var d = a && isFinite(a.duration) ? a.duration : 0, p = a ? a.currentTime : 0; bar.style.width = (d ? p / d * 100 : 0) + '%'; time.textContent = fmt(p) + ' / ' + fmt(d); };
-      var ensure = function () {
-        if (a) return a;
-        a = new Audio(el.dataset.src); a.preload = 'metadata'; el._a = a;
-        a.addEventListener('play', function () { if (apActive && apActive !== el) apStopAll(); apActive = el; player.stop(); el.classList.add('on'); });
-        a.addEventListener('pause', function () { el.classList.remove('on'); });
-        a.addEventListener('ended', function () { el.classList.remove('on'); a.currentTime = 0; draw(); });
-        a.addEventListener('timeupdate', draw); a.addEventListener('loadedmetadata', draw); a.addEventListener('durationchange', draw);
-        return a;
-      };
-      btn.addEventListener('click', function () { var x = ensure(); if (x.paused) x.play().catch(function () {}); else x.pause(); });
+    var panels = Array.prototype.slice.call(root.querySelectorAll('.ap'));
+    if (!panels.length) return;
+    var fmt = function (s) { s = Math.max(0, s | 0); return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); };
+    var last = '';
+    function draw() {
+      if (!root.isConnected) return;   /* window closed → loop ends */
+      var st = player.state(), key = st.id + '|' + st.playing + '|' + (st.pos | 0) + '|' + (st.dur | 0);
+      if (key !== last) {
+        last = key;
+        panels.forEach(function (el) {
+          var mine = el.dataset.id === st.id;
+          el.classList.toggle('on', mine && st.playing);
+          el.classList.toggle('cur', mine && st.started);
+          el.querySelector('.ap-seek i').style.width = (mine ? st.frac * 100 : 0) + '%';
+          el.querySelector('.ap-time').textContent = mine ? fmt(st.pos) + ' / ' + fmt(st.dur) : '';
+        });
+      }
+      requestAnimationFrame(draw);
+    }
+    panels.forEach(function (el) {
+      var id = el.dataset.id, seek = el.querySelector('.ap-seek');
+      el.querySelector('.ap-play').addEventListener('click', function () { if (player.state().id === id) player.toggle(); else player.playId(id); });
       var drag = false, at = function (ev) { var r = seek.getBoundingClientRect(); return Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)); };
-      var to = function (ev) { var x = ensure(); if (isFinite(x.duration) && x.duration) { x.currentTime = at(ev) * x.duration; draw(); } };
+      var to = function (ev) { var st = player.state(); if (st.id !== id) { player.playId(id); st = player.state(); } if (st.dur) player.seek(at(ev) * st.dur); };
       seek.addEventListener('pointerdown', function (ev) { drag = true; try { seek.setPointerCapture(ev.pointerId); } catch (e) {} to(ev); });
       seek.addEventListener('pointermove', function (ev) { if (drag) to(ev); });
       seek.addEventListener('pointerup', function () { drag = false; }); seek.addEventListener('pointercancel', function () { drag = false; });
       el.addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
     });
+    requestAnimationFrame(draw);
   }
 
   // ============================================================ app renderers
@@ -896,13 +905,13 @@
     var m = w.media || {};
     if (m.youtube) return '<iframe class="media" src="https://www.youtube-nocookie.com/embed/' + esc(m.youtube) + '" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen title="' + esc(w.title) + '"></iframe>';
     if (m.soundcloud) return '<iframe class="media" src="https://w.soundcloud.com/player/?url=' + esc(m.soundcloud) + '&color=%23e0b04a" loading="lazy" title="' + esc(w.title) + '"></iframe>';
-    if (m.local) return apHTML('../' + esc(m.local));
+    if (m.local) return apHTML(esc(w.id));
     return '';
   }
   function workItem(w) {
     var m = w.media || {}, acts = [];
     if (m.demo) acts.push('<button class="btn" data-demo="' + esc(m.demo.replace(/\/$/, '')) + '">' + esc(U.open_demo) + '</button>');   /* same in-shell window / panel as the Demos app */
-    if (w.type === 'music' && (m.local || m.youtube || m.soundcloud)) acts.push('<button class="btn ghost" data-play="' + esc(w.id) + '">' + esc(U.listen) + '</button>');
+    if (w.type === 'music' && !m.local && (m.youtube || m.soundcloud)) acts.push('<button class="btn ghost" data-play="' + esc(w.id) + '">' + esc(U.listen) + '</button>');   /* local tracks: the inline panel is the control */
     (w.links || []).forEach(function (l) { acts.push('<a class="btn ghost" href="' + esc(l.url) + '" rel="noopener">' + esc(l.label) + '</a>'); });
     return '<li data-type="' + esc(w.type) + '"><span class="badge ' + esc(w.type) + '">' + esc(U['type_' + w.type]) + '</span><div style="flex:1">' +
       '<div class="t">' + esc(w.title) + ' <span class="meta">' + w.year + '</span></div><div class="d">' + esc(w.desc) + '</div>' +
@@ -1075,7 +1084,7 @@
       var mutedNow = muted || vol === 0;
       if (t.synth && playing && actx) { pos = (actx.currentTime - synthStart) % SYNTH_LEN; dur = SYNTH_LEN; }
       else if (audio && !t.synth) { pos = pausedAt !== null ? pausedAt : audio.currentTime; dur = audio.duration || 0; }
-      return { title: t.title || '', id: t.id || '', pos: pos, playing: playing, started: cur >= 0 && (started || playing || pos > 0), frac: dur ? pos / dur : 0, muted: mutedNow, vol: vol, notes: (t.media && t.media.notes) || '', sr: actx ? actx.sampleRate : 48000 };
+      return { title: t.title || '', id: t.id || '', pos: pos, dur: dur, playing: playing, started: cur >= 0 && (started || playing || pos > 0), frac: dur ? pos / dur : 0, muted: mutedNow, vol: vol, notes: (t.media && t.media.notes) || '', sr: actx ? actx.sampleRate : 48000 };
     }
     function autoplay() { ensureCtx(); prepare(); if (!playing) play(); }
     /* gesture-time unlock: the AudioContext is created (=resumed) inside the gesture and the single <audio> element gets its first play()
@@ -1117,7 +1126,6 @@
              debug: function () { return { ctx: actx ? actx.state : '-', playing: playing, started: started, ducked: ducked, muted: muted, vol: vol, cur: cur, unlocked: !!(audio && audio._unlocked), wired: !!(audio && audio._wired),
                paused: audio ? audio.paused : '-', rs: audio ? audio.readyState : '-', ns: audio ? audio.networkState : '-', t: audio ? audio.currentTime.toFixed(1) : '-', err: audio && audio.error ? audio.error.code : 0, gain: master ? master.gain.value.toFixed(3) : '-', out: out ? out.gain.value.toFixed(2) : '-' }; } };
   })();
-  player.onTrack(function () { apStopAll(); });   /* player app takes over → inline works-app panel pauses */
   if (/[?&]debug/.test(location.search)) window.__player = player;   /* ?debug: console access for testing (seek / state) */
   player.onTrack(function (fromFrac) { wave.sweep(true, fromFrac); phoneWave.sweep(true, fromFrac); });   // new track: sweep the amber off the line and the bars
 
