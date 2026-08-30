@@ -509,7 +509,7 @@
     function draw() {
       raf = requestAnimationFrame(draw); size();
       var now = performance.now(), dk = decayFactor(lastT ? now - lastT : 16), prevT = lastT; lastT = now;
-      yCur = yTo < yCur ? Math.max(yTo, yCur - dk_dt(now, prevT) / Y_MS * (yRatio - 0.5)) : Math.min(yTo, yCur + dk_dt(now, prevT) / Y_MS * (yRatio - 0.5));   /* stage mode: the line glides to the true centre (its X axis) and back */
+      if (yCur !== yTo) { var ys = dk_dt(now, prevT) / Y_MS * Math.abs(yRatio - 0.5); yCur = yTo < yCur ? Math.max(yTo, yCur - ys) : Math.min(yTo, yCur + ys); }   /* stage mode: the line glides to the true centre (its X axis) and back. Step is |yRatio-0.5|: the phone line sits ABOVE the centre (0.47), a signed step made it drift upward forever (hotfix) */
       var W = cv.clientWidth, H = cv.clientHeight, y = H * yCur; g2.setTransform(DPR, 0, 0, DPR, 0, 0); g2.clearRect(0, 0, W, H);   /* all drawing stays in CSS px; the transform maps it onto the hi-res store */
       // heartbeat egg look: everything amber turns ECG green and the bars morph into a trace; snaps during the connect stage (boot), eases on a track change
       var hbT = wf && wf.hb() ? 1 : 0, dtm = prevT ? now - prevT : 16;
