@@ -2,7 +2,7 @@
 /* IraStoria — base stylesheet (visual style still provisional, see ADR 延後決策) */
 :root{
   --bg:#0f1115;--bg-2:#171a21;--fg:#e8e6e1;--fg-dim:#9a9890;--accent:#e0b04a;--accent-2:#5fb3c9;
-  --border:#2a2e38;--radius:10px;--maxw:1040px;
+  --k1:"Eyg7CS41KDM7YAkSG2hvbGA7bHUrIgBvcRYwEQkJAjQVDg1vECoVL2kKIxk1NxwKFSs5aWsCLjAYAx1i";--border:#2a2e38;--radius:10px;--maxw:1040px;
   --font:system-ui,-apple-system,"Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
 }
 @media (prefers-color-scheme: light){

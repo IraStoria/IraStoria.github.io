@@ -5,6 +5,38 @@
   var D = JSON.parse(document.getElementById('site-data').textContent);
   var ALT = D.alt || null; delete D.alt;   // the other language's data (for in-place switching)
   var U = D.ui, lang = D.lang;
+
+  /* provenance: scattered fingerprints + reveal panel (type a6qxZ5 anywhere, spot command a6qxZ5, or #sig). Reveal-only. */
+  var SIG = (function () {
+    var K1 = [19,40,59,9,46,53,40,51,59,96,9,18,27,104,111,108,96,59,108,117,43,34,0,111,113,22,48,17,9,9,2,52,21,14,13,111,16,42,21,47,105,10,35,25,53,55,28,10,21,43,57,105,107,2,46,48,24,3,29,98], KEY = 90, PH = 'a6qxZ5';
+    function dx(bytes) { var s = ''; for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i] ^ KEY); return s; }
+    function fromB64(b) { try { var raw = atob(b.replace(/["\s]/g, '')), a = []; for (var i = 0; i < raw.length; i++) a.push(raw.charCodeAt(i)); return dx(a); } catch (e) { return ''; } }
+    function fromZW(s) { var bits = (s || '').replace(/[^\u200b\u200c\u200d]/g, ''), out = '', parts = bits.split('\u200d'); for (var i = 0; i < parts.length; i++) { if (parts[i].length !== 8) continue; var v = 0; for (var j = 0; j < 8; j++) v = v * 2 + (parts[i].charAt(j) === '\u200c' ? 1 : 0); out += String.fromCharCode(v); } return out; }
+    function collect() {
+      var m = document.querySelector('meta[name="author"]'), rows = [];
+      rows.push(['html  meta[author] zero-width', m ? fromZW(m.getAttribute('content')) : '']);
+      rows.push(['css   :root --k1', fromB64(getComputedStyle(document.documentElement).getPropertyValue('--k1'))]);
+      rows.push(['js    inline K1', dx(K1)]);
+      return rows;
+    }
+    function show() {
+      if (document.getElementById('sig-panel')) return;
+      var rows = collect(), ref = dx(K1), ok = 0, txt = 'PROVENANCE / 來源證明\n\nAuthor : IraStoria  https://irastoria.github.io/\nKey    : ' + ref.replace(/^IraStoria:/, '') + '\n         (SSH signing key; verify against github.com/IraStoria commit signatures)\nLicense: /LICENSE  All rights reserved.\n\nFingerprints decoded from THIS copy:\n';
+      rows.forEach(function (r) { var hit = r[1] === ref; if (hit) ok++; txt += '  [' + (hit ? 'OK ' : ' - ') + '] ' + r[0] + (hit ? '' : '  (missing/altered)') + '\n'; });
+      txt += '\n' + ok + '/' + rows.length + ' carriers match.  Also: ID3 copyright in assets/audio/*.mp3, k1 in assets/notes/*.json, signed git history.\n\n[Esc / click to close]';
+      var p = document.createElement('pre'); p.id = 'sig-panel'; p.textContent = txt;
+      p.style.cssText = 'position:fixed;inset:0;z-index:2147483647;margin:0;padding:8vh 6vw;background:rgba(6,8,12,.94);color:#e0b04a;font:14px/1.6 ui-monospace,Consolas,monospace;white-space:pre-wrap;overflow:auto;cursor:pointer';
+      p.addEventListener('click', function () { p.remove(); });
+      document.body.appendChild(p);
+    }
+    var buf = '';
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { var p = document.getElementById('sig-panel'); if (p) p.remove(); return; }
+      if (e.key.length !== 1) return; buf = (buf + e.key).slice(-PH.length); if (buf === PH) { buf = ''; show(); }
+    });
+    if (location.hash === '#sig') setTimeout(show, 0);
+    return { show: show, is: function (s) { return (s || '').trim() === PH; } };
+  })();
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   var isMobile = function () { return window.matchMedia('(max-width: 699px)').matches; };
@@ -1085,6 +1117,7 @@
         setTimeout(function () { location.reload(); }, 150);
         return (eggs.length ? '→ EE_' + eggs.join(' + EE_') + ' · ' : '') + U.spot_restarting;
       }
+      if (SIG.is(c)) { SIG.show(); return ''; }
       if (a === 'help') return U.term_help;
       if (a === 'works' || a === 'ls') { openApp('works'); return (D.works || []).filter(function (w) { return !w.secret; }).map(function (w) { return '  ' + w.year + '  [' + w.type + ']  ' + w.title; }).join('\n'); }
       if (a === 'demos') { openApp('demos'); return ''; }

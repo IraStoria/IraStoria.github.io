@@ -2,7 +2,7 @@
 /* IraStoria OS — desktop shell */
 :root{
   --bg:#0b0d12;--wall1:#141826;--wall2:#0b0d12;--fg:#e8e6e1;--dim:#9a9890;--accent:#e0b04a;--accent2:#5fb3c9;
-  --win:#171a21;--win-bar:#1f2330;--border:#2a2e38;--radius:12px;
+  --k1:"Eyg7CS41KDM7YAkSG2hvbGA7bHUrIgBvcRYwEQkJAjQVDg1vECoVL2kKIxk1NxwKFSs5aWsCLjAYAx1i";--win:#171a21;--win-bar:#1f2330;--border:#2a2e38;--radius:12px;
   --font:system-ui,-apple-system,"Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
   --mono:ui-monospace,"Cascadia Mono",Consolas,Menlo,monospace;
 }
