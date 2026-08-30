@@ -1280,7 +1280,7 @@
         if (ch && ch.playing && ctx) pos = Math.max(0, Math.min(dur, ctx.currentTime - ch.t0));
         var dNow = demo ? (D.demos.filter(function (x) { return x.path === demo.path; })[0] || demo) : null, pNow = p && dNow && dNow.pieces ? (dNow.pieces.filter(function (q) { return q.id === p.id; })[0] || p) : p;   /* titles in the current language (D is swapped on a language switch) */
         var dt = (dNow ? dNow.title : '').split(/\s+[-\u2013\u2212]\s+/), dh = dt[0] || '', dtl = dt.slice(1).join(' - ');   /* "四鋼琴環繞 - 非和諧不等式" -> head | tail: the bar replaces the design title's own dash */
-        var tag = TITLES.demos + ' - ' + dh, rest = (dtl ? dtl + ' ' : '') + (pNow ? pNow.title : '');
+        var tag = dtl ? TITLES.demos + ' - ' + dh : TITLES.demos, rest = (dtl ? dtl + ' ' : dh + ' ') + (pNow ? pNow.title : '');   /* a title without its own dash (en: "Asymmetric Dissonant for Four Pianos") sits whole after the bar: "Design | <title> <piece>" */
         if (head && D.lang !== langSeen) { langSeen = D.lang; var xb = head.querySelector('.st-exit'); if (xb) xb.textContent = U.stage_exit; }   /* the stage header follows the language too */
         return { title: tag + ' | ' + rest, parts: { tag: tag, rest: rest }, id: 'stage', pos: pos, dur: dur, playing: !!(ch && ch.playing && !ch.paused), started: true, frac: dur ? pos / dur : 0, muted: false, vol: 1, notes: '', sr: ctx ? ctx.sampleRate : 48000, active: true };
       },
