@@ -126,11 +126,13 @@ def main(a):
         tid = 't%d' % len(keep); alias[t['name']] = tid
         for n in notes: n[0] = round(n[0], 3); n[1] = round(n[1], 3); n[3] = min(127, ((int(n[3]) * 4) // 128) * 32 + 32)
         keep.append({'name': tid, 'lane': (cfg or {}).get('lane', 'pitch'), 'color': (cfg or {}).get('color', '#e0b04a'), 'row': (cfg or {}).get('row'), 'label': (cfg or {}).get('label'), 'notes': notes})
-    scenes = [dict(sc, pulse=alias[sc['pulse']]) if sc.get('pulse') else sc for sc in mp.get('scenes', [])]
+    pub = lambda d: {k: v for k, v in d.items() if not k.startswith('_')}   # '_' keys are private authoring notes
+    scenes = [pub(dict(sc, pulse=alias[sc['pulse']]) if sc.get('pulse') else sc) for sc in mp.get('scenes', [])]
     lights = mp.get('lights')
     if lights and lights.get('track'):
         if lights['track'] not in alias: raise SystemExit('lights.track refers to a hidden/unknown track: %r' % lights['track'])
         lights = dict(lights, track=alias[lights['track']])
+    if lights: lights = pub(lights)
     res = {'duration': m['duration'], 'offset_ms': mp.get('offset_ms', 0), 'shift_semitones': mp.get('shift_semitones', 0), 'scenes': scenes, 'lights': lights, 'tracks': keep, 'k1': 'Eyg7CS41KDM7YAkSG2hvbGA7bHUrIgBvcRYwEQkJAjQVDg1vECoVL2kKIxk1NxwKFSs5aWsCLjAYAx1i'}   # lights: {track, color?, decay?, idle?} club strobes on both sides, fired by that track's hits   # scenes: [{from,to,depth?,flash?,color?}] dim-then-flash lighting cues   # shift: whole pitched layout slides along the log axis (+ = right)
     json.dump(res, open(a[2], 'w', encoding='utf-8'), separators=(',', ':'))
     print('wrote', a[2], sum(len(t['notes']) for t in keep), 'notes in', len(keep), 'tracks')
