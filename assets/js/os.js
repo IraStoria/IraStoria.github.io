@@ -672,9 +672,9 @@
     // desktop caption doubles as a mini transport: pause / previous / next without opening the player window
     els.forEach(function (el) {
       var pp = el.querySelector('.np-pp'), pv = el.querySelector('.np-prev'), nx = el.querySelector('.np-next');
-      if (pp) pp.addEventListener('click', function () { player.toggle(); refresh(); });
-      if (pv) pv.addEventListener('click', function () { player.prev(); refresh(); });
-      if (nx) nx.addEventListener('click', function () { player.next(); refresh(); });
+      if (pp) pp.addEventListener('click', function () { if (stage.active()) stage.toggle(); else player.toggle(); refresh(); });   /* on the ADE stage the transport drives the four stems, never the background music */
+      if (pv) pv.addEventListener('click', function () { if (stage.active()) stage.prev(); else player.prev(); refresh(); });
+      if (nx) nx.addEventListener('click', function () { if (stage.active()) stage.next(); else player.next(); refresh(); });
       var mu = el.querySelector('.np-mute'); if (mu) mu.addEventListener('click', function () { player.toggleMute(); refresh(); });
       var t = el.querySelector('.np-title'); if (t) t.addEventListener('click', function () { openApp('player'); });
     });
@@ -785,9 +785,11 @@
      ensemble, no drift, no media elements); a limiter at the end keeps four full stems from clipping. ~75 MB of RAM per decoded stem, desktop only.
      Leaving: circles shrink -> line glides back down -> the OS music resumes and the play head runs to the left edge and slides back out. ---- */
   var STAGE_NEAR = 1.0, STAGE_MID = 0.75, STAGE_FAR = 0.10, STAGE_UMAX = 2.4, STAGE_K_IN = 1.3, STAGE_K_OUT = 1.4, STAGE_PAN_MAX = 0.8, STAGE_LP_MIN = 2500, STAGE_LP_MAX = 8000, STAGE_SPAN = 0.42;
-  var STAGE_LEAD_S = 6 * (60 / 120 / 2), STAGE_GROW_MS = 800, STAGE_GROW_DELAY_MS = 750, STAGE_REACH = 0.8, STAGE_GLOW_MIN = 90, STAGE_GLOW_MAX = 360, STAGE_BAR_MIN = 24, STAGE_BANDS = 64, STAGE_SPAN_X = 0.42, STAGE_SPAN_Y = 0.36, STAGE_LVL_GAIN = 2.2, STAGE_FLOOR_LV = 0.22, STAGE_SMOOTH = 0.15, STAGE_RELEASE = 0.8, STAGE_PUNCH = 0.6, STAGE_BAND_GAMMA = 1.8;   /* PUNCH: extra height when the instant level jumps above its slow average (an accent); BAND_GAMMA: band contrast */   /* SMOOTH: analyser smoothing (0.8 on the desktop bars — here low so hits jump); RELEASE: per-frame fall after a hit */   /* FLOOR_LV: band level treated as silence (the desktop bars keep a −96 dB floor; here an empty band must read as empty) */
+  var STAGE_LEAD_S = 6 * (60 / 120 / 2), STAGE_GROW_MS = 800, STAGE_GROW_DELAY_MS = 750, STAGE_REACH_X = 0.92, STAGE_REACH_Y = 0.8, STAGE_GLOW_MIN = 90, STAGE_GLOW_MAX = 360, STAGE_BAR_MIN = 24, STAGE_BANDS = 64, STAGE_SPAN_X = 0.42, STAGE_SPAN_Y = 0.36, STAGE_LVL_GAIN = 2.2, STAGE_FLOOR_LV = 0.22, STAGE_SMOOTH = 0.15, STAGE_RELEASE = 0.7, STAGE_LVL_RELEASE = 0.8, STAGE_PUNCH_RELEASE = 0.8, STAGE_PUNCH = 0.6, STAGE_BAND_GAMMA = 1.8, STAGE_F_LO = 45, STAGE_F_HI = 2500;   /* PUNCH: extra height when the instant level jumps above its slow average (an accent); BAND_GAMMA: band contrast */   /* SMOOTH: analyser smoothing (0.8 on the desktop bars — here low so hits jump); RELEASE: per-frame fall after a hit */   /* FLOOR_LV: band level treated as silence (the desktop bars keep a −96 dB floor; here an empty band must read as empty) */
   /* LEAD: one 6/8 bar at quarter = 120 (six eighths of 0.25 s). GROW_DELAY: the glows appear only once the bars have sunk and the line has moved up.
-     REACH: at 100 % the silhouette's tip gets this far along the way from its edge to the centre line. SPAN_X/Y: half-width of a silhouette along its edge (fraction of W / H). */
+     REACH_X/Y: at 100 % the left/right (top/bottom) silhouette's tip gets this far along the way from its edge to the centre. SPAN_X/Y: half-width of a silhouette along its edge (fraction of W / H).
+     F_LO..F_HI: the band range shown (no top octaves — a piano has nothing there); lows sit at the two ends of an edge, the busiest upper mids at its midpoint.
+     RELEASE / LVL_RELEASE / PUNCH_RELEASE: per-frame fall of the bands / the glow level / the accent boost — lower = snappier, accents stand out more. */
   var stage = (function () {
     var KEYS = ['C', 'B', 'L', 'R'], UNIT = { C: [0, -1], B: [0, 1], L: [-1, 0], R: [1, 0] };   /* stage space: the centre is (0,0), every piano one unit out along its axis = on its screen edge */
     var el = null, cv = null, g2 = null, ctx = null, ch = null, pieces = [], idx = -1, active = false, ducked = false, lx = -1, ly = -1, raf = 0, moved = false, hint = null, ttl = null, geo = null, growT0 = 0, growDir = 1, grow = 0, demo = null, master = null;
@@ -804,7 +806,7 @@
       growT0 = performance.now() + STAGE_GROW_DELAY_MS; growDir = 1; grow = 0; if (!raf) raf = requestAnimationFrame(tick);   /* the glows wait for the line */
     }
     function onMove(e) { var r = desktop.getBoundingClientRect(); lx = e.clientX - r.left; ly = e.clientY - r.top; if (!moved) { moved = true; if (hint && ch && ch.playing) hint.classList.add('gone'); } }
-    function onClick() { if (ctx && ctx.state !== 'running') ctx.resume().then(playing); }   /* autoplay refused (deep link without a gesture): first click starts it */
+    function onClick() { if (ctx && ctx.state !== 'running' && !(ch && ch.paused)) ctx.resume().then(playing); }   /* autoplay refused (deep link without a gesture): first click starts it */
     function layout() {
       if (!el) return; var W = desktop.clientWidth, H = desktop.clientHeight, by = wave.baseY() || H * 0.5;
       geo = { W: W, H: H, cx: W / 2, cy: by, ex: W / 2, ey: Math.min(by, H - by) };   /* ex/ey: one stage unit in px = from the centre to the left/right edge, to the top/bottom edge */
@@ -833,7 +835,7 @@
       }
       if (ctx.state === 'suspended') ctx.resume();
       if (ttl) ttl.textContent = p.title || '';
-      var mine = ch = { playing: false, t0: 0, dur: 0, piece: p };
+      var mine = ch = { playing: false, paused: false, t0: 0, dur: 0, piece: p };
       KEYS.forEach(function (k) {
         var g = ctx.createGain(), pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null, lp = ctx.createBiquadFilter(), an = ctx.createAnalyser();
         lp.type = 'lowpass'; lp.frequency.value = 20000; lp.Q.value = 0.5; g.gain.value = 0.0001; an.fftSize = 2048; an.minDecibels = -96; an.maxDecibels = 6; an.smoothingTimeConstant = STAGE_SMOOTH;   /* same dB window as the main spectrum, much less smoothing: accents must jump */
@@ -867,6 +869,13 @@
       if (ctx.state !== 'running') { ctx.resume().then(playing, function () { if (hint) { hint.textContent = U.stage_tap; hint.classList.remove('gone'); } }); if (hint) hint.textContent = U.stage_tap; }
       else playing();
     }
+    /* transport: pause = suspend the context (the clock stops, so pos and sync are kept); prev = restart this piece; next = next piece or leave */
+    function toggle() { if (!ctx || !ch || !ch.playing) return; if (ch.paused) { ch.paused = false; ctx.resume(); } else { ch.paused = true; ctx.suspend(); } }
+    function restart() {
+      if (!ctx || !ch || !ch.playing) return; var mine = ch, t0 = ctx.currentTime + 0.1; if (mine.paused) { mine.paused = false; ctx.resume(); }
+      KEYS.forEach(function (k) { var c = mine[k]; if (c.src) { c.src.onended = null; try { c.src.stop(); } catch (e) {} } var s = ctx.createBufferSource(); s.buffer = c.buf; s.connect(c.g); s.start(t0); c.src = s; if (k === 'C') s.onended = function () { if (ch === mine) next(); }; });
+      mine.t0 = t0;
+    }
     function playing() { if (!ch || !ch.playing) return; if (hint) { hint.textContent = U.stage_hint; if (moved) hint.classList.add('gone'); } if (!raf) raf = requestAnimationFrame(tick); }
     /* distance -> volume: u = distance in stage units (1 = at the centre). 0..1: 100 % easing down to 75 %; past the centre: 75 % falling
        ever faster to 10 % at STAGE_UMAX (the far corner) */
@@ -875,6 +884,18 @@
       var q = Math.min(1, (u - 1) / (STAGE_UMAX - 1)); return STAGE_MID - (STAGE_MID - STAGE_FAR) * Math.pow(q, STAGE_K_OUT);
     }
     function easeOut(x) { return 1 - Math.pow(1 - x, 3); }
+    /* log-spaced bands between STAGE_F_LO and STAGE_F_HI (peak per band, interpolated when narrower than a bin); index 0 = lowest */
+    function stageBands(an, n) {
+      var data = new Uint8Array(an.frequencyBinCount); an.getByteFrequencyData(data);
+      var hz = (ctx ? ctx.sampleRate : 48000) / 2 / data.length, lo = STAGE_F_LO / hz, hi = Math.min(data.length - 1, STAGE_F_HI / hz), ratio = hi / lo, out = new Array(n);
+      for (var i = 0; i < n; i++) {
+        var a = lo * Math.pow(ratio, i / n), b = lo * Math.pow(ratio, (i + 1) / n), v;
+        if (b - a < 1) { var k = Math.floor(a), f = a - k; v = data[k] * (1 - f) + (data[Math.min(k + 1, data.length - 1)] || 0) * f; }
+        else { v = 0; for (var q = Math.floor(a); q < b && q < data.length; q++) v = Math.max(v, data[q]); }
+        out[i] = Math.pow(v / 255, 0.7);
+      }
+      return out;
+    }
     function tick() {
       raf = 0; if (!el || !geo) return;
       var now = performance.now(), gp = Math.max(0, Math.min(1, (now - growT0) / STAGE_GROW_MS)); grow = growDir > 0 ? easeOut(gp) : 1 - easeOut(gp);
@@ -888,9 +909,9 @@
         c.rel = (g - STAGE_FAR) / (STAGE_NEAR - STAGE_FAR);   /* 0 at the floor, 1 at full */
         /* live level (RMS of what this piano is putting out): fast attack, slower release, so the glow breathes with the playing */
         c.an.getByteTimeDomainData(c.td); var s = 0; for (var i = 0; i < c.td.length; i++) { var v = (c.td[i] - 128) / 128; s += v * v; }
-        var rms = Math.min(1, Math.sqrt(s / c.td.length) * STAGE_LVL_GAIN); c.lvl = rms > c.lvl ? rms : c.lvl * 0.9;
-        c.avg = (c.avg || 0) * 0.97 + rms * 0.03; var pk = Math.max(0, Math.min(1, (rms - c.avg) * 3)); c.punch = pk > (c.punch || 0) ? pk : (c.punch || 0) * 0.85;   /* accent detector: instant level well above its slow average */
-        var lv = barLevels(c.an, STAGE_BANDS); for (var q = 0; q < lv.length; q++) { var z = (lv[q] - STAGE_FLOOR_LV) / (1 - STAGE_FLOOR_LV); lv[q] = z > 0 ? Math.pow(z, STAGE_BAND_GAMMA) : 0; } if (c.bands.length !== STAGE_BANDS) c.bands = lv; else for (var b = 0; b < STAGE_BANDS; b++) c.bands[b] = lv[b] > c.bands[b] ? lv[b] : Math.max(lv[b], c.bands[b] * STAGE_RELEASE);   /* instant attack, quick release: a sforzando reads as a jump */
+        var rms = Math.min(1, Math.sqrt(s / c.td.length) * STAGE_LVL_GAIN); c.lvl = rms > c.lvl ? rms : c.lvl * STAGE_LVL_RELEASE;
+        c.avg = (c.avg || 0) * 0.97 + rms * 0.03; var pk = Math.max(0, Math.min(1, (rms - c.avg) * 3)); c.punch = pk > (c.punch || 0) ? pk : (c.punch || 0) * STAGE_PUNCH_RELEASE;   /* accent detector: instant level well above its slow average */
+        var lv = stageBands(c.an, STAGE_BANDS); for (var q = 0; q < lv.length; q++) { var z = (lv[q] - STAGE_FLOOR_LV) / (1 - STAGE_FLOOR_LV); lv[q] = z > 0 ? Math.pow(z, STAGE_BAND_GAMMA) : 0; } if (c.bands.length !== STAGE_BANDS) c.bands = lv; else for (var b = 0; b < STAGE_BANDS; b++) c.bands[b] = lv[b] > c.bands[b] ? lv[b] : Math.max(lv[b], c.bands[b] * STAGE_RELEASE);   /* instant attack, quick release: a sforzando reads as a jump */
       });
       /* canvas: per piano, from its screen edge — a radial glow at the edge midpoint (size = volume, pumped by the live level) and the
          spectrum as a stroke-less glow silhouette rising toward the centre: lows at the midpoint, highs toward the corners, mirrored.
@@ -905,12 +926,12 @@
         g2.fillStyle = grd; g2.fillRect(x - R, y - R, 2 * R, 2 * R);
         if (!c || !c.bands.length) return;
         var horiz = !!u[0], dist = horiz ? geo.ex : geo.ey, S = horiz ? geo.H * STAGE_SPAN_Y : geo.W * STAGE_SPAN_X;   /* S: half-width along the edge */
-        var amp = (STAGE_BAR_MIN + (STAGE_REACH * dist - STAGE_BAR_MIN) * rel) * grow * (1 + STAGE_PUNCH * (c.punch || 0)), n = STAGE_BANDS, nx_ = -u[0], ny_ = -u[1], tx = -u[1], ty = u[0];   /* (nx_,ny_): inward normal; (tx,ty): along the edge */
+        var amp = (STAGE_BAR_MIN + ((horiz ? STAGE_REACH_X : STAGE_REACH_Y) * dist - STAGE_BAR_MIN) * rel) * grow * (1 + STAGE_PUNCH * (c.punch || 0)), n = STAGE_BANDS, nx_ = -u[0], ny_ = -u[1], tx = -u[1], ty = u[0];   /* (nx_,ny_): inward normal; (tx,ty): along the edge */
         function sm(i) { i = Math.max(0, Math.min(n - 1, i)); var p = c.bands[Math.max(0, i - 1)], q = c.bands[i], r = c.bands[Math.min(n - 1, i + 1)]; return (p + 2 * q + r) / 4 * amp; }
-        function path() {   /* from one end of the edge over the band tops to the other end, closed along the edge; band 0 (lows) sits at the midpoint */
+        function path() {   /* from one end of the edge over the band tops to the other end, closed along the edge; lows at both ends, upper mids at the midpoint */
           g2.beginPath(); g2.moveTo(x + tx * S, y + ty * S);
           for (var s = 0; s <= 2 * n; s++) {
-            var i = Math.abs(s - n), off = (s - n) / n * S, h = sm(i);   /* s runs -n..n along the edge; band index mirrors around the midpoint */
+            var i = n - 1 - Math.abs(s - n), off = (s - n) / n * S, h = sm(i);   /* s runs -n..n along the edge; band index mirrors around the midpoint: lows at the ends, the top band (upper mids) at the midpoint */
             g2.lineTo(x + tx * off + nx_ * h, y + ty * off + ny_ * h);
           }
           g2.lineTo(x - tx * S, y - ty * S); g2.closePath();
@@ -950,11 +971,11 @@
       state: function () {
         var p = ch && ch.piece, pos = 0, dur = ch ? ch.dur : 0;
         if (ch && ch.playing && ctx) pos = Math.max(0, Math.min(dur, ctx.currentTime - ch.t0));
-        return { title: TITLES.demos + ' - ' + (demo ? demo.title : '') + ' | ' + (p ? p.title : ''), id: 'stage', pos: pos, dur: dur, playing: !!(ch && ch.playing), started: true, frac: dur ? pos / dur : 0, muted: false, vol: 1, notes: '', sr: ctx ? ctx.sampleRate : 48000, active: true };
+        return { title: TITLES.demos + ' - ' + (demo ? demo.title : '') + ' | ' + (p ? p.title : ''), id: 'stage', pos: pos, dur: dur, playing: !!(ch && ch.playing && !ch.paused), started: true, frac: dur ? pos / dur : 0, muted: false, vol: 1, notes: '', sr: ctx ? ctx.sampleRate : 48000, active: true };
       },
       analyser: function () { return master; }
     };
-    return { start: start, stop: function () { stop(false); }, active: function () { return active; }, src: function () { return src; },
+    return { start: start, stop: function () { stop(false); }, active: function () { return active; }, src: function () { return src; }, toggle: toggle, prev: restart, next: function () { if (active) next(); },
              debug: function () { var o = { active: active, ctx: ctx ? ctx.state : '-', idx: idx, playing: !!(ch && ch.playing), pos: ch && ch.playing && ctx ? +(ctx.currentTime - ch.t0).toFixed(2) : 0, dur: ch ? +ch.dur.toFixed(1) : 0, grow: +grow.toFixed(2), lx: Math.round(lx), ly: Math.round(ly), geo: geo }; if (ch) KEYS.forEach(function (k) { var c = ch[k]; o[k] = { buf: !!c.buf, g: +c.g.gain.value.toFixed(3), pan: c.pan ? +c.pan.pan.value.toFixed(2) : null, lp: Math.round(c.lp.frequency.value) }; }); return o; } };
   })();
 
