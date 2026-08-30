@@ -1178,7 +1178,7 @@
       });
     },
     demos: function (body) {
-      body.innerHTML = '<p class="d">' + esc(U.demos_intro) + '</p><ul class="list">' + D.demos.map(function (d) {
+      body.innerHTML = '<p class="d">' + esc(U.demos_intro) + '</p><ul class="list">' + D.demos.filter(function (d) { return !(PHONE && d.native); }).map(function (d) {   /* shell-native demos (the ADE stage) are desktop-only: the phone list does not offer them */
         return '<li><span class="badge demo">' + esc(U.type_demo) + '</span><div style="flex:1"><div class="t">' + esc(d.title) + ' <span class="meta">' + esc(d.year || '') + '</span></div><div class="d">' + esc(d.desc) + '</div>' +
           '<div class="meta" style="margin:.3rem 0">' + esc(d.platform === 'desktop' ? U.platform_desktop : U.platform_all) + '</div>' +
           '<button class="btn" data-demo="' + esc(d.path) + '">' + esc(d.native ? U.start_stage : U.open_demo) + '</button></div></li>';
@@ -1569,7 +1569,7 @@
     // a demo opens as a full-screen panel hosting its page in an iframe (same origin) — like the desktop window: the moment it makes sound the
     // background music ducks (position kept) and comes back when the panel is closed; a section player inside it drives the line + caption
     function openDemo(id) {
-      var d = demoOf(id); if (!d) return;
+      var d = demoOf(id); if (!d || d.native) return;   /* shell-native demos are desktop-only */
       if (!unlocked) unlock(true);
       var key = 'demo-' + id, top = stack[stack.length - 1];
       if (top && top.dataset.app === key) return;
