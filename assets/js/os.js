@@ -94,16 +94,16 @@
     if (sw) { sw.setAttribute('data-lang-switch', other); sw.setAttribute('href', '../' + other + '/'); sw.title = U.lang_switch; sw.setAttribute('aria-label', U.lang_switch); sw.setAttribute('aria-checked', lang === 'zh' ? 'true' : 'false'); }   // the knob itself follows body[data-lang] via CSS
     TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, terminal: U.app_terminal, updates: U.app_updates };
     if (PHONE && phone) phone.relabel();
-    document.querySelectorAll('.icon[data-app]').forEach(function (b) { var t = b.querySelector('span:last-child'); if (t) t.textContent = TITLES[b.getAttribute('data-app')]; });
-    document.querySelectorAll('#dock button[data-app]').forEach(function (b) { var a = b.getAttribute('data-app'); b.innerHTML = '<span>' + GLYPH[a] + '</span>' + esc(TITLES[a]); });
+    document.querySelectorAll('.icon[data-app]').forEach(function (b) { var t = b.querySelector('span:last-child'); if (t) t.textContent = TITLES[b.getAttribute('data-app')]; var g = b.querySelector('.glyph'); if (g && ICON[b.getAttribute('data-app')]) g.innerHTML = ICON[b.getAttribute('data-app')]; });
+    document.querySelectorAll('#dock button[data-app]').forEach(function (b) { var a = b.getAttribute('data-app'); b.innerHTML = '<span>' + (ICON[a] || GLYPH[a]) + '</span>' + esc(TITLES[a]); });
     var hp = document.querySelectorAll('.hero-text p'); if (hp[0]) hp[0].textContent = D.hero_intro; if (hp[1]) hp[1].textContent = '// ' + U.desk_hint;
     var st = $('#sticky .sticky-text'); if (st) st.textContent = U.sticky;
-    var uh = $('#updates .upd-head span'); if (uh) uh.innerHTML = '<span class="wg">💬</span> ' + esc(U.app_updates);
+    var uh = $('#updates .upd-head span'); if (uh) uh.innerHTML = '<span class="wg">' + ICON.updates + '</span> ' + esc(U.app_updates);
     var ub = $('#upd-hide'); if (ub) { ub.title = U.updates_hide; ub.setAttribute('aria-label', U.updates_hide); }
     var ul = $('#upd-log'); if (ul) ul.innerHTML = (D.updates || []).length ? D.updates.map(function (u) { return '<div class="msg"><time>' + esc(u.date) + '</time><p>' + esc(u.text) + '</p></div>'; }).join('') : '<p class="note">' + esc(U.updates_empty) + '</p>';
     document.querySelectorAll('.np-cap .np-lbl').forEach(function (l) { var stt = l.querySelector('.np-state'); l.textContent = U.player_now + (stt ? ' · ' : ''); if (stt) l.appendChild(stt); });
     caption.reset();
-    Object.keys(wins).forEach(function (a) { var w = wins[a]; if (!TITLES[a]) return; w.setAttribute('aria-label', TITLES[a]); var tt = w.querySelector('.win-title'); if (tt) tt.innerHTML = '<span class="wg">' + GLYPH[a] + '</span> ' + esc(TITLES[a]); var ft = w.querySelector('.win-foot a'); if (ft) ft.textContent = U.open_page; if (RENDER[a]) RENDER[a](w.querySelector('.win-body'), w); });
+    Object.keys(wins).forEach(function (a) { var w = wins[a]; if (!TITLES[a]) return; w.setAttribute('aria-label', TITLES[a]); var tt = w.querySelector('.win-title'); if (tt) tt.innerHTML = '<span class="wg">' + (ICON[a] || GLYPH[a]) + '</span> ' + esc(TITLES[a]); var ft = w.querySelector('.win-foot a'); if (ft) ft.textContent = U.open_page; if (RENDER[a]) RENDER[a](w.querySelector('.win-body'), w); });
   }
 
   // ============================================================ boot sequence
@@ -717,16 +717,21 @@
   var TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, terminal: U.app_terminal, updates: U.app_updates };
   var PAGES = { works: 'works/', demos: 'demos/', articles: 'articles/', about: 'about/' };
   var GLYPH = { works: '🎼', demos: '🎛️', player: '▶️', articles: '📝', about: '👤', terminal: '🔍', updates: '💬' };   /* desktop shell + window titles */
-  /* phone shell: monochrome line icons instead of emoji (one tile colour, white stroke) */
+  /* both shells: monochrome line icons instead of emoji (desktop icons / dock / window titles / search, phone tiles / dock) */
   var ICON = {
-    works: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18M3 12h18M3 17h18"/><circle cx="14" cy="15.5" r="2.3" fill="#0b0d12"/><path d="M16.3 15.5V5.5"/></svg>',
-    demos: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2" fill="#0b0d12"/><circle cx="15" cy="12" r="2" fill="#0b0d12"/><circle cx="8" cy="18" r="2" fill="#0b0d12"/></svg>',
-    player: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" stroke-linejoin="round"/></svg>',
-    articles: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke-linejoin="round"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>',
-    updates: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" stroke-linejoin="round"/></svg>',
-    about: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>',
-    terminal: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>',
+    works: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18M3 12h18M3 17h18"/><circle cx="14" cy="15.5" r="2.3" fill="#0b0d12"/><path d="M16.3 15.5V5.5"/></svg>',
+    demos: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2" fill="#0b0d12"/><circle cx="15" cy="12" r="2" fill="#0b0d12"/><circle cx="8" cy="18" r="2" fill="#0b0d12"/></svg>',
+    player: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" stroke-linejoin="round"/></svg>',
+    articles: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke-linejoin="round"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>',
+    updates: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" stroke-linejoin="round"/></svg>',
+    about: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>',
+    terminal: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>',
+    lang: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c3 3 3 14 0 17M12 3.5c-3 3-3 14 0 17"/></svg>',
+    music: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>',
   };
+  /* first paint: the template ships empty glyph slots (no emoji anywhere); the language swap re-fills them */
+  document.querySelectorAll('.icon[data-app] .glyph').forEach(function (g) { var a = g.parentNode.getAttribute('data-app'); if (ICON[a]) g.innerHTML = ICON[a]; });
+  (function () { var w = $('#updates .upd-head .wg'); if (w) w.innerHTML = ICON.updates; })();
 
   function initDesktop() {
     if (initDesktop.did) return; initDesktop.did = true;
@@ -744,7 +749,7 @@
     document.querySelectorAll('.icon[data-app]').forEach(function (b) { b.addEventListener('click', function () { openApp(b.getAttribute('data-app')); }); });
     // dock
     APPS.forEach(function (a) {
-      var b = document.createElement('button'); b.setAttribute('data-app', a); b.innerHTML = '<span>' + GLYPH[a] + '</span>' + esc(TITLES[a]);
+      var b = document.createElement('button'); b.setAttribute('data-app', a); b.innerHTML = '<span>' + (ICON[a] || GLYPH[a]) + '</span>' + esc(TITLES[a]);
       b.addEventListener('click', function () { var w = wins[a]; if (w && !w.classList.contains('minimized') && w.classList.contains('focus')) minimize(a); else openApp(a); });
       dock.appendChild(b);
     });
@@ -786,7 +791,7 @@
     var d = D.demos.filter(function (x) { return x.path === id; })[0]; if (!d) return;
     var key = 'demo-' + id.replace(/[^a-z0-9-]/gi, '-'), w = wins[key];
     if (!w) {
-      w = createWindow(key, { title: d.title, glyph: '🎛️', size: [900, 640], page: '../' + d.path + '/', render: function (body, win) {
+      w = createWindow(key, { title: d.title, glyph: ICON.demos, size: [900, 640], page: '../' + d.path + '/', render: function (body, win) {
         body.classList.add('frame');
         var f = document.createElement('iframe'); f.className = 'demo-frame'; f.src = '../' + d.path + '/' + (d.ver ? '?v=' + d.ver : ''); f.title = d.title; f.setAttribute('allow', 'autoplay; fullscreen'); f.allowFullscreen = true;
         f.addEventListener('load', function () { watchAudio(f, win); setTimeout(function () { ext.register(f, win); }, 300); });   /* the demo script sets window.sectionPlayer right after load */
@@ -806,7 +811,7 @@
   }
   function createWindow(app, opts) {
     opts = opts || {};
-    var title = opts.title || TITLES[app], glyph = opts.glyph || GLYPH[app];
+    var title = opts.title || TITLES[app], glyph = opts.glyph || ICON[app] || GLYPH[app];
     var w = document.createElement('section'); w.className = 'win'; w.setAttribute('data-app', app); w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', title);
     var size = opts.size || { works: [560, 520], demos: [520, 420], player: [480, 620], articles: [480, 380], about: [520, 460], terminal: [560, 380] }[app];
     var vw = window.innerWidth, vh = window.innerHeight - 30;
@@ -985,7 +990,7 @@
     function mount(b) {
       body = b;
       body.innerHTML = '<div class="player"><div class="art"><canvas id="pl-viz"></canvas><div class="np">' + esc(U.player_now) + '<b id="pl-title">—</b><span id="pl-sub"></span></div></div>' +
-        '<div class="ctl"><button id="pl-prev" aria-label="prev"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zM19 5v14L9 12z"/></svg></button><button class="play" id="pl-play" aria-label="play/pause"><svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg><svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button><button id="pl-next" aria-label="next"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2zM5 5v14l10-7z"/></svg></button><div class="seek" id="pl-seek"><i></i></div><span class="time" id="pl-time">0:00 / 0:00</span><button class="mute" id="pl-mute" aria-label="mute"><svg class="i-snd" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 8.5a4.5 4.5 0 0 1 0 7M18.5 6a8 8 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><svg class="i-mute" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9l5 6M21 9l-5 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button><input type="range" class="vol" id="pl-vol" min="0" max="1" step="0.01" aria-label="volume"></div>' +
+        '<div class="ctl"><button id="pl-prev" aria-label="prev"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zM19 5v14L9 12z"/></svg></button><button class="play" id="pl-play" aria-label="play/pause"><svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg><svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button><button id="pl-next" aria-label="next"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2zM5 5v14l10-7z"/></svg></button><div class="seek" id="pl-seek"><i></i></div><span class="time" id="pl-time">0:00 / 0:00</span><button class="mute" id="pl-mute" aria-label="mute"><svg class="i-snd" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 8.5a4.5 4.5 0 0 1 0 7M18.5 6a8 8 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><svg class="i-mute" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9l5 6M21 9l-5 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button><input type="range" class="vol" id="pl-vol" min="0" max="1" step="0.01" aria-label="volume"></div>' +
         '<div id="pl-ext"></div><ul class="list pl" id="pl-list">' + list.map(function (t, i) { return t.secret ? '' : '<li data-i="' + i + '"><span class="meta">' + ('0' + (i + 1)).slice(-2) + '</span><div><div class="t">' + esc(t.title) + '</div><div class="d">' + esc(t.desc || '') + '</div></div></li>'; }).join('') + '</ul>' +
         (tracks.length ? '' : '<p class="note">' + esc(U.player_empty) + '</p>') + '</div>';
       ui = { title: $('#pl-title', body), sub: $('#pl-sub', body), play: $('#pl-play', body), seek: $('#pl-seek', body), bar: $('#pl-seek i', body), time: $('#pl-time', body), ext: $('#pl-ext', body), list: $('#pl-list', body), viz: $('#pl-viz', body), mute: $('#pl-mute', body), vol: $('#pl-vol', body) };
@@ -1166,12 +1171,12 @@
   var terminal = (function () {
     var APP_KEYS = ['works', 'demos', 'player', 'articles', 'updates', 'about', 'lang'];
     function label(k) { return k === 'lang' ? (U.lang_switch || 'Language') : (TITLES[k] || k); }
-    function glyph(k) { return k === 'lang' ? '🌐' : (GLYPH[k] || ''); }
+    function glyph(k) { return ICON[k] || GLYPH[k] || ''; }
     function results(q) {
       q = q.trim().toLowerCase(); var out = [];
       if (!q || q.charAt(0) === '-') return out;
       APP_KEYS.forEach(function (k) { var l = label(k); if (l.toLowerCase().indexOf(q) >= 0 || k.indexOf(q) >= 0) out.push({ t: 'app', k: k, g: glyph(k), l: l, sub: U.spot_app }); });
-      (D.works || []).forEach(function (w) { if (!w.secret && (w.title || '').toLowerCase().indexOf(q) >= 0) out.push({ t: 'work', k: w.id, g: w.type === 'music' ? '🎵' : '🎛️', l: w.title, sub: w.year + ' · ' + w.type }); });
+      (D.works || []).forEach(function (w) { if (!w.secret && (w.title || '').toLowerCase().indexOf(q) >= 0) out.push({ t: 'work', k: w.id, g: w.type === 'music' ? ICON.music : ICON.demos, l: w.title, sub: w.year + ' · ' + w.type }); });
       return out.slice(0, 7);
     }
     function pick(r) { if (r.t === 'app') { if (r.k === 'lang') switchLang(); else openApp(r.k); } else if (r.t === 'work') { openApp('works'); } }
@@ -1201,7 +1206,7 @@
     }
     // shared UI: one field, a hit list, a message line (used inside the phone app panel and by the desktop overlay)
     function build(host, onDone) {
-      host.innerHTML = '<div class="spot-box"><div class="spot-in"><span class="spot-ico">🔍</span><input class="spot-q" autocomplete="off" spellcheck="false" placeholder="' + esc(U.spot_placeholder) + '" aria-label="' + esc(U.app_terminal) + '"></div><div class="spot-list"></div><pre class="spot-msg" hidden></pre></div>';
+      host.innerHTML = '<div class="spot-box"><div class="spot-in"><span class="spot-ico">' + ICON.terminal + '</span><input class="spot-q" autocomplete="off" spellcheck="false" placeholder="' + esc(U.spot_placeholder) + '" aria-label="' + esc(U.app_terminal) + '"></div><div class="spot-list"></div><pre class="spot-msg" hidden></pre></div>';
       var q = $('.spot-q', host), list = $('.spot-list', host), msg = $('.spot-msg', host), sel = 0, hits = [];
       function render() {
         hits = results(q.value); sel = Math.min(sel, Math.max(0, hits.length - 1));
@@ -1229,7 +1234,7 @@
     function ensureEl() {
       if (el) return;
       el = document.createElement('div'); el.className = 'spot'; el.hidden = true; el.innerHTML = '<div class="spot-back"></div><div class="spot-host"></div>';
-      (desktop || document.body).appendChild(el);
+      (PHONE ? $('#phone') : desktop || document.body).appendChild(el);   /* phone: the desktop element is detached — mount inside the phone shell */
       ui = terminal.build($('.spot-host', el), function () { close(); });
       $('.spot-back', el).addEventListener('click', close);
     }
@@ -1270,7 +1275,7 @@
     // lock-screen notifications: the newest recent updates (updates.json) as iOS-style cards; the full list lives in the 更新 app
     function renderNotes() {
       if (!notes) return;
-      notes.innerHTML = (D.updates || []).slice(0, 3).map(function (u) { return '<div class="ph-note"><div class="ph-note-h"><span><span class="wg">💬</span> ' + esc(U.app_updates) + '</span><time>' + esc(u.date) + '</time></div><p>' + esc(u.text) + '</p></div>'; }).join('');
+      notes.innerHTML = (D.updates || []).slice(0, 3).map(function (u) { return '<div class="ph-note"><div class="ph-note-h"><span><span class="wg">' + ICON.updates + '</span> ' + esc(U.app_updates) + '</span><time>' + esc(u.date) + '</time></div><p>' + esc(u.text) + '</p></div>'; }).join('');
     }
     function markLang() { if (langPick) langPick.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-l') === lang); }); }
     function init() {
@@ -1285,6 +1290,11 @@
       lock.addEventListener('pointerup', function (e) { if (!powered) return; if (y0 === null || y0 - e.clientY > 40 || Math.abs(y0 - e.clientY) < 8) unlock(); y0 = null; });
       var skip = false; try { skip = (navType !== 'reload' && sessionStorage.getItem('unlocked') === '1') || /[?&]app=/.test(location.search); } catch (e) {}   // refresh -> lock screen; returning from a sub-page -> straight to home
       if (skip) unlock(true);
+      // home screen: pull down (>70 px, mostly vertical) opens the search overlay — like iOS — and the field is focused inside the gesture so the keyboard appears
+      var hy = null, hx = null;
+      home.addEventListener('pointerdown', function (e) { if (stack.length || e.target.closest('.ph-app, .np-ctl, .ph-ls, .ph-dock')) { hy = null; return; } hy = e.clientY; hx = e.clientX; });
+      home.addEventListener('pointerup', function (e) { if (hy === null) return; var dy = e.clientY - hy, dx = Math.abs(e.clientX - hx); hy = null; if (dy > 70 && dx < 60) spot.open(); });
+      home.addEventListener('pointercancel', function () { hy = null; });
       window.addEventListener('popstate', function () { if (stack.length) close(true); });
       var m = /[?&]app=([a-z]+)/.exec(location.search);
       if (m && APPS.indexOf(m[1]) >= 0) open(m[1]);
@@ -1319,6 +1329,7 @@
     }
     function open(app) {
       if (!unlocked) unlock(true);
+      if (app === 'terminal') return spot.open();   /* search is the Spotlight overlay here too (opened in the tap / pull gesture so the keyboard comes up) */
       var top = stack[stack.length - 1];
       if (top && top.dataset.app === app) return;
       var pnl = document.createElement('section'); pnl.className = 'papp'; pnl.dataset.app = app; pnl.setAttribute('role', 'dialog');

@@ -67,7 +67,13 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .icons{position:absolute;top:48px;left:16px;display:grid;grid-template-columns:repeat(2,76px);gap:6px 4px;z-index:5}
 @media(min-width:700px){.icons{grid-template-columns:76px}}
 .icon{background:transparent;border:0;border-radius:10px;padding:.5rem .2rem;display:flex;flex-direction:column;align-items:center;gap:.25rem;cursor:pointer;font-size:12px;color:var(--fg);text-shadow:0 1px 2px #000}
-.icon .glyph{font-size:30px;line-height:1;filter:drop-shadow(0 4px 8px rgba(0,0,0,.5))}
+/* line icons (svg.ico): stroke = currentColor; sized by the context */
+.ico{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;display:inline-block;vertical-align:-.15em}
+.icon .glyph{width:54px;height:44px;display:flex;align-items:center;justify-content:center;color:#f2f1ee;filter:drop-shadow(0 3px 6px rgba(0,0,0,.6))}   /* desktop: bare line icon, no tile */
+.icon .glyph .ico{width:34px;height:34px;stroke-width:1.5}
+.dock button .ico{width:15px;height:15px}.win-title .ico{width:15px;height:15px;margin-right:.1em}.upd-head .ico{width:14px;height:14px}
+.spot-ico .ico{width:22px;height:22px;display:block}.spot-hit .g .ico{width:18px;height:18px;display:block;margin:auto}
+.ph-note-h .ico{width:12px;height:12px}
 .icon:hover,.icon:focus-visible{background:rgba(255,255,255,.08);outline:none}
 
 .hero-text{position:absolute;right:5vw;top:14vh;max-width:min(520px,70vw);text-align:right;z-index:1;pointer-events:none}
@@ -324,6 +330,8 @@ body[data-lang="zh"] .ph-ls .ls-knob{transform:translateX(26px)}
 .spot{position:absolute;inset:0;z-index:120}
 .spot-back{position:absolute;inset:0;background:rgba(6,8,12,.35)}
 .spot-host{position:absolute;left:50%;top:18%;transform:translateX(-50%);width:min(620px,92vw)}
+.phone .spot-host{top:calc(52px + env(safe-area-inset-top));width:calc(100% - 24px)}.phone .spot-q{font-size:18px}.phone .spot-back{background:rgba(6,8,12,.55)}
+.ph-home{touch-action:none}
 .spot-box{background:rgba(32,35,46,.92);backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,.12);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.55);overflow:hidden}
 .spot-in{display:flex;align-items:center;gap:.7rem;padding:.75rem 1rem}
 .spot-ico{font-size:22px;opacity:.75}
@@ -344,6 +352,7 @@ body[data-lang="zh"] .ph-ls .ls-knob{transform:translateX(26px)}
 .phone *:not(.ph-grid,.ph-hero,.ph-dock,.ph-ls,.ph-status,.ph-veil,.ph-power-scr,.ph-power-scr *,.np-title,.np-title *,.np-lbl,.ls-track,.ls-knob,canvas){transition:color .7s ease,text-shadow .7s ease,border-color .7s ease,filter .7s ease}
 body.hb .desktop *:not(.sticky,.sticky *,.np-title,.np-title *,canvas),
 body.hb .phone *:not(.np-title,.np-title *,canvas){color:#3dff7a;text-shadow:0 0 12px rgba(61,255,122,.45);border-color:rgba(61,255,122,.35)}
+body.hb .ico{color:#3dff7a}
 body.hb .desktop .glyph,body.hb .phone .glyph,body.hb .dock button>span,body.hb .ph-app .ic .wg,body.hb .spot-hit .g{filter:grayscale(1) sepia(1) saturate(6) hue-rotate(85deg) brightness(1.15) drop-shadow(0 0 6px rgba(61,255,122,.7))}
 body.hb .ls-knob{background:#3dff7a;box-shadow:0 0 8px rgba(61,255,122,.8)}body.hb .ls-track{border-color:rgba(61,255,122,.6)}
 body.hb-t .np-cap .np-title{color:#3dff7a;text-shadow:0 0 14px rgba(61,255,122,.6),0 2px 10px rgba(0,0,0,.6)}
