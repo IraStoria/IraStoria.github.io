@@ -937,8 +937,8 @@
           g2.lineTo(x - tx * S, y - ty * S); g2.closePath();
         }
         var top = amp, lin = g2.createLinearGradient(x, y, x + nx_ * top, y + ny_ * top);
-        var a0 = 0.14 + 0.26 * rel + 0.12 * lvl;   /* translucent even at the edge: the wallpaper and icons stay visible through the light */
-        lin.addColorStop(0, 'rgba(232,190,90,' + a0.toFixed(3) + ')'); lin.addColorStop(0.45, 'rgba(232,190,90,' + (a0 * 0.45).toFixed(3) + ')'); lin.addColorStop(1, 'rgba(240,214,140,' + (a0 * 0.08).toFixed(3) + ')');
+        var a0 = 0.22 + 0.28 * rel + 0.12 * lvl;   /* the body glows evenly from the edge up; only the top quarter fades, so the shape never looks hollow when it bounces */
+        lin.addColorStop(0, 'rgba(232,190,90,' + a0.toFixed(3) + ')'); lin.addColorStop(0.72, 'rgba(232,190,90,' + (a0 * 0.8).toFixed(3) + ')'); lin.addColorStop(1, 'rgba(240,214,140,' + (a0 * 0.22).toFixed(3) + ')');
         g2.fillStyle = lin;
         try { g2.filter = 'blur(' + (12 + 10 * rel).toFixed(0) + 'px)'; } catch (e) {}   /* one soft pass only: two passes read as two stacked outlines */
         path(); g2.fill();
