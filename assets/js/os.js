@@ -498,18 +498,21 @@
   }
   function makeWave(cv, yRatio, withNotes) {
     var wf = withNotes ? makeWaterfall() : null;
-    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000, hbMix = 0, HB_MORPH_MS = 700, liveT0 = 0, GRID_FADE_MS = 3000, AMB = '224,176,74', GRN = '61,255,122', SLATE = '96,104,122', DIMG = '30,120,62';   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
+    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000, squash = 1, squashTo = 1, SQUASH_MS = 600, yCur = yRatio, yTo = yRatio, Y_MS = 700, hbMix = 0, HB_MORPH_MS = 700, liveT0 = 0, GRID_FADE_MS = 3000, AMB = '224,176,74', GRN = '61,255,122', SLATE = '96,104,122', DIMG = '30,120,62';   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
     function grad(y0, y1, rgb, a0, a1) { var g = g2.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + rgb + ',' + a0 + ')'); g.addColorStop(1, 'rgba(' + rgb + ',' + a1 + ')'); return g; }
     var DPR = 1;   /* backing store at device resolution (capped at 2x): at 1x an iPhone upscales the layer 3x and the label text, note rims and the line go soft */
     function size() { DPR = Math.min(2, Math.max(1, window.devicePixelRatio || 1)); var pw = Math.round(cv.clientWidth * DPR), ph = Math.round(cv.clientHeight * DPR); if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; } }
     function ease(x) { return 1 - Math.pow(1 - x, 3); }
+    function dk_dt(now, prev) { return prev ? Math.min(100, now - prev) : 16; }
     function lerpCol(a, b, t) { if (t <= 0) return a; if (t >= 1) return b; a = a.split(','); b = b.split(','); return a.map(function (v, i) { return Math.round(+v + (+b[i] - +v) * t); }).join(','); }
     function draw() {
       raf = requestAnimationFrame(draw); size();
       var now = performance.now(), dk = decayFactor(lastT ? now - lastT : 16), prevT = lastT; lastT = now;
-      var W = cv.clientWidth, H = cv.clientHeight, y = H * yRatio; g2.setTransform(DPR, 0, 0, DPR, 0, 0); g2.clearRect(0, 0, W, H);   /* all drawing stays in CSS px; the transform maps it onto the hi-res store */
+      yCur = yTo < yCur ? Math.max(yTo, yCur - dk_dt(now, prevT) / Y_MS * (yRatio - 0.5)) : Math.min(yTo, yCur + dk_dt(now, prevT) / Y_MS * (yRatio - 0.5));   /* stage mode: the line glides to the true centre (its X axis) and back */
+      var W = cv.clientWidth, H = cv.clientHeight, y = H * yCur; g2.setTransform(DPR, 0, 0, DPR, 0, 0); g2.clearRect(0, 0, W, H);   /* all drawing stays in CSS px; the transform maps it onto the hi-res store */
       // heartbeat egg look: everything amber turns ECG green and the bars morph into a trace; snaps during the connect stage (boot), eases on a track change
       var hbT = wf && wf.hb() ? 1 : 0, dtm = prevT ? now - prevT : 16;
+      squash = squashTo < squash ? Math.max(squashTo, squash - dtm / SQUASH_MS) : Math.min(squashTo, squash + dtm / SQUASH_MS);   /* stage mode: the bars sink into the baseline and rise again after */
       if (mode === 'connect') hbMix = hbT; else hbMix = hbT > hbMix ? Math.min(hbT, hbMix + dtm / HB_MORPH_MS) : Math.max(hbT, hbMix - dtm / HB_MORPH_MS);
       // the ECG look lives left of `edge`, the normal look right of it: entering sweeps the edge left→right, leaving sweeps it right→left; boot snaps it to W
       var m = ease(hbMix), edge = W * m, LC = m >= 1 ? GRN : AMB, UC = SLATE;
@@ -558,7 +561,7 @@
         for (var i = 0; i < n; i++) {
           var target = lv[i];   // follows the real signal, so the fade-out and the bars fall together
           levels[i] = target > levels[i] ? target : Math.max(target, levels[i] * dk);
-          var h = levels[i] * maxH * (1 - hbAt(i * bw + bw / 2)), x = i * bw + 1, w = bw - 2; if (levels[i] * maxH > 0.5) any = true;
+          var h = levels[i] * squash * maxH * (1 - hbAt(i * bw + bw / 2)), x = i * bw + 1, w = bw - 2; if (levels[i] * squash * maxH > 0.5) any = true;
           if (areaMode) continue;
           // the play head wipes each bar from its left edge: grey underneath, amber over the part left of px
           // vertical gradients: bars are dim where they meet the baseline and brighten upward (reflection fades downward),
@@ -577,7 +580,7 @@
             for (var k = 1; k < n; k++) { var cx_ = k * bw + bw / 2, cy_ = y - sm(k); g2.quadraticCurveTo(px_, py_, (px_ + cx_) / 2, (py_ + cy_) / 2); px_ = cx_; py_ = cy_; }
             g2.lineTo(W, py_); g2.lineTo(W, y); g2.closePath();
           }
-          function sm(k) { var a = levels[Math.max(0, k - 1)], b = levels[k], c = levels[Math.min(n - 1, k + 1)]; return (a + 2 * b + c) / 4 * maxH * 0.9; }
+          function sm(k) { var a = levels[Math.max(0, k - 1)], b = levels[k], c = levels[Math.min(n - 1, k + 1)]; return (a + 2 * b + c) / 4 * maxH * 0.9 * squash; }
           function fillArea(gUp, gDown, clipTo) {
             g2.save(); if (clipTo != null) { g2.beginPath(); g2.rect(0, 0, clipTo, H); g2.clip(); }
             areaPath(); g2.fillStyle = gUp; g2.fill();
@@ -605,7 +608,7 @@
         if (wf) { var ov = wf.overlay(g2, W, H), dark = ov.dark;   /* lighting cues: dim / flash over wallpaper, bars and notes — drawn before the baseline, so the line stays bright */
           if (dark > 0) {   // in the dark the bars keep a faint amber glow (drawn over the veil so they show through it); it throbs on the scene's pulse track
             g2.save(); g2.globalAlpha = Math.min(1, dark * (0.35 + 0.65 * ov.pulse)); g2.shadowColor = 'rgba(' + LC + ',.9)'; g2.shadowBlur = 14 + 16 * ov.pulse; g2.fillStyle = 'rgba(' + LC + ',.55)';
-            for (var gi = 0; gi < n; gi++) { var gh = levels[gi] * maxH * (1 - hbAt(gi * bw + bw / 2)); if (gh > 0.5) g2.fillRect(gi * bw + 1, y - gh, bw - 2, gh); }
+            for (var gi = 0; gi < n; gi++) { var gh = levels[gi] * squash * maxH * (1 - hbAt(gi * bw + bw / 2)); if (gh > 0.5) g2.fillRect(gi * bw + 1, y - gh, bw - 2, gh); }
             g2.restore();
           }
         }
@@ -626,7 +629,7 @@
     function start(m) { if (!cv) return; mode = m || 'idle'; if (!raf) draw(); }
     function connect(cb, lead) { if (!cv) { cb(); return; } onConnected = cb; connectT0 = performance.now(); if (wf && lead) wf.preroll(connectT0, lead); start('connect'); }   /* lead: waterfall pre-roll seconds */
     function sweep(bars, fromFrac) { clearT0 = performance.now(); clearBars = !!bars; clearFrom = (fromFrac == null) ? 1 : Math.max(0, Math.min(1, fromFrac)); }
-    return { start: start, connect: connect, sweep: sweep, hb: function () { return !!(wf && wf.hb()); } };
+    return { start: start, connect: connect, sweep: sweep, hb: function () { return !!(wf && wf.hb()); }, squash: function (on) { squashTo = on ? 0 : 1; }, centre: function (on) { yTo = on ? 0.5 : yRatio; }, baseY: function () { return cv ? cv.clientHeight * yTo : 0; } };
   }
   var wave = makeWave($('#wave'), 0.58, true), phoneWave = makeWave($('#ph-wave'), 0.47, true);   /* waterfall on both shells */  // phone: slightly above centre
 
@@ -763,39 +766,44 @@
     updateDock();
   }
 
-  /* ---- ADE stage (LOG-096): four synchronized stems — L / R / C (front) / B (back) — placed on the desktop edges; the pointer is the listener.
-     Volume = "stage feel" distance curve with a floor (the far pianos stay in the background, never vanish); pan = direction of each piano
-     from the listener; the back piano is low-passed the further away it is (the listener always faces the front piano).
-     Engine: the stems are downloaded whole, decoded into AudioBuffers and started on one clock (sample-accurate ensemble, no drift, no
-     media elements — those stall on hosts without Range support); costs ~75 MB of RAM per decoded stem, desktop only.
+  /* ---- ADE stage (LOG-096/097): four synchronized stems — L / R / C (front) / B (back) — as four dots on the desktop itself; the pointer is the listener.
+     No overlay: the spectrum bars sink into the baseline and that line becomes the stage's X axis (L and R sit on it, C above, B below).
+     Volume: 75 % for all four at the centre, 100 % right at a dot, sliding to 10 % at the far edge — and once the listener is past the
+     centre the fall-off speeds up (the piano behind you drops away). Pan = direction of each dot from the listener; the back piano is
+     low-passed the further away it is (the listener always faces the front). Each dot wears a halo whose size/brightness is its volume.
+     Engine: stems downloaded whole, decoded into AudioBuffers and started on one clock (sample-accurate ensemble, no drift, no media
+     elements); a limiter at the end keeps four full stems from clipping. ~75 MB of RAM per decoded stem, desktop only.
      The OS music ducks while the stage runs and comes back when the playlist runs out or the stage is left. ---- */
-  var STAGE_FLOOR = 0.25, STAGE_CURVE = 1.5, STAGE_SUM = 1.6, STAGE_PAN_MAX = 0.8, STAGE_LP_MIN = 2500, STAGE_LP_MAX = 8000, STAGE_MASTER = 0.9, STAGE_LEAD_S = 0.15;
+  var STAGE_NEAR = 1.0, STAGE_MID = 0.75, STAGE_FAR = 0.10, STAGE_UMAX = 2.4, STAGE_K_IN = 1.3, STAGE_K_OUT = 1.4, STAGE_PAN_MAX = 0.8, STAGE_LP_MIN = 2500, STAGE_LP_MAX = 8000, STAGE_LEAD_S = 0.15, STAGE_SPAN = 0.42, STAGE_GLOW_MIN = 70, STAGE_GLOW_MAX = 300, STAGE_RING_MIN = 14, STAGE_RING_MAX = 70, STAGE_BAR_MIN = 20, STAGE_BAR_MAX = 190, STAGE_BARS = 40, STAGE_LVL_GAIN = 2.2;   /* glow radius / spectrum-ring inner radius / max bar length, px at the floor -> at full volume; bars per half circle; how hard the live level pumps the glow */
   var stage = (function () {
-    var KEYS = ['C', 'B', 'L', 'R'], POS = { C: [0.5, 0.07], B: [0.5, 0.93], L: [0.07, 0.5], R: [0.93, 0.5] };   /* fractions of the stage; distances are measured in this normalized square so the centre hears all four alike whatever the aspect ratio */
-    var PIANO = '<svg viewBox="0 0 48 32" aria-hidden="true"><path d="M4 8h40v16H4z"/><path d="M10 8v10M16 8v10M22 8v10M28 8v10M34 8v10M40 8v10"/><path d="M8 24v4M40 24v4"/></svg>';
-    var el = null, ctx = null, ch = null, pieces = [], idx = -1, active = false, ducked = false, px = 0.5, py = 0.5, raf = 0, moved = false, hint = null, dot = null, lines = null, ico = null, ttl = null;
+    var KEYS = ['C', 'B', 'L', 'R'], UNIT = { C: [0, -1], B: [0, 1], L: [-1, 0], R: [1, 0] };   /* stage space: the centre is (0,0), every dot one unit out along its axis */
+    var el = null, cv = null, g2 = null, ctx = null, ch = null, pieces = [], idx = -1, active = false, ducked = false, lx = -1, ly = -1, raf = 0, moved = false, hint = null, dots = null, ttl = null, geo = null;
     function lbl(k) { var t = (U.stage_pos || '前|後|左|右').split('|'); return { C: t[0], B: t[1], L: t[2], R: t[3] }[k]; }
     function build(d) {
-      el = document.createElement('div'); el.className = 'stage'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', d.title);
-      el.innerHTML = '<svg class="st-lines" aria-hidden="true">' + KEYS.map(function (k) { return '<line data-k="' + k + '"/>'; }).join('') + '</svg>' +
-        KEYS.map(function (k) { return '<div class="st-piano" data-k="' + k + '">' + PIANO + '<b>' + esc(lbl(k)) + '</b></div>'; }).join('') +
-        '<div class="st-dot"></div><div class="st-hint">' + esc(U.stage_loading) + '</div>' +
+      el = document.createElement('div'); el.className = 'stage'; el.setAttribute('aria-label', d.title);
+      el.innerHTML = '<canvas class="st-cv" aria-hidden="true"></canvas>' + KEYS.map(function (k) { return '<div class="st-dot" data-k="' + k + '"><i></i><b>' + esc(lbl(k)) + '</b></div>'; }).join('') +
+        '<div class="st-hint">' + esc(U.stage_loading) + '</div>' +
         '<div class="st-head"><span class="ttl">' + esc(d.title) + '<small></small></span><button class="st-exit" type="button">' + esc(U.stage_exit) + '</button></div>';
-      hint = $('.st-hint', el); dot = $('.st-dot', el); ttl = $('.st-head small', el); lines = {}; ico = {};
-      KEYS.forEach(function (k) { lines[k] = $('line[data-k="' + k + '"]', el); ico[k] = $('.st-piano[data-k="' + k + '"]', el); });
+      hint = $('.st-hint', el); ttl = $('.st-head small', el); dots = {}; cv = $('.st-cv', el); g2 = cv.getContext('2d');
+      KEYS.forEach(function (k) { dots[k] = $('.st-dot[data-k="' + k + '"]', el); });
       $('.st-exit', el).addEventListener('click', stop);
-      el.addEventListener('pointermove', function (e) { var r = el.getBoundingClientRect(); px = (e.clientX - r.left) / r.width; py = (e.clientY - r.top) / r.height; if (!moved) { moved = true; if (hint && ch && ch.playing) hint.classList.add('gone'); } });
-      el.addEventListener('click', function () { if (ctx && ctx.state !== 'running') { ctx.resume().then(playing); } });   /* autoplay refused (deep link without a gesture): first click starts it */
       desktop.appendChild(el); requestAnimationFrame(function () { el.classList.add('in'); });
+      desktop.addEventListener('pointermove', onMove); desktop.addEventListener('click', onClick);
       window.addEventListener('resize', layout); layout();
     }
+    function onMove(e) { var r = desktop.getBoundingClientRect(); lx = e.clientX - r.left; ly = e.clientY - r.top; if (!moved) { moved = true; if (hint && ch && ch.playing) hint.classList.add('gone'); } }
+    function onClick() { if (ctx && ctx.state !== 'running') ctx.resume().then(playing); }   /* autoplay refused (deep link without a gesture): first click starts it */
     function layout() {
-      if (!el) return; var W = el.clientWidth, H = el.clientHeight;
-      KEYS.forEach(function (k) { var x = POS[k][0] * W, y = POS[k][1] * H; ico[k].style.left = x + 'px'; ico[k].style.top = y + 'px'; lines[k].setAttribute('x2', x); lines[k].setAttribute('y2', y); });
+      if (!el) return; var W = desktop.clientWidth, H = desktop.clientHeight, by = wave.baseY() || H * 0.5;
+      geo = { W: W, H: H, cx: W / 2, cy: by, ex: W * STAGE_SPAN, ey: Math.min(by, H - by) - H * 0.12 };   /* ex/ey: one stage unit in px (horizontal / vertical) */
+      var DPR = Math.min(2, window.devicePixelRatio || 1); cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR); geo.dpr = DPR;
+      KEYS.forEach(function (k) { var u = UNIT[k]; dots[k].style.left = (geo.cx + u[0] * geo.ex) + 'px'; dots[k].style.top = (geo.cy + u[1] * geo.ey) + 'px'; });
+      hint.style.top = (by - 34) + 'px';
+      if (lx < 0) { lx = geo.cx; ly = geo.cy; }
     }
     function start(d) {
-      if (active) stop(); active = true; moved = false; px = 0.5; py = 0.5;
-      pieces = d.pieces || []; idx = -1; build(d);
+      if (active) stop(); active = true; moved = false; lx = ly = -1;
+      pieces = d.pieces || []; idx = -1; wave.squash(true); wave.centre(true); build(d);   /* centre first: layout() reads the line's target height */
       if (player.isPlaying()) { ducked = true; player.duck(true); }
       document.addEventListener('keydown', onKey); next();
     }
@@ -806,15 +814,18 @@
       load(pieces[idx]);
     }
     function load(p) {
-      if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (!ctx) {
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        var lim = ctx.createDynamicsCompressor(); lim.threshold.value = -3; lim.knee.value = 6; lim.ratio.value = 12; lim.attack.value = 0.003; lim.release.value = 0.15; lim.connect(ctx.destination); ctx.__out = lim;
+      }
       if (ctx.state === 'suspended') ctx.resume();
       if (ttl) ttl.textContent = p.title || '';
       var mine = ch = { playing: false, t0: 0, dur: 0 };
       KEYS.forEach(function (k) {
-        var g = ctx.createGain(), pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null, lp = ctx.createBiquadFilter();
-        lp.type = 'lowpass'; lp.frequency.value = 20000; lp.Q.value = 0.5; g.gain.value = 0.0001;
-        if (pan) { g.connect(pan); pan.connect(lp); } else g.connect(lp); lp.connect(ctx.destination);
-        mine[k] = { g: g, pan: pan, lp: lp, buf: null, src: null, done: 0, total: 0 };
+        var g = ctx.createGain(), pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null, lp = ctx.createBiquadFilter(), an = ctx.createAnalyser();
+        lp.type = 'lowpass'; lp.frequency.value = 20000; lp.Q.value = 0.5; g.gain.value = 0.0001; an.fftSize = 2048; an.minDecibels = -96; an.maxDecibels = 6; an.smoothingTimeConstant = 0.8;   /* same window as the main spectrum, so the rings read like the desktop bars */
+        if (pan) { g.connect(pan); pan.connect(lp); } else g.connect(lp); lp.connect(an); an.connect(ctx.__out);   /* analyser after gain + filter: the halo shows what you actually hear from that piano */
+        mine[k] = { g: g, pan: pan, lp: lp, an: an, td: new Uint8Array(1024), bars: [], lvl: 0, buf: null, src: null, done: 0, total: 0 };
         fetchStem('../' + p.stems[k], mine[k], function (ab) {
           if (ch !== mine) return;   /* stage left / piece changed while downloading */
           ctx.decodeAudioData(ab, function (buf) { if (ch !== mine) return; mine[k].buf = buf; if (KEYS.every(function (x) { return mine[x].buf; })) playAll(); }, fail);
@@ -844,39 +855,68 @@
       else playing();
     }
     function playing() { if (!ch || !ch.playing) return; if (hint) { hint.textContent = U.stage_hint; if (moved) hint.classList.add('gone'); } if (!raf) raf = requestAnimationFrame(tick); }
+    /* distance -> volume: u = distance in stage units (1 = at the centre). 0..1: 100 % easing down to 75 %; past the centre: 75 % falling
+       ever faster to 10 % at STAGE_UMAX (the far corner) */
+    function volume(u) {
+      if (u <= 1) return STAGE_NEAR - (STAGE_NEAR - STAGE_MID) * Math.pow(u, STAGE_K_IN);
+      var q = Math.min(1, (u - 1) / (STAGE_UMAX - 1)); return STAGE_MID - (STAGE_MID - STAGE_FAR) * Math.pow(q, STAGE_K_OUT);
+    }
     function tick() {
-      raf = 0; if (!active || !ch || !ctx || !el) return;
-      var W = el.clientWidth, H = el.clientHeight, lx = px * W, ly = py * H, DMAX = Math.SQRT1_2, raw = {}, sum = 0;
-      var dist = function (k) { return Math.min(1, Math.hypot(POS[k][0] - px, POS[k][1] - py) / DMAX); };
-      KEYS.forEach(function (k) { var d = dist(k); raw[k] = STAGE_FLOOR + (1 - STAGE_FLOOR) * Math.pow(1 - d, STAGE_CURVE); sum += raw[k]; });
-      var scale = STAGE_SUM / sum, t = ctx.currentTime, gmax = 0;
-      KEYS.forEach(function (k) { if (raw[k] * scale > gmax) gmax = raw[k] * scale; });
+      raf = 0; if (!active || !ch || !ctx || !el || !geo) return;
+      var nx = (lx - geo.cx) / geo.ex, ny = (ly - geo.cy) / geo.ey, t = ctx.currentTime;
       KEYS.forEach(function (k) {
-        var c = ch[k], g = raw[k] * scale * STAGE_MASTER;
+        var c = ch[k], u = UNIT[k], d = Math.hypot(u[0] - nx, u[1] - ny), g = volume(d);
         c.g.gain.setTargetAtTime(g, t, 0.05);
-        if (c.pan) c.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, (POS[k][0] - px) * 2)) * STAGE_PAN_MAX, t, 0.05);
-        if (k === 'B') { var db = dist('B'); c.lp.frequency.setTargetAtTime(STAGE_LP_MIN + (STAGE_LP_MAX - STAGE_LP_MIN) * (1 - db), t, 0.05); }
-        var rel = raw[k] * scale / gmax, o = 0.3 + 0.7 * rel;
-        ico[k].style.opacity = o; ico[k].style.transform = 'translate(-50%,-50%) scale(' + (0.85 + 0.35 * rel).toFixed(3) + ')';
-        lines[k].setAttribute('x1', lx); lines[k].setAttribute('y1', ly); lines[k].style.opacity = (0.08 + 0.5 * rel * rel).toFixed(3);
+        if (c.pan) c.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, u[0] - nx)) * STAGE_PAN_MAX, t, 0.05);
+        if (k === 'B') c.lp.frequency.setTargetAtTime(STAGE_LP_MAX - (STAGE_LP_MAX - STAGE_LP_MIN) * Math.min(1, d / STAGE_UMAX), t, 0.05);
+        var rel = (g - STAGE_FAR) / (STAGE_NEAR - STAGE_FAR);   /* 0 at the floor, 1 at full */
+        /* live level (RMS of what this piano is putting out): fast attack, slower release, so the glow breathes with the playing */
+        c.an.getByteTimeDomainData(c.td); var s = 0; for (var i = 0; i < c.td.length; i++) { var v = (c.td[i] - 128) / 128; s += v * v; }
+        var rms = Math.min(1, Math.sqrt(s / c.td.length) * STAGE_LVL_GAIN); c.lvl = rms > c.lvl ? rms : c.lvl * 0.9; c.rel = rel;
+        var lv = barLevels(c.an, STAGE_BARS); if (c.bars.length !== STAGE_BARS) c.bars = lv; else for (var b = 0; b < STAGE_BARS; b++) c.bars[b] = lv[b] > c.bars[b] ? lv[b] : Math.max(lv[b], c.bars[b] * 0.93);   /* same fall-off feel as the desktop bars */
+        dots[k].style.setProperty('--core', (0.3 + 0.7 * Math.max(rel, c.lvl)).toFixed(3));
       });
-      dot.style.left = lx + 'px'; dot.style.top = ly + 'px';
+      /* canvas: a big soft glow per piano (size = volume, pumped by the live level) and its waveform wrapped into a ring around the dot —
+         the ring's radius and the wave's amplitude both grow toward 100 % */
+      g2.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0); g2.clearRect(0, 0, geo.W, geo.H);
+      KEYS.forEach(function (k) {
+        var c = ch[k], u = UNIT[k], x = geo.cx + u[0] * geo.ex, y = geo.cy + u[1] * geo.ey, rel = c.rel, lvl = c.lvl;
+        var R = (STAGE_GLOW_MIN + (STAGE_GLOW_MAX - STAGE_GLOW_MIN) * rel) * (0.7 + 0.5 * lvl), a = 0.22 + 0.5 * rel + 0.25 * lvl;
+        var grd = g2.createRadialGradient(x, y, 0, x, y, R); grd.addColorStop(0, 'rgba(224,176,74,' + a.toFixed(3) + ')'); grd.addColorStop(0.3, 'rgba(224,176,74,' + (a * 0.45).toFixed(3) + ')'); grd.addColorStop(1, 'rgba(224,176,74,0)');
+        g2.globalCompositeOperation = 'lighter'; g2.fillStyle = grd; g2.fillRect(x - R, y - R, 2 * R, 2 * R);
+        /* radial spectrum: the piano's frequency bands (low at the bottom, high at the top) as bars around the dot, mirrored left/right;
+           bar length = that band's level, scaled by the volume you hear from this position */
+        var r0 = STAGE_RING_MIN + (STAGE_RING_MAX - STAGE_RING_MIN) * rel, amp = STAGE_BAR_MIN + (STAGE_BAR_MAX - STAGE_BAR_MIN) * rel, n = STAGE_BARS;
+        g2.globalCompositeOperation = 'source-over'; g2.lineCap = 'round'; g2.lineWidth = Math.max(2, (Math.PI * r0 / n) * 0.9); g2.shadowColor = 'rgba(224,176,74,.7)'; g2.shadowBlur = 8 + 10 * rel;
+        for (var i = 0; i < n; i++) {
+          var len = c.bars[i] * amp; if (len < 0.6) continue;
+          var psi = (i + 0.5) / n * Math.PI, dy = Math.cos(psi), dx = Math.sin(psi);   /* psi 0 = straight down (lows) -> pi = straight up (highs) */
+          var a0 = (0.35 + 0.4 * rel).toFixed(3), a1 = (0.7 + 0.3 * rel).toFixed(3);
+          [1, -1].forEach(function (sgn) {
+            var x0 = x + dx * sgn * r0, y0 = y + dy * r0, x1 = x + dx * sgn * (r0 + len), y1 = y + dy * (r0 + len);
+            var grd2 = g2.createLinearGradient(x0, y0, x1, y1); grd2.addColorStop(0, 'rgba(224,176,74,' + a0 + ')'); grd2.addColorStop(1, 'rgba(240,214,140,' + a1 + ')');
+            g2.strokeStyle = grd2; g2.beginPath(); g2.moveTo(x0, y0); g2.lineTo(x1, y1); g2.stroke();
+          });
+        }
+        g2.shadowBlur = 0;
+      });
       raf = requestAnimationFrame(tick);
     }
     function unload() {
       if (!ch) return;
-      KEYS.forEach(function (k) { var c = ch[k]; if (!c) return; if (c.src) { c.src.onended = null; try { c.src.stop(); } catch (e) {} } try { c.lp.disconnect(); } catch (e) {} c.buf = null; });
+      KEYS.forEach(function (k) { var c = ch[k]; if (!c) return; if (c.src) { c.src.onended = null; try { c.src.stop(); } catch (e) {} } try { c.lp.disconnect(); c.an.disconnect(); } catch (e) {} c.buf = null; });
       ch = null; if (raf) { cancelAnimationFrame(raf); raf = 0; }
     }
     function stop() {
       if (!active) return; active = false;
       unload(); if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; }
-      document.removeEventListener('keydown', onKey); window.removeEventListener('resize', layout);
+      document.removeEventListener('keydown', onKey); window.removeEventListener('resize', layout); desktop.removeEventListener('pointermove', onMove); desktop.removeEventListener('click', onClick);
+      wave.squash(false); wave.centre(false);
       if (el) { var e0 = el; el = null; e0.classList.remove('in'); setTimeout(function () { e0.remove(); }, 500); }
       if (ducked) { ducked = false; player.unduck(); }
     }
     return { start: start, stop: stop, active: function () { return active; },
-             debug: function () { var o = { active: active, ctx: ctx ? ctx.state : '-', idx: idx, playing: !!(ch && ch.playing), pos: ch && ch.playing && ctx ? +(ctx.currentTime - ch.t0).toFixed(2) : 0, dur: ch ? +ch.dur.toFixed(1) : 0, px: +px.toFixed(3), py: +py.toFixed(3) }; if (ch) KEYS.forEach(function (k) { var c = ch[k]; o[k] = { buf: !!c.buf, g: +c.g.gain.value.toFixed(3), pan: c.pan ? +c.pan.pan.value.toFixed(2) : null, lp: Math.round(c.lp.frequency.value) }; }); return o; } };
+             debug: function () { var o = { active: active, ctx: ctx ? ctx.state : '-', idx: idx, playing: !!(ch && ch.playing), pos: ch && ch.playing && ctx ? +(ctx.currentTime - ch.t0).toFixed(2) : 0, dur: ch ? +ch.dur.toFixed(1) : 0, lx: Math.round(lx), ly: Math.round(ly), geo: geo }; if (ch) KEYS.forEach(function (k) { var c = ch[k]; o[k] = { buf: !!c.buf, g: +c.g.gain.value.toFixed(3), pan: c.pan ? +c.pan.pan.value.toFixed(2) : null, lp: Math.round(c.lp.frequency.value) }; }); return o; } };
   })();
 
   function openApp(app) {
