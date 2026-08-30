@@ -785,7 +785,7 @@
      ensemble, no drift, no media elements); a limiter at the end keeps four full stems from clipping. ~75 MB of RAM per decoded stem, desktop only.
      Leaving: circles shrink -> line glides back down -> the OS music resumes and the play head runs to the left edge and slides back out. ---- */
   var STAGE_NEAR = 1.0, STAGE_MID = 0.75, STAGE_FAR = 0.10, STAGE_UMAX = 2.4, STAGE_K_IN = 1.3, STAGE_K_OUT = 1.4, STAGE_PAN_MAX = 0.8, STAGE_LP_MIN = 2500, STAGE_LP_MAX = 8000, STAGE_SPAN = 0.42;
-  var STAGE_LEAD_S = 6 * (60 / 120 / 2), STAGE_GROW_MS = 800, STAGE_GROW_DELAY_MS = 750, STAGE_REACH_X = 0.92, STAGE_REACH_Y = 0.8, STAGE_GLOW_MIN = 60, STAGE_GLOW_MAX = 220, STAGE_BAR_MIN = 24, STAGE_BANDS = 64, STAGE_SPAN_X = 0.5, STAGE_SPAN_Y = 0.5, STAGE_LVL_GAIN = 2.2, STAGE_FLOOR_LV = 0.14, STAGE_SMOOTH = 0.15, STAGE_RELEASE = 0.7, STAGE_LVL_RELEASE = 0.8, STAGE_PUNCH_RELEASE = 0.8, STAGE_PUNCH = 0.6, STAGE_BAND_GAMMA = 2.4, STAGE_F_LO = 45, STAGE_F_HI = 2500, STAGE_TOP_INSET = 30, STAGE_MIN_H = 0;   /* TOP_INSET: the top edge's base sits under the menubar; MIN_H: 0 = with no sound the edge shows nothing at all (the range is built only from real band levels) */   /* PUNCH: extra height when the instant level jumps above its slow average (an accent); BAND_GAMMA: band contrast */   /* SMOOTH: analyser smoothing (0.8 on the desktop bars — here low so hits jump); RELEASE: per-frame fall after a hit */   /* FLOOR_LV: band level treated as silence (the desktop bars keep a −96 dB floor; here an empty band must read as empty) */
+  var STAGE_LEAD_S = 6 * (60 / 120 / 2), STAGE_GROW_MS = 800, STAGE_GROW_DELAY_MS = 750, STAGE_REACH_X = 0.92, STAGE_REACH_Y = 0.8, STAGE_GLOW_MIN = 60, STAGE_GLOW_MAX = 220, STAGE_BAR_MIN = 24, STAGE_BANDS = 64, STAGE_SPAN_X = 0.5, STAGE_SPAN_Y = 0.5, STAGE_LVL_GAIN = 2.2, STAGE_FLOOR_LV = 0.14, STAGE_SMOOTH = 0.15, STAGE_RELEASE = 0.7, STAGE_LVL_RELEASE = 0.8, STAGE_PUNCH_RELEASE = 0.8, STAGE_PUNCH = 0.6, STAGE_BAND_GAMMA = 2.4, STAGE_F_LO = 45, STAGE_F_HI = 2500, STAGE_TOP_INSET = 30, STAGE_MIN_H = 0, STAGE_R0 = 0.3, STAGE_DISC_A = 0.10;   /* R0: base half-disc radius as a share of the edge-to-centre distance (its diameter lies on the edge); DISC_A: the disc's own faint fill */   /* TOP_INSET: the top edge's base sits under the menubar; MIN_H: 0 = with no sound the edge shows nothing at all (the range is built only from real band levels) */   /* PUNCH: extra height when the instant level jumps above its slow average (an accent); BAND_GAMMA: band contrast */   /* SMOOTH: analyser smoothing (0.8 on the desktop bars — here low so hits jump); RELEASE: per-frame fall after a hit */   /* FLOOR_LV: band level treated as silence (the desktop bars keep a −96 dB floor; here an empty band must read as empty) */
   /* LEAD: one 6/8 bar at quarter = 120 (six eighths of 0.25 s). GROW_DELAY: the glows appear only once the bars have sunk and the line has moved up.
      REACH_X/Y: at 100 % the left/right (top/bottom) silhouette's tip gets this far along the way from its edge to the centre. SPAN_X/Y: half-width of a silhouette along its edge (fraction of W / H).
      F_LO..F_HI: the band range shown (no top octaves — a piano has nothing there); lows sit at the two ends of an edge, the busiest upper mids at its midpoint.
@@ -921,23 +921,24 @@
         var c = ch && ch[k], u = UNIT[k], x = geo.cx + u[0] * geo.ex, y = geo.cy + u[1] * geo.ey + (k === 'C' ? STAGE_TOP_INSET : 0), rel = c ? c.rel : 0, lvl = c ? c.lvl : 0;
         var pk = c ? (c.punch || 0) : 0;   /* accents flare the range's own glow below; there is no separate light on the edge */
         if (!c || !c.bands.length) return;
-        var horiz = !!u[0], dist = horiz ? geo.ex : geo.ey, S = horiz ? geo.H * STAGE_SPAN_Y : geo.W * STAGE_SPAN_X;   /* S: half-width along the edge */
-        var amp = (STAGE_BAR_MIN + ((horiz ? STAGE_REACH_X : STAGE_REACH_Y) * dist - STAGE_BAR_MIN) * rel) * grow * (1 + STAGE_PUNCH * (c.punch || 0)), n = STAGE_BANDS, nx_ = -u[0], ny_ = -u[1], tx = horiz ? 0 : 1, ty = horiz ? -1 : 0;   /* (nx_,ny_): inward normal; (tx,ty): along the edge from the lows end — bottom->top on the side edges, left->right on the top/bottom edges */
-        function sm(i) { i = Math.max(0, Math.min(n - 1, i)); var B = c.bands, p2 = B[Math.max(0, i - 2)], p = B[Math.max(0, i - 1)], q = B[i], r = B[Math.min(n - 1, i + 1)], r2 = B[Math.min(n - 1, i + 2)]; return (STAGE_MIN_H + (1 - STAGE_MIN_H) * (p2 + 2 * p + 3 * q + 2 * r + r2) / 9) * amp; }   /* 5-tap smoothing: a mountain range, not spikes */
-        function path() {   /* one mountain range per edge: the whole band range laid along the edge (lows at one end, highs at the other), closed along the edge */
-          g2.beginPath(); g2.moveTo(x - tx * S, y - ty * S);
-          for (var s = 0; s < n; s++) {   /* first band exactly at one end, last band at the other: the ends drop straight down onto the edge, no slant */
-            var off = (s / (n - 1) * 2 - 1) * S, h = sm(s);
-            g2.lineTo(x + tx * off + nx_ * h, y + ty * off + ny_ * h);
-          }
-          g2.lineTo(x + tx * S, y + ty * S); g2.closePath();
+        /* half-disc on the edge (diameter on the edge, centred on its midpoint); the spectrum runs along the arc from one end to the other
+           (lows -> highs, not mirrored) and pushes the arc outward by each band's level. Same look as the desktop bars: dim at the base,
+           brighter toward the tips, a soft glow around it (stronger on accents) */
+        var horiz = !!u[0], dist = horiz ? geo.ex : geo.ey, r0 = STAGE_R0 * dist * grow;
+        var amp = (STAGE_BAR_MIN + ((horiz ? STAGE_REACH_X : STAGE_REACH_Y) * dist - r0 - STAGE_BAR_MIN) * rel) * grow * (1 + STAGE_PUNCH * (c.punch || 0)), n = STAGE_BANDS;
+        var nx_ = -u[0], ny_ = -u[1], tx = horiz ? 0 : 1, ty = horiz ? -1 : 0;   /* (nx_,ny_): inward normal; (tx,ty): along the edge from the lows end */
+        function sm(i) { i = Math.max(0, Math.min(n - 1, i)); var B = c.bands, p2 = B[Math.max(0, i - 2)], p = B[Math.max(0, i - 1)], q = B[i], r = B[Math.min(n - 1, i + 1)], r2 = B[Math.min(n - 1, i + 2)]; return (p2 + 2 * p + 3 * q + 2 * r + r2) / 9 * amp; }
+        function arc(rad) {   /* closed shape: along the arc with radius rad(s), then back along the diameter */
+          g2.beginPath();
+          for (var s = 0; s < n; s++) { var th = Math.PI * s / (n - 1), R = rad(s), dx = -Math.cos(th) * tx + Math.sin(th) * nx_, dy = -Math.cos(th) * ty + Math.sin(th) * ny_; if (s) g2.lineTo(x + dx * R, y + dy * R); else g2.moveTo(x + dx * R, y + dy * R); }
+          g2.closePath();
         }
-        /* same look as the desktop bars: dim where it meets its baseline, brighter upward; crisp fill, a soft amber glow around it, and a
-           thin baseline along the edge so the range visibly stands on the edge instead of floating */
-        var top = amp, lin = g2.createLinearGradient(x, y, x + nx_ * top, y + ny_ * top), a0 = 0.32 + 0.35 * rel + 0.12 * lvl;
-        lin.addColorStop(0, 'rgba(224,176,74,' + (a0 * 0.35).toFixed(3) + ')'); lin.addColorStop(1, 'rgba(240,214,140,' + a0.toFixed(3) + ')');
-        g2.globalCompositeOperation = 'source-over'; g2.fillStyle = lin; g2.shadowColor = 'rgba(224,176,74,.7)'; g2.shadowBlur = 14 + 12 * rel + 16 * pk;
-        path(); g2.fill(); g2.shadowBlur = 0;
+        g2.globalCompositeOperation = 'source-over';
+        g2.fillStyle = 'rgba(224,176,74,' + (STAGE_DISC_A * (0.6 + 0.4 * rel)).toFixed(3) + ')'; arc(function () { return r0; }); g2.fill();   /* the sphere itself */
+        var a0 = 0.32 + 0.35 * rel + 0.12 * lvl, grd = g2.createRadialGradient(x, y, r0 * 0.9, x, y, r0 + amp);
+        grd.addColorStop(0, 'rgba(224,176,74,' + (a0 * 0.35).toFixed(3) + ')'); grd.addColorStop(1, 'rgba(240,214,140,' + a0.toFixed(3) + ')');
+        g2.fillStyle = grd; g2.shadowColor = 'rgba(224,176,74,.7)'; g2.shadowBlur = 14 + 12 * rel + 16 * pk;
+        arc(function (s) { return r0 + sm(s); }); g2.fill(); g2.shadowBlur = 0;
       });
       g2.globalCompositeOperation = 'source-over';
       raf = requestAnimationFrame(tick);
