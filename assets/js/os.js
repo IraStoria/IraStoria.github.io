@@ -898,7 +898,7 @@
       g2.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0); g2.clearRect(0, 0, geo.W, geo.H);
       KEYS.forEach(function (k) {
         var c = ch && ch[k], u = UNIT[k], x = geo.cx + u[0] * geo.ex, y = geo.cy + u[1] * geo.ey, rel = c ? c.rel : 0, lvl = c ? c.lvl : 0;
-        var R = (STAGE_GLOW_MIN + (STAGE_GLOW_MAX - STAGE_GLOW_MIN) * rel) * (0.7 + 0.5 * lvl) * grow, a = 0.14 + 0.3 * rel + 0.2 * lvl;
+        var pk = c ? (c.punch || 0) : 0, R = (STAGE_GLOW_MIN + (STAGE_GLOW_MAX - STAGE_GLOW_MIN) * rel) * (0.7 + 0.5 * lvl) * (1 + 0.5 * pk) * grow, a = 0.14 + 0.3 * rel + 0.2 * lvl + 0.3 * pk;   /* an accent flares the glow */
         if (R < 1) return;
         g2.globalCompositeOperation = 'lighter';
         var grd = g2.createRadialGradient(x, y, 0, x, y, R); grd.addColorStop(0, 'rgba(224,176,74,' + a.toFixed(3) + ')'); grd.addColorStop(0.3, 'rgba(224,176,74,' + (a * 0.45).toFixed(3) + ')'); grd.addColorStop(1, 'rgba(224,176,74,0)');
