@@ -363,7 +363,8 @@
     setTimeout(function () {
       lang = next; try { localStorage.setItem('lang', lang); } catch (e) {}
       buildThemes(); buildButtons(); render();
-      requestAnimationFrame(function () { document.body.classList.remove('lang-fade'); langFading = false; });
+      var back = function () { if (!langFading) return; document.body.classList.remove('lang-fade'); langFading = false; };
+      requestAnimationFrame(back); setTimeout(back, 80);   /* timer fallback for throttled tabs */
     }, LANG_FADE_MS);
   }); });
   [optExclude, optRules].forEach(function (o) { o.addEventListener('change', render); });

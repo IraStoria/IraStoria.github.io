@@ -354,6 +354,12 @@ def local_versioned(rel):
     return f"{rel}?v={hashlib.sha1((ROOT / rel).read_bytes()).hexdigest()[:8]}"
 
 
+def demo_ver(rel):
+    """Short content hash of a demo's index.html (which itself carries the hashed js/css refs): the shells put it on the iframe src."""
+    p = ROOT / rel / "index.html"
+    return hashlib.sha1(p.read_bytes()).hexdigest()[:8] if p.exists() else ""
+
+
 def version_demo_assets(demos):
     """demos/<name>/index.html: stamp local demo.js / demo.css references with a content-hash ?v= (idempotent, rewritten in place)
     so a changed demo script is not served from browser cache inside the shell iframes / on the static demos page."""
@@ -464,7 +470,7 @@ def build_pages(site, works, demos, articles):
             "fx": {name: {k: (local_versioned(v) if k in ("video", "sound") and v else v) for k, v in f.items() if not k.startswith("_")} for name, f in (site.get("fx") or {}).items()},
             "works": [loc(w) for w in works],
             "updates": [{"date": u["date"], "text": u[lang]} for u in load_updates()],
-            "demos": [{"path": rel, "title": m["title"][lang], "desc": m["desc"][lang], "platform": m["platform"], "year": m.get("year", "")} for rel, m in demos.items()],
+            "demos": [{"path": rel, "title": m["title"][lang], "desc": m["desc"][lang], "platform": m["platform"], "year": m.get("year", ""), "ver": demo_ver(rel)} for rel, m in demos.items()],
             "articles": [{"slug": a["slug"], "title": a[lang]["meta"]["title"], "date": a[lang]["meta"]["date"]} for a in articles],
           }
         other = "en" if lang == "zh" else "zh"
@@ -554,6 +560,8 @@ def main(argv):
         site = load_site()
         works = load_works()
         demos = load_demos(works)
+        if not check_only:
+            version_demo_assets(demos)   # before the pages: their demo data carries the hash of the (re-stamped) index.html
         articles = load_articles()
         big = scan_big_files()
         pages = build_pages(site, works, demos, articles)
@@ -566,7 +574,6 @@ def main(argv):
     if check_only:
         print("check passed (nothing written)")
         return 0
-    version_demo_assets(demos)
     for d in OUTPUT_DIRS:
         shutil.rmtree(ROOT / d, ignore_errors=True)
     for rel, content in pages.items():
