@@ -354,6 +354,26 @@ def local_versioned(rel):
     return f"{rel}?v={hashlib.sha1((ROOT / rel).read_bytes()).hexdigest()[:8]}"
 
 
+def version_demo_assets(demos):
+    """demos/<name>/index.html: stamp local demo.js / demo.css references with a content-hash ?v= (idempotent, rewritten in place)
+    so a changed demo script is not served from browser cache inside the shell iframes / on the static demos page."""
+    pat = re.compile(r'((?:src|href)=")((?:[\w.-]+/)*[\w.-]+\.(?:js|css))(?:\?v=[0-9a-f]+)?(")')
+    for rel in demos:
+        html = ROOT / rel / "index.html"
+        if not html.exists():
+            continue
+        text = html.read_text(encoding="utf-8")
+        def sub(m):
+            f = ROOT / rel / m.group(2)
+            if not f.exists():
+                return m.group(0)
+            return f'{m.group(1)}{m.group(2)}?v={hashlib.sha1(f.read_bytes()).hexdigest()[:8]}{m.group(3)}'
+        new = pat.sub(sub, text)
+        if new != text:
+            html.write_text(new, encoding="utf-8", newline="\n")
+            print(f"  versioned demo assets: {rel}/index.html")
+
+
 def media_block(w, root):
     m = w.get("media") or {}
     if "youtube" in m:
@@ -546,6 +566,7 @@ def main(argv):
     if check_only:
         print("check passed (nothing written)")
         return 0
+    version_demo_assets(demos)
     for d in OUTPUT_DIRS:
         shutil.rmtree(ROOT / d, ignore_errors=True)
     for rel, content in pages.items():

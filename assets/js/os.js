@@ -765,7 +765,7 @@
     updateDock();
   }
   function minimize(app) { var w = wins[app]; if (w) { w.classList.add('minimized'); w.classList.remove('focus'); } updateDock(); }
-  function closeApp(app) { var w = wins[app]; if (!w) return; w.remove(); delete wins[app]; if (w.dataset.duck) player.unduck(); updateDock(); }   // closing the player window never stops the music
+  function closeApp(app) { var w = wins[app]; if (!w) return; w.remove(); delete wins[app]; if (w.dataset.duck || /^demo-/.test(app)) player.unduck(); updateDock(); }   /* unduck is a no-op unless the music was ducked (by a hook or by an iOS interruption) */   // closing the player window never stops the music
   function focus(w) {
     Object.keys(wins).forEach(function (k) { wins[k].classList.remove('focus'); });
     w.classList.add('focus'); w.style.zIndex = ++z;
@@ -997,7 +997,9 @@
       if (cur < 0) prepare(); else refresh();
       draw(); if (!timeTimer) timeTimer = setInterval(tickTime, 250); tickTime();
     }
-    function ensureCtx() { if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); analyser = actx.createAnalyser(); analyser.fftSize = 2048; analyser.minDecibels = -96; analyser.maxDecibels = 6; analyser.smoothingTimeConstant = 0.8; /* +6 dB headroom: mastered bass no longer clips to a flat top */ out = actx.createGain(); out.gain.value = muted ? 0 : vol; analyser.connect(out); out.connect(actx.destination); master = actx.createGain(); master.connect(analyser); } /* analyser sits before the volume stage so the bars keep moving while muted */ if (actx.state === 'suspended') actx.resume(); }
+    function ensureCtx() { if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); analyser = actx.createAnalyser(); analyser.fftSize = 2048; analyser.minDecibels = -96; analyser.maxDecibels = 6; analyser.smoothingTimeConstant = 0.8; /* +6 dB headroom: mastered bass no longer clips to a flat top */ out = actx.createGain(); out.gain.value = muted ? 0 : vol; analyser.connect(out); out.connect(actx.destination); master = actx.createGain(); master.connect(analyser);
+        actx.addEventListener('statechange', function () { if (actx && actx.state !== 'running' && playing && audio && !audio.paused && !ducked) { ducked = true; stopAll(true); } });   /* iOS interruption (a demo's own AudioContext, a call): a media element on a non-running context stutter-loops a few ms — silence it now; a demo close (or play) brings it back */
+      } /* analyser sits before the volume stage so the bars keep moving while muted */ if (actx.state === 'suspended') actx.resume(); }
     var fadeTimer = null, pausedAt = null, playSeq = 0;   /* playSeq: a play() promise that loses (track changed underneath it) must not flip the new track back to ▶ */   // position at the moment pause was pressed (the fade tail must not count as progress)
     function rampDown(g) { g.gain.cancelScheduledValues(0); g.gain.setValueAtTime(Math.max(g.gain.value, 0.0001), actx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + FADE_SEC); }
     function stopAll(immediate) {
@@ -1045,8 +1047,21 @@
     function toggle() { if (playing) stopAll(); else play(); }
     // duck: another window started making sound -> pause (fade, position kept); unduck: that window closed -> resume from where we stopped
     var ducked = false;
-    function duck(immediate) { if (playing) { ducked = true; stopAll(!!immediate); } }   /* immediate: a demo just started making sound — no 3 s fade, no overlap */
-    function unduck() { if (ducked) { ducked = false; if (!playing) play(); } }
+    function duck(immediate) { if (playing) { ducked = true; stopAll(!!immediate); if (immediate && actx) { try { actx.suspend(); } catch (e) {} } } }   /* immediate: a demo just started making sound — no 3 s fade, no overlap; the context is suspended so iOS gives the hardware to the demo's context cleanly */
+    function unduck() { if (ducked) { ducked = false; rebuildAudio(); if (!playing) play(); } }
+    /* after another AudioContext (a demo) has run, iOS may bring the old context back at a different hardware sample rate: a media element wired through
+       the old MediaElementSource then plays a few semitones sharp (or stutters). A MediaElementSource cannot be re-created on the same element, so the
+       element is replaced too: same src, same position; the graph is rebuilt on a fresh context (volume / mute carried over by ensureCtx). */
+    function rebuildAudio() {
+      var t = list[cur]; if (!audio || !t || t.synth) return;
+      var src = audio.src, pos = pausedAt !== null ? pausedAt : (audio.currentTime || 0);
+      try { audio.pause(); audio.removeAttribute('src'); audio.load(); } catch (e) {}
+      var a = new Audio(); a.addEventListener('ended', function () { next(); }); a.preload = 'auto'; a.src = src; a._unlocked = true; audio = a;
+      var seek = function () { try { a.currentTime = pos; } catch (e) {} }; if (a.readyState >= 1) seek(); else a.addEventListener('loadedmetadata', seek, { once: true });
+      pausedAt = pos;
+      if (actx) { try { actx.close(); } catch (e) {} actx = null; analyser = null; master = null; out = null; }
+      ensureCtx();
+    }
     function playId(id) { var i = list.findIndex(function (t) { return t.id === id; }); if (i >= 0) { remember(i); load(i, true); } }
     // Placeholder: a gentle generative pad so the player is demonstrable before real tracks exist.
     function startSynth() {
@@ -1335,7 +1350,7 @@
     function close(fromHistory) {
       var pnl = stack.pop(); if (!pnl) return;
       pnl.classList.add('out'); setTimeout(function () { pnl.remove(); if (pnl.dataset.demo) caption.reset(); }, reduced ? 0 : 220);
-      if (pnl.dataset.duck) player.unduck();   /* the demo that silenced the music is gone -> resume where it stopped */
+      if (pnl.dataset.duck || pnl.dataset.demo) player.unduck();   /* the demo that silenced the music is gone -> resume where it stopped (no-op unless ducked) */
       if (!fromHistory) history.back();
     }
     // in-place language switch (called by applyLang): every phone label follows the new language without a reload
