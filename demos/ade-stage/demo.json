@@ -1,0 +1,32 @@
+{
+  "id": "ade-stage",
+  "year": 2026,
+  "title": {
+    "zh": "ADE ─ 四鋼琴環繞",
+    "en": "ADE — Four-Piano Surround"
+  },
+  "desc": {
+    "zh": "ADE 樂章寫給四台鋼琴：前、後、左、右各一台，觀眾站在中間。四台同時演奏各自的內容，合起來才是一首曲子；站的位置不同，聽到的重點、音量與方位也不同。這裡的桌面就是場地，滑鼠就是你——移動滑鼠，混音跟著改變。",
+    "en": "An ADE movement written for four pianos — front, back, left and right — with the audience in the middle. All four play their own material at once and only together form the piece; where you stand changes what you hear, how loud and from where. Here the desktop is the hall and the pointer is you: move it and the mix follows."
+  },
+  "platform": "desktop",
+  "native": "stage",
+  "pieces": [
+    {
+      "id": "ade",
+      "title": {
+        "zh": "ADE",
+        "en": "ADE"
+      },
+      "stems": {
+        "L": "assets/audio/ade/L.mp3",
+        "R": "assets/audio/ade/R.mp3",
+        "C": "assets/audio/ade/C.mp3",
+        "B": "assets/audio/ade/B.mp3"
+      }
+    }
+  ],
+  "concept_level_checked": true,
+  "concept_level_note": "ADR-004 self-check 2026-08-30: distance/direction mixing of four synchronized stems, written from scratch (Web Audio: gain + stereo panner + lowpass per stem). Audio = the user's own original ADE stems.",
+  "dependencies": "none (Web Audio API only); assets/audio/ade/*.mp3 (~13 MB, loaded only when the stage starts)"
+}

@@ -302,6 +302,30 @@
     "win_fullscreen": {
       "zh": "全螢幕",
       "en": "Full screen"
+    },
+    "start_stage": {
+      "zh": "開始展示",
+      "en": "Start"
+    },
+    "stage_exit": {
+      "zh": "離開舞台",
+      "en": "Leave stage"
+    },
+    "stage_hint": {
+      "zh": "移動滑鼠，改變你在四台鋼琴之間的位置",
+      "en": "Move the pointer to change where you stand among the four pianos"
+    },
+    "stage_loading": {
+      "zh": "載入四軌中…",
+      "en": "Loading the four stems…"
+    },
+    "stage_tap": {
+      "zh": "點一下開始",
+      "en": "Click to start"
+    },
+    "stage_pos": {
+      "zh": "前|後|左|右",
+      "en": "FRONT|BACK|LEFT|RIGHT"
     }
   },
   "about_body": {

@@ -213,6 +213,16 @@ def load_demos(works):
             raise BuildError(f"{rel}/demo.json: 'concept_level_checked' must be true (ADR-004 / V4 self-check)")
         if not (d / "index.html").exists():
             raise BuildError(f"{rel}: index.html missing")
+        if meta.get("native"):   # shell-native demo (no iframe): the shells run it themselves; index.html is only the static fallback
+            if meta["native"] != "stage":
+                raise BuildError(f"{rel}/demo.json: unknown 'native' kind {meta['native']!r}")
+            for pc in meta.get("pieces") or []:
+                bilingual(pc.get("title"), f"{rel}/demo.json:pieces[{pc.get('id')}].title")
+                for ch in ("L", "R", "C", "B"):
+                    if not (ROOT / (pc.get("stems") or {}).get(ch, "")).is_file():
+                        raise BuildError(f"{rel}/demo.json: piece {pc.get('id')!r} stem {ch} missing")
+            if not meta.get("pieces"):
+                raise BuildError(f"{rel}/demo.json: native demo needs at least one piece")
         if rel not in referenced:
             print(f"  note: {rel} is not referenced by any works.json entry (listed on demos page only)")
         demos[rel] = meta
@@ -471,7 +481,8 @@ def build_pages(site, works, demos, articles):
             "fx": {name: {k: (local_versioned(v) if k in ("video", "sound") and v else v) for k, v in f.items() if not k.startswith("_")} for name, f in (site.get("fx") or {}).items()},
             "works": [loc(w) for w in works],
             "updates": [{"date": u["date"], "text": u[lang]} for u in load_updates()],
-            "demos": [{"path": rel, "title": m["title"][lang], "desc": m["desc"][lang], "platform": m["platform"], "year": m.get("year", ""), "ver": demo_ver(rel)} for rel, m in demos.items()],
+            "demos": [{"path": rel, "title": m["title"][lang], "desc": m["desc"][lang], "platform": m["platform"], "year": m.get("year", ""), "ver": demo_ver(rel), "native": m.get("native", ""),
+                       "pieces": [{"id": p["id"], "title": p["title"][lang], "stems": p["stems"]} for p in m.get("pieces", [])]} for rel, m in demos.items()],
             "articles": [{"slug": a["slug"], "title": a[lang]["meta"]["title"], "date": a[lang]["meta"]["date"]} for a in articles],
           }
         other = "en" if lang == "zh" else "zh"

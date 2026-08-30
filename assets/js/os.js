@@ -758,8 +758,126 @@
     // deep link ?app=works
     var m = /[?&]app=([a-z]+)/.exec(location.search);
     if (m && APPS.indexOf(m[1]) >= 0) openApp(m[1]);
+    var sm = /[?&]stage=([a-z0-9-]+)/.exec(location.search);   // deep link from the static demo page: straight onto the stage
+    if (sm) setTimeout(function () { openDemo('demos/' + sm[1]); }, 1200);
     updateDock();
   }
+
+  /* ---- ADE stage (LOG-096): four synchronized stems — L / R / C (front) / B (back) — placed on the desktop edges; the pointer is the listener.
+     Volume = "stage feel" distance curve with a floor (the far pianos stay in the background, never vanish); pan = direction of each piano
+     from the listener; the back piano is low-passed the further away it is (the listener always faces the front piano).
+     Engine: the stems are downloaded whole, decoded into AudioBuffers and started on one clock (sample-accurate ensemble, no drift, no
+     media elements — those stall on hosts without Range support); costs ~75 MB of RAM per decoded stem, desktop only.
+     The OS music ducks while the stage runs and comes back when the playlist runs out or the stage is left. ---- */
+  var STAGE_FLOOR = 0.25, STAGE_CURVE = 1.5, STAGE_SUM = 1.6, STAGE_PAN_MAX = 0.8, STAGE_LP_MIN = 2500, STAGE_LP_MAX = 8000, STAGE_MASTER = 0.9, STAGE_LEAD_S = 0.15;
+  var stage = (function () {
+    var KEYS = ['C', 'B', 'L', 'R'], POS = { C: [0.5, 0.07], B: [0.5, 0.93], L: [0.07, 0.5], R: [0.93, 0.5] };   /* fractions of the stage; distances are measured in this normalized square so the centre hears all four alike whatever the aspect ratio */
+    var PIANO = '<svg viewBox="0 0 48 32" aria-hidden="true"><path d="M4 8h40v16H4z"/><path d="M10 8v10M16 8v10M22 8v10M28 8v10M34 8v10M40 8v10"/><path d="M8 24v4M40 24v4"/></svg>';
+    var el = null, ctx = null, ch = null, pieces = [], idx = -1, active = false, ducked = false, px = 0.5, py = 0.5, raf = 0, moved = false, hint = null, dot = null, lines = null, ico = null, ttl = null;
+    function lbl(k) { var t = (U.stage_pos || '前|後|左|右').split('|'); return { C: t[0], B: t[1], L: t[2], R: t[3] }[k]; }
+    function build(d) {
+      el = document.createElement('div'); el.className = 'stage'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', d.title);
+      el.innerHTML = '<svg class="st-lines" aria-hidden="true">' + KEYS.map(function (k) { return '<line data-k="' + k + '"/>'; }).join('') + '</svg>' +
+        KEYS.map(function (k) { return '<div class="st-piano" data-k="' + k + '">' + PIANO + '<b>' + esc(lbl(k)) + '</b></div>'; }).join('') +
+        '<div class="st-dot"></div><div class="st-hint">' + esc(U.stage_loading) + '</div>' +
+        '<div class="st-head"><span class="ttl">' + esc(d.title) + '<small></small></span><button class="st-exit" type="button">' + esc(U.stage_exit) + '</button></div>';
+      hint = $('.st-hint', el); dot = $('.st-dot', el); ttl = $('.st-head small', el); lines = {}; ico = {};
+      KEYS.forEach(function (k) { lines[k] = $('line[data-k="' + k + '"]', el); ico[k] = $('.st-piano[data-k="' + k + '"]', el); });
+      $('.st-exit', el).addEventListener('click', stop);
+      el.addEventListener('pointermove', function (e) { var r = el.getBoundingClientRect(); px = (e.clientX - r.left) / r.width; py = (e.clientY - r.top) / r.height; if (!moved) { moved = true; if (hint && ch && ch.playing) hint.classList.add('gone'); } });
+      el.addEventListener('click', function () { if (ctx && ctx.state !== 'running') { ctx.resume().then(playing); } });   /* autoplay refused (deep link without a gesture): first click starts it */
+      desktop.appendChild(el); requestAnimationFrame(function () { el.classList.add('in'); });
+      window.addEventListener('resize', layout); layout();
+    }
+    function layout() {
+      if (!el) return; var W = el.clientWidth, H = el.clientHeight;
+      KEYS.forEach(function (k) { var x = POS[k][0] * W, y = POS[k][1] * H; ico[k].style.left = x + 'px'; ico[k].style.top = y + 'px'; lines[k].setAttribute('x2', x); lines[k].setAttribute('y2', y); });
+    }
+    function start(d) {
+      if (active) stop(); active = true; moved = false; px = 0.5; py = 0.5;
+      pieces = d.pieces || []; idx = -1; build(d);
+      if (player.isPlaying()) { ducked = true; player.duck(true); }
+      document.addEventListener('keydown', onKey); next();
+    }
+    function onKey(e) { if (e.key === 'Escape') stop(); }
+    function next() {
+      unload(); idx++;
+      if (idx >= pieces.length) return stop();   /* playlist exhausted -> leave the stage, music comes back */
+      load(pieces[idx]);
+    }
+    function load(p) {
+      if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') ctx.resume();
+      if (ttl) ttl.textContent = p.title || '';
+      var mine = ch = { playing: false, t0: 0, dur: 0 };
+      KEYS.forEach(function (k) {
+        var g = ctx.createGain(), pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null, lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass'; lp.frequency.value = 20000; lp.Q.value = 0.5; g.gain.value = 0.0001;
+        if (pan) { g.connect(pan); pan.connect(lp); } else g.connect(lp); lp.connect(ctx.destination);
+        mine[k] = { g: g, pan: pan, lp: lp, buf: null, src: null, done: 0, total: 0 };
+        fetchStem('../' + p.stems[k], mine[k], function (ab) {
+          if (ch !== mine) return;   /* stage left / piece changed while downloading */
+          ctx.decodeAudioData(ab, function (buf) { if (ch !== mine) return; mine[k].buf = buf; if (KEYS.every(function (x) { return mine[x].buf; })) playAll(); }, fail);
+        });
+      });
+    }
+    function fail() { if (hint) { hint.textContent = 'audio error'; hint.classList.remove('gone'); } }
+    function fetchStem(url, c, done) {
+      var xhr = new XMLHttpRequest(); xhr.open('GET', url); xhr.responseType = 'arraybuffer';
+      xhr.onprogress = function (e) { c.done = e.loaded; c.total = e.lengthComputable ? e.total : 0; progress(); };
+      xhr.onload = function () { if (xhr.status >= 200 && xhr.status < 300) { c.done = c.total = xhr.response.byteLength; progress(); done(xhr.response); } else fail(); };
+      xhr.onerror = fail; xhr.send();
+    }
+    function progress() {
+      if (!hint || !ch || ch.playing) return;
+      var d = 0, t = 0; KEYS.forEach(function (k) { if (ch[k]) { d += ch[k].done; t += ch[k].total; } });
+      hint.textContent = U.stage_loading + (t ? ' ' + Math.round(100 * d / t) + '%' : '');
+    }
+    function playAll() {
+      if (!ch || !ctx || ch.playing) return; ch.playing = true;
+      var mine = ch, t0 = ctx.currentTime + STAGE_LEAD_S; mine.t0 = t0; mine.dur = 0;
+      KEYS.forEach(function (k) {
+        var c = mine[k], s = ctx.createBufferSource(); s.buffer = c.buf; s.connect(c.g); s.start(t0); c.src = s; if (c.buf.duration > mine.dur) mine.dur = c.buf.duration;
+        if (k === 'C') s.onended = function () { if (ch === mine) next(); };
+      });
+      if (ctx.state !== 'running') { ctx.resume().then(playing, function () { if (hint) { hint.textContent = U.stage_tap; hint.classList.remove('gone'); } }); if (hint) hint.textContent = U.stage_tap; }
+      else playing();
+    }
+    function playing() { if (!ch || !ch.playing) return; if (hint) { hint.textContent = U.stage_hint; if (moved) hint.classList.add('gone'); } if (!raf) raf = requestAnimationFrame(tick); }
+    function tick() {
+      raf = 0; if (!active || !ch || !ctx || !el) return;
+      var W = el.clientWidth, H = el.clientHeight, lx = px * W, ly = py * H, DMAX = Math.SQRT1_2, raw = {}, sum = 0;
+      var dist = function (k) { return Math.min(1, Math.hypot(POS[k][0] - px, POS[k][1] - py) / DMAX); };
+      KEYS.forEach(function (k) { var d = dist(k); raw[k] = STAGE_FLOOR + (1 - STAGE_FLOOR) * Math.pow(1 - d, STAGE_CURVE); sum += raw[k]; });
+      var scale = STAGE_SUM / sum, t = ctx.currentTime, gmax = 0;
+      KEYS.forEach(function (k) { if (raw[k] * scale > gmax) gmax = raw[k] * scale; });
+      KEYS.forEach(function (k) {
+        var c = ch[k], g = raw[k] * scale * STAGE_MASTER;
+        c.g.gain.setTargetAtTime(g, t, 0.05);
+        if (c.pan) c.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, (POS[k][0] - px) * 2)) * STAGE_PAN_MAX, t, 0.05);
+        if (k === 'B') { var db = dist('B'); c.lp.frequency.setTargetAtTime(STAGE_LP_MIN + (STAGE_LP_MAX - STAGE_LP_MIN) * (1 - db), t, 0.05); }
+        var rel = raw[k] * scale / gmax, o = 0.3 + 0.7 * rel;
+        ico[k].style.opacity = o; ico[k].style.transform = 'translate(-50%,-50%) scale(' + (0.85 + 0.35 * rel).toFixed(3) + ')';
+        lines[k].setAttribute('x1', lx); lines[k].setAttribute('y1', ly); lines[k].style.opacity = (0.08 + 0.5 * rel * rel).toFixed(3);
+      });
+      dot.style.left = lx + 'px'; dot.style.top = ly + 'px';
+      raf = requestAnimationFrame(tick);
+    }
+    function unload() {
+      if (!ch) return;
+      KEYS.forEach(function (k) { var c = ch[k]; if (!c) return; if (c.src) { c.src.onended = null; try { c.src.stop(); } catch (e) {} } try { c.lp.disconnect(); } catch (e) {} c.buf = null; });
+      ch = null; if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    }
+    function stop() {
+      if (!active) return; active = false;
+      unload(); if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; }
+      document.removeEventListener('keydown', onKey); window.removeEventListener('resize', layout);
+      if (el) { var e0 = el; el = null; e0.classList.remove('in'); setTimeout(function () { e0.remove(); }, 500); }
+      if (ducked) { ducked = false; player.unduck(); }
+    }
+    return { start: start, stop: stop, active: function () { return active; },
+             debug: function () { var o = { active: active, ctx: ctx ? ctx.state : '-', idx: idx, playing: !!(ch && ch.playing), pos: ch && ch.playing && ctx ? +(ctx.currentTime - ch.t0).toFixed(2) : 0, dur: ch ? +ch.dur.toFixed(1) : 0, px: +px.toFixed(3), py: +py.toFixed(3) }; if (ch) KEYS.forEach(function (k) { var c = ch[k]; o[k] = { buf: !!c.buf, g: +c.g.gain.value.toFixed(3), pan: c.pan ? +c.pan.pan.value.toFixed(2) : null, lp: Math.round(c.lp.frequency.value) }; }); return o; } };
+  })();
 
   function openApp(app) {
     if (PHONE) return phone.open(app);
@@ -790,6 +908,7 @@
   function openDemo(id) {
     if (PHONE) return phone.openDemo(id);
     var d = D.demos.filter(function (x) { return x.path === id; })[0]; if (!d) return;
+    if (d.native === 'stage') { minimize('demos'); return stage.start(d); }   /* shell-native: the desktop itself is the stage, no iframe */
     var key = 'demo-' + id.replace(/[^a-z0-9-]/gi, '-'), w = wins[key];
     if (!w) {
       w = createWindow(key, { title: d.title, glyph: ICON.demos, size: [900, 640], page: '../' + d.path + '/', render: function (body, win) {
@@ -954,7 +1073,7 @@
       body.innerHTML = '<p class="d">' + esc(U.demos_intro) + '</p><ul class="list">' + D.demos.map(function (d) {
         return '<li><span class="badge demo">' + esc(U.type_demo) + '</span><div style="flex:1"><div class="t">' + esc(d.title) + ' <span class="meta">' + esc(d.year || '') + '</span></div><div class="d">' + esc(d.desc) + '</div>' +
           '<div class="meta" style="margin:.3rem 0">' + esc(d.platform === 'desktop' ? U.platform_desktop : U.platform_all) + '</div>' +
-          '<button class="btn" data-demo="' + esc(d.path) + '">' + esc(U.open_demo) + '</button></div></li>';
+          '<button class="btn" data-demo="' + esc(d.path) + '">' + esc(d.native ? U.start_stage : U.open_demo) + '</button></div></li>';
       }).join('') + '</ul>';
       body.addEventListener('click', function (e) { var b = e.target.closest('[data-demo]'); if (b) openDemo(b.dataset.demo); });
     },
@@ -1160,7 +1279,7 @@
     function next() { var i = pickRandom(); remember(i); load(i, true); }
     return { seek: function (sec) { if (audio && !list[cur].synth) { audio.currentTime = sec; if (pausedAt !== null) pausedAt = sec; } }, onTrack: function (fn) { trackListeners.push(fn); }, duck: duck, unduck: unduck, unlock: unlock, mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state, autoplay: autoplay, prepare: prepare, restore: restore, prev: prev, next: next, toggleMute: toggleMute, setVolume: setVolume,
              analyser: function () { return analyser; }, isPlaying: function () { return playing; },
-             debug: function () { return { ctx: actx ? actx.state : '-', playing: playing, started: started, ducked: ducked, muted: muted, vol: vol, cur: cur, unlocked: !!(audio && audio._unlocked), wired: !!(audio && audio._wired),
+             debug: function () { return { stage: stage.debug(), ctx: actx ? actx.state : '-', playing: playing, started: started, ducked: ducked, muted: muted, vol: vol, cur: cur, unlocked: !!(audio && audio._unlocked), wired: !!(audio && audio._wired),
                paused: audio ? audio.paused : '-', rs: audio ? audio.readyState : '-', ns: audio ? audio.networkState : '-', t: audio ? audio.currentTime.toFixed(1) : '-', err: audio && audio.error ? audio.error.code : 0, gain: master ? master.gain.value.toFixed(3) : '-', out: out ? out.gain.value.toFixed(2) : '-' }; } };
   })();
   if (/[?&]debug/.test(location.search)) window.__player = player;   /* ?debug: console access for testing (seek / state) */
