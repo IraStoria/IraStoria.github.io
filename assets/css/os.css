@@ -210,9 +210,11 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .ph-app{background:none;border:0;display:flex;flex-direction:column;align-items:center;gap:6px;color:#fff;font-size:11px;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .ph-app .ic{width:60px;height:60px;border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:30px;box-shadow:0 6px 14px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.25)}
 .ph-app:active .ic{transform:scale(.92);filter:brightness(.8)}
-.ic.works{background:linear-gradient(160deg,#8e5cff,#4d2bb3)}.ic.demos{background:linear-gradient(160deg,#ffb347,#e06a1a)}.ic.player{background:linear-gradient(160deg,#ff5f7e,#c1123b)}
-.ic.articles{background:linear-gradient(160deg,#ffd76a,#e0a020)}.ic.about{background:linear-gradient(160deg,#5fd4ff,#1b7fc9)}.ic.terminal{background:linear-gradient(160deg,#3a3f4b,#14171e)}
-.ic.lang{background:linear-gradient(160deg,#54d68a,#1a8a4f)}.ic.upd{background:linear-gradient(160deg,#6ec6ff,#2a6fd6)}.ic.page{background:linear-gradient(160deg,#c9cdd8,#7a8090)}
+/* phone tiles: one quiet glass look for every app (no per-app colour), white line icon; the language tile is text */
+.ph-app .ic{background:linear-gradient(160deg,rgba(255,255,255,.16),rgba(255,255,255,.05)),#0b0d12;box-shadow:0 6px 14px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.16),inset 0 1px 0 rgba(255,255,255,.22);color:#f2f1ee}
+.ph-app .ic .wg{display:flex;align-items:center;justify-content:center}
+.ph-app .ic svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;display:block}
+.ph-app .ic.lang{font:600 20px/1 var(--font);letter-spacing:.02em}
 .ph-hero{margin-top:auto;padding:0 8px 14px;text-align:center;opacity:.85}
 .ph-hero b{display:block;font-size:22px;letter-spacing:.04em}.ph-hero span{font-size:12px;opacity:.8}
 .ph-dock{margin:0 0 calc(12px + env(safe-area-inset-bottom));background:rgba(255,255,255,.14);backdrop-filter:blur(20px);border-radius:28px;padding:12px 10px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -364,7 +366,7 @@ body.hb .lang-switch:hover .ls-track,body.hb[data-lang="zh"] .lang-switch:hover 
 body.hb .filter button.on{border-color:#3dff7a}body.hb .win-bar .fs:hover{color:#3dff7a}
 /* hb on the phone: app tiles keep a dark ground — translucent green with a thin outline — and only the emoji is tinted (a filtered gradient tile was a solid bright block) */
 .ph-app .ic{transition:background .7s ease,box-shadow .7s ease}
-body.hb .ph-app .ic{background:linear-gradient(rgba(61,255,122,.10),rgba(61,255,122,.10)),#0b0d12;box-shadow:inset 0 0 0 1px rgba(61,255,122,.45),0 0 10px rgba(61,255,122,.12)}
+body.hb .ph-app .ic{background:linear-gradient(rgba(61,255,122,.10),rgba(61,255,122,.10)),#0b0d12;box-shadow:inset 0 0 0 1px rgba(61,255,122,.45),0 0 10px rgba(61,255,122,.12);color:#3dff7a}
 body.hb .ph-dock{background:rgba(12,24,16,.88);box-shadow:inset 0 0 0 1px rgba(61,255,122,.18)}
 body.hb .phone *:not(.np-title,.np-title *,canvas){text-shadow:0 0 8px rgba(61,255,122,.3)}
 /* player app transport: inline SVG icons (same set as the corner control); .on toggles play/pause and sound/mute */

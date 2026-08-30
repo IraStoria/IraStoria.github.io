@@ -716,7 +716,17 @@
   var APPS = ['works', 'demos', 'player', 'articles', 'about', 'terminal'];
   var TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, terminal: U.app_terminal, updates: U.app_updates };
   var PAGES = { works: 'works/', demos: 'demos/', articles: 'articles/', about: 'about/' };
-  var GLYPH = { works: '🎼', demos: '🎛️', player: '▶️', articles: '📝', about: '👤', terminal: '🔍', updates: '💬' };
+  var GLYPH = { works: '🎼', demos: '🎛️', player: '▶️', articles: '📝', about: '👤', terminal: '🔍', updates: '💬' };   /* desktop shell + window titles */
+  /* phone shell: monochrome line icons instead of emoji (one tile colour, white stroke) */
+  var ICON = {
+    works: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>',
+    demos: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2" fill="#0b0d12"/><circle cx="15" cy="12" r="2" fill="#0b0d12"/><circle cx="8" cy="18" r="2" fill="#0b0d12"/></svg>',
+    player: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" stroke-linejoin="round"/></svg>',
+    articles: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke-linejoin="round"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>',
+    updates: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" stroke-linejoin="round"/></svg>',
+    about: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>',
+    terminal: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>',
+  };
 
   function initDesktop() {
     if (initDesktop.did) return; initDesktop.did = true;
@@ -1222,7 +1232,7 @@
     var HOME_APPS = ['works', 'demos', 'player', 'articles', 'updates', 'about', 'terminal', 'lang'];
     var DOCK_APPS = ['works', 'demos', 'player', 'about'];
     function label(a) { return a === 'lang' ? U.lang_switch : TITLES[a]; }
-    function glyph(a) { return a === 'lang' ? (lang === 'zh' ? 'EN' : '中') : GLYPH[a]; }
+    function glyph(a) { return a === 'lang' ? (lang === 'zh' ? 'EN' : '中') : (ICON[a] || GLYPH[a]); }
     function fill(b) { var a = b.getAttribute('data-app'); b.innerHTML = '<span class="ic ' + (a === 'updates' ? 'upd' : a) + '"><span class="wg">' + glyph(a) + '</span></span><span>' + esc(label(a)) + '</span>'; }
     function appBtn(a) {
       var b = document.createElement('button'); b.className = 'ph-app'; b.setAttribute('data-app', a); fill(b);
