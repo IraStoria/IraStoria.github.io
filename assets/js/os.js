@@ -1306,7 +1306,7 @@
       if (top && top.dataset.app === app) return;
       var pnl = document.createElement('section'); pnl.className = 'papp'; pnl.dataset.app = app; pnl.setAttribute('role', 'dialog');
       pnl.innerHTML = '<div class="papp-nav"><button class="back">‹ ' + esc(backLabel()) + '</button><span class="ttl">' + esc(TITLES[app]) + '</span>' +
-        (PAGES[app] ? '<a class="more" href="' + PAGES[app] + '">' + esc(U.open_page) + '</a>' : '<span class="more"></span>') + '</div><div class="papp-body"></div>';
+        '<span class="more"></span></div><div class="papp-body"></div>';   /* no "open as page" on the phone: the static page is the same content with no way back into the shell */
       push(pnl, app);
       RENDER[app]($('.papp-body', pnl), pnl);
     }
@@ -1319,7 +1319,7 @@
       if (top && top.dataset.app === key) return;
       var pnl = document.createElement('section'); pnl.className = 'papp papp-demo'; pnl.dataset.app = key; pnl.dataset.demo = id; pnl.setAttribute('role', 'dialog');
       pnl.innerHTML = '<div class="papp-nav"><button class="back">‹ ' + esc(backLabel()) + '</button><span class="ttl">' + esc(d.title) + '</span>' +
-        '<span class="more"><button class="full" title="' + esc(U.win_fullscreen) + '" aria-label="' + esc(U.win_fullscreen) + '">⛶</button><a href="../' + esc(d.path) + '/">' + esc(U.open_page) + '</a></span></div><div class="papp-body frame"></div>';
+        '<span class="more"><button class="full" title="' + esc(U.win_fullscreen) + '" aria-label="' + esc(U.win_fullscreen) + '">⛶</button></span></div><div class="papp-body frame"></div>';
       var f = document.createElement('iframe'); f.className = 'demo-frame'; f.src = '../' + d.path + '/'; f.title = d.title; f.setAttribute('allow', 'autoplay; fullscreen'); f.allowFullscreen = true;
       f.addEventListener('load', function () { watchAudio(f, pnl); setTimeout(function () { ext.register(f, pnl); }, 300); });   /* the demo script sets window.sectionPlayer right after load */
       $('.papp-body', pnl).appendChild(f);
