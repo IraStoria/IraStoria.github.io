@@ -792,15 +792,16 @@
      RELEASE / LVL_RELEASE / PUNCH_RELEASE: per-frame fall of the bands / the glow level / the accent boost — lower = snappier, accents stand out more. */
   var stage = (function () {
     var KEYS = ['C', 'B', 'L', 'R'], UNIT = { C: [0, -1], B: [0, 1], L: [-1, 0], R: [1, 0] };   /* stage space: the centre is (0,0), every piano one unit out along its axis = on its screen edge */
-    var el = null, cv = null, g2 = null, ctx = null, ch = null, vis = {}, pieces = [], idx = -1, active = false, ducked = false, lx = -1, ly = -1, raf = 0, moved = false, hint = null, ttl = null, geo = null, growT0 = 0, growDir = 1, grow = 0, demo = null, master = null;
+    var el = null, head = null, cv = null, g2 = null, ctx = null, ch = null, vis = {}, pieces = [], idx = -1, active = false, ducked = false, lx = -1, ly = -1, raf = 0, moved = false, hint = null, ttl = null, geo = null, growT0 = 0, growDir = 1, grow = 0, demo = null, master = null;
     function build(d) {
       el = document.createElement('div'); el.className = 'stage'; el.setAttribute('aria-label', d.title);
-      el.innerHTML = '<canvas class="st-cv" aria-hidden="true"></canvas>' +
-        '<div class="st-hint">' + esc(U.stage_loading) + '</div>' +
-        '<div class="st-head"><span class="ttl">' + esc(d.title) + '<small></small></span><button class="st-exit" type="button">' + esc(U.stage_exit) + '</button></div>';
-      hint = $('.st-hint', el); ttl = $('.st-head small', el); cv = $('.st-cv', el); g2 = cv.getContext('2d');
-      $('.st-exit', el).addEventListener('click', stop);
-      desktop.appendChild(el); requestAnimationFrame(function () { el.classList.add('in'); });
+      el.innerHTML = '<canvas class="st-cv" aria-hidden="true"></canvas>';
+      head = document.createElement('div'); head.className = 'stage-ui'; head.innerHTML = '<div class="st-hint">' + esc(U.stage_loading) + '</div>' +
+        '<div class="st-head"><span class="ttl">' + esc(d.title) + '<small></small></span><button class="st-exit" type="button">' + esc(U.stage_exit) + '</button></div>';   /* hint + exit live above the desktop; the spheres live below it */
+      hint = $('.st-hint', head); ttl = $('.st-head small', head); cv = $('.st-cv', el); g2 = cv.getContext('2d');
+      $('.st-exit', head).addEventListener('click', stop);
+      var waveEl = $('#wave'); if (waveEl) desktop.insertBefore(el, waveEl); else desktop.appendChild(el);   /* under the spectrum line, the icons, notes and windows */
+      desktop.appendChild(head); requestAnimationFrame(function () { el.classList.add('in'); head.classList.add('in'); });
       desktop.addEventListener('pointermove', onMove); desktop.addEventListener('click', onClick);
       window.addEventListener('resize', layout); layout();
       growT0 = performance.now() + STAGE_GROW_DELAY_MS; growDir = 1; grow = 0; if (!raf) raf = requestAnimationFrame(tick);   /* the glows wait for the line */
@@ -929,25 +930,28 @@
         var amp = (STAGE_BAR_MIN + (STAGE_REACH_X * geo.ex - r0 - STAGE_BAR_MIN) * rel) * grow * (1 + STAGE_PUNCH * (c.punch || 0)), n = STAGE_BANDS;   /* same wave amplitude on all four edges (sized from the wider axis) */
         var nx_ = -u[0], ny_ = -u[1], tx = horiz ? 0 : 1, ty = horiz ? -1 : 0;   /* (nx_,ny_): inward normal; (tx,ty): along the edge from the lows end */
         function sm(i) { i = Math.max(0, Math.min(n - 1, i)); var B = c.bands, p2 = B[Math.max(0, i - 2)], p = B[Math.max(0, i - 1)], q = B[i], r = B[Math.min(n - 1, i + 1)], r2 = B[Math.min(n - 1, i + 2)]; return (p2 + 2 * p + 3 * q + 2 * r + r2) / 9 * amp; }
-        function arc(rad) {   /* closed shape: along the arc with radius rad(s), then back along the diameter */
+        function arc(rad, inner) {   /* ring: out along the arc with radius rad(s), back along the inner arc (radius `inner`); the centre stays open */
           g2.beginPath();
           for (var s = 0; s < n; s++) { var th = Math.PI * s / (n - 1), R = rad(s), dx = -Math.cos(th) * tx + Math.sin(th) * nx_, dy = -Math.cos(th) * ty + Math.sin(th) * ny_; if (s) g2.lineTo(x + dx * R, y + dy * R); else g2.moveTo(x + dx * R, y + dy * R); }
+          if (inner == null) inner = 0;
+          for (var s2 = n - 1; s2 >= 0; s2--) { var th2 = Math.PI * s2 / (n - 1), dx2 = -Math.cos(th2) * tx + Math.sin(th2) * nx_, dy2 = -Math.cos(th2) * ty + Math.sin(th2) * ny_; g2.lineTo(x + dx2 * inner, y + dy2 * inner); }
           g2.closePath();
         }
         g2.globalCompositeOperation = 'source-over';
         /* black-hole look: the disc is a dark hole; its rim is the brightest ring (white-orange) and the light falls off outward; the wave
            pushes that rim outward, so the body is brightest at the disc edge and fades toward the peaks. A wide additive halo sits behind. */
-        var shape = function (s) { return r0 + sm(s); }, a0 = 0.28 + 0.3 * rel + 0.12 * lvl;   /* M87-style: soft orange ring, never white-hot */
-        g2.globalCompositeOperation = 'lighter'; g2.fillStyle = 'rgba(255,140,50,' + (0.06 + 0.10 * rel + 0.12 * pk).toFixed(3) + ')'; g2.shadowColor = 'rgba(255,150,60,.8)'; g2.shadowBlur = STAGE_HALO + 30 * rel + 40 * pk;
-        arc(shape); g2.fill();   /* halo */
+        var shape = function (s) { return r0 + sm(s); }, a0 = 0.22 + 0.24 * rel + 0.1 * lvl;   /* M87-style: soft orange ring, never white-hot; the centre is open (the wallpaper shows through) */
+        g2.globalCompositeOperation = 'lighter'; g2.fillStyle = 'rgba(255,140,50,' + (0.05 + 0.08 * rel + 0.1 * pk).toFixed(3) + ')'; g2.shadowColor = 'rgba(255,150,60,.8)'; g2.shadowBlur = STAGE_HALO + 40 * rel + 50 * pk;
+        arc(shape, r0 * 0.9); g2.fill();   /* halo */
         var grd = g2.createRadialGradient(x, y, r0, x, y, r0 + Math.max(1, amp));
         grd.addColorStop(0, 'rgba(255,200,120,' + a0.toFixed(3) + ')'); grd.addColorStop(0.25, 'rgba(255,160,70,' + (a0 * 0.8).toFixed(3) + ')'); grd.addColorStop(0.65, 'rgba(220,100,40,' + (a0 * 0.3).toFixed(3) + ')'); grd.addColorStop(1, 'rgba(180,70,30,0)');
-        g2.fillStyle = grd; g2.shadowColor = 'rgba(255,170,90,.7)'; g2.shadowBlur = 18 + 12 * rel + 16 * pk;
-        try { g2.filter = 'blur(' + (6 + 4 * rel).toFixed(0) + 'px)'; } catch (e) {}   /* the ring itself is fuzzy, like the EHT image */
-        arc(shape); g2.fill(); g2.shadowBlur = 0; try { g2.filter = 'none'; } catch (e) {}
-        g2.globalCompositeOperation = 'source-over'; g2.fillStyle = 'rgba(11,13,18,' + (0.97 * grow).toFixed(3) + ')'; arc(function () { return r0 * 0.985; }); g2.fill();   /* the hole: the desktop's own background colour */
-        var rim = g2.createRadialGradient(x, y, r0 * 0.9, x, y, r0 * 1.02); rim.addColorStop(0, 'rgba(255,190,110,0)'); rim.addColorStop(0.85, 'rgba(255,190,110,' + (0.18 + 0.22 * rel).toFixed(3) + ')'); rim.addColorStop(1, 'rgba(255,190,110,0)');
-        g2.fillStyle = rim; arc(function () { return r0 * 1.02; }); g2.fill();   /* the event-horizon ring */
+        g2.fillStyle = grd; g2.shadowColor = 'rgba(255,170,90,.6)'; g2.shadowBlur = 26 + 16 * rel + 20 * pk;
+        try { g2.filter = 'blur(' + (10 + 6 * rel).toFixed(0) + 'px)'; } catch (e) {}   /* the ring itself is fuzzy, like the EHT image */
+        arc(shape, r0 * 0.9); g2.fill(); g2.shadowBlur = 0; try { g2.filter = 'none'; } catch (e) {}
+        var inner = g2.createRadialGradient(x, y, r0 * 0.55, x, y, r0);   /* faint light spilling into the open centre */
+        inner.addColorStop(0, 'rgba(255,170,90,0)'); inner.addColorStop(1, 'rgba(255,170,90,' + (0.05 + 0.06 * rel).toFixed(3) + ')');
+        g2.fillStyle = inner; arc(function () { return r0; }, r0 * 0.55); g2.fill();
+        g2.globalCompositeOperation = 'source-over';
       });
       g2.globalCompositeOperation = 'source-over';
       raf = requestAnimationFrame(tick);
@@ -962,6 +966,7 @@
       unload(); if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; master = null; }
       document.removeEventListener('keydown', onKey); window.removeEventListener('resize', layout); desktop.removeEventListener('pointermove', onMove); desktop.removeEventListener('click', onClick);
       var e0 = el, wasDucked = ducked; ducked = false;
+      if (head) { head.remove(); head = null; }
       if (immediate) { if (e0) e0.remove(); el = null; if (raf) { cancelAnimationFrame(raf); raf = 0; } wave.squash(false); wave.centre(false); if (wasDucked) player.unduck(); return; }
       /* exit choreography: 1) circles shrink back into their dots  2) the line glides back down  3) the music resumes and the play head
          runs to the left edge, then slides back out to the track's real position (the bars rise with it) */

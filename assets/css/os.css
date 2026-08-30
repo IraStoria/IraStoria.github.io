@@ -387,12 +387,14 @@ body.hb .phone *:not(.np-title,.np-title *,canvas){text-shadow:0 0 8px rgba(61,2
 .player .ctl button{color:var(--fg);display:flex;align-items:center;justify-content:center}
 
 /* ADE stage (LOG-096/097): lives on the desktop itself — four dots with a volume halo, the spectrum baseline is the X axis */
-.stage{position:absolute;inset:0;z-index:4;pointer-events:none;opacity:0;transition:opacity .6s}
+.stage{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:0;transition:opacity .6s}   /* under the spectrum canvas (inserted before it): nothing on the desktop is covered */
 .stage.in{opacity:1}
+.stage-ui{position:absolute;inset:0;z-index:20;pointer-events:none;opacity:0;transition:opacity .6s}
+.stage-ui.in{opacity:1}
 .stage .st-cv{position:absolute;inset:0;width:100%;height:100%}
-.stage .st-hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);width:min(70vw,520px);text-align:center;color:var(--dim);font:12px/1.7 var(--mono);transition:opacity .6s}
-.stage .st-hint.gone{opacity:0}
-.stage .st-head{position:absolute;top:38px;right:16px;display:flex;align-items:center;gap:.9rem;font:12px/1.4 var(--mono);color:var(--fg);pointer-events:auto}
-.stage .st-head .ttl{opacity:.7}.stage .st-head .ttl small{color:var(--dim);margin-left:.6em}
-.stage .st-exit{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);color:var(--fg);border-radius:999px;padding:.35rem .9rem;font:12px var(--mono);cursor:pointer}
-.stage .st-exit:hover{background:rgba(255,255,255,.14)}
+.stage-ui .st-hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);width:min(70vw,520px);text-align:center;color:var(--dim);font:12px/1.7 var(--mono);transition:opacity .6s}
+.stage-ui .st-hint.gone{opacity:0}
+.stage-ui .st-head{position:absolute;top:38px;right:16px;display:flex;align-items:center;gap:.9rem;font:12px/1.4 var(--mono);color:var(--fg);pointer-events:auto}
+.stage-ui .st-head .ttl{opacity:.7}.stage-ui .st-head .ttl small{color:var(--dim);margin-left:.6em}
+.stage-ui .st-exit{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);color:var(--fg);border-radius:999px;padding:.35rem .9rem;font:12px var(--mono);cursor:pointer}
+.stage-ui .st-exit:hover{background:rgba(255,255,255,.14)}
