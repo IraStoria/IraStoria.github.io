@@ -277,7 +277,8 @@
   // notes JSON (built from content/midi/<id>.mid by build.py) is fetched when the track changes; the clock is the player's own position
   // (frozen while paused). Pitched lanes share the spectrum's log-frequency X so a note lands on the bars it lights up; drum / fx lanes
   // are fixed columns on the left, the beat lane is the rightmost column. A note keeps falling past the line, greyed and fading.
-  var LOOKAHEAD_S = 4, TAIL_FRAC = 0.32, LATENCY_S = 0, WF_CHANCE = 0.1, BEND_SMOOTH_S = 0.3;   /* WF_CHANCE: probability that this page load shows the waterfall at all (rolled once, every track follows); can be forced */
+  var LOOKAHEAD_S = 4, TAIL_FRAC = 0.32, LATENCY_S = 0, WF_CHANCE = 0.1, BEND_SMOOTH_S = 0.3;
+  var PHONE_AREA = false, PHONE_MIN_BARS = 24;   /* phone spectrum: false = same bars as desktop (bar pitch ~12 px, so ~32 bars at 390 px); true = the smoothed silhouette (LOG-071). PHONE_MIN_BARS is the narrow-screen floor on the bar count */   /* WF_CHANCE: probability that this page load shows the waterfall at all (rolled once, every track follows); can be forced */
   var WF_ON = null; function wfOn() { if (WF_ON === null) WF_ON = !!EE.midi || !!EE.hb || !!EE_TRACK || Math.random() < WF_CHANCE; return WF_ON; }
   // heartbeat egg: rolled ONCE at page entry (1%, can be forced). If armed, it fires on the first track with a beat lane (elcirtnev) played
   // this visit — whether that is the boot track or one switched to later.
@@ -522,7 +523,7 @@
       var an = ext.analyser();
       if (mode === 'live' && an) {
         // spectrum bars (same log-frequency mapping as the player). On pause the bars fall gradually instead of vanishing.
-        var n = Math.max(48, Math.min(128, Math.floor(W / 12))), bw = W / n, maxH = H * 0.28, any = false;
+        var n = Math.max(W < 700 ? PHONE_MIN_BARS : 48, Math.min(128, Math.floor(W / 12))), bw = W / n, maxH = H * 0.28, any = false;   /* phone: no 48-bar floor, so the bars keep desktop proportions instead of turning into 6 px sticks */
         var lv = barLevels(an, n);
         if (levels.length !== n) levels = new Array(n).fill(0);
         g2.shadowBlur = 0;
@@ -552,7 +553,7 @@
         var lit = wf ? wf.lights(g2, W, H, y) : false;   /* stage lights behind the bars; when lit, each bar punches the light out under itself so it reads as solid */
         var lpx = px;
         if (clearT0) { var cp = (now - clearT0) / CLEAR_MS; if (cp >= 1) clearT0 = 0; else { var sx = W * clearFrom * (1 - ease(cp)); lpx = Math.max(px, sx); if (clearBars) px = Math.max(px, sx); } }
-        var areaMode = W < 700 && m <= 0;   /* phone: bars and MIDI blocks are both thin sticks and blur together — the spectrum becomes one smooth filled silhouette instead */
+        var areaMode = PHONE_AREA && W < 700 && m <= 0;   /* phone: bars and MIDI blocks are both thin sticks and blur together — the spectrum becomes one smooth filled silhouette instead */
         for (var i = 0; i < n; i++) {
           var target = lv[i];   // follows the real signal, so the fade-out and the bars fall together
           levels[i] = target > levels[i] ? target : Math.max(target, levels[i] * dk);
