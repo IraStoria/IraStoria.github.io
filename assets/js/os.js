@@ -122,10 +122,12 @@
   var script = [];
   // ============================================================ fx: click-to-enter video overlay + synced sound (IDEA-001 / feat.fx)
   var fx = (function () {
+    var OGG_OK = (function () { try { return !!document.createElement('audio').canPlayType('audio/ogg; codecs="vorbis"'); } catch (e) { return false; } })();
+    function sndUrl(u) { return OGG_OK ? u : u.replace(/\.ogg(\?|$)/, '.m4a$1'); }   /* Safari has never decoded Ogg Vorbis: the same clips ride alongside as AAC (.m4a), picked at runtime */
     var cfg = (D.fx && D.fx.click) || null, vid = null, snd = null, bootCfg = (D.fx && D.fx.boot) || null, bootSnd = null, bootPending = false;
     if (cfg && cfg.video && !reduced) { vid = document.createElement('video'); vid.src = '../' + cfg.video; vid.muted = true; vid.playsInline = true; vid.preload = 'auto'; vid.className = 'fx-clip'; vid.setAttribute('aria-hidden', 'true'); vid.load(); }
-    if (cfg && cfg.sound) { snd = new Audio('../' + cfg.sound); snd.preload = 'auto'; snd.load(); }
-    if (bootCfg && bootCfg.sound) { bootSnd = new Audio('../' + bootCfg.sound); bootSnd.preload = 'auto'; bootSnd.load(); }
+    if (cfg && cfg.sound) { snd = new Audio('../' + sndUrl(cfg.sound)); snd.preload = 'auto'; snd.load(); }
+    if (bootCfg && bootCfg.sound) { bootSnd = new Audio('../' + sndUrl(bootCfg.sound)); bootSnd.preload = 'auto'; bootSnd.load(); }
     // boot sound: try the moment the boot screen appears; browsers block sound before the first gesture, so if refused we play it on the boot click instead
     function boot() {
       if (!bootSnd || muted()) return;
