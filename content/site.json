@@ -319,6 +319,10 @@
       "zh": "載入四軌中…",
       "en": "Loading the four stems…"
     },
+    "stage_loading_sec": {
+      "zh": "載入段落中…",
+      "en": "Loading the sections…"
+    },
     "stage_tap": {
       "zh": "點一下開始",
       "en": "Click to start"

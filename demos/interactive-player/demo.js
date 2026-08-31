@@ -60,7 +60,7 @@
   var TICK = 25;
 
   /* scheduler state */
-  var running = false, timer = null, paused = false, muted = false, mgain = null, byeTimer = null;   /* paused = ctx.suspend(): the clock freezes, so the whole schedule freezes with it; muted drives mgain (after the analyser — the bars keep moving); byeTimer: the outro's panel collapse */
+  var running = false, timer = null, paused = false, muted = false, mgain = null, byeTimer = null, loadProg = null;   /* loadProg {d,t}: fetch+decode progress while the stage loads (the OS shows it at the line, like the ADE stage) */   /* paused = ctx.suspend(): the clock freezes, so the whole schedule freezes with it; muted drives mgain (after the analyser — the bars keep moving); byeTimer: the outro's panel collapse */
   var stageLead = 0, stageT0 = null;   /* stage mode: four 4/4 beats at the theme's tempo before the first entry — load time, like the ADE stage's count-in */
   var cur = null;        /* { seg, start, end, src, gain } */
   var nxt = null;        /* scheduled next: same shape */
@@ -81,7 +81,7 @@
   /* public API for the host page (same-origin iframe): progress / spectrum / title of the current section */
   window.sectionPlayer = {
     state: function () {
-      if (!running || !cur || !ctx) return { active: false, started: false, playing: false, title: '', pos: 0, dur: 0, frac: 0, muted: muted };
+      if (!running || !cur || !ctx) return { active: false, started: false, playing: false, title: '', pos: 0, dur: 0, frac: 0, muted: muted, loading: loadProg };
       var pos = Math.max(0, Math.min(cur.end - cur.start, ctx.currentTime - cur.start)), dur = cur.end - cur.start;
       var mark = cur.seg === OUTRO ? null : Math.max(0, 1 - decisionLead() / dur);   /* the decision-lock point as a fraction — the OS line draws it as a tick */
       var o = { active: true, started: true, playing: !paused, title: trackTitle(cur.seg), parts: titleParts(cur.seg), id: cur.seg.id, pos: pos, dur: dur, frac: dur ? pos / dur : 0, mark: mark, muted: muted };
@@ -265,10 +265,11 @@
     paused = false;
     if (stageLead && stageT0 === null) stageT0 = ctx.currentTime;   /* the count-in starts NOW; loading runs inside it */
     var pending = allSegs().filter(function (s) { return !buffers[bufKey(s)]; }), done = 0, fetched = 0;
-    var prog = function () { startBtn.textContent = T('loading') + ' ' + fetched + '↓ ' + done + '/' + pending.length; };   /* downloaded↓ decoded/total — so a stall is visible as one or the other */
+    var prog = function () { startBtn.textContent = T('loading') + ' ' + fetched + '↓ ' + done + '/' + pending.length; loadProg = pending.length ? { d: fetched + done, t: pending.length * 2 } : null; };   /* downloaded↓ decoded/total — so a stall is visible as one or the other; loadProg counts both phases for the OS loading readout */
     startBtn.disabled = true; if (pending.length) prog();
     Promise.all(pending.map(function (s) { return loadBuffer(s, function () { fetched++; prog(); }).then(function (b) { buffers[bufKey(s)] = b; done++; prog(); }); })).then(function () {
       if (pending.length && /[?&]debug/.test(location.search)) logLoad(pending);   /* decode check only with ?debug */
+      loadProg = null;
       running = true; queued = later = null; randomAuto = false; lastId = null; history = []; loopCount = 0; mate = null;
       var first = INTRO || SEG[0];
       var entry = ctx.currentTime + 0.05 + preSec(first);   /* first entry sits after its own pick-up: start times can't be negative */
@@ -277,7 +278,7 @@
       markPair(first);   /* starting inside a two-version group opens its pair too */
       history.push(first.id); fireTrack(0);
       timer = setInterval(tick, TICK); startBtn.disabled = false; render();
-    }).catch(function (err) { running = false; clearInterval(timer); cur = nxt = null; startBtn.disabled = false; var s = document.createElement('span'); s.className = 'bad'; s.textContent = 'start error: ' + (err && err.stack || err) + '\n'; histEl.appendChild(s); render(); });
+    }).catch(function (err) { running = false; loadProg = null; clearInterval(timer); cur = nxt = null; startBtn.disabled = false; var s = document.createElement('span'); s.className = 'bad'; s.textContent = 'start error: ' + (err && err.stack || err) + '\n'; histEl.appendChild(s); render(); });
   }
   function stop() {
     running = false; clearInterval(timer);

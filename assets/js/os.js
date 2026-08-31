@@ -1506,11 +1506,16 @@
      (ext.register) keeps the desktop line, caption and duck in sync; Escape or the「離開舞台」button leaves. */
   var DSTAGE_OUT_MS = 420;
   var secStage = (function () {
-    var el = null, head = null, active = false, frame = null, watch = 0, seen = false, fw = false, tRaf = 0;   /* fw: the outro farewell has taken the line down; tRaf: the caption-tint loop */
+    var el = null, head = null, active = false, frame = null, watch = 0, seen = false, fw = false, tRaf = 0, hint = null;   /* fw: the outro farewell has taken the line down; tRaf: the caption-tint loop; hint: the loading readout */
     var lastSec = null, aheadCol = '224,176,74', lastTint = '224,176,74';   /* the caption HOLDS the previous section's colour ahead of the play head — it never fades, only the sweeping new colour replaces it */
     var stopTimers = [];   /* the exit choreography's timers — a quick re-entry must cancel them (or the bars would pop back up mid-entrance) */
     function paintTitle() {   /* ADE's title treatment, in the section's colour: each half is a gradient clipped to its glyphs — part colour behind the play head, amber ahead, glowing with the covered share; the colour is the line's own eased tint, so both change together */
       tRaf = 0; if (!active) return; tRaf = requestAnimationFrame(paintTitle);
+      if (hint && !hint.classList.contains('gone')) {   /* loading readout at the line (as on the ADE stage), gone once the player is up */
+        var stL = null; try { stL = frame && frame.contentWindow && frame.contentWindow.sectionPlayer && frame.contentWindow.sectionPlayer.state(); } catch (e) {}
+        if (stL && stL.active) hint.classList.add('gone');
+        else if (stL && stL.loading && stL.loading.t) hint.textContent = U.stage_loading_sec + ' ' + Math.round(100 * stL.loading.d / stL.loading.t) + '%';
+      }
       var a = ext.api(), st = a && a.state(), tEl = document.querySelector('#np-desktop .np-title'); if (!tEl) return;
       var sp = tEl.querySelectorAll('.np-tag, .np-rest'); if (!st || !st.active || !st.color || !sp.length) return;
       var col = wave.tintNow(), hx = wave.head();
@@ -1539,7 +1544,8 @@
       f.addEventListener('load', function () { watchAudio(f, el); setTimeout(function () { ext.register(f, el); }, 300); });   /* same contract as the demo window: duck on first sound, line + caption follow */
       $('.ds-panel', el).appendChild(f);
       head = document.createElement('div'); head.className = 'stage-ui';
-      head.innerHTML = '<div class="st-head"><button class="st-exit" type="button">' + esc(U.stage_exit) + '</button></div>';
+      head.innerHTML = '<div class="st-hint">' + esc(U.stage_loading_sec) + '</div><div class="st-head"><button class="st-exit" type="button">' + esc(U.stage_exit) + '</button></div>';   /* the ADE stage's loading readout, at the line's centre */
+      hint = $('.st-hint', head); hint.style.top = ((wave.baseY() || desktop.clientHeight * 0.58) - 34) + 'px';
       $('.st-exit', head).addEventListener('click', function () { stop(); });
       desktop.appendChild(el); desktop.appendChild(head);
       requestAnimationFrame(function () { el.classList.add('in'); head.classList.add('in'); });

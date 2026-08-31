@@ -69,6 +69,8 @@ h1{margin:.2rem 0 .4rem;font-size:1.7rem}.lead{color:var(--dim);max-width:65ch}
    Buttons are liquid-glass bubbles (hairline ring + top glint, like the shell's hover bubble); the zone frames are gone
    (only the labels remain); a section that may not follow the current one fades off the screen until it is allowed again. */
 body.stage{background:none}
+html.stage body{visibility:hidden;background:none}   /* the head script marks <html> before first paint; the page stays invisible until demo.js has dressed it for the stage */
+html.stage body.stage{visibility:visible}
 body.stage .top,body.stage h1,body.stage .lead,body.stage .viz,body.stage .explain,body.stage .hist{display:none}
 body.stage main{max-width:none;height:100vh;margin:0;padding:0;display:flex;align-items:stretch}
 body.stage .panel{margin:0;flex:1;overflow:visible;background:none;border:0;padding:0}
