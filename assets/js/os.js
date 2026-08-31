@@ -683,7 +683,8 @@
     function start(m) { if (!cv) return; mode = m || 'idle'; if (!raf) draw(); }
     function connect(cb, lead) { if (!cv) { cb(); return; } onConnected = cb; connectT0 = performance.now(); if (wf && lead) wf.preroll(connectT0, lead); start('connect'); }   /* lead: waterfall pre-roll seconds */
     function sweep(bars, fromFrac) { clearT0 = performance.now(); clearBars = !!bars; clearFrom = (fromFrac == null) ? 1 : Math.max(0, Math.min(1, fromFrac)); }
-    return { start: start, connect: connect, sweep: sweep, hb: function () { return !!(wf && wf.hb()); }, squash: function (on) { squashTo = on ? 0 : 1; }, boost: function (k, dec) { boostK = k || 1; decayK = dec || 1; }, centre: function (on) { yTo = on ? 0.5 : yRatio; }, head: function () { return headPx; }, tint: function (col, shadow, ms) { tintFrom = tintCur.slice(); tintTo = [col || AMB0, shadow || AMB0]; tintT0 = performance.now(); tintDur = col ? (ms || TINT_MS) : TINT_OUT_MS; },   /* null = back to amber, slowly */
+    function flush() { for (var fi = 0; fi < levels.length; fi++) levels[fi] = 0; }   /* drop the held bar heights: on an audio-source handover the rising bars must carry the NEW source's sound, not the old one's residue */
+    return { start: start, connect: connect, sweep: sweep, flush: flush, hb: function () { return !!(wf && wf.hb()); }, squash: function (on) { squashTo = on ? 0 : 1; }, boost: function (k, dec) { boostK = k || 1; decayK = dec || 1; }, centre: function (on) { yTo = on ? 0.5 : yRatio; }, head: function () { return headPx; }, tint: function (col, shadow, ms) { tintFrom = tintCur.slice(); tintTo = [col || AMB0, shadow || AMB0]; tintT0 = performance.now(); tintDur = col ? (ms || TINT_MS) : TINT_OUT_MS; },   /* null = back to amber, slowly */
              ghost: function (frac) { ghostT0 = performance.now(); ghostFrac = Math.max(0, Math.min(1, frac == null ? 1 : frac)); ghostCol = tintCur[0]; }, tintNow: function () { return tintCur[0]; },   /* snapshot the outgoing fill: it fades out where it stood; tintNow = the line's current eased colour (the caption paints with the same brush) */
              ghostInfo: function () { if (!ghostT0) return null; var gp = (performance.now() - ghostT0) / GHOST_MS; return gp >= 1 ? null : { col: ghostCol, k: 1 - ease(gp) };
  },   /* the fading previous colour (k 1->0 on the ghost clock) — the caption's not-yet-repainted part wears it */
@@ -1552,7 +1553,7 @@
         try {
           var a2 = frame && frame.contentWindow && frame.contentWindow.sectionPlayer; if (!a2) return;
           if (!fw && frame.contentDocument && frame.contentDocument.body.classList.contains('bye')) { fw = true; wave.farewell(); setTimeout(function () { stop(); }, 950); }   /* two bars from the end: retract into the centre, and the moment it is gone hand STRAIGHT over to the desktop player (the outro's tail sings on under it) */
-          if (a2.state().active) { if (!seen) { seen = true; wave.squash(false); } } else if (seen) stop();   /* first sign of the player: the bars rise again, now carrying the section's spectrum */
+          if (a2.state().active) { if (!seen) { seen = true; wave.flush(); wave.squash(false); } } else if (seen) stop();   /* first sign of the player: the bars rise again from ZERO, carrying only the section's own sound (no residue of the OS music) */
         } catch (e) {}
       }, 500);
     }
@@ -1575,7 +1576,7 @@
         var exitFrac = 0; try { exitFrac = f0.contentWindow.sectionPlayer.state().frac || 0; } catch (e) {}
         wave.squash(true);
         stopTimers.push(setTimeout(function () { e0.remove(); h0.remove(); }, DSTAGE_OUT_MS));   /* the card sinks out; the frame's audio dies with it */
-        stopTimers.push(setTimeout(function () { wave.squash(false); wave.reflow(exitFrac); caption.reset(); if (wasDucked) player.unduck(); }, 700));
+        stopTimers.push(setTimeout(function () { wave.flush(); wave.squash(false); wave.reflow(exitFrac); caption.reset(); if (wasDucked) player.unduck(); }, 700));
       }
     }
     return { start: start, stop: stop, active: function () { return active; } };
