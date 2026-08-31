@@ -959,6 +959,13 @@
       if (!fxc) { fxc = document.createElement('canvas'); fxg = fxc.getContext('2d'); } if (fxc.width !== cv.width || fxc.height !== cv.height) { fxc.width = cv.width; fxc.height = cv.height; }
       fxg.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0); fxg.clearRect(0, 0, geo.W, geo.H); fxg.globalAlpha = 1; fxg.globalCompositeOperation = 'source-over'; return fxg;
     }
+    var fxUsed = false;   /* perf: ONE shared effects layer per frame for all four pianos, ONE red composite after them (per-piano full-canvas composites were 5 a frame and dropped it well under 60) */
+    function fxStart(alpha) { var g; if (!fxUsed) { fxUsed = true; g = fxLayer(); } else { g = fxg; g.globalCompositeOperation = 'source-over'; } g.globalAlpha = alpha; return g; }   /* per-piano presence is applied while drawing instead of at composite time */
+    var glc = null, glg = null;
+    function glowLayer() {   /* perf: the halo and the field are the blur-heavy fills — they render at HALF resolution (blur radii halved to match) and are scaled up; on glowing light the difference is invisible, the CPU blur cost falls ~4x */
+      if (!glc) { glc = document.createElement('canvas'); glg = glc.getContext('2d'); } var hw = Math.ceil(cv.width / 2), hh = Math.ceil(cv.height / 2); if (glc.width !== hw || glc.height !== hh) { glc.width = hw; glc.height = hh; }
+      glg.setTransform(geo.dpr / 2, 0, 0, geo.dpr / 2, 0, 0); glg.clearRect(0, 0, geo.W, geo.H); glg.globalAlpha = 1; glg.globalCompositeOperation = 'source-over'; return glg;
+    }
     function redK() { if (!redHold) return 1; var k = redHold.k0 * (1 - (performance.now() - redHold.t0) / STAGE_RED_FADE_MS); if (k <= 0) { redHold = null; return 1; } return k; }   /* red strength: 1 normally; fading in place after a piece change */
     function redX() { return redHold ? redHold.x : wave.head(); }   /* where the red ends: the play head, or frozen while fading */
     function mixCol(a, b, t) { if (t <= 0) return a; if (t >= 1) return b; a = a.split(','); b = b.split(','); return a.map(function (v, i) { return Math.round(+v + (+b[i] - +v) * t); }).join(','); }
@@ -1152,16 +1159,18 @@
            pushes that rim outward, so the body is brightest at the disc edge and fades toward the peaks. A wide additive halo sits behind. */
         var shape = function (s) { return r0 + sm(s); }, a0 = (STAGE_GLOW_BASE + 0.14 * rel + 0.06 * lvl) * gate * (1 + STAGE_GLOW_PUNCH * pk);   /* dark until the piano first sounds, then its resting brightness; a strong jump on accents */   /* M87-style: soft orange ring, never white-hot; the centre is open (the wallpaper shows through); accents brighten it */
         var hit = 0; for (var hs = 0; hs < n; hs++) { var ovr = (shape(hs) - Rmax) / (r0 * 0.08); if (ovr > hit) hit = ovr; } hit = Math.min(1, hit);   /* how far the mound pokes through the outer ring */
+        var gHalo = g2; g2 = glowLayer();   /* the two blur-heavy fills go to the half-res glow layer (blur radii halved to match), then one cheap upscale */
         var ha = (0.03 + 0.05 * rel + 0.16 * pk) * gate, hg = g2.createRadialGradient(x, y, 0, x, y, r0 + Math.max(1, amp)); hg.addColorStop(0, 'rgba(255,140,50,0)'); hg.addColorStop(0.5, 'rgba(255,140,50,0)'); hg.addColorStop(1, 'rgba(255,140,50,' + ha.toFixed(3) + ')');
-        g2.globalCompositeOperation = 'lighter'; g2.fillStyle = hg; g2.shadowColor = 'rgba(255,150,60,.8)'; g2.shadowBlur = STAGE_HALO + 40 * rel + 50 * pk;
-        try { g2.filter = 'blur(' + (40 + 14 * rel).toFixed(0) + 'px)'; } catch (e) {}   /* the halo is blurred too: no crisp outer edge anywhere */
+        g2.globalCompositeOperation = 'lighter'; g2.fillStyle = hg; g2.shadowColor = 'rgba(255,150,60,.8)'; g2.shadowBlur = (STAGE_HALO + 40 * rel + 50 * pk) / 2;
+        try { g2.filter = 'blur(' + (20 + 7 * rel).toFixed(0) + 'px)'; } catch (e) {}   /* the halo is blurred too: no crisp outer edge anywhere */
         arc(shape, 0); g2.fill();   /* halo */
         /* one continuous field from the centre out to the wave: almost nothing at the centre, brightest just inside the wave's edge, fading past it — no inner arc, no outer arc */
         var R1 = r0 + Math.max(1, amp), grd = g2.createRadialGradient(x, y, 0, x, y, R1), k0 = r0 / R1;
         grd.addColorStop(0, 'rgba(255,170,90,0)'); grd.addColorStop(Math.max(0.01, k0 * 0.5), 'rgba(255,170,90,0)'); grd.addColorStop(Math.max(0.02, k0 * 0.8), 'rgba(255,170,90,' + (a0 * 0.3).toFixed(3) + ')');   /* fully transparent around the centre: the wallpaper shows through */ grd.addColorStop(Math.min(0.99, k0), 'rgba(255,200,120,' + a0.toFixed(3) + ')'); grd.addColorStop(Math.min(0.995, k0 + (1 - k0) * 0.3), 'rgba(255,160,70,' + (a0 * 0.75).toFixed(3) + ')'); grd.addColorStop(1, 'rgba(180,70,30,0)');
-        g2.fillStyle = grd; g2.shadowColor = 'rgba(255,170,90,.6)'; g2.shadowBlur = 26 + 16 * rel + 20 * pk;
-        try { g2.filter = 'blur(' + (18 + 10 * rel).toFixed(0) + 'px)'; } catch (e) {}   /* the field itself is fuzzy, like the EHT image */
+        g2.fillStyle = grd; g2.shadowColor = 'rgba(255,170,90,.6)'; g2.shadowBlur = (26 + 16 * rel + 20 * pk) / 2;
+        try { g2.filter = 'blur(' + (9 + 5 * rel).toFixed(0) + 'px)'; } catch (e) {}   /* the field itself is fuzzy, like the EHT image */
         arc(shape, 0); g2.fill(); g2.shadowBlur = 0; try { g2.filter = 'none'; } catch (e) {}
+        g2 = gHalo; g2.globalCompositeOperation = 'lighter'; g2.drawImage(glc, 0, 0, geo.W, geo.H); g2.globalCompositeOperation = 'source-over';   /* additive onto the wallpaper, exactly as the full-res fills were */
         /* inner ring: a soft band well inside the sphere (around 60 % of its radius), blurred so it reads as light, not a drawn circle; the sphere's own edge stays a continuous fade */
         /* sound wave line, independent of the mound: it sits on its own base circle. At 75 % (the centre) the base is the sphere radius r0;
            below that it shrinks toward the inner ring and meets it at the volume floor. Above 85 % / 95 % a star-chart ring snaps in from
@@ -1169,7 +1178,7 @@
         /* effects layer: wave ring, star-chart rings, accent flash and sigil are drawn offscreen, then composited — the part left of the play head
            tinted eclipse-red with a red glow, the rest as is (the desktop bars turn amber behind the play head the same way). The inner ring and the
            ember stay on the main canvas: they never turn red */
-        var gMain = g2; g2 = fxLayer();
+        var gMain = g2; g2 = fxStart(easeOut(app));   /* shared layer: this piano's rings join the frame's single red composite; its presence is baked in while drawing */
         var gv = STAGE_FAR + (STAGE_NEAR - STAGE_FAR) * rel, st = ann[k] || (ann[k] = { r: [0, 0, 0], t: 0, rot: 0, on: false }), step = dtm / STAGE_RING_MS;
         if (app < 0.999) step *= app;   /* while a veiled piano is still appearing its rings ease in with it */
         for (var ri = 0; ri < STAGE_RINGS.length; ri++) st.r[ri] = !trails && !midiForm && gv + STAGE_EPS >= STAGE_RINGS[ri][0] ? Math.min(1, st.r[ri] + step) : Math.max(0, st.r[ri] - step);   /* under the star-trail egg (and the MIDI form) the disc stops at the wave ring */
@@ -1312,8 +1321,7 @@
           }
           g2.shadowBlur = 0; g2.restore();
         }
-        g2 = gMain; var hx = Math.max(0, Math.min(geo.W, RX));
-        redComposite(hx, easeOut(app), RK); g2.globalAlpha = easeOut(app);
+        g2 = gMain; g2.globalAlpha = easeOut(app);   /* the shared effects layer is red-composited ONCE after all pianos (see tick) */
         /* thin, crisp, no glow (except in eclipse, when it shares the corona's blur) */
         var ra = Math.min(1, STAGE_RING_A * (0.6 + 0.4 * rel) + 0.1 * pk + STAGE_OVERLAP_A * ov), rr = r0 * STAGE_RING_R;   /* brightens too when the wave ring lands on it */
         g2.globalCompositeOperation = 'source-over'; g2.strokeStyle = 'rgba(' + RC2 + ',' + ra.toFixed(3) + ')'; g2.lineWidth = STAGE_RING_W; g2.shadowColor = 'rgba(' + STAGE_ECL_COL + ',.95)'; g2.shadowBlur = Math.max(STAGE_ECL_BLUR * ov, RG);
@@ -1326,10 +1334,12 @@
         g2.globalCompositeOperation = 'source-over'; g2.globalAlpha = 1;
       };
       var under = vb && vb.lit <= 0 && vb.app > 0 ? 'B' : null;   /* the veiled disc on its way out is drawn first: the floor fades in over it */
-      if (under) drawPiano(under);
+      fxUsed = false;
+      if (under) { drawPiano(under); if (fxUsed) { redComposite(Math.max(0, Math.min(geo.W, RX)), 1, RK); fxUsed = false; } }   /* flushed before the floor covers it (mwfPass clears the shared layer next) */
       if (fl > 0) { var fd = g2.createLinearGradient(0, geo.cy, 0, geo.H); fd.addColorStop(0, 'rgba(' + STAGE_FLOOR_COL + ',' + (STAGE_FLOOR_DARK * STAGE_FLOOR_TOP * fl * grow).toFixed(3) + ')'); fd.addColorStop(1, 'rgba(' + STAGE_FLOOR_COL + ',' + (STAGE_FLOOR_DARK * fl * grow).toFixed(3) + ')'); g2.fillStyle = fd; g2.fillRect(0, geo.cy, geo.W, geo.H - geo.cy); }   /* the floor itself: near-black over the wallpaper, under the pianos (the side discs still straddle the line) */
-      if (midiForm) mwfPass(t, now, RK, RX);   /* third form: the outward waterfalls and the white square sit above the floor, under the pianos */
+      if (midiForm) { mwfPass(t, now, RK, RX); fxUsed = false; }   /* third form: the outward waterfalls and the white square sit above the floor, under the pianos (mwfPass owns its own composite and leaves the layer dirty) */
       KEYS.forEach(function (k) { if (k !== under) drawPiano(k); });
+      if (fxUsed) { redComposite(Math.max(0, Math.min(geo.W, RX)), 1, RK); fxUsed = false; }   /* one composite for all pianos' rings */
       g2.globalCompositeOperation = 'source-over';
       if (fl > 0) {   /* floor: below the line the sky is mirrored — only the stars and a faint pool of the top piano's light; the rings and sigils do not reflect */
         var hh = geo.H - geo.cy, fa_ = STAGE_FLOOR_A * fl * grow;
