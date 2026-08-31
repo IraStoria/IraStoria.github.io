@@ -58,8 +58,45 @@ h1{margin:.2rem 0 .4rem;font-size:1.7rem}.lead{color:var(--dim);max-width:65ch}
 .seg .nm{display:block;font-size:.9rem;white-space:nowrap}
 .seg .st{font-size:.58rem;margin-top:.05rem;min-height:1em}
 .zone.ctrl .seg{width:64px}
-.seg.outro{--c:#e8e6e1}
+.seg.outro{--c:#e8e8e4}   /* the bookends are white light (a touch grey) */
 .hist .dim{color:#6f7480}
 @media (max-width:560px){.segs{gap:.4rem}.col{width:52px}}
 .seg.random.mode{border-color:color-mix(in srgb,var(--accent) 55%,var(--border))}
-.seg.seq{--c:#9ad0ff}
+.seg.seq{--c:var(--accent)}   /* Random and In-order flash the SAME colour */
+
+/* stage mode (?stage=1): hosted on the OS desktop in a chromeless layer — page chrome AND the panel card disappear;
+   the bare controls float straight on the desktop wallpaper (the OS line + caption are the spectrum and title display).
+   Buttons are liquid-glass bubbles (hairline ring + top glint, like the shell's hover bubble); the zone frames are gone
+   (only the labels remain); a section that may not follow the current one fades off the screen until it is allowed again. */
+body.stage{background:none}
+body.stage .top,body.stage h1,body.stage .lead,body.stage .viz,body.stage .explain,body.stage .hist{display:none}
+body.stage main{max-width:none;height:100vh;margin:0;padding:0;display:flex;align-items:stretch}
+body.stage .panel{margin:0;flex:1;overflow:visible;background:none;border:0;padding:0}
+body.stage .zone,body.stage .zone.ctrl{border:0;background:none;padding:0 .2rem}
+/* buttons = clear glass, ROUNDED SQUARES: no fill, a hairline ring, a top glint and a drop shadow;
+   the label sits dead-centre (the little status line is hidden — light carries the state) */
+body.stage .seg{border-radius:12px;border-color:transparent;background:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.20),inset 0 1px 0 rgba(255,255,255,.28),0 6px 16px rgba(0,0,0,.30);transition:opacity .45s ease,transform .1s,box-shadow .3s ease;padding:0;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center}
+body.stage .seg .st{display:none}
+body.stage .seg .nm{margin:0}
+/* selected = the ECLIPSE treatment, in the part's colour: queued -> the rim itself lights up; playing -> the lit rim grows its corona */
+body.stage .seg.queued{background:color-mix(in srgb,var(--c) 14%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--c) 80%,#fff),0 0 10px color-mix(in srgb,var(--c) 55%,transparent),0 6px 16px rgba(0,0,0,.30)}
+body.stage .seg.playing{background:color-mix(in srgb,var(--c) 24%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--c) 85%,#fff),0 0 12px color-mix(in srgb,var(--c) 70%,transparent),0 0 30px color-mix(in srgb,var(--c) 45%,transparent),0 6px 16px rgba(0,0,0,.30)}
+body.stage .seg.random.mode{background:color-mix(in srgb,var(--c) 11%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--c) 65%,rgba(255,255,255,.6)),0 0 8px color-mix(in srgb,var(--c) 40%,transparent),0 6px 16px rgba(0,0,0,.30)}   /* CRISP light: a flat tinted pane behind the lit rim — no soft radial wash */
+@keyframes stpulse{50%{filter:brightness(1.3)}}
+body.stage .seg.random.auto{animation:stpulse 1s ease-in-out infinite}   /* auto hand-over breathes by brightness, not by the ring pulse */
+body.stage #start,body.stage .opts,body.stage .prog{display:none}   /* no Start (the stage counts itself in), no option toggles (the rules always hold), no bar (the OS line carries the tick) */
+/* pair rule engaged: one rectangle around BOTH versions of the group in play */
+body.stage .col{border:1.5px solid transparent;border-radius:14px;padding:3px;transition:border-color .4s ease,box-shadow .4s ease}
+body.stage .col.pair{border-color:color-mix(in srgb,var(--c) 60%,rgba(255,255,255,.35));box-shadow:0 0 10px color-mix(in srgb,var(--c) 30%,transparent)}
+/* the OS hover droplet, in here: a spring-driven glass bubble glides between the buttons (demo.js) */
+body.stage .hb2{position:absolute;left:0;top:0;pointer-events:none;opacity:0;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22),inset 0 1px 0 rgba(255,255,255,.30);transition:opacity .4s ease;z-index:0}
+body.stage .seg,body.stage .big{position:relative;z-index:1}
+/* outro, four bars in: the whole control surface compresses into its own centre and is gone (the stage leaves when the music ends) */
+body.stage .panel{transition:transform .7s cubic-bezier(.5,0,.8,.4),opacity .65s ease}
+body.stage.bye .panel{transform:scale(0);opacity:0;pointer-events:none}
+body.stage .seg.off{opacity:0;pointer-events:none}   /* not allowed after the current section: gone from the stage until it may follow again */
+body.stage .col .link{display:none}   /* no ↓ between the versions: either may lead (the pair frame carries the grouping) */
+body.stage .next{display:none}   /* no queued/locked hint line either — the lit buttons and the pair frame say it all */
+body.stage .big{border-radius:999px;border-color:transparent;background:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22),inset 0 1px 0 rgba(255,255,255,.30),0 6px 16px rgba(0,0,0,.30)}
+body.stage .prog{background:rgba(29,33,42,.75)}
+body.stage .status,body.stage .next,body.stage .opts,body.stage .zlab{text-shadow:0 1px 6px rgba(0,0,0,.85)}

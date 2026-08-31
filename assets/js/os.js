@@ -44,6 +44,7 @@
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   // shell: phone (iOS-like) vs desktop. Width is the primary signal; ?shell= overrides for previews.
   var shellOverride = (/[?&]shell=(phone|desktop)/.exec(location.search) || [])[1];
+  try { if (shellOverride) sessionStorage.setItem('shellpref', shellOverride); else shellOverride = sessionStorage.getItem('shellpref') || ''; } catch (e) {}   /* the phone's「電腦版」switch survives in-visit navigation (session only); an explicit ?shell= always wins and resets it */
   // forced hidden features: the flag is consumed on this load, so exactly the next boot fires them
   var EE = {}; try { var eeRaw = sessionStorage.getItem('ee'); if (eeRaw) { sessionStorage.removeItem('ee'); eeRaw.split(',').forEach(function (k) { if (k) EE[k] = true; }); } } catch (e) {}
   // secret tracks (works.json `secret: true`, e.g. ADE): never listed, never drawn by shuffle (0% chance); a forced flag plays one as the first track of that boot
@@ -243,6 +244,7 @@
   /* external "now playing" source: a demo window (same-origin iframe) that exposes window.sectionPlayer.
      While it is active, the desktop spectrum/progress line and the caption follow it instead of the OS player. */
   var extFrames = [];
+  function hexRgb(h) { var v = parseInt(String(h).replace('#', ''), 16); return ((v >> 16) & 255) + ',' + ((v >> 8) & 255) + ',' + (v & 255); }   /* '#4a90e0' -> '74,144,224' (wave.tint speaks r,g,b) */
   var ext = {
     api: function () {
       if (typeof stage !== 'undefined' && stage && stage.active()) return stage.src();   /* ADE stage: caption and progress follow the four stems */
@@ -266,9 +268,11 @@
         if (a && !a.__hooked) {
           a.__hooked = true;
           a.onTrack(function (fromFrac) {
-            wave.sweep(true, fromFrac); phoneWave.sweep(true, fromFrac);
+            var stN = a.state();
+            if (stN.color) { wave.ghost(fromFrac); wave.tint(hexRgb(stN.color), hexRgb(stN.color), 3000); }   /* stage section mode: NO retract — the old fill dissolves in place while the new bar grows out STILL WEARING the old colour, easing into the new one over 3 s (the ADE amber-to-red logic) */
+            else { wave.sweep(true, fromFrac); phoneWave.sweep(true, fromFrac); }
             /* the demo started → silence the background music at once (its position is kept); it only comes back when the demo window is closed */
-            if (a.state().active && player.isPlaying()) { if (win) win.dataset.duck = '1'; player.duck(true); }
+            if (stN.active && player.isPlaying()) { if (win) win.dataset.duck = '1'; player.duck(true); }
             caption.reset();
           });
         }
@@ -503,7 +507,7 @@
     var wf = withNotes ? makeWaterfall() : null;
     var headPx = -1;
     var tintFrom = ['224,176,74', '224,176,74'], tintTo = ['224,176,74', '224,176,74'], tintT0 = 0, tintDur = 1, tintCur = ['224,176,74', '224,176,74'], TINT_MS = 900, TINT_OUT_MS = 2200, TINT_BLUR = 22, TINT_W = 1.2, TINT_A = 1.0, TINT_CORONA = 32, TINT_CORONA_A = 0.40, tintShadow = '255,110,90';   /* tint = the stage's eclipsed ring: STAGE_RING_W, its brightness, STAGE_ECL_BLUR corona in STAGE_ECL_COL */
-    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000, squash = 1, squashTo = 1, SQUASH_MS = 600, yCur = yRatio, yTo = yRatio, Y_MS = 700, reflowT0 = 0, reflowFrom = 0, REFLOW_IN_MS = 900, REFLOW_OUT_MS = 650, reflowHold = 0, hbMix = 0, HB_MORPH_MS = 700, liveT0 = 0, GRID_FADE_MS = 3000, AMB0 = '224,176,74', GRN = '61,255,122', SLATE = '96,104,122', DIMG = '30,120,62';   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
+    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000, squash = 1, squashTo = 1, SQUASH_MS = 600, boostK = 1, decayK = 1, ghostT0 = 0, ghostFrac = 0, ghostCol = null, GHOST_MS = 7000, collT0 = 0, COLL_MS = 900, blankW = false, regrowT0 = 0, REGROW_MS = 900,   /* decayK: bar-fall exponent (stage: faster fall = clearer bounce); ghost: the previous section's filled colour fading out in place; coll/regrow: the outro farewell — both edges retract to the centre, later the line grows back from the left */ yCur = yRatio, yTo = yRatio, Y_MS = 700, reflowT0 = 0, reflowFrom = 0, REFLOW_IN_MS = 900, REFLOW_OUT_MS = 650, reflowHold = 0, hbMix = 0, HB_MORPH_MS = 700, liveT0 = 0, GRID_FADE_MS = 3000, AMB0 = '224,176,74', GRN = '61,255,122', SLATE = '96,104,122', DIMG = '30,120,62';   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
     function grad(y0, y1, rgb, a0, a1) { var g = g2.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + rgb + ',' + a0 + ')'); g.addColorStop(1, 'rgba(' + rgb + ',' + a1 + ')'); return g; }
     var DPR = 1;   /* backing store at device resolution (capped at 2x): at 1x an iPhone upscales the layer 3x and the label text, note rims and the line go soft */
     function size() { DPR = Math.min(2, Math.max(1, window.devicePixelRatio || 1)); var pw = Math.round(cv.clientWidth * DPR), ph = Math.round(cv.clientHeight * DPR); if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; } }
@@ -512,7 +516,7 @@
     function lerpCol(a, b, t) { if (t <= 0) return a; if (t >= 1) return b; a = a.split(','); b = b.split(','); return a.map(function (v, i) { return Math.round(+v + (+b[i] - +v) * t); }).join(','); }
     function draw() {
       raf = requestAnimationFrame(draw); size();
-      var now = performance.now(), dk = decayFactor(lastT ? now - lastT : 16), prevT = lastT; lastT = now;
+      var now = performance.now(), dk = Math.pow(decayFactor(lastT ? now - lastT : 16), decayK), prevT = lastT; lastT = now;   /* decayK > 1: the bars fall faster, so each hit reads as its own bounce */
       if (yCur !== yTo) { var ys = dk_dt(now, prevT) / Y_MS * Math.abs(yRatio - 0.5); yCur = yTo < yCur ? Math.max(yTo, yCur - ys) : Math.min(yTo, yCur + ys); }   /* stage mode: the line glides to the true centre (its X axis) and back. Step is |yRatio-0.5|: the phone line sits ABOVE the centre (0.47), a signed step made it drift upward forever (hotfix) */
       var W = cv.clientWidth, H = cv.clientHeight, y = H * yCur; g2.setTransform(DPR, 0, 0, DPR, 0, 0); g2.clearRect(0, 0, W, H);   /* all drawing stays in CSS px; the transform maps it onto the hi-res store */
       // heartbeat egg look: everything amber turns ECG green and the bars morph into a trace; snaps during the connect stage (boot), eases on a track change
@@ -530,15 +534,23 @@
         if (p >= 1) { mode = 'live'; liveT0 = performance.now(); sweep(false); if (onConnected) { var cb = onConnected; onConnected = null; cb(); } }
         return;
       }
+      /* outro farewell (section stage): the whole display — line, bars, notes — retracts from BOTH edges into the centre and is gone;
+         reappear() grows it back from the left edge before the OS music returns */
+      var winX0 = 0, winX1 = W, winClip = false;
+      if (collT0) { var cw2 = (now - collT0) / COLL_MS; if (cw2 >= 1) { collT0 = 0; blankW = true; } else { var ce2 = ease(cw2) * W / 2; winX0 = ce2; winX1 = W - ce2; winClip = true; } }
+      if (blankW) return;
+      if (regrowT0) { var rw2 = (now - regrowT0) / REGROW_MS; if (rw2 >= 1) regrowT0 = 0; else { winX1 = W * ease(rw2); winClip = true; } }
+      if (winClip) { g2.save(); g2.beginPath(); g2.rect(winX0, 0, Math.max(0, winX1 - winX0), H); g2.clip(); }
       var an = ext.analyser();
       if (mode === 'live' && an) {
         // spectrum bars (same log-frequency mapping as the player). On pause the bars fall gradually instead of vanishing.
-        var n = Math.max(W < 700 ? PHONE_MIN_BARS : 48, Math.min(128, Math.floor(W / 12))), bw = W / n, maxH = H * 0.28, any = false;   /* phone: no 48-bar floor, so the bars keep desktop proportions instead of turning into 6 px sticks */
+        var n = Math.max(W < 700 ? PHONE_MIN_BARS : 48, Math.min(128, Math.floor(W / 12))), bw = W / n, maxH = H * 0.28 * boostK, any = false;   /* phone: no 48-bar floor, so the bars keep desktop proportions instead of turning into 6 px sticks */   /* boostK: the section stage raises the bars so the bass/bk hits read clearly */
         var lv = barLevels(an, n);
         if (levels.length !== n) levels = new Array(n).fill(0);
         g2.shadowBlur = 0;
         // the whole spectrum doubles as the progress bar: bars/baseline left of the play head are amber, the unplayed part is a quiet grey (frac frozen while paused)
         var st = ext.state(), fracNow = Math.max(0, Math.min(1, st.frac || 0));
+        if (st.frozen) for (var zi = 0; zi < n; zi++) lv[zi] = 0;   /* paused section player: its suspended analyser holds the last frame forever — feed silence so the bars sink like a normal pause */
         if (reflowT0) {   /* after the stage: the play head runs back to the left edge, then slides out again to where the track really is */
           var rel_ = now - reflowT0; if (rel_ >= reflowHold + REFLOW_OUT_MS) reflowT0 = 0; else if (rel_ < REFLOW_IN_MS) fracNow = reflowFrom * (1 - ease(rel_ / REFLOW_IN_MS)); else if (rel_ < reflowHold) fracNow = 0; else fracNow = fracNow * ease((rel_ - reflowHold) / REFLOW_OUT_MS);   /* retreat to the left edge (with the colour change), wait for the line to glide down, then slide out to where the track is */
         }
@@ -581,6 +593,23 @@
           g2.fillStyle = gGreyR; g2.fillRect(x, y, w, h * 0.45);
           var aw = Math.min(w, px - x);
           if (aw > 0) { if (tg > 0) { g2.shadowColor = 'rgba(' + tintShadow + ',' + (0.85 * tg).toFixed(2) + ')'; g2.shadowBlur = TINT_BLUR * tg; } g2.fillStyle = gAmb; g2.fillRect(x, y - h, aw, h); g2.shadowBlur = 0; g2.fillStyle = gAmbR; g2.fillRect(x, y, aw, h * 0.45); }   /* tinted: the played bars glow like the eclipsed rings, and the glow fades with the tint */
+        }
+        if (ghostT0 && m <= 0 && !areaMode) {   /* the PREVIOUS section's filled colour dissolves in place instead of vanishing (stage section change) */
+          var gpr = (now - ghostT0) / GHOST_MS;
+          if (gpr >= 1) ghostT0 = 0; else {
+            var ga2 = 1 - ease(gpr), gx1 = W * ghostFrac;
+            if (gx1 > px + 1) {
+              var gGh = grad(y, y - maxH, ghostCol, 0.35, 0.95), gGhR = grad(y, y + maxH * 0.45, ghostCol, 0.16, 0);
+              g2.save(); g2.globalAlpha = ga2; g2.beginPath(); g2.rect(px, 0, gx1 - px, H); g2.clip();
+              g2.shadowColor = 'rgba(' + ghostCol + ',.85)'; g2.shadowBlur = TINT_BLUR;   /* the ghost keeps the SAME glow the live bars wear — it must dim on the 7 s clock, never snap off */
+              for (var gq = 0; gq < n; gq++) { var gh2 = levels[gq] * squash * maxH, gxq = gq * bw + 1, gwq = bw - 2; if (gh2 > 0.5) { g2.fillStyle = gGh; g2.fillRect(gxq, y - gh2, gwq, gh2); g2.shadowBlur = 0; g2.fillStyle = gGhR; g2.fillRect(gxq, y, gwq, gh2 * 0.45); g2.shadowBlur = TINT_BLUR; } }
+              g2.lineWidth = 2 + (TINT_W - 2); g2.strokeStyle = 'rgba(' + ghostCol + ',' + TINT_A + ')'; g2.shadowColor = 'rgba(' + ghostCol + ',.9)'; g2.shadowBlur = TINT_BLUR; g2.beginPath(); g2.moveTo(px, y); g2.lineTo(gx1, y); g2.stroke(); g2.shadowBlur = 0;
+              g2.globalCompositeOperation = 'lighter';   /* the corona goes with it — the same soft band the live line wears, dissolving on the ghost's clock instead of vanishing */
+              var cgh = g2.createLinearGradient(0, y - TINT_CORONA, 0, y + TINT_CORONA); cgh.addColorStop(0, 'rgba(' + ghostCol + ',0)'); cgh.addColorStop(0.25, 'rgba(' + ghostCol + ',' + (TINT_CORONA_A * 0.22).toFixed(3) + ')'); cgh.addColorStop(0.5, 'rgba(' + ghostCol + ',' + TINT_CORONA_A.toFixed(3) + ')'); cgh.addColorStop(0.75, 'rgba(' + ghostCol + ',' + (TINT_CORONA_A * 0.22).toFixed(3) + ')'); cgh.addColorStop(1, 'rgba(' + ghostCol + ',0)');
+              g2.fillStyle = cgh; g2.fillRect(px, y - TINT_CORONA, gx1 - px, TINT_CORONA * 2);
+              g2.restore();
+            }
+          }
         }
         if (areaMode) {
           // smoothed silhouette through the bar tops (3-tap average, quadratic through midpoints); played part amber via a clip, the rest slate; mirrored reflection below the line
@@ -637,16 +666,28 @@
         // play head: same amber as the line (no highlight), just a stronger halo at the amber/grey boundary
         if (px0 >= edge) { g2.lineWidth = 2 + (TINT_W - 2) * tg; g2.strokeStyle = 'rgba(' + AMB + ',.9)'; g2.shadowColor = 'rgba(' + lerpCol(AMB, tintShadow, tg) + ',.9)'; g2.shadowBlur = 24 * (1 - tg) + TINT_BLUR * tg; g2.beginPath(); g2.moveTo(Math.max(edge, lpx - 14), y); g2.lineTo(lpx, y); g2.stroke(); }
         /* ECG side: no play-head halo — the bright/dim split of the trace is the play head */   /* ECG side: the same plain horizontal halo, in green */
+        if (st.mark != null && m <= 0) {   /* section player: the decision-lock point as an ADE-style tick on the line — white with the old bar marker's glow */
+          var mx = Math.round(W * Math.max(0, Math.min(1, st.mark))) + 0.5;
+          g2.lineWidth = 2; g2.strokeStyle = 'rgba(255,255,255,.9)'; g2.shadowColor = 'rgba(255,255,255,.8)'; g2.shadowBlur = 8;
+          g2.beginPath(); g2.moveTo(mx, y - 9); g2.lineTo(mx, y + 9); g2.stroke();
+          g2.shadowBlur = 6; g2.fillStyle = 'rgba(255,255,255,.9)';
+          g2.beginPath(); g2.moveTo(mx - 4, y - 15); g2.lineTo(mx + 4, y - 15); g2.lineTo(mx, y - 9); g2.closePath(); g2.fill();
+        }
         g2.shadowBlur = 0;
       } else {
         g2.strokeStyle = 'rgba(' + AMB + ',.28)'; g2.shadowBlur = 0;
         g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
       }
+      if (winClip) g2.restore();
     }
     function start(m) { if (!cv) return; mode = m || 'idle'; if (!raf) draw(); }
     function connect(cb, lead) { if (!cv) { cb(); return; } onConnected = cb; connectT0 = performance.now(); if (wf && lead) wf.preroll(connectT0, lead); start('connect'); }   /* lead: waterfall pre-roll seconds */
     function sweep(bars, fromFrac) { clearT0 = performance.now(); clearBars = !!bars; clearFrom = (fromFrac == null) ? 1 : Math.max(0, Math.min(1, fromFrac)); }
-    return { start: start, connect: connect, sweep: sweep, hb: function () { return !!(wf && wf.hb()); }, squash: function (on) { squashTo = on ? 0 : 1; }, centre: function (on) { yTo = on ? 0.5 : yRatio; }, head: function () { return headPx; }, tint: function (col, shadow) { tintFrom = tintCur.slice(); tintTo = [col || AMB0, shadow || AMB0]; tintT0 = performance.now(); tintDur = col ? TINT_MS : TINT_OUT_MS; },   /* null = back to amber, slowly */ reflowCancel: function () { reflowT0 = 0; }, reflow: function (fromFrac, holdMs) { reflowT0 = performance.now(); reflowFrom = Math.max(0, Math.min(1, fromFrac || 0)); reflowHold = Math.max(REFLOW_IN_MS, holdMs || REFLOW_IN_MS); }, baseY: function () { return cv ? cv.clientHeight * yTo : 0; } };
+    return { start: start, connect: connect, sweep: sweep, hb: function () { return !!(wf && wf.hb()); }, squash: function (on) { squashTo = on ? 0 : 1; }, boost: function (k, dec) { boostK = k || 1; decayK = dec || 1; }, centre: function (on) { yTo = on ? 0.5 : yRatio; }, head: function () { return headPx; }, tint: function (col, shadow, ms) { tintFrom = tintCur.slice(); tintTo = [col || AMB0, shadow || AMB0]; tintT0 = performance.now(); tintDur = col ? (ms || TINT_MS) : TINT_OUT_MS; },   /* null = back to amber, slowly */
+             ghost: function (frac) { ghostT0 = performance.now(); ghostFrac = Math.max(0, Math.min(1, frac == null ? 1 : frac)); ghostCol = tintCur[0]; }, tintNow: function () { return tintCur[0]; },   /* snapshot the outgoing fill: it fades out where it stood; tintNow = the line's current eased colour (the caption paints with the same brush) */
+             ghostInfo: function () { if (!ghostT0) return null; var gp = (performance.now() - ghostT0) / GHOST_MS; return gp >= 1 ? null : { col: ghostCol, k: 1 - ease(gp) };
+ },   /* the fading previous colour (k 1->0 on the ghost clock) — the caption's not-yet-repainted part wears it */
+             farewell: function () { if (!collT0 && !blankW) collT0 = performance.now(); }, reappear: function () { blankW = false; collT0 = 0; if (!regrowT0) regrowT0 = performance.now(); }, reflowCancel: function () { reflowT0 = 0; }, reflow: function (fromFrac, holdMs) { reflowT0 = performance.now(); reflowFrom = Math.max(0, Math.min(1, fromFrac || 0)); reflowHold = Math.max(REFLOW_IN_MS, holdMs || REFLOW_IN_MS); }, baseY: function () { return cv ? cv.clientHeight * yTo : 0; } };
   }
   var wave = makeWave($('#wave'), 0.58, true), phoneWave = makeWave($('#ph-wave'), 0.47, true);   /* waterfall on both shells */  // phone: slightly above centre
 
@@ -684,15 +725,16 @@
     // desktop caption doubles as a mini transport: pause / previous / next without opening the player window
     els.forEach(function (el) {
       var pp = el.querySelector('.np-pp'), pv = el.querySelector('.np-prev'), nx = el.querySelector('.np-next');
-      if (pp) pp.addEventListener('click', function () { if (stage.active()) stage.toggle(); else player.toggle(); refresh(); });   /* on the ADE stage the transport drives the four stems, never the background music */
+      if (pp) pp.addEventListener('click', function () { if (stage.active()) stage.toggle(); else { var ax = ext.api(); if (ax && ax.toggle) ax.toggle(); else player.toggle(); } refresh(); });   /* on the ADE stage the transport drives the four stems; an active section player (its state IS the caption) takes the pause too — never the background music */
       if (pv) pv.addEventListener('click', function () { if (stage.active()) stage.prev(); else player.prev(); refresh(); });
       if (nx) nx.addEventListener('click', function () { if (stage.active()) stage.next(); else player.next(); refresh(); });
-      var mu = el.querySelector('.np-mute'); if (mu) mu.addEventListener('click', function () { if (stage.active()) stage.toggleMute(); else player.toggleMute(); refresh(); });   /* on the stage the speaker silences the four stems (the OS music is already ducked) */
+      var mu = el.querySelector('.np-mute'); if (mu) mu.addEventListener('click', function () { if (stage.active()) stage.toggleMute(); else { var ax2 = ext.api(); if (ax2 && ax2.toggleMute) ax2.toggleMute(); else player.toggleMute(); } refresh(); });   /* on the stage the speaker silences the four stems; an active section player takes the mute the same way (the OS music is already ducked) */
       var t = el.querySelector('.np-title'); if (t) t.addEventListener('click', function () { openApp('player'); });
     });
     function arm() { player.prepare(); els.forEach(function (el) { el.style.transitionDuration = CONNECT_MS + 'ms'; }); if (!timer) timer = setInterval(refresh, 400); refresh(); }
     /* split caption for the section player: <tag> | <rest>; a changed tag flips over its horizontal axis (down, swap, up) */
     function setParts(tEl, parts) {
+      tEl.style.backgroundImage = ''; tEl.style.webkitBackgroundClip = ''; tEl.style.backgroundClip = ''; tEl.style.color = ''; tEl.style.textShadow = '';   /* stray stage paint on the PARENT + transformed halves = every glyph printed twice (the overlap bug) — the parent must carry nothing */
       tEl.dataset.parts = '1';
       tEl.innerHTML = '<span class="np-tag"></span><span class="np-sep">|</span><span class="np-rest"></span>';
       tEl.querySelector('.np-tag').textContent = parts.tag; tEl.querySelector('.np-rest').textContent = parts.rest;
@@ -751,6 +793,7 @@
     terminal: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>',
     lang: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c3 3 3 14 0 17M12 3.5c-3 3-3 14 0 17"/></svg>',
     music: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>',
+    pc: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12.5" rx="1.5"/><path d="M9 21h6M12 17v4"/></svg>',   /* the phone's「電腦版」switch tile */
   };
   /* first paint: the template ships empty glyph slots (no emoji anywhere); the language swap re-fills them */
   document.querySelectorAll('.icon[data-app] .glyph').forEach(function (g) { var a = g.parentNode.getAttribute('data-app'); if (ICON[a]) g.innerHTML = ICON[a]; });
@@ -1386,7 +1429,7 @@
       }
       var tEl = document.querySelector('#np-desktop .np-title'); if (tEl) {   /* the caption reddens from left to right as the play head crosses it: each half is a gradient clipped to its glyphs (per span — a clip on the parent double-paints its transformed children), glowing with the covered share */
         var hxT = RX, tcol = mixCol('224,176,74', STAGE_TITLE_COL, RK), sp = tEl.querySelectorAll('.np-tag, .np-rest'); if (!sp.length) sp = [tEl]; else if (tEl.style.backgroundImage) { tEl.style.backgroundImage = ''; tEl.style.webkitBackgroundClip = ''; tEl.style.backgroundClip = ''; tEl.style.color = ''; tEl.style.textShadow = ''; }   /* once the halves exist the parent must carry nothing (a clip on both paints the text twice) */
-        for (var si_ = 0; si_ < sp.length; si_++) { var e_ = sp[si_], r_ = e_.getBoundingClientRect(), w_ = Math.max(1, r_.width), p_ = (hxT - r_.left) / w_, f_ = STAGE_RED_FEATHER / w_, a_ = Math.max(0, Math.min(1, p_ + f_ * 0.35)), b_ = Math.max(0, Math.min(1, p_ - f_ * 0.65)), cov = Math.max(0, Math.min(1, p_));
+        for (var si_ = 0; si_ < sp.length; si_++) { var e_ = sp[si_], r_ = e_.getBoundingClientRect(), w_ = Math.max(1, r_.width), p_ = (hxT - r_.left) / w_, f_ = 28 / w_, a_ = Math.max(0, Math.min(1, p_ + f_ * 0.35)), b_ = Math.max(0, Math.min(1, p_ - f_ * 0.65)), cov = Math.max(0, Math.min(1, p_));   /* feather 28 px, not STAGE_RED_FEATHER: 90 px is as wide as a caption half — the head passed it and the text still read half-painted */
           e_.style.backgroundImage = 'linear-gradient(90deg, rgb(' + tcol + ') 0%, rgb(' + tcol + ') ' + (b_ * 100).toFixed(1) + '%, rgb(224,176,74) ' + (a_ * 100).toFixed(1) + '%, rgb(224,176,74) 100%)';
           e_.style.webkitBackgroundClip = 'text'; e_.style.backgroundClip = 'text'; e_.style.color = 'transparent'; e_.style.textShadow = '0 0 ' + Math.round(STAGE_ECL_BLUR * cov * RK) + 'px rgba(' + STAGE_ECL_COL + ',' + (0.7 * cov * RK).toFixed(2) + ')'; } }
       raf = requestAnimationFrame(tick);
@@ -1456,11 +1499,85 @@
   }
 
   var spawn = 0;
+  /* ============================================================ demo stage: an iframe demo presented ON the desktop, no window chrome.
+     The demo loads with ?stage=1 (its page strips itself down to the bare control surface on a translucent card) in a chromeless layer
+     above the wallpaper; enter = the card rises and fades in, leave = it sinks back out. The same sectionPlayer contract as the window
+     (ext.register) keeps the desktop line, caption and duck in sync; Escape or the「離開舞台」button leaves. */
+  var DSTAGE_OUT_MS = 420;
+  var secStage = (function () {
+    var el = null, head = null, active = false, frame = null, watch = 0, seen = false, fw = false, tRaf = 0;   /* fw: the outro farewell has taken the line down; tRaf: the caption-tint loop */
+    var lastSec = null, aheadCol = '224,176,74', lastTint = '224,176,74';   /* the caption HOLDS the previous section's colour ahead of the play head — it never fades, only the sweeping new colour replaces it */
+    function paintTitle() {   /* ADE's title treatment, in the section's colour: each half is a gradient clipped to its glyphs — part colour behind the play head, amber ahead, glowing with the covered share; the colour is the line's own eased tint, so both change together */
+      tRaf = 0; if (!active) return; tRaf = requestAnimationFrame(paintTitle);
+      var a = ext.api(), st = a && a.state(), tEl = document.querySelector('#np-desktop .np-title'); if (!tEl) return;
+      var sp = tEl.querySelectorAll('.np-tag, .np-rest'); if (!st || !st.active || !st.color || !sp.length) return;
+      var col = wave.tintNow(), hx = wave.head();
+      if (st.id !== lastSec) { if (lastSec !== null) aheadCol = lastTint; lastSec = st.id; }   /* section change: whatever colour the text wore becomes the held colour ahead of the head — kept as is until the new colour paints over it */
+      lastTint = col;
+      var ahead = aheadCol;
+      for (var i = 0; i < sp.length; i++) {
+        var e_ = sp[i], r_ = e_.getBoundingClientRect(), w_ = Math.max(1, r_.width), p_ = (hx - r_.left) / w_, f_ = 28 / w_;   /* feather 28 px (the ADE 90 px was as wide as the tag itself — the head passed it and the text still read half-painted) */
+        var a_ = Math.max(0, Math.min(1, p_ + f_ * 0.35)), b_ = Math.max(0, Math.min(1, p_ - f_ * 0.65)), cov = Math.max(0, Math.min(1, p_));
+        e_.style.backgroundImage = 'linear-gradient(90deg, rgb(' + col + ') 0%, rgb(' + col + ') ' + (b_ * 100).toFixed(1) + '%, rgb(' + ahead + ') ' + (a_ * 100).toFixed(1) + '%, rgb(' + ahead + ') 100%)';
+        e_.style.webkitBackgroundClip = 'text'; e_.style.backgroundClip = 'text'; e_.style.color = 'transparent';
+        e_.style.textShadow = '0 0 ' + Math.round(22 * cov) + 'px rgba(' + col + ',' + (0.6 * cov).toFixed(2) + ')';
+      }
+    }
+    function clearTitle() { var tEl = document.querySelector('#np-desktop .np-title'); if (!tEl) return; [tEl].concat(Array.prototype.slice.call(tEl.querySelectorAll('.np-tag, .np-rest'))).forEach(function (e_) { e_.style.color = ''; e_.style.textShadow = ''; e_.style.backgroundImage = ''; e_.style.webkitBackgroundClip = ''; e_.style.backgroundClip = ''; }); }
+    function start(d) {
+      if (active) return;
+      if (stage.active()) stage.stop();   /* the ADE stage and a demo stage never share the desktop */
+      active = true; seen = false;
+      el = document.createElement('div'); el.className = 'dstage'; el.setAttribute('aria-label', d.title);
+      el.innerHTML = '<div class="ds-panel"></div>';
+      var f = frame = document.createElement('iframe'); f.className = 'ds-frame'; f.title = d.title; f.setAttribute('allow', 'autoplay'); f.setAttribute('allowtransparency', 'true');
+      f.src = '../' + d.path + '/?stage=1' + (d.ver ? '&v=' + d.ver : '');
+      f.addEventListener('load', function () { watchAudio(f, el); setTimeout(function () { ext.register(f, el); }, 300); });   /* same contract as the demo window: duck on first sound, line + caption follow */
+      $('.ds-panel', el).appendChild(f);
+      head = document.createElement('div'); head.className = 'stage-ui';
+      head.innerHTML = '<div class="st-head"><button class="st-exit" type="button">' + esc(U.stage_exit) + '</button></div>';
+      $('.st-exit', head).addEventListener('click', function () { stop(); });
+      desktop.appendChild(el); desktop.appendChild(head);
+      requestAnimationFrame(function () { el.classList.add('in'); head.classList.add('in'); });
+      setTimeout(function () { if (active && el) { var pn = $('.ds-panel', el); if (pn) { pn.style.opacity = '1'; pn.style.transform = 'none'; } } }, 900);   /* an occluded tab freezes CSS transitions mid-flight — pin the landed state so the panel can never strand half-invisible */
+      document.addEventListener('keydown', onKey);
+      wave.boost(1.45, 2);   /* taller bars, faster fall — each hit bounces on its own (the demo lowers its analyser smoothing to match) */
+      lastSec = null; aheadCol = '224,176,74'; lastTint = '224,176,74';
+      if (!tRaf) tRaf = requestAnimationFrame(paintTitle);
+      fw = false;
+      watch = setInterval(function () {   /* the outro's last note: the player goes inactive on its own — leave the stage and bring the OS music back (as the ADE stage does) */
+        try {
+          var a2 = frame && frame.contentWindow && frame.contentWindow.sectionPlayer; if (!a2) return;
+          if (!fw && frame.contentDocument && frame.contentDocument.body.classList.contains('bye')) { fw = true; wave.farewell(); setTimeout(function () { stop(); }, 950); }   /* two bars from the end: retract into the centre, and the moment it is gone hand STRAIGHT over to the desktop player (the outro's tail sings on under it) */
+          if (a2.state().active) seen = true; else if (seen) stop();
+        } catch (e) {}
+      }, 500);
+    }
+    function onKey(e) { if (e.key === 'Escape') stop(); }
+    function stop() {
+      if (!active) return; active = false;
+      document.removeEventListener('keydown', onKey);
+      if (watch) { clearInterval(watch); watch = 0; }
+      if (tRaf) { cancelAnimationFrame(tRaf); tRaf = 0; } clearTitle();   /* hand the caption back unpainted (leftover paint on it double-prints the glyphs) */
+      wave.boost(1); wave.tint(null);   /* the line hands its part colour back to amber */
+      var afterFw = fw; if (fw) { wave.reappear(); fw = false; }   /* after the farewell the desktop's own line grows back from the left; the music returns once it is across */
+      var e0 = el, h0 = head, f0 = frame, wasDucked = e0.dataset.duck === '1'; el = head = frame = null;
+      var xi = extFrames.indexOf(f0); if (xi >= 0) extFrames.splice(xi, 1);   /* unregister NOW: the tail may still sound, but caption/line/duck all hand back to the OS player (ensureDucked must not re-silence the returning music) */
+      var pn0 = $('.ds-panel', e0); if (pn0) { pn0.style.opacity = ''; pn0.style.transform = ''; }   /* drop the pinned state so .out can animate */
+      e0.classList.remove('in'); e0.classList.add('out'); h0.classList.remove('in');
+      if (afterFw) {   /* seamless hand-back: the desktop line regrows at once, the music returns as it lands, and the hidden frame stays alive a moment longer so the outro's tail is not cut off */
+        setTimeout(function () { caption.reset(); if (wasDucked) player.unduck(); }, 1000);
+        setTimeout(function () { e0.remove(); h0.remove(); }, 4000);
+      } else setTimeout(function () { e0.remove(); h0.remove(); caption.reset(); if (wasDucked) player.unduck(); }, DSTAGE_OUT_MS);   /* the frame lives until the card has sunk out, then its audio dies with it and the music comes back */
+    }
+    return { start: start, stop: stop, active: function () { return active; } };
+  })();
   // a demo opens as a desktop window hosting its page in an iframe (same origin); ⛶ in the title bar goes real fullscreen
   function openDemo(id) {
     if (PHONE) return phone.openDemo(id);
     var d = D.demos.filter(function (x) { return x.path === id; })[0]; if (!d) return;
-    if (d.native === 'stage') { minimize('demos'); return stage.start(d); }   /* shell-native: the desktop itself is the stage, no iframe */
+    if (d.native === 'stage') { minimize('demos'); if (secStage.active()) secStage.stop(); return stage.start(d); }   /* shell-native: the desktop itself is the stage, no iframe */
+    if (d.stage_ui) { minimize('demos'); return secStage.start(d); }   /* stage-capable iframe demo: presented on the desktop instead of a window (the phone keeps its panel) */
     var key = 'demo-' + id.replace(/[^a-z0-9-]/gi, '-'), w = wins[key];
     if (!w) {
       w = createWindow(key, { title: d.title, glyph: ICON.demos, size: [900, 640], page: '../' + d.path + '/', render: function (body, win) {
@@ -1625,7 +1742,7 @@
       body.innerHTML = '<p class="d">' + esc(U.demos_intro) + '</p><ul class="list">' + D.demos.filter(function (d) { return !(PHONE && d.native); }).map(function (d) {   /* shell-native demos (the ADE stage) are desktop-only: the phone list does not offer them */
         return '<li><span class="badge demo">' + esc(U.type_demo) + '</span><div style="flex:1"><div class="t">' + esc(d.title) + ' <span class="meta">' + esc(d.year || '') + '</span></div><div class="d">' + esc(d.desc) + '</div>' +
           '<div class="meta" style="margin:.3rem 0">' + esc(d.platform === 'desktop' ? U.platform_desktop : U.platform_all) + '</div>' +
-          '<button class="btn" data-demo="' + esc(d.path) + '">' + esc(d.native ? U.start_stage : U.open_demo) + '</button></div></li>';
+          '<button class="btn" data-demo="' + esc(d.path) + '">' + esc((d.native || (d.stage_ui && !PHONE)) ? U.start_stage : U.open_demo) + '</button></div></li>';
       }).join('') + '</ul>';
       body.addEventListener('click', function (e) { var b = e.target.closest('[data-demo]'); if (b) openDemo(b.dataset.demo); });
     },
@@ -1848,35 +1965,58 @@
     if (window.ResizeObserver) { all.ro = new ResizeObserver(all); if (dk) all.ro.observe(dk); if (mb) all.ro.observe(mb); }   /* the dock's width follows its labels (language switch included); the reference lives on `all` so the observer cannot be collected */
     window.addEventListener('resize', all); all(); [400, 1500, 4000].forEach(function (ms) { setTimeout(all, ms); });   /* the dock is empty until the desktop renders — remeasure after boot regardless */
   })();
-  (function () {   /* liquid-glass hover bubble (app column + dock): a glass lozenge appears under the pointed item and GLIDES to the next one, like a droplet running along the bar */
+  (function () {   /* liquid-glass hover bubble (app column + dock): a glass droplet wells out under the pointed item and glides to the next one.
+     JS SPRING, not CSS transitions: retargeting mid-flight keeps the current velocity, so sweeping across several items never restarts
+     the curve (no instant-acceleration step), and the underdamped landing overshoots a little and jiggles — the droplet wobble.
+     While moving fast the droplet stretches along its direction of travel and squashes across it (velocity squash).
+     The dock's mask hole is fed the SAME numbers every frame, so ring and hole cannot drift apart. */
     if (PHONE) return;
     var PILL_HOLE = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 100 40\' preserveAspectRatio=\'none\'%3E%3Crect width=\'100\' height=\'40\' rx=\'20\' fill=\'black\'/%3E%3C/svg%3E"), linear-gradient(%23fff 0 0)'.replace('%23', '#');
+    var SPR_K = 300, SPR_D = 24, SQUASH = 0.00030, SQUASH_MAX = 0.10;   /* K/D: underdamped spring (ζ≈.7 → ~5% overshoot — user: the ζ≈.55 bounce was a touch too wide; settles ≈.5 s); SQUASH: droplet stretch per px/s of speed */
     function attach(box, sel, pill, overlay) {
       if (!box) return;
       var host = overlay ? (document.querySelector('.desktop') || box) : box;   /* the dock's bubble lives above the bar so its ring is not clipped by the bar's own mask */
       var b = document.createElement('i'); b.className = 'hovbub' + (pill ? ' pill' : '') + (overlay ? ' ov' : ''); b.setAttribute('aria-hidden', 'true');
       if (overlay) host.appendChild(b); else box.insertBefore(b, box.firstChild);
-      var on = false, cx = 0, cy = 0, cw = 0, chh = 0, hx = 0, hy = 0, holeT = 0;
-      function put(s) { b.style.transform = 'translate(' + cx + 'px,' + cy + 'px) scale(' + s + ')'; b.style.width = cw + 'px'; b.style.height = chh + 'px'; }
+      var on = false, raf = 0, lastT = 0, off = { x: 0, y: 0 };
+      var S = { x: 0, y: 0, w: 0, h: 0, vx: 0, vy: 0, vw: 0, vh: 0 }, T = { x: 0, y: 0, w: 0, h: 0 };   /* centre-based: x/y = bubble centre, w/h = its size */
       function setHole(x, y, w, h) {   /* the "glass" of the dock's bubble: a pill-shaped hole cut in the CHROME's mask (::before, via custom props) — inside it the bar's background, glass and border are simply absent; the buttons above stay */
         box.style.setProperty('--dkm', PILL_HOLE); box.style.setProperty('--dkp', x + 'px ' + y + 'px, 0 0'); box.style.setProperty('--dks', Math.max(0.01, w) + 'px ' + Math.max(0.01, h) + 'px, 100% 100%');
       }
       function clearHole() { box.style.removeProperty('--dkm'); box.style.removeProperty('--dkp'); box.style.removeProperty('--dks'); }
+      function apply() {
+        var a = Math.min(SQUASH_MAX, Math.abs(S.vx) * SQUASH), c = Math.min(SQUASH_MAX, Math.abs(S.vy) * SQUASH);
+        var w = Math.max(0, S.w) * (1 + a - c * 0.6), h = Math.max(0, S.h) * (1 + c - a * 0.6);   /* stretched along the travel axis, squashed across it */
+        b.style.transform = 'translate(' + (S.x - w / 2) + 'px,' + (S.y - h / 2) + 'px)';
+        b.style.width = w + 'px'; b.style.height = h + 'px';
+        if (overlay) setHole(S.x - off.x - w / 2, S.y - off.y - h / 2, w, h);
+      }
+      function step(t) {
+        raf = 0; var dt = Math.min(0.032, Math.max(0.001, (t - lastT) / 1000)); lastT = t;
+        S.vx += ((T.x - S.x) * SPR_K - S.vx * SPR_D) * dt; S.x += S.vx * dt;
+        S.vy += ((T.y - S.y) * SPR_K - S.vy * SPR_D) * dt; S.y += S.vy * dt;
+        S.vw += ((T.w - S.w) * SPR_K - S.vw * SPR_D) * dt; S.w += S.vw * dt;
+        S.vh += ((T.h - S.h) * SPR_K - S.vh * SPR_D) * dt; S.h += S.vh * dt;
+        var settled = Math.abs(T.x - S.x) < 0.3 && Math.abs(T.y - S.y) < 0.3 && Math.abs(T.w - S.w) < 0.3 && Math.abs(T.h - S.h) < 0.3 &&
+                      Math.abs(S.vx) < 6 && Math.abs(S.vy) < 6 && Math.abs(S.vw) < 6 && Math.abs(S.vh) < 6;
+        if (settled) { S.x = T.x; S.y = T.y; S.w = T.w; S.h = T.h; S.vx = S.vy = S.vw = S.vh = 0; }
+        apply();
+        if (!settled) raf = requestAnimationFrame(step);
+        else if (!on) clearHole();   /* left and fully shrunk: release the mask */
+      }
+      function wake() { if (!raf) { lastT = performance.now(); raf = requestAnimationFrame(step); } }
       box.addEventListener('pointerover', function (e) {
         var t = e.target && e.target.closest ? e.target.closest(sel) : null; if (!t || !box.contains(t) || t === b) return;
-        if (overlay) { var r = t.getBoundingClientRect(), hr = host.getBoundingClientRect(); cx = r.left - hr.left; cy = r.top - hr.top; cw = r.width; chh = r.height; hx = t.offsetLeft - box.scrollLeft; hy = t.offsetTop - box.scrollTop; }   /* the mask lives in box coords: subtract the pill's scroll */
-        else { cx = t.offsetLeft; cy = t.offsetTop; cw = t.offsetWidth; chh = t.offsetHeight; }
-        if (holeT) { clearTimeout(holeT); holeT = 0; }
-        if (!on) {   /* first landing: it WELLS OUT of the item's centre instead of gliding across from a stale spot */
-          b.style.transition = 'none'; put(0.3); b.style.opacity = 0; void b.offsetWidth; b.style.transition = ''; on = true;
-          if (overlay) { box.classList.add('snap'); setHole(hx + cw / 2, hy + chh / 2, 0, 0); void box.offsetWidth; box.classList.remove('snap'); }
-        }
-        put(1); b.style.opacity = 1;
-        if (overlay) setHole(hx, hy, cw, chh);
+        if (overlay) {
+          var r = t.getBoundingClientRect(), hr = host.getBoundingClientRect(), br = box.getBoundingClientRect();
+          T.x = r.left - hr.left + r.width / 2; T.y = r.top - hr.top + r.height / 2; T.w = r.width; T.h = r.height;
+          off.x = br.left - hr.left; off.y = br.top - hr.top;   /* the mask lives in box coords: same numbers, shifted by the pill's position */
+        } else { T.x = t.offsetLeft + t.offsetWidth / 2; T.y = t.offsetTop + t.offsetHeight / 2; T.w = t.offsetWidth; T.h = t.offsetHeight; }
+        if (!on) { on = true; S.x = T.x; S.y = T.y; S.w = S.h = 0; S.vx = S.vy = S.vw = S.vh = 0; }   /* first landing: it WELLS OUT of the item's centre (the size spring pops it open with a little overshoot) */
+        b.style.opacity = 1; wake();
       });
       box.addEventListener('pointerleave', function () {   /* and shrinks back into its centre on the way out, like a droplet being taken up */
-        on = false; put(0.45); b.style.opacity = 0;
-        if (overlay) { setHole(hx + cw / 2, hy + chh / 2, 0, 0); holeT = setTimeout(function () { clearHole(); holeT = 0; }, 260); }
+        on = false; T.w = 0; T.h = 0; b.style.opacity = 0; wake();
       });
     }
     attach(document.getElementById('icons'), '.icon');
@@ -1973,16 +2113,38 @@
   var phone = (function () {
     var root = $('#phone'), lock = $('#ph-lock'), home = $('#ph-home'), grid = $('#ph-grid'), dockEl = $('#ph-dock'), appsEl = $('#ph-apps'), notes = $('#ph-notes'), power = $('#ph-power'), powerScr = $('#ph-power-scr'), langPick = $('#ph-lang'), ls = $('#ph-ls');
     var stack = [], unlocked = false, powered = false, swappingPh = false;
-    var HOME_APPS = ['works', 'demos', 'player', 'articles'];   /* home grid = only what the dock does not already carry; language switching is the EN/中 slider, no tile */
+    var HOME_APPS = ['works', 'demos', 'player', 'articles', 'pc'];   /* home grid = only what the dock does not already carry; language switching is the EN/中 slider, no tile; pc = switch to the desktop shell */
     var DOCK_APPS = ['terminal', 'about', 'updates'];
-    function label(a) { return a === 'lang' ? U.lang_switch : TITLES[a]; }
+    function label(a) { return a === 'lang' ? U.lang_switch : a === 'pc' ? U.pc_tile : TITLES[a]; }
     function glyph(a) { return a === 'lang' ? (lang === 'zh' ? 'EN' : '中') : (ICON[a] || GLYPH[a]); }
     function fill(b) { var a = b.getAttribute('data-app'); b.innerHTML = '<span class="ic ' + (a === 'updates' ? 'upd' : a) + '"><span class="wg">' + glyph(a) + '</span></span><span>' + esc(label(a)) + '</span>'; }
     function appBtn(a) {
       var b = document.createElement('button'); b.className = 'ph-app'; b.setAttribute('data-app', a); fill(b);
-      b.addEventListener('click', function () { if (a === 'lang') switchLang(); else open(a); });   /* lang: in place, no reload (music keeps playing) */
+      b.addEventListener('click', function () { if (a === 'lang') switchLang(); else if (a === 'pc') askDesktop(); else open(a); });   /* lang: in place, no reload (music keeps playing) */
       return b;
     }
+    /* iOS-style alert (custom, never window.confirm): title + message + cancel/confirm; resolves through cb(true|false) */
+    function ask(title, msg, okLabel, cancelLabel, danger, cb) {
+      var ov = document.createElement('div'); ov.className = 'ph-alert-ov';
+      ov.innerHTML = '<div class="ph-alert" role="alertdialog" aria-modal="true"><h3></h3><p></p><div class="ph-alert-btns"><button type="button" class="no"></button><button type="button" class="yes"></button></div></div>';
+      $('h3', ov).textContent = title; $('p', ov).textContent = msg; $('.no', ov).textContent = cancelLabel; $('.yes', ov).textContent = okLabel;
+      if (danger) $('.yes', ov).classList.add('danger');
+      root.appendChild(ov); requestAnimationFrame(function () { ov.classList.add('in'); });
+      var done = function (v) { ov.classList.remove('in'); setTimeout(function () { ov.remove(); }, reduced ? 0 : 200); cb(v); };
+      $('.no', ov).addEventListener('click', function () { done(false); });
+      $('.yes', ov).addEventListener('click', function () { done(true); });
+      ov.addEventListener('click', function (e) { if (e.target === ov) done(false); });   /* tapping the dimmed backdrop = cancel */
+    }
+    /* the「電腦版」tile: confirm; on a genuinely small screen add the eyesight warning before switching */
+    function askDesktop() {
+      var big = Math.min(screen.width, screen.height) >= 700;   /* tablet-class (iPad ≥ 768): the desktop shell is perfectly usable there */
+      ask(U.pc_confirm_title, U.pc_confirm_msg, U.pc_ok, U.pc_cancel, false, function (go) {
+        if (!go) return;
+        if (big) return toDesktop();
+        ask(U.pc_warn_title, U.pc_warn_msg, U.pc_warn_go, U.pc_warn_stay, true, function (sure) { if (sure) toDesktop(); });
+      });
+    }
+    function toDesktop() { try { sessionStorage.setItem('shellpref', 'desktop'); } catch (e) {} location.href = location.pathname + '?shell=desktop#desktop'; }   /* #desktop: already unlocked here — no second boot sequence */
     function demoOf(id) { return D.demos.filter(function (x) { return x.path === id; })[0]; }
     function titleOf(pnl) { return pnl.dataset.demo ? ((demoOf(pnl.dataset.demo) || {}).title || '') : TITLES[pnl.dataset.app]; }
     function clock() {

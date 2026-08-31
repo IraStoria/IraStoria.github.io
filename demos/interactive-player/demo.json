@@ -10,6 +10,7 @@
     "en": "Section slices of original IraStoria tracks: after the intro, pick a section while playing and it joins seamlessly when the current one ends; otherwise it carries on in order (or Random, if chosen); pick Outro to finish."
   },
   "platform": "all",
+  "stage_ui": true,
   "concept_level_checked": true,
   "concept_level_note": "ADR-004 self-check 2026-08-29: generic queued-section playback with random fallback, written from scratch. Audio = the user's own original track Theme A (user decision 2026-08-29 to publish real mp3 slices); no project code or gameplay details.",
   "dependencies": "none (Web Audio API only); audio/*.mp3 (~11 MB)"

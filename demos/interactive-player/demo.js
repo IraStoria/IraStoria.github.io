@@ -8,6 +8,9 @@
    A theme = fixed intro + free middle sections (grouped by letter, several versions each) + fixed outro. */
 (function () {
   'use strict';
+  /* stage mode (?stage=1): the OS desktop hosts this page in a chromeless layer — the page strips itself down to the control surface (demo.css body.stage) */
+  var STAGE_HOST = /[?&]stage=1/.test(location.search);
+  if (STAGE_HOST) document.body.classList.add('stage');
 
   /* ------------------------------------------------------------ i18n */
   var I18N = {
@@ -57,12 +60,17 @@
   var TICK = 25;
 
   /* scheduler state */
-  var running = false, timer = null;
+  var running = false, timer = null, paused = false, muted = false, mgain = null, byeTimer = null;   /* paused = ctx.suspend(): the clock freezes, so the whole schedule freezes with it; muted drives mgain (after the analyser — the bars keep moving); byeTimer: the outro's panel collapse */
+  var stageLead = 0, stageT0 = null;   /* stage mode: four 4/4 beats at the theme's tempo before the first entry — load time, like the ADE stage's count-in */
   var cur = null;        /* { seg, start, end, src, gain } */
   var nxt = null;        /* scheduled next: same shape */
   var queued = null;     /* user's choice for the next decision (segment id) */
   var later = null;      /* user's choice after a lock (applies to the decision after next) */
-  var randomAuto = false, lastId = null, history = [], ending = false;
+  var randomAuto = false, lastId = null, history = [], ending = false, loopCount = 0, mate = null;   /* loopCount: consecutive passes of the current loop segment (it leaves only on an even count); mate: the OTHER version of the group just entered — whichever version is picked plays first, its mate follows before anything else */
+  function markPair(seg) {   /* entering a section: does it complete a pair, or open one? */
+    if (mate && seg.id === mate.id) { mate = null; return; }
+    if (!seg.loop && !isBookend(seg)) { var vs = groupVersions(seg); mate = vs.length === 2 ? vs[vs.indexOf(seg) ^ 1] : null; } else mate = null;
+  }
   var autoMode = 'seq';   /* 'random' | 'seq' — what takes over at the decision point when nothing is queued */
   var trackListeners = [];   /* fired on every section change with the outgoing progress fraction (the OS shell sweeps its progress bar from there) */
   function fireTrack(fromFrac) { trackListeners.forEach(function (fn) { try { fn(fromFrac); } catch (e) {} }); }
@@ -73,9 +81,21 @@
   /* public API for the host page (same-origin iframe): progress / spectrum / title of the current section */
   window.sectionPlayer = {
     state: function () {
-      if (!running || !cur || !ctx) return { active: false, started: false, playing: false, title: '', pos: 0, dur: 0, frac: 0, muted: false };
+      if (!running || !cur || !ctx) return { active: false, started: false, playing: false, title: '', pos: 0, dur: 0, frac: 0, muted: muted };
       var pos = Math.max(0, Math.min(cur.end - cur.start, ctx.currentTime - cur.start)), dur = cur.end - cur.start;
-      return { active: true, started: true, playing: true, title: trackTitle(cur.seg), parts: titleParts(cur.seg), id: cur.seg.id, pos: pos, dur: dur, frac: dur ? pos / dur : 0, muted: false };
+      var mark = cur.seg === OUTRO ? null : Math.max(0, 1 - decisionLead() / dur);   /* the decision-lock point as a fraction — the OS line draws it as a tick */
+      var o = { active: true, started: true, playing: !paused, title: trackTitle(cur.seg), parts: titleParts(cur.seg), id: cur.seg.id, pos: pos, dur: dur, frac: dur ? pos / dur : 0, mark: mark, muted: muted };
+      if (STAGE_HOST) { o.color = segColor(cur.seg); o.frozen = paused; }   /* stage: the OS line/bars wear the part's colour; frozen lets the bars decay while the suspended analyser holds its last frame */
+      return o;
+    },
+    toggle: function () {   /* the OS transport's play/pause: suspending the context freezes the clock, so the whole schedule pauses in place */
+      if (!running || !ctx) return;
+      if (paused) { paused = false; ctx.resume(); } else { paused = true; ctx.suspend(); }
+      render();
+    },
+    toggleMute: function () {   /* the OS transport's speaker: silences the output stage (after the analyser, so the visuals keep breathing) */
+      muted = !muted;
+      if (mgain && ctx) mgain.gain.setTargetAtTime(muted ? 0.0001 : 1, ctx.currentTime, 0.03);
     },
     analyser: function () { return running ? analyser : null; },
     onTrack: function (fn) { trackListeners.push(fn); }
@@ -98,6 +118,25 @@
   function logicalSec(seg) { var b = buffers[bufKey(seg)]; return b ? Math.max(0.1, (seg.durationSec || b.duration) - preSec(seg) - postSec(seg)) : 0; }   /* durationSec: true length for files whose mp3 has no gapless tag */
   function colorOf(seg) { return (byGroup[seg.group] || {}).color || '#e0b04a'; }
   function nameOf(seg) { return seg.id.replace('_', ' '); }
+  function groupVersions(seg) { return SEG.filter(function (s) { return s.group === seg.group; }); }
+  function verIdx(seg) { return isBookend(seg) ? 0 : groupVersions(seg).indexOf(seg); }
+  function hexHsl(hex) {   /* -> [h 0-360, s 0-1, l 0-1] */
+    var v = parseInt(hex.slice(1), 16), r = ((v >> 16) & 255) / 255, g = ((v >> 8) & 255) / 255, b = (v & 255) / 255;
+    var mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn, h = 0, s = 0;
+    if (d > 0) { s = d / (1 - Math.abs(2 * l - 1)); h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h = (h * 60 + 360) % 360; }
+    return [h, s, l];
+  }
+  function hslHex(h, s, l) {
+    var c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2, r = 0, g = 0, b = 0;
+    if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; } else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
+    var q = function (u) { return Math.round((u + m) * 255); };
+    return '#' + ((1 << 24) + (q(r) << 16) + (q(g) << 8) + q(b)).toString(16).slice(1);
+  }
+  function deep(hex) {   /* colour DEPTH (the 深藍紫 concept): richer and darker, with only a SMALL lean toward violet — capped at 12° so the pair stays in one colour family (amber -> deep amber, never red) */
+    var t = hexHsl(hex), h = t[0], d = ((270 - t[0] + 540) % 360) - 180, shift = Math.max(-12, Math.min(12, d * 0.25));
+    return hslHex((h + shift + 360) % 360, Math.min(1, t[1] * 1.12), Math.max(0, t[2] * 0.6));
+  }
+  function segColor(seg) { if (isBookend(seg)) return '#e8e8e4'; var c = colorOf(seg); return verIdx(seg) > 0 ? deep(c) : c; }   /* intro/outro = white light (a touch grey — pure #fff read too bright); version 1 = the group colour (淺), version 2 = its deep violet-leaning shade (深) */
 
   /* ------------------------------------------------------------ audio loading */
   /* decode with a concurrency cap: decoding twenty mp3s at once stalls mobile Safari (and peaks memory); Safari < 15 also only knows the callback form */
@@ -152,23 +191,35 @@
     if (!a) return true;
     return a.indexOf(toId) >= 0 || a.indexOf(to.group) >= 0 || (to === OUTRO && a.indexOf('OUTRO') >= 0);
   }
-  /* natural order: the config order of the middle sections (I_loop skipped), then I */
+  /* natural order: the config order of the middle sections (I_loop skipped), then I.
+     The CURRENT group is excluded: its versions were consumed as a pair (the mate rule), so in-order moves on to the
+     next group's head — entering at B2 runs B2 -> B1 -> C1, never the B2/B1 ping-pong. */
   function pickNext(fromId) {
     var from = byId[fromId];
     var order = SEG.filter(function (s) { return !s.loop; }); if (OUTRO) order.push(OUTRO);
-    var i = order.indexOf(from), pool = order.slice(i + 1).filter(function (s) { return allowed(fromId, s.id); });
-    if (from.loop) pool = order.filter(function (s) { return allowed(fromId, s.id); });
+    var i = order.indexOf(from), pool = order.slice(i + 1).filter(function (s) { return s.group !== from.group && allowed(fromId, s.id); });
+    if (from.loop) pool = order.filter(function (s) { return s.group !== from.group && allowed(fromId, s.id); });
     return pool.length ? pool[0] : pickRandom(fromId);
   }
   function pickRandom(fromId) {
     var from = byId[fromId];
     if (from.loop) return from;   /* outro loop: keeps looping itself until the user picks something */
-    var pool = SEG.filter(function (s) { return allowed(fromId, s.id) && !(optExclude.checked && s.id === lastId && SEG.length > 1) && s.id !== fromId; });
+    var pool = SEG.filter(function (s) { return s.group !== from.group && allowed(fromId, s.id) && !(optExclude.checked && s.id === lastId && SEG.length > 1) && s.id !== fromId; });   /* the group just completed as a pair — random moves to a different group */
     if (!pool.length) pool = SEG.filter(function (s) { return allowed(fromId, s.id); });
     if (!pool.length) pool = SEG;
     return pool[Math.floor(Math.random() * pool.length)];
   }
   function decide() {
+    /* a group plays out whole, in the order it was entered: whichever version was picked plays first, its mate ALWAYS follows
+       (any queued pick waits for the decision after); the outro loop leaves only after an even number of passes */
+    var forced = null;
+    if (cur.seg.loop && loopCount % 2 === 1) forced = cur.seg;
+    else if (mate) forced = mate;   /* the pair rule is the user's own design — it outranks the allow list (schedule() still honours pre-entry/tail timing) */
+    if (forced) {
+      randomAuto = false;
+      nxt = schedule(forced, cur.end);
+      fadeOut(cur); logSeam(cur, nxt); render(); return;   /* `queued` is left untouched — it applies after the pair completes */
+    }
     var choice = null;
     if (queued && allowed(cur.seg.id, queued)) { choice = byId[queued]; randomAuto = false; }
     else { choice = autoMode === 'seq' ? pickNext(cur.seg.id) : pickRandom(cur.seg.id); randomAuto = !(choice.loop && autoMode === 'random'); }
@@ -187,29 +238,39 @@
     if (!nxt && now >= cur.end - decisionLead()) decide();
     if (nxt && now >= cur.end) {           /* hand-over */
       lastId = cur.seg.id; cur = nxt; nxt = null; fireTrack(1);
+      loopCount = cur.seg.loop ? loopCount + 1 : 0;
+      markPair(cur.seg);
       if (later) { queued = later; later = null; }
       history.push(cur.seg.id);
+      if (STAGE_HOST && cur.seg === OUTRO && !byeTimer) byeTimer = setTimeout(function () { document.body.classList.add('bye'); }, Math.max(0, (cur.end - ctx.currentTime - 2 * barSec(OUTRO.bpmOut)) * 1000));   /* TWO bars before the outro's logical end: the surface compresses and the OS line retracts — the desktop player runs straight back out under the closing bars */
       render();
     }
     renderProgress();
   }
   function start() {
-    if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = 0.9; analyser = ctx.createAnalyser(); analyser.fftSize = 2048; analyser.minDecibels = -96; analyser.maxDecibels = 6; master.connect(analyser); analyser.connect(ctx.destination); }
+    if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = 0.9; analyser = ctx.createAnalyser(); analyser.fftSize = 2048; analyser.minDecibels = -96; analyser.maxDecibels = 6; if (STAGE_HOST) analyser.smoothingTimeConstant = 0.55; master.connect(analyser); mgain = ctx.createGain(); mgain.gain.value = muted ? 0.0001 : 1; analyser.connect(mgain); mgain.connect(ctx.destination); }   /* mgain: the mute stage sits after the analyser so the bars keep moving; a mute requested before the context existed is honoured here. Stage: lower smoothing — the bass/bk hits snap instead of blurring */
     if (ctx.state === 'suspended') ctx.resume();
+    paused = false;
+    if (stageLead && stageT0 === null) stageT0 = ctx.currentTime;   /* the count-in starts NOW; loading runs inside it */
     var pending = allSegs().filter(function (s) { return !buffers[bufKey(s)]; }), done = 0, fetched = 0;
     var prog = function () { startBtn.textContent = T('loading') + ' ' + fetched + '↓ ' + done + '/' + pending.length; };   /* downloaded↓ decoded/total — so a stall is visible as one or the other */
     startBtn.disabled = true; if (pending.length) prog();
     Promise.all(pending.map(function (s) { return loadBuffer(s, function () { fetched++; prog(); }).then(function (b) { buffers[bufKey(s)] = b; done++; prog(); }); })).then(function () {
       if (pending.length && /[?&]debug/.test(location.search)) logLoad(pending);   /* decode check only with ?debug */
-      running = true; queued = later = null; randomAuto = false; lastId = null; history = [];
+      running = true; queued = later = null; randomAuto = false; lastId = null; history = []; loopCount = 0; mate = null;
       var first = INTRO || SEG[0];
-      cur = schedule(first, ctx.currentTime + 0.05 + preSec(first)); nxt = null;   /* first entry sits after its own pick-up: start times can't be negative */
+      var entry = ctx.currentTime + 0.05 + preSec(first);   /* first entry sits after its own pick-up: start times can't be negative */
+      if (stageLead && stageT0 !== null) { entry = Math.max(entry, stageT0 + stageLead + preSec(first)); stageT0 = null; }   /* stage: the music enters on the count-in's downbeat (or as soon as loading allows, whichever is later) */
+      cur = schedule(first, entry); nxt = null;
+      markPair(first);   /* starting inside a two-version group opens its pair too */
       history.push(first.id); fireTrack(0);
       timer = setInterval(tick, TICK); startBtn.disabled = false; render();
     }).catch(function (err) { running = false; clearInterval(timer); cur = nxt = null; startBtn.disabled = false; var s = document.createElement('span'); s.className = 'bad'; s.textContent = 'start error: ' + (err && err.stack || err) + '\n'; histEl.appendChild(s); render(); });
   }
   function stop() {
     running = false; clearInterval(timer);
+    if (byeTimer) { clearTimeout(byeTimer); byeTimer = null; }
+    if (paused) { paused = false; try { ctx.resume(); } catch (e) {} }   /* never leave the context suspended: the fade-out below needs a running clock */
     [cur, nxt].forEach(function (it) { if (it) { try { it.gain.gain.cancelScheduledValues(0); it.gain.gain.setValueAtTime(it.gain.gain.value, ctx.currentTime); it.gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1); it.src.stop(ctx.currentTime + 0.12); } catch (e) {} } });
     cur = nxt = null; queued = later = null; randomAuto = false; render(); fireTrack(0);
   }
@@ -262,7 +323,7 @@
         var col = document.createElement('div'); col.className = 'col'; col.style.setProperty('--c', g.color);
         SEG.filter(function (s) { return s.group === g.id; }).forEach(function (s, i) {
           if (i > 0) { var arrow = document.createElement('i'); arrow.className = 'link'; arrow.textContent = '↓'; col.appendChild(arrow); }
-          var b = document.createElement('button'); b.className = 'seg'; b.style.setProperty('--c', g.color);
+          var b = document.createElement('button'); b.className = 'seg'; b.style.setProperty('--c', i > 0 ? deep(g.color) : g.color);   /* version 2 = the deep violet-leaning shade (matches the OS line) */
           b.innerHTML = '<span class="nm"></span><span class="st"></span>';
           b.addEventListener('click', function () { choose(s.id); });
           col.appendChild(b); segBtns[s.id] = b;
@@ -287,7 +348,7 @@
     document.documentElement.lang = lang === 'zh' ? 'zh-Hant' : 'en';
     document.querySelectorAll('[data-i18n]').forEach(function (el) { var k = el.getAttribute('data-i18n'); el.textContent = k === 'start' ? (running ? T('stop') : T('start')) : T(k); });
     document.querySelectorAll('[data-lang]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-lang') === lang); });
-    GROUPS.forEach(function (g) { if (colEls[g.id]) colEls[g.id].classList.toggle('active', !!cur && cur.seg.group === g.id); });
+    GROUPS.forEach(function (g) { if (colEls[g.id]) { var inG = !!cur && cur.seg.group === g.id; colEls[g.id].classList.toggle('active', inG); colEls[g.id].classList.toggle('pair', inG && SEG.filter(function (s) { return s.group === g.id; }).length === 2); } });   /* pair rule engaged: a rectangle frames BOTH versions of the group being played (stage styling) */
     var list = SEG.slice(); if (OUTRO) list.push(OUTRO);
     list.forEach(function (s) {
       var b = segBtns[s.id], st = '';
@@ -298,6 +359,7 @@
       b.classList.toggle('queued', (!!isQ && !(isCur && s.loop)) || later === s.id);
       var ok = !running || allowed((nxt || cur).seg.id, s.id);
       b.disabled = !running || !ok;
+      b.classList.toggle('off', running && !ok && !isCur && later !== s.id);   /* stage mode fades a blocked section off the screen — but never the one that is PLAYING (the outro may not follow itself, yet it must stay lit) or already picked (styled only under body.stage; the window keeps the greyed look) */
       if (isCur) st = (s.loop && (!nxt || nxt.seg.id === s.id) && !queued) ? T('st_loop') : T('st_playing');
       else if (later === s.id) st = T('st_next_next');
       else if (isQ) st = T('st_queued');
@@ -310,14 +372,14 @@
     randomBtn.querySelector('.st').textContent = randomAuto && running && autoMode === 'random' ? T('random_auto') : '';
     seqBtn.querySelector('.st').textContent = randomAuto && running && autoMode === 'seq' ? T('seq_auto') : '';
     randomBtn.disabled = seqBtn.disabled = !running || (cur && cur.seg === OUTRO);
-    nowEl.textContent = cur ? nameOf(cur.seg) : '—'; nowEl.style.color = cur ? colorOf(cur.seg) : '';
-    progEl.style.setProperty('--c', cur ? colorOf(cur.seg) : '');
+    nowEl.textContent = cur ? nameOf(cur.seg) : '—'; nowEl.style.color = cur ? segColor(cur.seg) : '';
+    progEl.style.setProperty('--c', cur ? segColor(cur.seg) : '');
     if (!running) nextEl.innerHTML = '';
     else if (cur.seg === OUTRO) nextEl.innerHTML = T('next_end');
     else if (nxt) nextEl.innerHTML = (nxt.seg.loop && nxt.seg.id === cur.seg.id ? T('next_loop') : randomAuto ? (autoMode === 'seq' ? T('next_seq') : T('next_auto')) : T('next_locked')).replace('{n}', nameOf(nxt.seg));
     else if (queued) nextEl.innerHTML = T('next_queued').replace('{n}', nameOf(byId[queued]));
     else if (cur.seg.loop) nextEl.innerHTML = T('next_loop').replace('{n}', nameOf(cur.seg));
-    else nextEl.innerHTML = T(autoMode === 'seq' ? 'next_none_seq' : 'next_none').replace('{s}', Math.max(0, cur.end - decisionLead() - ctx.currentTime).toFixed(1));
+    else nextEl.innerHTML = STAGE_HOST ? '' : T(autoMode === 'seq' ? 'next_none_seq' : 'next_none').replace('{s}', Math.max(0, cur.end - decisionLead() - ctx.currentTime).toFixed(1));   /* stage: no "undecided" countdown — the tick on the OS line says it */
   }
   function renderProgress() {
     if (!cur) { progEl.firstElementChild.style.width = '0'; return; }
@@ -326,12 +388,13 @@
     var showMark = cur.seg !== OUTRO;
     dmark.style.display = showMark ? '' : 'none';
     if (showMark) dmark.style.left = (Math.max(0, 1 - decisionLead() / (cur.end - cur.start)) * 100) + '%';
-    if (!nxt && !queued && !cur.seg.loop && showMark) nextEl.innerHTML = T(autoMode === 'seq' ? 'next_none_seq' : 'next_none').replace('{s}', Math.max(0, cur.end - decisionLead() - ctx.currentTime).toFixed(1));
+    if (!nxt && !queued && !cur.seg.loop && showMark && !STAGE_HOST) nextEl.innerHTML = T(autoMode === 'seq' ? 'next_none_seq' : 'next_none').replace('{s}', Math.max(0, cur.end - decisionLead() - ctx.currentTime).toFixed(1));
   }
 
   /* spectrum display (same style as the OS player) + segment colour */
   var viz = document.getElementById('viz'), vg = viz.getContext('2d');
   (function drawViz() {
+    if (STAGE_HOST) return;   /* on the desktop stage the OS spectrum line is the display — the hidden canvas must not burn frames */
     requestAnimationFrame(drawViz);
     if (viz.width !== viz.clientWidth) viz.width = viz.clientWidth;
     var W = viz.width, H = viz.height; vg.clearRect(0, 0, W, H);
@@ -384,5 +447,48 @@
   fetch('segments.json').then(function (r) { return r.json(); }).then(function (cfg) {
     CFG = cfg; THEMES = cfg.themes || []; useTheme(THEMES[0]);
     optExclude.checked = !!cfg.excludeLast; buildThemes(); buildButtons(); render();
+    if (STAGE_HOST) {   /* stage: no options — the transition rules always hold (they ARE the pre-entry/tail model) and repeats are the rules' business; no Start button — entering the stage starts the count-in */
+      optRules.checked = true; optExclude.checked = false;
+      var first = INTRO || SEG[0], bpm = first.bpmIn || first.bpmOut || 120;
+      stageLead = 4 * 60 / bpm; stageT0 = null;   /* four 4/4 beats at the theme's tempo (145 -> ~1.7 s of load time) */
+      start();
+    }
   });
+  /* stage: the parent's click opened the stage, but autoplay activation does not always reach the iframe — the first tap inside revives a
+     context the policy kept suspended. Never while paused: pause IS a suspend, and a tap on a section button must not silently resume it. */
+  if (STAGE_HOST) document.addEventListener('pointerdown', function () { if (ctx && ctx.state === 'suspended' && !paused) ctx.resume(); }, true);
+  /* stage: the same glass droplet the OS bars have — a spring-driven bubble glides between the buttons (velocity kept on retarget, a
+     small overshoot wobble on landing). Kept in sync with the shell's feel: K/D/squash mirror os.js. */
+  if (STAGE_HOST) (function () {
+    var host = document.querySelector('.panel'); if (!host) return; host.style.position = 'relative';
+    var b = document.createElement('i'); b.className = 'hb2'; b.setAttribute('aria-hidden', 'true'); host.insertBefore(b, host.firstChild);
+    var K = 300, DA = 24, SQ = 0.0003, SQM = 0.10;
+    var S = { x: 0, y: 0, w: 0, h: 0, vx: 0, vy: 0, vw: 0, vh: 0 }, TT = { x: 0, y: 0, w: 0, h: 0 }, on = false, raf = 0, lastT = 0;
+    function apply() {
+      var a = Math.min(SQM, Math.abs(S.vx) * SQ), c = Math.min(SQM, Math.abs(S.vy) * SQ);
+      var w = Math.max(0, S.w) * (1 + a - c * 0.6), h = Math.max(0, S.h) * (1 + c - a * 0.6);
+      b.style.transform = 'translate(' + (S.x - w / 2) + 'px,' + (S.y - h / 2) + 'px)'; b.style.width = w + 'px'; b.style.height = h + 'px';
+    }
+    function step(t) {
+      raf = 0; var dt = Math.min(0.032, Math.max(0.001, (t - lastT) / 1000)); lastT = t;
+      S.vx += ((TT.x - S.x) * K - S.vx * DA) * dt; S.x += S.vx * dt;
+      S.vy += ((TT.y - S.y) * K - S.vy * DA) * dt; S.y += S.vy * dt;
+      S.vw += ((TT.w - S.w) * K - S.vw * DA) * dt; S.w += S.vw * dt;
+      S.vh += ((TT.h - S.h) * K - S.vh * DA) * dt; S.h += S.vh * dt;
+      var done = Math.abs(TT.x - S.x) < 0.3 && Math.abs(TT.y - S.y) < 0.3 && Math.abs(TT.w - S.w) < 0.3 && Math.abs(TT.h - S.h) < 0.3 &&
+                 Math.abs(S.vx) < 6 && Math.abs(S.vy) < 6 && Math.abs(S.vw) < 6 && Math.abs(S.vh) < 6;
+      if (done) { S.x = TT.x; S.y = TT.y; S.w = TT.w; S.h = TT.h; S.vx = S.vy = S.vw = S.vh = 0; }
+      apply(); if (!done) raf = requestAnimationFrame(step);
+    }
+    function wake() { if (!raf) { lastT = performance.now(); raf = requestAnimationFrame(step); } }
+    host.addEventListener('pointerover', function (e) {
+      var t = e.target && e.target.closest ? e.target.closest('.seg,.big') : null; if (!t || t.disabled || t.classList.contains('off')) return;
+      var r = t.getBoundingClientRect(), hr = host.getBoundingClientRect();
+      TT.x = r.left - hr.left + host.scrollLeft + r.width / 2; TT.y = r.top - hr.top + host.scrollTop + r.height / 2; TT.w = r.width; TT.h = r.height;
+      b.style.borderRadius = getComputedStyle(t).borderRadius;
+      if (!on) { on = true; S.x = TT.x; S.y = TT.y; S.w = S.h = 0; S.vx = S.vy = S.vw = S.vh = 0; }
+      b.style.opacity = 1; wake();
+    });
+    host.addEventListener('pointerleave', function () { on = false; TT.w = 0; TT.h = 0; b.style.opacity = 0; wake(); });
+  })();
 })();

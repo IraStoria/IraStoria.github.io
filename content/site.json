@@ -326,6 +326,42 @@
     "stage_pos": {
       "zh": "前|後|左|右",
       "en": "FRONT|BACK|LEFT|RIGHT"
+    },
+    "pc_tile": {
+      "zh": "電腦版",
+      "en": "Desktop"
+    },
+    "pc_confirm_title": {
+      "zh": "轉換成電腦版？",
+      "en": "Switch to the desktop version?"
+    },
+    "pc_confirm_msg": {
+      "zh": "將以電腦版介面重新載入這個網站。",
+      "en": "The site will reload with the desktop interface."
+    },
+    "pc_ok": {
+      "zh": "轉換",
+      "en": "Switch"
+    },
+    "pc_cancel": {
+      "zh": "取消",
+      "en": "Cancel"
+    },
+    "pc_warn_title": {
+      "zh": "⚠ 眼瞎警告",
+      "en": "⚠ Eyesight Hazard"
+    },
+    "pc_warn_msg": {
+      "zh": "你的螢幕偏小。切到電腦版之後，所有東西都會縮成螞蟻尺寸——看得到算你視力好，點得到算你指尖裝了 GPS。確定要繼續嗎？",
+      "en": "Your screen is on the small side. On the desktop version everything shrinks to ant size — seeing it takes eagle eyes, tapping it takes GPS fingertips. Continue anyway?"
+    },
+    "pc_warn_go": {
+      "zh": "繼續，我眼睛很利",
+      "en": "Continue — my eyes are sharp"
+    },
+    "pc_warn_stay": {
+      "zh": "饒了我的眼睛",
+      "en": "Spare my eyes"
     }
   },
   "about_body": {

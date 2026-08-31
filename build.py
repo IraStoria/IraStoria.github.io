@@ -489,7 +489,8 @@ def build_pages(site, works, demos, articles):
             "fx": {name: {k: (local_versioned(v) if k in ("video", "sound") and v else v) for k, v in f.items() if not k.startswith("_")} for name, f in (site.get("fx") or {}).items()},
             "works": [loc(w) for w in works],
             "updates": [{"date": u["date"], "text": u[lang]} for u in load_updates()],
-            "demos": [{"path": rel, "title": m["title"][lang], "desc": m["desc"][lang], "platform": m["platform"], "year": m.get("year", ""), "ver": demo_ver(rel), "native": m.get("native", ""),
+            "demos": [{"path": rel, "title": m["title"][lang], "desc": m["desc"][lang], "platform": m["platform"], "year": m.get("year", ""), "ver": demo_ver(rel), "native": m.get("native", ""), "stage_ui": bool(m.get("stage_ui")),   # stage_ui: the desktop presents this iframe demo on the desktop itself (?stage=1), not in a window
+
                        "pieces": [{"id": p["id"], "title": p["title"][lang], "stems": p["stems"], "veil": p.get("veil", []), "notes": local_versioned(p["notes"]) if p.get("notes") else "", "count_in": p.get("count_in")} for p in m.get("pieces", [])]} for rel, m in demos.items()],
             "articles": [{"slug": a["slug"], "title": a[lang]["meta"]["title"], "date": a[lang]["meta"]["date"]} for a in articles],
           }
