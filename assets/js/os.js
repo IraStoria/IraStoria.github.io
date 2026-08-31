@@ -1507,6 +1507,7 @@
   var secStage = (function () {
     var el = null, head = null, active = false, frame = null, watch = 0, seen = false, fw = false, tRaf = 0;   /* fw: the outro farewell has taken the line down; tRaf: the caption-tint loop */
     var lastSec = null, aheadCol = '224,176,74', lastTint = '224,176,74';   /* the caption HOLDS the previous section's colour ahead of the play head — it never fades, only the sweeping new colour replaces it */
+    var stopTimers = [];   /* the exit choreography's timers — a quick re-entry must cancel them (or the bars would pop back up mid-entrance) */
     function paintTitle() {   /* ADE's title treatment, in the section's colour: each half is a gradient clipped to its glyphs — part colour behind the play head, amber ahead, glowing with the covered share; the colour is the line's own eased tint, so both change together */
       tRaf = 0; if (!active) return; tRaf = requestAnimationFrame(paintTitle);
       var a = ext.api(), st = a && a.state(), tEl = document.querySelector('#np-desktop .np-title'); if (!tEl) return;
@@ -1528,6 +1529,8 @@
       if (active) return;
       if (stage.active()) stage.stop();   /* the ADE stage and a demo stage never share the desktop */
       active = true; seen = false;
+      stopTimers.forEach(clearTimeout); stopTimers = [];
+      wave.sweep(true, player.state().frac || 0); wave.squash(true);   /* ADE-style entrance: the music's played part sweeps off and the bars sink into the line; they rise again with the section spectrum once the player is up */
       el = document.createElement('div'); el.className = 'dstage'; el.setAttribute('aria-label', d.title);
       el.innerHTML = '<div class="ds-panel"></div>';
       var f = frame = document.createElement('iframe'); f.className = 'ds-frame'; f.title = d.title; f.setAttribute('allow', 'autoplay'); f.setAttribute('allowtransparency', 'true');
@@ -1549,7 +1552,7 @@
         try {
           var a2 = frame && frame.contentWindow && frame.contentWindow.sectionPlayer; if (!a2) return;
           if (!fw && frame.contentDocument && frame.contentDocument.body.classList.contains('bye')) { fw = true; wave.farewell(); setTimeout(function () { stop(); }, 950); }   /* two bars from the end: retract into the centre, and the moment it is gone hand STRAIGHT over to the desktop player (the outro's tail sings on under it) */
-          if (a2.state().active) seen = true; else if (seen) stop();
+          if (a2.state().active) { if (!seen) { seen = true; wave.squash(false); } } else if (seen) stop();   /* first sign of the player: the bars rise again, now carrying the section's spectrum */
         } catch (e) {}
       }, 500);
     }
@@ -1566,9 +1569,14 @@
       var pn0 = $('.ds-panel', e0); if (pn0) { pn0.style.opacity = ''; pn0.style.transform = ''; }   /* drop the pinned state so .out can animate */
       e0.classList.remove('in'); e0.classList.add('out'); h0.classList.remove('in');
       if (afterFw) {   /* seamless hand-back: the desktop line regrows at once, the music returns as it lands, and the hidden frame stays alive a moment longer so the outro's tail is not cut off */
-        setTimeout(function () { caption.reset(); if (wasDucked) player.unduck(); }, 1000);
-        setTimeout(function () { e0.remove(); h0.remove(); }, 4000);
-      } else setTimeout(function () { e0.remove(); h0.remove(); caption.reset(); if (wasDucked) player.unduck(); }, DSTAGE_OUT_MS);   /* the frame lives until the card has sunk out, then its audio dies with it and the music comes back */
+        stopTimers.push(setTimeout(function () { caption.reset(); if (wasDucked) player.unduck(); }, 1000));
+        stopTimers.push(setTimeout(function () { e0.remove(); h0.remove(); }, 4000));
+      } else {   /* manual exit, ADE-style: the section bars sink into the line, then rise again as the OS music's — with the play head retreating and sliding back out to where the track really is */
+        var exitFrac = 0; try { exitFrac = f0.contentWindow.sectionPlayer.state().frac || 0; } catch (e) {}
+        wave.squash(true);
+        stopTimers.push(setTimeout(function () { e0.remove(); h0.remove(); }, DSTAGE_OUT_MS));   /* the card sinks out; the frame's audio dies with it */
+        stopTimers.push(setTimeout(function () { wave.squash(false); wave.reflow(exitFrac); caption.reset(); if (wasDucked) player.unduck(); }, 700));
+      }
     }
     return { start: start, stop: stop, active: function () { return active; } };
   })();
