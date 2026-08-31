@@ -13,6 +13,20 @@
   "native": "stage",
   "pieces": [
     {
+      "id": "ade",
+      "title": {
+        "zh": "《第2樂章：過飽和》",
+        "en": "II. Supersaturated"
+      },
+      "stems": {
+        "L": "assets/audio/ade/L.mp3",
+        "R": "assets/audio/ade/R.mp3",
+        "C": "assets/audio/ade/C.mp3",
+        "B": "assets/audio/ade/B.mp3"
+      },
+      "notes": "assets/notes/ade.json"
+    },
+    {
       "id": "ade1",
       "title": {
         "zh": "《第1樂章：前奏》",
@@ -32,20 +46,6 @@
         "beats": 8,
         "bpm": 180
       }
-    },
-    {
-      "id": "ade",
-      "title": {
-        "zh": "《第2樂章：過飽和》",
-        "en": "II. Supersaturated"
-      },
-      "stems": {
-        "L": "assets/audio/ade/L.mp3",
-        "R": "assets/audio/ade/R.mp3",
-        "C": "assets/audio/ade/C.mp3",
-        "B": "assets/audio/ade/B.mp3"
-      },
-      "notes": "assets/notes/ade.json"
     }
   ],
   "concept_level_checked": true,
