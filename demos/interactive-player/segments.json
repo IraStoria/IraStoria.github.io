@@ -12,15 +12,15 @@
    },
    "intro": {
     "id": "A",
-    "file": "audio/MasterIntro_0_1_none.mp3",
+    "file": "audio/ThemeA_A_0_1_none.mp3",
     "bpmIn": 145,
     "bpmOut": 145,
     "preBars": 0,
     "tailBars": 1,
     "role": "intro",
     "trimStart": 0.025057,
-    "durationSec": 29.793,
-    "note": "encoded without a LAME gapless tag: skip the encoder delay and use the true wav length"
+    "durationSec": 28.965517,
+    "note": "replaced 2026-09-01 (user export, first 2 beats already cut upstream): 17.5 bars total = 16.5 logical + 1 tail; encoded without a LAME gapless tag: skip the encoder delay and use the true length"
    },
    "outro": {
     "id": "I",
