@@ -104,6 +104,7 @@
     var ub = $('#upd-hide'); if (ub) { ub.title = U.updates_hide; ub.setAttribute('aria-label', U.updates_hide); }
     var ul = $('#upd-log'); if (ul) ul.innerHTML = (D.updates || []).length ? D.updates.map(function (u) { return '<div class="msg"><time>' + esc(u.date) + '</time><p>' + esc(u.text) + '</p></div>'; }).join('') : '<p class="note">' + esc(U.updates_empty) + '</p>';
     document.querySelectorAll('.np-cap .np-lbl').forEach(function (l) { var stt = l.querySelector('.np-state'); l.textContent = U.player_now + (stt ? ' · ' : ''); if (stt) l.appendChild(stt); });
+    if (typeof secStage !== 'undefined' && secStage && secStage.active()) secStage.relabel();   /* the native section stage follows an in-place language switch (zone labels, mode buttons, exit) */
     caption.reset();
     Object.keys(wins).forEach(function (a) { var w = wins[a]; if (!TITLES[a]) return; w.setAttribute('aria-label', TITLES[a]); var tt = w.querySelector('.win-title'); if (tt) tt.innerHTML = '<span class="wg">' + (ICON[a] || GLYPH[a]) + '</span> ' + esc(TITLES[a]); var ft = w.querySelector('.win-foot a'); if (ft) ft.textContent = U.open_page; if (RENDER[a]) RENDER[a](w.querySelector('.win-body'), w); });
   }
@@ -248,6 +249,7 @@
   var ext = {
     api: function () {
       if (typeof stage !== 'undefined' && stage && stage.active()) return stage.src();   /* ADE stage: caption and progress follow the four stems */
+      if (typeof secStage !== 'undefined' && secStage && secStage.active()) { var sp = secStage.src(); if (sp) { try { if (sp.state().active) return sp; } catch (e) {} } }   /* section stage (shell-native): same contract — while it is still loading the caption stays on the (ducked) OS player, as the iframe version did */
       for (var i = extFrames.length - 1; i >= 0; i--) {
         var f = extFrames[i]; if (!f.isConnected) { extFrames.splice(i, 1); continue; }
         try { var a = f.contentWindow && f.contentWindow.sectionPlayer; if (a && a.state().active) return a; } catch (e) {}
@@ -726,10 +728,10 @@
     // desktop caption doubles as a mini transport: pause / previous / next without opening the player window
     els.forEach(function (el) {
       var pp = el.querySelector('.np-pp'), pv = el.querySelector('.np-prev'), nx = el.querySelector('.np-next');
-      if (pp) pp.addEventListener('click', function () { if (stage.active()) stage.toggle(); else { var ax = ext.api(); if (ax && ax.toggle) ax.toggle(); else player.toggle(); } refresh(); });   /* on the ADE stage the transport drives the four stems; an active section player (its state IS the caption) takes the pause too — never the background music */
+      if (pp) pp.addEventListener('click', function () { if (stage.active()) stage.toggle(); else if (secStage.active()) secStage.toggle(); else { var ax = ext.api(); if (ax && ax.toggle) ax.toggle(); else player.toggle(); } refresh(); });   /* on the ADE stage the transport drives the four stems; an active section player (its state IS the caption) takes the pause too — never the background music */
       if (pv) pv.addEventListener('click', function () { if (stage.active()) stage.prev(); else player.prev(); refresh(); });
       if (nx) nx.addEventListener('click', function () { if (stage.active()) stage.next(); else player.next(); refresh(); });
-      var mu = el.querySelector('.np-mute'); if (mu) mu.addEventListener('click', function () { if (stage.active()) stage.toggleMute(); else { var ax2 = ext.api(); if (ax2 && ax2.toggleMute) ax2.toggleMute(); else player.toggleMute(); } refresh(); });   /* on the stage the speaker silences the four stems; an active section player takes the mute the same way (the OS music is already ducked) */
+      var mu = el.querySelector('.np-mute'); if (mu) mu.addEventListener('click', function () { if (stage.active()) stage.toggleMute(); else if (secStage.active()) secStage.toggleMute(); else { var ax2 = ext.api(); if (ax2 && ax2.toggleMute) ax2.toggleMute(); else player.toggleMute(); } refresh(); });   /* on the stage the speaker silences the four stems; an active section player takes the mute the same way (the OS music is already ducked) */
       var t = el.querySelector('.np-title'); if (t) t.addEventListener('click', function () { openApp('player'); });
     });
     function arm() { player.prepare(); els.forEach(function (el) { el.style.transitionDuration = CONNECT_MS + 'ms'; }); if (!timer) timer = setInterval(refresh, 400); refresh(); }
@@ -1500,19 +1502,365 @@
   }
 
   var spawn = 0;
-  /* ============================================================ demo stage: an iframe demo presented ON the desktop, no window chrome.
-     The demo loads with ?stage=1 (its page strips itself down to the bare control surface on a translucent card) in a chromeless layer
-     above the wallpaper; enter = the card rises and fades in, leave = it sinks back out. The same sectionPlayer contract as the window
-     (ext.register) keeps the desktop line, caption and duck in sync; Escape or the「離開舞台」button leaves. */
+  /* ============================================================ section stage (LOG-109): the interactive section player, SHELL-NATIVE.
+     A straight port of demos/interactive-player/demo.js in stage dress — same scheduler, timing model, pair rule and colours —
+     running right in the shell: no iframe, no second document sharing the main thread, nothing left to stutter the entrance.
+     The desktop line, caption, transport and duck follow through the same ext contract (state() keeps the iframe shape);
+     the phone keeps its iframe panel and the demo page itself is untouched. Escape or the「離開舞台」button leaves. */
   var DSTAGE_OUT_MS = 420;
+  function makeSecPlayer(base, ver, host, onBye) {
+    /* base = '../demos/interactive-player/' — files in segments.json are relative to the demo directory (like the ADE stems) */
+    var LOOKAHEAD = 0.25, TICK = 25;
+    var CFG = null, TH = null, SEG = [], byId = {}, GROUPS = [], byGroup = {}, INTRO = null, OUTRO = null;
+    var ctx = null, master = null, analyser = null, mgain = null, buffers = {};
+    var running = false, timer = null, paused = false, muted = false, loadProg = null, dead = false;
+    var stageLead = 0, stageT0 = null, startTimer = 0;   /* four 4/4 beats at the theme's tempo before the first entry — load time, like the ADE stage's count-in */
+    var cur = null, nxt = null, queued = null, later = null;
+    var randomAuto = false, lastId = null, loopCount = 0, mate = null, autoMode = 'seq';   /* loopCount: consecutive passes of the loop segment (it leaves only on an even count); mate: the OTHER version of the group just entered — whichever version is picked plays first, its mate follows before anything else */
+    var trackListeners = [], byeTimer = null;
+    function fireTrack(fromFrac) { trackListeners.forEach(function (fn) { try { fn(fromFrac); } catch (e) {} }); }
+    function markPair(seg) {   /* entering a section: does it complete a pair, or open one? */
+      if (mate && seg.id === mate.id) { mate = null; return; }
+      if (!seg.loop && !isBookend(seg)) { var vs = groupVersions(seg); mate = vs.length === 2 ? vs[vs.indexOf(seg) ^ 1] : null; } else mate = null;
+    }
+    function titleParts(seg) { var song = (CFG && CFG.song) || {}; return { tag: (TH.version || 'V1') + ' - ' + seg.id.replace('_loop', ' loop'), rest: (song.title || '') + (song.artist ? ' - by ' + song.artist : '') }; }
+    function trackTitle(seg) { var p = titleParts(seg); return p.tag + ' | ' + p.rest; }
+    function useTheme(th) {
+      TH = th; INTRO = th.intro || null; OUTRO = th.outro || null;
+      SEG = th.segments; GROUPS = th.groups || []; byId = {}; byGroup = {};
+      SEG.forEach(function (s) { byId[s.id] = s; }); GROUPS.forEach(function (g) { byGroup[g.id] = g; });
+      if (INTRO) byId[INTRO.id] = INTRO; if (OUTRO) byId[OUTRO.id] = OUTRO;
+    }
+    function isBookend(seg) { return seg === INTRO || seg === OUTRO; }
+    function bufKey(seg) { return TH.id + ':' + seg.id; }
+    function allSegs() { var a = SEG.slice(); if (INTRO) a.unshift(INTRO); if (OUTRO) a.push(OUTRO); return a; }
+    /* ---- timing model (per segment) */
+    function barSec(bpm) { return 60 / bpm * CFG.beatsPerBar; }
+    function preSec(seg) { return (seg.preBars || 0) * barSec(seg.bpmIn); }      /* pick-up runs at the incoming tempo */
+    function postSec(seg) { return (seg.tailBars || 0) * barSec(seg.bpmOut); }   /* tail rings at the outgoing tempo */
+    function logicalSec(seg) { var b = buffers[bufKey(seg)]; return b ? Math.max(0.1, (seg.durationSec || b.duration) - preSec(seg) - postSec(seg)) : 0; }   /* durationSec: true length for files whose mp3 has no gapless tag */
+    function colorOf(seg) { return (byGroup[seg.group] || {}).color || '#e0b04a'; }
+    function nameOf(seg) { return seg.id.replace('_', ' '); }
+    function groupVersions(seg) { return SEG.filter(function (s) { return s.group === seg.group; }); }
+    function verIdx(seg) { return isBookend(seg) ? 0 : groupVersions(seg).indexOf(seg); }
+    function hexHsl(hex) {   /* -> [h 0-360, s 0-1, l 0-1] */
+      var v = parseInt(hex.slice(1), 16), r = ((v >> 16) & 255) / 255, g = ((v >> 8) & 255) / 255, b = (v & 255) / 255;
+      var mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn, h = 0, s = 0;
+      if (d > 0) { s = d / (1 - Math.abs(2 * l - 1)); h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h = (h * 60 + 360) % 360; }
+      return [h, s, l];
+    }
+    function hslHex(h, s, l) {
+      var c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2, r = 0, g = 0, b = 0;
+      if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; } else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
+      var q = function (u) { return Math.round((u + m) * 255); };
+      return '#' + ((1 << 24) + (q(r) << 16) + (q(g) << 8) + q(b)).toString(16).slice(1);
+    }
+    function deep(hex) {   /* colour DEPTH (the 深藍紫 concept): richer and darker, with only a SMALL lean toward violet — capped at 12° so the pair stays in one colour family (amber -> deep amber, never red) */
+      var t = hexHsl(hex), h = t[0], d = ((270 - t[0] + 540) % 360) - 180, shift = Math.max(-12, Math.min(12, d * 0.25));
+      return hslHex((h + shift + 360) % 360, Math.min(1, t[1] * 1.12), Math.max(0, t[2] * 0.6));
+    }
+    function segColor(seg) { if (isBookend(seg)) return '#e8e8e4'; var c = colorOf(seg); return verIdx(seg) > 0 ? deep(c) : c; }   /* intro/outro = white light (a touch grey); version 1 = the group colour (淺), version 2 = its deep violet-leaning shade (深) */
+    /* ---- loading: even shell-native, decodes are paced — one at a time in the idle slice after the frame, fetches capped (LOG-108 ㉕㉗ kept: a burst of decodes still steals frames from the wallpaper) */
+    var DECODE_AT_ONCE = 1, DECODE_GAP_MS = 60, PLAY_GAP_MS = 280, decodeQueue = [], decoding = 0;
+    function decode(ab, urgent) {
+      return new Promise(function (res, rej) {
+        decodeQueue[urgent ? 'unshift' : 'push'](function () {   /* urgent = the intro: it decodes before anything already queued — playback starts on it alone */
+          decoding++;
+          var done = function (fn) { return function (v) { decoding--; schedulePump(); fn(v); }; };
+          try {
+            var p = ctx.decodeAudioData(ab, done(res), done(function (e) { rej(e || new Error('decode failed')); }));
+            if (p && p.then) p.then(function () {}, function () {});
+          } catch (e) { done(rej)(e); }
+        });
+        pump();
+      });
+    }
+    function pump() { while (decoding < DECODE_AT_ONCE && decodeQueue.length) decodeQueue.shift()(); }
+    function schedulePump() {   /* the next decode runs only in the IDLE time after the animation frame; a hidden tab (no frames) decodes flat out */
+      if (document.hidden) { pump(); return; }
+      var gap = running ? PLAY_GAP_MS : DECODE_GAP_MS;   /* once the music PLAYS the remaining decodes stretch way out: each completion allocates ~10 MB of PCM, and the intro gives us 25 s to hide seventeen of those between frames */
+      setTimeout(function () { if (window.requestIdleCallback) requestIdleCallback(function () { pump(); }, { timeout: 400 }); else pump(); }, gap);
+    }
+    var FETCH_AT_ONCE = 2, fetchQueue = [], fetching = 0;
+    function fpump() { while (fetching < FETCH_AT_ONCE && fetchQueue.length) fetchQueue.shift()(); }
+    function qFetch(url) {
+      return new Promise(function (res, rej) {
+        fetchQueue.push(function () {
+          fetching++;
+          var done = function (fn) { return function (v) { fetching--; fpump(); fn(v); }; };
+          fetch(url).then(function (r) { if (!r.ok) throw new Error(url + ' ' + r.status); return r.arrayBuffer(); }).then(done(res), done(rej));
+        });
+        fpump();
+      });
+    }
+    function loadBuffer(seg, onFetched, urgent) { return qFetch(base + seg.file).then(function (ab) { if (onFetched) onFetched(); return decode(ab, urgent); }); }
+    function ready(s) { return !!buffers[bufKey(s)]; }   /* progressive loading: a segment still decoding under the music must never be scheduled (only conceivable seconds into the intro — everything is down long before the first decision) */
+    /* ---- scheduler */
+    function schedule(seg, entry) {
+      var src = ctx.createBufferSource(), g = ctx.createGain();
+      src.buffer = buffers[bufKey(seg)]; src.connect(g); g.connect(master);
+      var pre = preSec(seg), xf = (cur && pre <= 0 && !postSec(cur.seg)) ? CFG.crossfadeMs / 1000 : 0;   /* tiny equal-power seam only when nothing overlaps */
+      if (xf > 0) { g.gain.setValueAtTime(0, entry); g.gain.linearRampToValueAtTime(1, entry + xf); }
+      src.start(entry - pre, seg.trimStart || 0);   /* trimStart skips an mp3 encoder delay when the file carries no gapless tag */
+      return { seg: seg, start: entry, end: entry + logicalSec(seg), audioStart: entry - pre, src: src, gain: g };
+    }
+    function fadeOut(item) {
+      var post = postSec(item.seg), xf = (!post && nxt && preSec(nxt.seg) <= 0) ? CFG.crossfadeMs / 1000 : 0;
+      if (post > 0) { item.src.stop(item.end + post); }            /* let the tail ring out over the next section */
+      else if (xf > 0) { item.gain.gain.setValueAtTime(1, item.end); item.gain.gain.linearRampToValueAtTime(0, item.end + xf); item.src.stop(item.end + xf); }
+      else item.src.stop(item.end);
+    }
+    function candidates(fromId) { return allSegs().filter(function (s) { return s !== INTRO && allowed(fromId, s.id); }); }
+    function decisionLead() {
+      var lead = (CFG.decisionLeadBeats || 0) * (60 / cur.seg.bpmOut);
+      candidates(cur.seg.id).forEach(function (s) { lead = Math.max(lead, preSec(s)); });
+      return lead + LOOKAHEAD;
+    }
+    function allowed(fromId, toId) {   /* the rules always hold on the stage (they ARE the pre-entry/tail model); repeats are the rules' business */
+      var to = byId[toId], from = byId[fromId];
+      if (!to || !from || to === INTRO) return false;
+      if (from === OUTRO) return false;
+      var A = TH.allow || {}, a = A[fromId] || A[from.group];   /* per-segment first, then per-group */
+      if (!a) return true;
+      return a.indexOf(toId) >= 0 || a.indexOf(to.group) >= 0 || (to === OUTRO && a.indexOf('OUTRO') >= 0);
+    }
+    /* natural order: the config order of the middle sections (I_loop skipped), then I. The CURRENT group is excluded: its
+       versions were consumed as a pair (the mate rule) — entering at B2 runs B2 -> B1 -> C1, never the B2/B1 ping-pong. */
+    function pickNext(fromId) {
+      var from = byId[fromId];
+      var order = SEG.filter(function (s) { return !s.loop; }); if (OUTRO) order.push(OUTRO);
+      var i = order.indexOf(from), pool = order.slice(i + 1).filter(function (s) { return s.group !== from.group && allowed(fromId, s.id) && ready(s); });
+      if (from.loop) pool = order.filter(function (s) { return s.group !== from.group && allowed(fromId, s.id) && ready(s); });
+      return pool.length ? pool[0] : pickRandom(fromId);
+    }
+    function pickRandom(fromId) {
+      var from = byId[fromId];
+      if (from.loop) return from;   /* outro loop: keeps looping itself until the user picks something */
+      var pool = SEG.filter(function (s) { return s.group !== from.group && allowed(fromId, s.id) && s.id !== fromId && ready(s); });   /* the group just completed as a pair — random moves to a different group */
+      if (!pool.length) pool = SEG.filter(function (s) { return allowed(fromId, s.id) && ready(s); });
+      if (!pool.length) pool = SEG.filter(ready);
+      if (!pool.length) return from;   /* nothing else decoded yet: repeat the current section (unreachable in practice — the first decision sits ~20 s in) */
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+    function decide() {
+      /* a group plays out whole, in the order it was entered: whichever version was picked plays first, its mate ALWAYS follows
+         (any queued pick waits for the decision after); the outro loop leaves only after an even number of passes */
+      var forced = null;
+      if (cur.seg.loop && loopCount % 2 === 1) forced = cur.seg;
+      else if (mate) forced = mate;   /* the pair rule is the user's own design — it outranks the allow list (schedule() still honours pre-entry/tail timing) */
+      if (forced && !ready(forced)) forced = null;   /* still decoding under the music (early-intro edge only) — fall through to a decoded pick */
+      if (forced) { randomAuto = false; nxt = schedule(forced, cur.end); fadeOut(cur); render(); return; }   /* `queued` is left untouched — it applies after the pair completes */
+      var choice = null;
+      if (queued && allowed(cur.seg.id, queued) && ready(byId[queued])) { choice = byId[queued]; randomAuto = false; }
+      else { choice = autoMode === 'seq' ? pickNext(cur.seg.id) : pickRandom(cur.seg.id); randomAuto = !(choice.loop && autoMode === 'random'); }
+      queued = null;
+      nxt = schedule(choice, cur.end);
+      fadeOut(cur);
+      render();
+    }
+    function tick() {
+      var now = ctx.currentTime;
+      if (cur.seg === OUTRO) {                /* terminal: let it finish, then stop (the shell's farewell normally leaves first) */
+        if (now >= cur.end + postSec(cur.seg) + 0.05) stop();
+        return;
+      }
+      if (!nxt && now >= cur.end - decisionLead()) decide();
+      if (nxt && now >= cur.end) {           /* hand-over */
+        lastId = cur.seg.id; cur = nxt; nxt = null; fireTrack(1);
+        loopCount = cur.seg.loop ? loopCount + 1 : 0;
+        markPair(cur.seg);
+        if (later) { queued = later; later = null; }
+        if (cur.seg === OUTRO && !byeTimer) byeTimer = setTimeout(function () { if (running) onBye(); }, Math.max(0, (cur.end - ctx.currentTime - 2 * barSec(OUTRO.bpmOut)) * 1000));   /* TWO bars before the outro's logical end: the surface compresses and the OS line retracts — the desktop player runs straight back out under the closing bars */
+        render();
+      }
+    }
+    function start() {
+      if (dead) return;
+      if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = 0.9; analyser = ctx.createAnalyser(); analyser.fftSize = 2048; analyser.minDecibels = -96; analyser.maxDecibels = 6; analyser.smoothingTimeConstant = 0.55; master.connect(analyser); mgain = ctx.createGain(); mgain.gain.value = muted ? 0.0001 : 1; analyser.connect(mgain); mgain.connect(ctx.destination); }   /* mgain after the analyser: the bars keep moving while muted — and a mute requested before the context existed is honoured here */
+      if (ctx.state === 'suspended') ctx.resume();
+      paused = false;
+      if (stageLead && stageT0 === null) stageT0 = ctx.currentTime;   /* the count-in starts NOW; loading runs inside it */
+      /* progressive start (LOG-109 追記①): the INTRO alone gates playback — it fetches and decodes first (urgent), the music
+         enters on its count-in downbeat, and the other seventeen decode UNDERNEATH the intro's 25 s at a gentle pace
+         (PLAY_GAP_MS between allocations). Nothing on the desktop waits for the full set any more. */
+      var first = INTRO || SEG[0];
+      var pending = allSegs().filter(function (s) { return !buffers[bufKey(s)]; }), done = 0, fetched = 0, began = false;
+      var prog = function () { loadProg = (pending.length && !began) ? { d: fetched + done, t: pending.length * 2 } : null; };   /* both phases counted: downloaded + decoded / total*2 (the shell's hint shows the percentage at the line, until the music is up) */
+      if (pending.length) prog();
+      var begin = function () {
+        if (began || dead) return; began = true; loadProg = null;
+        running = true; queued = later = null; randomAuto = false; lastId = null; loopCount = 0; mate = null;
+        var entry = ctx.currentTime + 0.05 + preSec(first);   /* first entry sits after its own pick-up: start times can't be negative */
+        if (stageLead && stageT0 !== null) { entry = Math.max(entry, stageT0 + stageLead + preSec(first)); stageT0 = null; }   /* the music enters on the count-in's downbeat (or as soon as the intro's decode allows, whichever is later) */
+        cur = schedule(first, entry); nxt = null;
+        markPair(first);   /* starting inside a two-version group opens its pair too */
+        fireTrack(0);
+        timer = setInterval(tick, TICK); render();
+      };
+      var rest = pending.filter(function (s) { return s !== first; });
+      var loadRest = function () {
+        Promise.all(rest.map(function (s) { return loadBuffer(s, function () { fetched++; prog(); }).then(function (b) { buffers[bufKey(s)] = b; done++; prog(); }); }))
+          .catch(function (err) { console.warn('section stage: background load failed', err); });   /* a missing section stays out of every pool (ready()); the music keeps playing */
+      };
+      if (pending.indexOf(first) >= 0) {
+        loadBuffer(first, function () { fetched++; prog(); }, true).then(function (b) { buffers[bufKey(first)] = b; done++; prog(); begin(); })
+          .catch(function (err) { running = false; loadProg = null; clearInterval(timer); cur = nxt = null; render(); console.warn('section stage: start failed', err); });
+        loadRest();   /* the rest fetch alongside (cap 2); their decodes queue behind the urgent intro */
+      } else { begin(); loadRest(); }
+    }
+    function stop() {   /* hard stop (manual exit): everything ramps out in 100 ms, the context closes right after */
+      running = false; dead = true; clearInterval(timer); if (startTimer) { clearTimeout(startTimer); startTimer = 0; }
+      if (byeTimer) { clearTimeout(byeTimer); byeTimer = null; }
+      if (paused) { paused = false; try { ctx.resume(); } catch (e) {} }   /* never leave the context suspended: the fade-out needs a running clock */
+      [cur, nxt].forEach(function (it) { if (it) { try { it.gain.gain.cancelScheduledValues(0); it.gain.gain.setValueAtTime(it.gain.gain.value, ctx.currentTime); it.gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1); it.src.stop(ctx.currentTime + 0.12); } catch (e) {} } });
+      cur = nxt = null; queued = later = null; randomAuto = false; render();
+      var c = ctx; ctx = null; if (c) setTimeout(function () { try { c.close(); } catch (e) {} }, 500);
+    }
+    function finish() {   /* graceful stop (after the farewell): scheduling ends but nothing is cut — the outro's scheduled tail rings out on its own, then the context closes. The native win: no frame to keep alive for the sake of the last note. */
+      var tail = 1; try { if (cur) tail = Math.max(0.3, cur.end + postSec(cur.seg) - ctx.currentTime + 0.3); } catch (e) {}
+      running = false; dead = true; clearInterval(timer); if (byeTimer) { clearTimeout(byeTimer); byeTimer = null; }
+      cur = nxt = null;
+      var c = ctx; ctx = null; if (c) setTimeout(function () { try { c.close(); } catch (e) {} }, tail * 1000);
+    }
+    function choose(id) {
+      if (!running) return;
+      if (nxt) { if (allowed(nxt.seg.id, id)) later = id; }        /* decision already locked → after next */
+      else if (allowed(cur.seg.id, id)) { queued = id; randomAuto = false; }
+      render();
+    }
+    function key(k) {   /* a letter queues that group's first version; the same letter again cycles its versions; I = outro, L = the loop */
+      if (!running) return;
+      var g = String(k || '').toUpperCase();
+      if (g === 'I' && OUTRO) { choose(OUTRO.id); return; }
+      if (g === 'L' && byId.I_loop) { choose('I_loop'); return; }
+      if (!byGroup[g]) return;
+      var segs = SEG.filter(function (s) { return s.group === g; }), i = 0;
+      var curPick = nxt ? later : queued;
+      if (curPick && byId[curPick] && byId[curPick].group === g) i = (segs.findIndex(function (s) { return s.id === curPick; }) + 1) % segs.length;
+      choose(segs[i].id);
+    }
+    /* ---- UI: the demo's stage surface, built as shell DOM (zones · glass-bubble buttons · the spring droplet) */
+    var segsEl = document.createElement('div'); segsEl.className = 'ds-secs'; host.appendChild(segsEl);
+    var segBtns = {}, colEls = {}, randomBtn = null, seqBtn = null, outroBtn = null, zlabs = [];
+    function mkSeg(cls, onClick) { var b = document.createElement('button'); b.type = 'button'; b.className = cls; b.innerHTML = '<span class="nm"></span>'; b.addEventListener('click', onClick); return b; }
+    function buildButtons() {
+      segsEl.innerHTML = ''; segBtns = {}; colEls = {}; zlabs = [];
+      /* zones: first half {B,C,D} · bridge {E} · second half {F,G,H,I_loop}; no ↓ between versions (the pair frame carries the grouping) */
+      var zones = [{ k: 'sec_zone_pre', g: ['B', 'C', 'D'] }, { k: 'sec_zone_gate', g: ['E'] }, { k: 'sec_zone_post', g: ['F', 'G', 'H', 'I_loop'] }];
+      zones.forEach(function (z) {
+        var band = document.createElement('div'); band.className = 'zone';
+        var lab = document.createElement('div'); lab.className = 'zlab'; lab.setAttribute('data-u', z.k); lab.textContent = U[z.k]; band.appendChild(lab); zlabs.push(lab);
+        var cols = document.createElement('div'); cols.className = 'zcols'; band.appendChild(cols);
+        z.g.forEach(function (gid) {
+          var g = byGroup[gid]; if (!g) return;
+          var col = document.createElement('div'); col.className = 'col'; col.style.setProperty('--c', g.color);
+          SEG.filter(function (s) { return s.group === g.id; }).forEach(function (s, i) {
+            var b = mkSeg('seg', function () { choose(s.id); });
+            b.style.setProperty('--c', i > 0 ? deep(g.color) : g.color);   /* version 2 = the deep violet-leaning shade (matches the OS line) */
+            col.appendChild(b); segBtns[s.id] = b;
+          });
+          cols.appendChild(col); colEls[g.id] = col;
+        });
+        segsEl.appendChild(band);
+      });
+      var tail = document.createElement('div'); tail.className = 'zone ctrl';
+      var tl = document.createElement('div'); tl.className = 'zlab'; tl.textContent = ' '; tail.appendChild(tl);
+      if (OUTRO) { outroBtn = mkSeg('seg outro', function () { choose(OUTRO.id); }); tail.appendChild(outroBtn); segBtns[OUTRO.id] = outroBtn; }
+      randomBtn = mkSeg('seg random', function () { autoMode = 'random'; queued = null; later = null; randomAuto = false; render(); });
+      seqBtn = mkSeg('seg random seq', function () { autoMode = 'seq'; queued = null; later = null; randomAuto = false; render(); });
+      tail.appendChild(randomBtn); tail.appendChild(seqBtn); segsEl.appendChild(tail);
+    }
+    function render() {
+      if (!randomBtn) return;
+      GROUPS.forEach(function (g) { if (colEls[g.id]) { var inG = !!cur && cur.seg.group === g.id; colEls[g.id].classList.toggle('active', inG); colEls[g.id].classList.toggle('pair', inG && SEG.filter(function (s) { return s.group === g.id; }).length === 2); } });   /* pair rule engaged: a rectangle frames BOTH versions of the group being played */
+      var list = SEG.slice(); if (OUTRO) list.push(OUTRO);
+      list.forEach(function (s) {
+        var b = segBtns[s.id]; if (!b) return;
+        b.querySelector('.nm').textContent = nameOf(s);
+        var isCur = !!cur && cur.seg.id === s.id;
+        b.classList.toggle('playing', isCur);
+        var isQ = (nxt && nxt.seg.id === s.id) || (!nxt && queued === s.id);
+        b.classList.toggle('queued', (!!isQ && !(isCur && s.loop)) || later === s.id);
+        var ok = !running || allowed((nxt || cur).seg.id, s.id);
+        b.disabled = !running || !ok;
+        b.classList.toggle('off', running && !ok && !isCur && later !== s.id);   /* a blocked section fades off the stage — but never the one PLAYING (the outro may not follow itself, yet it must stay lit) or already picked */
+      });
+      randomBtn.querySelector('.nm').textContent = U.sec_random; seqBtn.querySelector('.nm').textContent = U.sec_seq;
+      randomBtn.classList.toggle('mode', autoMode === 'random'); seqBtn.classList.toggle('mode', autoMode === 'seq');
+      randomBtn.classList.toggle('auto', randomAuto && running && autoMode === 'random'); seqBtn.classList.toggle('auto', randomAuto && running && autoMode === 'seq');
+      randomBtn.disabled = seqBtn.disabled = !running || (!!cur && cur.seg === OUTRO);
+    }
+    (function () {   /* the OS hover droplet, in here: the spring-driven glass bubble glides between the buttons (same K/D/squash as the dock) */
+      var b = document.createElement('i'); b.className = 'hb2'; b.setAttribute('aria-hidden', 'true'); host.insertBefore(b, host.firstChild);
+      var K = 300, DA = 24, SQ = 0.0003, SQM = 0.10;
+      var S = { x: 0, y: 0, w: 0, h: 0, vx: 0, vy: 0, vw: 0, vh: 0 }, TT = { x: 0, y: 0, w: 0, h: 0 }, on = false, raf = 0, lastT = 0;
+      function apply() {
+        var a = Math.min(SQM, Math.abs(S.vx) * SQ), c = Math.min(SQM, Math.abs(S.vy) * SQ);
+        var w = Math.max(0, S.w) * (1 + a - c * 0.6), h = Math.max(0, S.h) * (1 + c - a * 0.6);
+        b.style.transform = 'translate(' + (S.x - w / 2) + 'px,' + (S.y - h / 2) + 'px)'; b.style.width = w + 'px'; b.style.height = h + 'px';
+      }
+      function step(t) {
+        raf = 0; var dt = Math.min(0.032, Math.max(0.001, (t - lastT) / 1000)); lastT = t;
+        S.vx += ((TT.x - S.x) * K - S.vx * DA) * dt; S.x += S.vx * dt;
+        S.vy += ((TT.y - S.y) * K - S.vy * DA) * dt; S.y += S.vy * dt;
+        S.vw += ((TT.w - S.w) * K - S.vw * DA) * dt; S.w += S.vw * dt;
+        S.vh += ((TT.h - S.h) * K - S.vh * DA) * dt; S.h += S.vh * dt;
+        var done = Math.abs(TT.x - S.x) < 0.3 && Math.abs(TT.y - S.y) < 0.3 && Math.abs(TT.w - S.w) < 0.3 && Math.abs(TT.h - S.h) < 0.3 &&
+                   Math.abs(S.vx) < 6 && Math.abs(S.vy) < 6 && Math.abs(S.vw) < 6 && Math.abs(S.vh) < 6;
+        if (done) { S.x = TT.x; S.y = TT.y; S.w = TT.w; S.h = TT.h; S.vx = S.vy = S.vw = S.vh = 0; }
+        apply(); if (!done) raf = requestAnimationFrame(step);
+      }
+      function wake() { if (!raf) { lastT = performance.now(); raf = requestAnimationFrame(step); } }
+      host.addEventListener('pointerover', function (e) {
+        var t = e.target && e.target.closest ? e.target.closest('.seg') : null; if (!t || t.disabled || t.classList.contains('off')) return;
+        var r = t.getBoundingClientRect(), hr = host.getBoundingClientRect();
+        TT.x = r.left - hr.left + host.scrollLeft + r.width / 2; TT.y = r.top - hr.top + host.scrollTop + r.height / 2; TT.w = r.width; TT.h = r.height;
+        b.style.borderRadius = getComputedStyle(t).borderRadius;
+        if (!on) { on = true; S.x = TT.x; S.y = TT.y; S.w = S.h = 0; S.vx = S.vy = S.vw = S.vh = 0; }
+        b.style.opacity = 1; wake();
+      });
+      host.addEventListener('pointerleave', function () { on = false; TT.w = 0; TT.h = 0; b.style.opacity = 0; wake(); });
+    })();
+    /* ---- boot: config, buttons, then the auto-start after the entrance has landed */
+    fetch(base + 'segments.json' + (ver ? '?v=' + ver : '')).then(function (r) { return r.json(); }).then(function (cfg) {
+      if (dead) return;
+      CFG = cfg; useTheme((cfg.themes || [])[0]);
+      var first = INTRO || SEG[0], bpm = first.bpmIn || first.bpmOut || 120;
+      stageLead = 4 * 60 / bpm; stageT0 = null;   /* four 4/4 beats at the theme's tempo (145 -> ~1.7 s of load time) */
+      buildButtons(); render();
+      startTimer = setTimeout(start, 1100);   /* NOTHING loads while the entrance plays: the panel and button fade-ins own the thread until they have landed; the count-in begins with the loading */
+    }).catch(function (e) { console.warn('section stage: config failed', e); });
+    return {
+      state: function () {
+        if (!running || !cur || !ctx) return { active: false, started: false, playing: false, title: '', pos: 0, dur: 0, frac: 0, muted: muted, loading: loadProg };
+        var pos = Math.max(0, Math.min(cur.end - cur.start, ctx.currentTime - cur.start)), dur = cur.end - cur.start;
+        var mark = cur.seg === OUTRO ? null : Math.max(0, 1 - decisionLead() / dur);   /* the decision-lock point as a fraction — the OS line draws it as a tick */
+        return { active: true, started: true, playing: !paused, title: trackTitle(cur.seg), parts: titleParts(cur.seg), id: cur.seg.id, pos: pos, dur: dur, frac: dur ? pos / dur : 0, mark: mark, muted: muted, color: segColor(cur.seg), frozen: paused };   /* color: the OS line/bars wear the part's colour; frozen lets the bars decay while the suspended clock holds */
+      },
+      toggle: function () {   /* the OS transport's play/pause: suspending the context freezes the clock, so the whole schedule pauses in place */
+        if (!running || !ctx) return;
+        if (paused) { paused = false; ctx.resume(); } else { paused = true; ctx.suspend(); }
+        render();
+      },
+      toggleMute: function () {   /* the OS transport's speaker: silences the output stage (after the analyser, so the visuals keep breathing); works before the context exists too */
+        muted = !muted;
+        if (mgain && ctx) mgain.gain.setTargetAtTime(muted ? 0.0001 : 1, ctx.currentTime, 0.03);
+      },
+      analyser: function () { return running ? analyser : null; },
+      onTrack: function (fn) { trackListeners.push(fn); },
+      poke: function () { if (ctx && ctx.state === 'suspended' && !paused) ctx.resume(); },   /* autoplay refused (the entrance's click was a while ago): the next tap on the stage revives the context — never while paused (pause IS a suspend) */
+      relabel: function () { zlabs.forEach(function (l) { l.textContent = U[l.getAttribute('data-u')] || l.textContent; }); render(); },   /* in-place language switch, shell-native bonus: the zone labels and mode buttons follow */
+      choose: choose, key: key, stop: stop, finish: finish
+    };
+  }
   var secStage = (function () {
-    var el = null, head = null, active = false, frame = null, watch = 0, seen = false, fw = false, tRaf = 0, hint = null;   /* fw: the outro farewell has taken the line down; tRaf: the caption-tint loop; hint: the loading readout */
+    var el = null, head = null, active = false, eng = null, watch = 0, seen = false, fw = false, tRaf = 0, hint = null, ducked = false, unduckPending = false, pendEl = null;   /* fw: the outro farewell has taken the line down; tRaf: the caption-tint loop; hint: the loading readout; pendEl: the previous run's surface, still animating out — a quick re-entry removes it at once (cancelling its timers alone would strand it in the DOM) */
     var lastSec = null, aheadCol = '224,176,74', lastTint = '224,176,74';   /* the caption HOLDS the previous section's colour ahead of the play head — it never fades, only the sweeping new colour replaces it */
     var stopTimers = [];   /* the exit choreography's timers — a quick re-entry must cancel them (or the bars would pop back up mid-entrance) */
     function paintTitle() {   /* ADE's title treatment, in the section's colour: each half is a gradient clipped to its glyphs — part colour behind the play head, amber ahead, glowing with the covered share; the colour is the line's own eased tint, so both change together */
       tRaf = 0; if (!active) return; tRaf = requestAnimationFrame(paintTitle);
       if (hint && !hint.classList.contains('gone')) {   /* loading readout at the line (as on the ADE stage), gone once the player is up */
-        var stL = null; try { stL = frame && frame.contentWindow && frame.contentWindow.sectionPlayer && frame.contentWindow.sectionPlayer.state(); } catch (e) {}
+        var stL = eng && eng.state();
         if (stL && stL.active) hint.classList.add('gone');
         else if (stL && stL.loading && stL.loading.t) hint.textContent = U.stage_loading_sec + ' ' + Math.round(100 * stL.loading.d / stL.loading.t) + '%';
       }
@@ -1531,61 +1879,84 @@
       }
     }
     function clearTitle() { var tEl = document.querySelector('#np-desktop .np-title'); if (!tEl) return; [tEl].concat(Array.prototype.slice.call(tEl.querySelectorAll('.np-tag, .np-rest'))).forEach(function (e_) { e_.style.color = ''; e_.style.textShadow = ''; e_.style.backgroundImage = ''; e_.style.webkitBackgroundClip = ''; e_.style.backgroundClip = ''; }); }
+    function onBye() {   /* two bars from the outro's end (the engine's timer): the surface compresses, the line retracts into the centre, and the moment it is gone hand STRAIGHT over to the desktop player (the outro's tail sings on under it) */
+      if (fw || !active) return; fw = true;
+      if (el) el.classList.add('bye');
+      wave.farewell();
+      stopTimers.push(setTimeout(function () { stop(); }, 950));
+    }
     function start(d) {
       if (active) return;
       if (stage.active()) stage.stop();   /* the ADE stage and a demo stage never share the desktop */
       active = true; seen = false;
       stopTimers.forEach(clearTimeout); stopTimers = [];
+      if (pendEl) { pendEl.e0.remove(); pendEl.h0.remove(); pendEl = null; }   /* the previous surface was still sinking out: gone NOW (its removal timers were just cancelled) */
+      var carry = unduckPending; unduckPending = false;   /* re-entered before the previous exit unducked: the music stays ducked and is released by THIS run's exit */
       wave.sweep(true, player.state().frac || 0); wave.squash(true);   /* ADE-style entrance: the music's played part sweeps off and the bars sink into the line; they rise again with the section spectrum once the player is up */
+      ducked = player.isPlaying(); if (ducked) player.duck(true); else if (carry) ducked = true;   /* ADE-style duck: the stage owns the desktop from the first moment (no watchAudio — there is no frame to watch) */
       el = document.createElement('div'); el.className = 'dstage'; el.setAttribute('aria-label', d.title);
-      el.innerHTML = '<div class="ds-panel"></div>';
-      var f = frame = document.createElement('iframe'); f.className = 'ds-frame'; f.title = d.title; f.setAttribute('allow', 'autoplay'); f.setAttribute('allowtransparency', 'true');
-      f.src = '../' + d.path + '/?stage=1' + (d.ver ? '&v=' + d.ver : '');
-      f.addEventListener('load', function () { watchAudio(f, el); setTimeout(function () { ext.register(f, el); }, 300); });   /* same contract as the demo window: duck on first sound, line + caption follow */
-      $('.ds-panel', el).appendChild(f);
+      el.innerHTML = '<div class="ds-panel"><div class="ds-sec"></div></div>';
       head = document.createElement('div'); head.className = 'stage-ui';
       head.innerHTML = '<div class="st-hint">' + esc(U.stage_loading_sec) + '</div><div class="st-head"><button class="st-exit" type="button">' + esc(U.stage_exit) + '</button></div>';   /* the ADE stage's loading readout, at the line's centre */
       hint = $('.st-hint', head); hint.style.top = ((wave.baseY() || desktop.clientHeight * 0.58) - 34) + 'px';
       $('.st-exit', head).addEventListener('click', function () { stop(); });
       desktop.appendChild(el); desktop.appendChild(head);
-      requestAnimationFrame(function () { el.classList.add('in'); head.classList.add('in'); });
+      var e1_ = el, h1_ = head;
+      requestAnimationFrame(function () { if (e1_.isConnected) { e1_.classList.add('in'); h1_.classList.add('in'); } });   /* locals, guarded: a stop() racing in before the first frame must not throw on the nulled module vars */
       setTimeout(function () { if (active && el) { var pn = $('.ds-panel', el); if (pn) { pn.style.opacity = '1'; pn.style.transform = 'none'; } } }, 900);   /* an occluded tab freezes CSS transitions mid-flight — pin the landed state so the panel can never strand half-invisible */
       document.addEventListener('keydown', onKey);
-      wave.boost(1.45, 2);   /* taller bars, faster fall — each hit bounces on its own (the demo lowers its analyser smoothing to match) */
+      document.addEventListener('pointerdown', onDown, true);
+      wave.boost(1.45, 2);   /* taller bars, faster fall — each hit bounces on its own (the engine's analyser smoothing is lowered to match) */
       lastSec = null; aheadCol = '224,176,74'; lastTint = '224,176,74';
       if (!tRaf) tRaf = requestAnimationFrame(paintTitle);
       fw = false;
-      watch = setInterval(function () {   /* the outro's last note: the player goes inactive on its own — leave the stage and bring the OS music back (as the ADE stage does) */
-        try {
-          var a2 = frame && frame.contentWindow && frame.contentWindow.sectionPlayer; if (!a2) return;
-          if (!fw && frame.contentDocument && frame.contentDocument.body.classList.contains('bye')) { fw = true; wave.farewell(); setTimeout(function () { stop(); }, 950); }   /* two bars from the end: retract into the centre, and the moment it is gone hand STRAIGHT over to the desktop player (the outro's tail sings on under it) */
-          if (a2.state().active) { if (!seen) { seen = true; wave.flush(); wave.squash(false); } } else if (seen) stop();   /* first sign of the player: the bars rise again from ZERO, carrying only the section's own sound (no residue of the OS music) */
-        } catch (e) {}
+      eng = makeSecPlayer('../' + d.path + '/', d.ver, $('.ds-sec', el), onBye);
+      if (/[?&]debug/.test(location.search)) window.__sec = eng;   /* ?debug: console access for testing (state / choose / toggle) */
+      eng.onTrack(function (fromFrac) {   /* every section change: the outgoing fill dissolves in place while the new bar grows out STILL WEARING the old colour, easing into the new one over 3 s (the ADE amber-to-red logic); the caption flips */
+        if (!active) return;
+        var stN = eng.state();
+        if (stN.active && stN.color) { wave.ghost(fromFrac); wave.tint(hexRgb(stN.color), hexRgb(stN.color), 3000); caption.reset(); }
+      });
+      watch = setInterval(function () {   /* first sign of the player: the bars rise again from ZERO, carrying only the section's own sound; gone inactive on its own (load failure, terminal end) -> leave the stage and bring the OS music back */
+        if (!eng) return;
+        var s2 = eng.state();
+        if (s2.active) { if (!seen) { seen = true; wave.flush(); wave.squash(false); } } else if (seen && !fw) stop();
       }, 500);
     }
-    function onKey(e) { if (e.key === 'Escape') stop(); }
+    function onKey(e) {
+      if (e.key === 'Escape') { stop(); return; }
+      var t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;   /* Spotlight typing must not queue sections */
+      if (eng) eng.key(e.key);
+    }
+    function onDown() { if (eng) eng.poke(); }
     function stop() {
       if (!active) return; active = false;
       document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onDown, true);
       if (watch) { clearInterval(watch); watch = 0; }
       if (tRaf) { cancelAnimationFrame(tRaf); tRaf = 0; } clearTitle();   /* hand the caption back unpainted (leftover paint on it double-prints the glyphs) */
       wave.boost(1); wave.tint(null);   /* the line hands its part colour back to amber */
       var afterFw = fw; if (fw) { wave.reappear(); fw = false; }   /* after the farewell the desktop's own line grows back from the left; the music returns once it is across */
-      var e0 = el, h0 = head, f0 = frame, wasDucked = e0.dataset.duck === '1'; el = head = frame = null;
-      var xi = extFrames.indexOf(f0); if (xi >= 0) extFrames.splice(xi, 1);   /* unregister NOW: the tail may still sound, but caption/line/duck all hand back to the OS player (ensureDucked must not re-silence the returning music) */
+      var e0 = el, h0 = head, g0 = eng, wasDucked = ducked; el = head = eng = null; ducked = false;
+      unduckPending = wasDucked;   /* until the timer below runs, a re-entry must know the music is still ducked */
+      pendEl = { e0: e0, h0: h0 };
       var pn0 = $('.ds-panel', e0); if (pn0) { pn0.style.opacity = ''; pn0.style.transform = ''; }   /* drop the pinned state so .out can animate */
       e0.classList.remove('in'); e0.classList.add('out'); h0.classList.remove('in');
-      if (afterFw) {   /* seamless hand-back: the desktop line regrows at once, the music returns as it lands, and the hidden frame stays alive a moment longer so the outro's tail is not cut off */
-        stopTimers.push(setTimeout(function () { caption.reset(); if (wasDucked) player.unduck(); }, 1000));
-        stopTimers.push(setTimeout(function () { e0.remove(); h0.remove(); }, 4000));
+      if (afterFw) {   /* seamless hand-back: the desktop line regrows at once and the music returns as it lands; the engine keeps its scheduled tail singing on its own — no frame to keep alive (LOG-109) */
+        if (g0) g0.finish();
+        stopTimers.push(setTimeout(function () { unduckPending = false; caption.reset(); if (wasDucked) player.unduck(); }, 1000));
+        stopTimers.push(setTimeout(function () { e0.remove(); h0.remove(); pendEl = null; }, 1200));   /* the .bye compression (.7 s) has landed; the audio no longer lives in this DOM */
       } else {   /* manual exit, ADE-style: the section bars sink into the line, then rise again as the OS music's — with the play head retreating and sliding back out to where the track really is */
-        var exitFrac = 0; try { exitFrac = f0.contentWindow.sectionPlayer.state().frac || 0; } catch (e) {}
+        var exitFrac = 0; try { exitFrac = g0 && g0.state().frac || 0; } catch (e) {}
+        if (g0) g0.stop();   /* hard stop: 100 ms ramp, context closed right after */
         wave.squash(true);
-        stopTimers.push(setTimeout(function () { e0.remove(); h0.remove(); }, DSTAGE_OUT_MS));   /* the card sinks out; the frame's audio dies with it */
-        stopTimers.push(setTimeout(function () { wave.flush(); wave.squash(false); wave.reflow(exitFrac); caption.reset(); if (wasDucked) player.unduck(); }, 700));
+        stopTimers.push(setTimeout(function () { e0.remove(); h0.remove(); pendEl = null; }, DSTAGE_OUT_MS));   /* the card sinks out */
+        stopTimers.push(setTimeout(function () { unduckPending = false; wave.flush(); wave.squash(false); wave.reflow(exitFrac); caption.reset(); if (wasDucked) player.unduck(); }, 700));
       }
     }
-    return { start: start, stop: stop, active: function () { return active; } };
+    return { start: start, stop: stop, active: function () { return active; }, src: function () { return eng; },
+             toggle: function () { if (eng) eng.toggle(); }, toggleMute: function () { if (eng) eng.toggleMute(); },   /* the transport routes here while the stage is up — the mute lands even before the engine's context exists */
+             relabel: function () { if (eng) eng.relabel(); if (head) { var x = $('.st-exit', head); if (x) x.textContent = U.stage_exit; if (hint && !hint.classList.contains('gone')) hint.textContent = U.stage_loading_sec; } } };
   })();
   // a demo opens as a desktop window hosting its page in an iframe (same origin); ⛶ in the title bar goes real fullscreen
   function openDemo(id) {

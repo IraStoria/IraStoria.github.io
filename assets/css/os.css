@@ -374,9 +374,9 @@ body.hb .np-ctl .i-mute path:last-child,body.hb .player .ctl .mute .i-mute path:
    except the sticky note and the track name (that one swaps mid-slide, yellow out / green in, via body.hb-t). */
 .hero-text h1{transition:transform 2.4s cubic-bezier(.2,.7,.2,1),color .7s ease,text-shadow .7s ease}
 .ls-track{transition:background .25s,border-color .7s ease}.ls-knob{transition:transform .3s cubic-bezier(.2,.7,.2,1),background .7s ease,box-shadow .7s ease}
-.desktop *:not(.desktop>*,.hero-text h1,.sticky,.sticky *,.np-title,.np-title *,.ls-track,.ls-knob,.fx-clip,.fx-clip *,.hovbub,.ds-panel,canvas),   /* .hovbub and .ds-panel keep their own transitions (glide / stage card rise) — this sweep would flatten them to colour-only */
+.desktop *:not(.desktop>*,.hero-text h1,.sticky,.sticky *,.np-title,.np-title *,.ls-track,.ls-knob,.fx-clip,.fx-clip *,.hovbub,.ds-panel,.ds-panel *,canvas),   /* .hovbub and .ds-panel (with the native section stage inside it) keep their own transitions (glide / card rise / bubble fades) — this sweep would flatten them to colour-only */
 .phone *:not(.ph-grid,.ph-hero,.ph-dock,.ph-ls,.ph-status,.ph-veil,.ph-power-scr,.ph-power-scr *,.np-title,.np-title *,.np-lbl,.ls-track,.ls-knob,.ph-alert-ov,.ph-alert,canvas){transition:color .7s ease,text-shadow .7s ease,border-color .7s ease,filter .7s ease}
-body.hb .desktop *:not(.sticky,.sticky *,.np-title,.np-title *,canvas),
+body.hb .desktop *:not(.sticky,.sticky *,.np-title,.np-title *,.ds-panel,.ds-panel *,canvas),   /* the native section stage keeps its own part colours (the iframe version was immune to hb too) */
 body.hb .phone *:not(.np-title,.np-title *,canvas){color:#3dff7a;text-shadow:0 0 12px rgba(61,255,122,.45);border-color:rgba(61,255,122,.35)}
 body.hb .ico{color:#3dff7a}
 body.hb .desktop .glyph,body.hb .phone .glyph,body.hb .dock button>span,body.hb .ph-app .ic .wg,body.hb .spot-hit .g{filter:grayscale(1) sepia(1) saturate(6) hue-rotate(85deg) brightness(1.15) drop-shadow(0 0 6px rgba(61,255,122,.7))}
@@ -427,4 +427,29 @@ body.hb .phone *:not(.np-title,.np-title *,canvas){text-shadow:0 0 8px rgba(61,2
 .dstage .ds-panel{position:absolute;left:max(110px,7vw);top:8vh;transform:translateY(26px) scale(.99);width:min(760px,72vw);height:min(430px,64vh);pointer-events:auto;opacity:0;transition:opacity .55s ease,transform .55s cubic-bezier(.2,.7,.2,1)}   /* no card: the frame is invisible — the demo's own buttons float straight on the wallpaper, in the empty upper-left, clear of the spectrum line */
 .dstage.in .ds-panel{opacity:1;transform:none}
 .dstage.out .ds-panel{opacity:0;transform:translateY(32px) scale(.99);transition:opacity .38s ease,transform .38s ease}
-.dstage .ds-frame{display:block;width:100%;height:100%;border:0;background:transparent}
+/* native section stage (LOG-109): the demo's stage dress (demo.css body.stage), ported as shell DOM — no iframe.
+   Buttons are liquid-glass rounded squares (hairline ring + top glint); zone frames are gone, only the small labels
+   remain; the pair frame wraps both versions of the group in play; a blocked section fades off until allowed again. */
+.ds-sec{position:relative;width:100%;height:100%;font-family:var(--font);line-height:1.6;color:var(--fg);transition:transform .7s cubic-bezier(.5,0,.8,.4),opacity .65s ease}
+.dstage.bye .ds-sec{transform:scale(0);opacity:0;pointer-events:none}   /* outro, two bars from the end: the whole control surface compresses into its own centre */
+.ds-secs{display:flex;gap:.6rem;align-items:stretch;flex-wrap:wrap}
+.ds-sec .zone{display:flex;flex-direction:column;gap:.35rem;padding:0 .2rem}
+.ds-sec .zlab{font-size:11px;color:var(--dim);letter-spacing:.05em;text-align:center;min-height:1em;text-shadow:0 1px 6px rgba(0,0,0,.85)}
+.ds-sec .zcols{display:flex;gap:.35rem}
+.ds-sec .col{display:flex;flex-direction:column;align-items:stretch;width:58px;border:1.5px solid transparent;border-radius:14px;padding:3px;transition:border-color .4s ease,box-shadow .4s ease}
+.ds-sec .col.pair{border-color:color-mix(in srgb,var(--c) 60%,rgba(255,255,255,.35));box-shadow:0 0 10px color-mix(in srgb,var(--c) 30%,transparent)}
+.ds-sec .seg{position:relative;z-index:1;font:inherit;font-weight:600;text-align:center;color:var(--fg);cursor:pointer;border:2px solid transparent;background:none;border-radius:12px;padding:0;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.20),inset 0 1px 0 rgba(255,255,255,.28),0 6px 16px rgba(0,0,0,.30);transition:opacity .45s ease,transform .1s,box-shadow .3s ease}
+.ds-sec .seg:active{transform:scale(.97)}
+.ds-sec .seg:disabled{opacity:.35;cursor:not-allowed}
+.ds-sec .seg .nm{display:block;font-size:14px;white-space:nowrap;margin:0}
+/* selected = the ECLIPSE treatment, in the part's colour: queued -> the rim itself lights up; playing -> the lit rim grows its corona; mode = a flat tinted pane behind a softer rim */
+.ds-sec .seg.queued{background:color-mix(in srgb,var(--c) 14%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--c) 80%,#fff),0 0 10px color-mix(in srgb,var(--c) 55%,transparent),0 6px 16px rgba(0,0,0,.30)}
+.ds-sec .seg.playing{background:color-mix(in srgb,var(--c) 24%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--c) 85%,#fff),0 0 12px color-mix(in srgb,var(--c) 70%,transparent),0 0 30px color-mix(in srgb,var(--c) 45%,transparent),0 6px 16px rgba(0,0,0,.30)}
+.ds-sec .seg.random.mode{background:color-mix(in srgb,var(--c) 11%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--c) 65%,rgba(255,255,255,.6)),0 0 8px color-mix(in srgb,var(--c) 40%,transparent),0 6px 16px rgba(0,0,0,.30)}
+@keyframes stpulse{50%{filter:brightness(1.3)}}
+.ds-sec .seg.random.auto{animation:stpulse 1s ease-in-out infinite}   /* auto hand-over breathes by brightness, not by the ring pulse */
+.ds-sec .seg.off{opacity:0;pointer-events:none}   /* not allowed after the current section: gone from the stage until it may follow again */
+.ds-sec .zone.ctrl .seg{width:64px}
+.ds-sec .seg.outro{--c:#e8e8e4}   /* the bookends are white light (a touch grey) */
+.ds-sec .seg.random,.ds-sec .seg.seq{--c:var(--accent)}   /* Random and In-order flash the SAME colour */
+.ds-sec .hb2{position:absolute;left:0;top:0;pointer-events:none;opacity:0;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22),inset 0 1px 0 rgba(255,255,255,.30);transition:opacity .4s ease;z-index:0}

@@ -323,6 +323,26 @@
       "zh": "載入段落中…",
       "en": "Loading the sections…"
     },
+    "sec_zone_pre": {
+      "zh": "前段",
+      "en": "first half"
+    },
+    "sec_zone_gate": {
+      "zh": "中繼",
+      "en": "bridge"
+    },
+    "sec_zone_post": {
+      "zh": "後段",
+      "en": "second half"
+    },
+    "sec_random": {
+      "zh": "隨機",
+      "en": "Random"
+    },
+    "sec_seq": {
+      "zh": "順序",
+      "en": "In order"
+    },
     "stage_tap": {
       "zh": "點一下開始",
       "en": "Click to start"
