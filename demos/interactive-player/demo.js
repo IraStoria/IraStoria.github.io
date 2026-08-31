@@ -140,12 +140,14 @@
 
   /* ------------------------------------------------------------ audio loading */
   /* decode with a concurrency cap: decoding twenty mp3s at once stalls mobile Safari (and peaks memory); Safari < 15 also only knows the callback form */
-  var DECODE_AT_ONCE = 2, decodeQueue = [], decoding = 0;
+  /* loading must never stutter the HOST: this iframe shares the site's main thread, so the decode completions and their
+     buffer allocations are paced — one decode at a time with a breather between them. Slower to finish, invisible to the frame rate. */
+  var DECODE_AT_ONCE = 1, DECODE_GAP_MS = 60, decodeQueue = [], decoding = 0;
   function decode(ab) {
     return new Promise(function (res, rej) {
       decodeQueue.push(function () {
         decoding++;
-        var done = function (fn) { return function (v) { decoding--; pump(); fn(v); }; };
+        var done = function (fn) { return function (v) { decoding--; if (document.hidden) pump(); else setTimeout(pump, DECODE_GAP_MS); fn(v); }; };   /* the gap lets the host's animation frames through between allocations — hidden tabs have no frames to protect (and their timers are throttled to 1 s), so they decode flat out */
         try {
           var p = ctx.decodeAudioData(ab, done(res), done(function (e) { rej(e || new Error('decode failed')); }));
           if (p && p.then) p.then(function () {}, function () {});   /* promise form resolves through the callbacks above; swallow the duplicate rejection */
@@ -156,7 +158,7 @@
   }
   function pump() { while (decoding < DECODE_AT_ONCE && decodeQueue.length) decodeQueue.shift()(); }
   /* fetches are capped too: twenty simultaneous responses landing at once (plus their decodes) is the first-launch stutter */
-  var FETCH_AT_ONCE = 4, fetchQueue = [], fetching = 0;
+  var FETCH_AT_ONCE = 2, fetchQueue = [], fetching = 0;
   function fpump() { while (fetching < FETCH_AT_ONCE && fetchQueue.length) fetchQueue.shift()(); }
   function qFetch(url) {
     return new Promise(function (res, rej) {
