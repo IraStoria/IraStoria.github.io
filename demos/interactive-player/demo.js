@@ -155,9 +155,21 @@
     });
   }
   function pump() { while (decoding < DECODE_AT_ONCE && decodeQueue.length) decodeQueue.shift()(); }
+  /* fetches are capped too: twenty simultaneous responses landing at once (plus their decodes) is the first-launch stutter */
+  var FETCH_AT_ONCE = 4, fetchQueue = [], fetching = 0;
+  function fpump() { while (fetching < FETCH_AT_ONCE && fetchQueue.length) fetchQueue.shift()(); }
+  function qFetch(url) {
+    return new Promise(function (res, rej) {
+      fetchQueue.push(function () {
+        fetching++;
+        var done = function (fn) { return function (v) { fetching--; fpump(); fn(v); }; };
+        fetch(url).then(function (r) { if (!r.ok) throw new Error(url + ' ' + r.status); return r.arrayBuffer(); }).then(done(res), done(rej));
+      });
+      fpump();
+    });
+  }
   function loadBuffer(seg, onFetched) {
-    return fetch(seg.file).then(function (r) { if (!r.ok) throw new Error(seg.file + ' ' + r.status); return r.arrayBuffer(); })
-      .then(function (ab) { if (onFetched) onFetched(); return decode(ab); });
+    return qFetch(seg.file).then(function (ab) { if (onFetched) onFetched(); return decode(ab); });
   }
 
   /* ------------------------------------------------------------ scheduler */
@@ -451,7 +463,7 @@
       optRules.checked = true; optExclude.checked = false;
       var first = INTRO || SEG[0], bpm = first.bpmIn || first.bpmOut || 120;
       stageLead = 4 * 60 / bpm; stageT0 = null;   /* four 4/4 beats at the theme's tempo (145 -> ~1.7 s of load time) */
-      start();
+      setTimeout(start, 500);   /* let the stage's entrance animation land before the fetch/decode burst — the count-in begins with the loading */
     }
   });
   /* stage: the parent's click opened the stage, but autoplay activation does not always reach the iframe — the first tap inside revives a
