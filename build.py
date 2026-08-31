@@ -224,6 +224,11 @@ def load_demos(works):
                 for ch in pc.get("veil") or []:   # pianos that stay invisible until they first sound (performance design per piece)
                     if ch not in ("L", "R", "C", "B"):
                         raise BuildError(f"{rel}/demo.json: piece {pc.get('id')!r} veil {ch!r} is not a stem key")
+                if pc.get("notes") and not (ROOT / pc["notes"]).is_file():   # per-piece waterfall data for the stage's third form
+                    raise BuildError(f"{rel}/demo.json: piece {pc.get('id')!r} notes file missing ({pc['notes']})")
+                ci = pc.get("count_in")   # per-piece count-in in the piece's own meter (defaults to the stage constant when absent)
+                if ci is not None and not (isinstance(ci.get("beats"), (int, float)) and ci["beats"] > 0 and isinstance(ci.get("bpm"), (int, float)) and ci["bpm"] > 0):
+                    raise BuildError(f"{rel}/demo.json: piece {pc.get('id')!r} count_in needs positive 'beats' and 'bpm'")
             if not meta.get("pieces"):
                 raise BuildError(f"{rel}/demo.json: native demo needs at least one piece")
         if rel not in referenced:
@@ -485,7 +490,7 @@ def build_pages(site, works, demos, articles):
             "works": [loc(w) for w in works],
             "updates": [{"date": u["date"], "text": u[lang]} for u in load_updates()],
             "demos": [{"path": rel, "title": m["title"][lang], "desc": m["desc"][lang], "platform": m["platform"], "year": m.get("year", ""), "ver": demo_ver(rel), "native": m.get("native", ""),
-                       "pieces": [{"id": p["id"], "title": p["title"][lang], "stems": p["stems"], "veil": p.get("veil", [])} for p in m.get("pieces", [])]} for rel, m in demos.items()],
+                       "pieces": [{"id": p["id"], "title": p["title"][lang], "stems": p["stems"], "veil": p.get("veil", []), "notes": local_versioned(p["notes"]) if p.get("notes") else "", "count_in": p.get("count_in")} for p in m.get("pieces", [])]} for rel, m in demos.items()],
             "articles": [{"slug": a["slug"], "title": a[lang]["meta"]["title"], "date": a[lang]["meta"]["date"]} for a in articles],
           }
         other = "en" if lang == "zh" else "zh"

@@ -98,6 +98,24 @@
   </main>
 </noscript>
 
+<!-- liquid-glass lens: displacement maps for backdrop-filter url() (Chromium; other engines keep the plain clear-glass fallback).
+     Red channel bends X, green bends Y; neutral 0x80 = no shift, so only the edge bands refract — a mild convex lens. The two
+     single-channel maps are ADDED with feComposite arithmetic (blend modes inside a feImage document are not reliable), and the
+     filter regions are sized in px by os.js to match each pane's box (percent feImage sizing is not reliable in backdrop-filter). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <filter id="lg-lens" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" x="0" y="0" width="800" height="48" color-interpolation-filters="sRGB">
+    <feImage href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20preserveAspectRatio='none'%20viewBox='0%200%20100%20100'%3E%3Cdefs%3E%3ClinearGradient%20id='r'%20x1='0'%20y1='0'%20x2='1'%20y2='0'%3E%3Cstop%20offset='0'%20stop-color='%23000000'/%3E%3Cstop%20offset='0.05'%20stop-color='%23800000'/%3E%3Cstop%20offset='0.95'%20stop-color='%23800000'/%3E%3Cstop%20offset='1'%20stop-color='%23ff0000'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width='100'%20height='100'%20fill='url(%23r)'/%3E%3C/svg%3E" x="0" y="0" width="800" height="48" preserveAspectRatio="none" result="mr"/>
+    <feImage href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20preserveAspectRatio='none'%20viewBox='0%200%20100%20100'%3E%3Cdefs%3E%3ClinearGradient%20id='g'%20x1='0'%20y1='0'%20x2='0'%20y2='1'%3E%3Cstop%20offset='0'%20stop-color='%23000000'/%3E%3Cstop%20offset='0.33'%20stop-color='%23008000'/%3E%3Cstop%20offset='0.67'%20stop-color='%23008000'/%3E%3Cstop%20offset='1'%20stop-color='%2300ff00'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width='100'%20height='100'%20fill='url(%23g)'/%3E%3C/svg%3E" x="0" y="0" width="800" height="48" preserveAspectRatio="none" result="mg"/>
+    <feComposite in="mr" in2="mg" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="m"/>
+    <feDisplacementMap in="SourceGraphic" in2="m" xChannelSelector="R" yChannelSelector="G" scale="18"/>
+  </filter>
+  <filter id="lg-lens-y" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" x="0" y="0" width="1920" height="30" color-interpolation-filters="sRGB">
+    <feFlood flood-color="#800000" result="mr"/>
+    <feImage href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20preserveAspectRatio='none'%20viewBox='0%200%20100%20100'%3E%3Cdefs%3E%3ClinearGradient%20id='g'%20x1='0'%20y1='0'%20x2='0'%20y2='1'%3E%3Cstop%20offset='0'%20stop-color='%23000000'/%3E%3Cstop%20offset='0.33'%20stop-color='%23008000'/%3E%3Cstop%20offset='0.67'%20stop-color='%23008000'/%3E%3Cstop%20offset='1'%20stop-color='%2300ff00'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width='100'%20height='100'%20fill='url(%23g)'/%3E%3C/svg%3E" x="0" y="0" width="1920" height="30" preserveAspectRatio="none" result="mg"/>
+    <feComposite in="mr" in2="mg" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="m"/>
+    <feDisplacementMap in="SourceGraphic" in2="m" xChannelSelector="R" yChannelSelector="G" scale="14"/>
+  </filter>
+</defs></svg>
 <script id="site-data" type="application/json">{{site_data}}</script>
 <script src="../assets/js/os.js?v={{v_os_js}}"></script>
 </body>

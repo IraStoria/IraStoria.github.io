@@ -685,7 +685,7 @@
       if (pp) pp.addEventListener('click', function () { if (stage.active()) stage.toggle(); else player.toggle(); refresh(); });   /* on the ADE stage the transport drives the four stems, never the background music */
       if (pv) pv.addEventListener('click', function () { if (stage.active()) stage.prev(); else player.prev(); refresh(); });
       if (nx) nx.addEventListener('click', function () { if (stage.active()) stage.next(); else player.next(); refresh(); });
-      var mu = el.querySelector('.np-mute'); if (mu) mu.addEventListener('click', function () { player.toggleMute(); refresh(); });
+      var mu = el.querySelector('.np-mute'); if (mu) mu.addEventListener('click', function () { if (stage.active()) stage.toggleMute(); else player.toggleMute(); refresh(); });   /* on the stage the speaker silences the four stems (the OS music is already ducked) */
       var t = el.querySelector('.np-title'); if (t) t.addEventListener('click', function () { openApp('player'); });
     });
     function arm() { player.prepare(); els.forEach(function (el) { el.style.transitionDuration = CONNECT_MS + 'ms'; }); if (!timer) timer = setInterval(refresh, 400); refresh(); }
@@ -798,7 +798,8 @@
      Leaving: circles shrink -> line glides back down -> the OS music resumes and the play head runs to the left edge and slides back out. ---- */
   var STAGE_NEAR = 1.0, STAGE_MID = 0.75, STAGE_FAR = 0.10, STAGE_UMAX = 2.4, STAGE_K_IN = 1.3, STAGE_K_OUT = 1.4, STAGE_PAN_MAX = 0.8, STAGE_LP_MIN = 2500, STAGE_LP_MAX = 8000, STAGE_SPAN = 0.42;
   var STAGE_LEAD_S = 6 * (60 / 120 / 2), STAGE_GROW_MS = 800, STAGE_GROW_DELAY_MS = 750, STAGE_REACH_X = 0.92, STAGE_REACH_Y = 0.8, STAGE_GLOW_MIN = 60, STAGE_GLOW_MAX = 220, STAGE_BAR_MIN = 24, STAGE_BANDS = 64, STAGE_SPAN_X = 0.5, STAGE_SPAN_Y = 0.5, STAGE_LVL_GAIN = 2.2, STAGE_FLOOR_LV = 0.14, STAGE_SMOOTH = 0.15, STAGE_RELEASE = 0.7, STAGE_LVL_RELEASE = 0.8, STAGE_PUNCH_RELEASE = 0.8, STAGE_PUNCH = 0.6, STAGE_BAND_GAMMA = 2.4, STAGE_F_LO = 45, STAGE_F_HI = 2500, STAGE_TOP_INSET = 30, STAGE_SQUARE = false, STAGE_MIN_H = 0, STAGE_HALO = 40, STAGE_RING_IN = 0.93, STAGE_RING_A = 0.22, STAGE_RING_R = 0.6, STAGE_RING_W = 1.2, STAGE_WAVE_PTS = 512, STAGE_WAVE_A = 0.28, STAGE_MOUND = 1.6,   /* MOUND: height multiplier of the spectrum field (1 = the outer ring at full band level) */ STAGE_RINGS = [[0.50, 1.4], [0.60, 1.8], [0.65, 1.95]], STAGE_SIGIL_ON = 0.75, STAGE_SIGIL_OFF = 0.70, STAGE_ECLIPSE = 0.50, STAGE_ECLIPSE_END = 0.20, STAGE_ECLIPSE_GLOW = 0.10, STAGE_EPS = 0.006, STAGE_HIT_A = 0.9, STAGE_ECL_BLUR = 22,   /* ECL_BLUR: how far the eclipsed rings bleed at 10 % */ STAGE_GLOW_BASE = 0.11, STAGE_GLOW_PUNCH = 1.6, STAGE_LIT_AT = 0.035,   /* LIT_AT: the live level that counts as "this piano has started" — from then on its glow stays on */   /* GLOW_BASE: resting glow alpha; GLOW_PUNCH: how much an accent multiplies it (1.6 = up to 2.6x) */ STAGE_SPIN = 0.25,   /* rings leave from the outside in as the volume falls (outer below 65 %, middle below 60 %, inner below 50 %); the sigil shows from 75 % and leaves below 70 %; eclipse: from 50 % the wave ring sinks, at 20 % it sits on the inner ring, from 10 % they glow. EPS: tolerance so the exact centre (75 %) counts. HIT_A: flash of the outer ring when an accent drives the mound into it */ STAGE_CROSS = 7, STAGE_TICK = 4, STAGE_TICKS = [0.5, 0.2, 0.1],   /* axis ticks (volume of the piano you are leaving) either side of the centre */ STAGE_STARS = 260, STAGE_STARS_A = 0.9, STAGE_STAR_SPIN = Math.PI * 2 / 1200, STAGE_TRAIL_CHANCE = 0.10, STAGE_TRAIL_RAD = 0.32, STAGE_TRAIL_A = 0.55,   /* STAR_SPIN: clockwise about the screen centre, 20 min per turn. Star-trail egg (its flag, or TRAIL_CHANCE per stage start): long-exposure arcs of TRAIL_RAD radians behind each star */   /* from the centre (75 %) on, rings and sigil are all present; SPIN: sigil rotation at 100 %, radians per second */ STAGE_RING_FROM = 2.6, STAGE_RING_MS = 220, STAGE_OVERLAP_A = 0.35,   /* RINGS: [volume threshold, radius as share of r0] — spacing = the inner-ring/wave-ring gap (0.4 r0); OVERLAP_A: extra brightness when the wave ring meets the inner ring */ STAGE_NODE_R = 3, STAGE_DASH_GAP = 10, STAGE_TICK_L2 = 16, STAGE_GLOW_AT = 0.975,   /* GLOW_AT: from this volume up the sigil brightens to its full glow at 100 % */ STAGE_PAUSE_DECAY = 0.965, STAGE_XFADE_MS = 3200, STAGE_VEIL_MS = 300, STAGE_ABSORB_S = 4, STAGE_FLOOR_A = 0.35, STAGE_FLOOR_FADE = 0.55, STAGE_FIRST_LV = 0.02, STAGE_ECL_COL = '255,110,90', STAGE_ECL_LINE = '255,232,200', STAGE_RING_COL = '255,200,120', STAGE_RING_COL2 = '255,190,110', STAGE_RED_GLOW = 0.7, STAGE_RED_A = 0.85, STAGE_RED_FEATHER = 90,  STAGE_TITLE_COL = '255,120,100', STAGE_RED_FADE_MS = 1400, STAGE_TINT_AT_MS = 1000,   /* TINT_AT_MS: the line turns red this long after the stage opens (= the sweep's length) */ REFLOW_OUT_MS_STAGE = 650,   /* = wave's REFLOW_OUT_MS: when the line has slid back out */ STAGE_FLOOR_MS = 1600,   /* RED_FADE_MS: on a piece change the red fades out in place (it does not follow the line's sweep); FLOOR_MS: the floor fades in when a veiled piece comes back */   /* RED_FEATHER: px over which the effects blend from red to warm at the play head; TITLE_COL: the caption's colour at the end of the piece */   /* RED_A: how fully the effects behind the play head take the eclipse colour */   /* RING_COL(2): the effects' line colours (rings, sigil / inner ring, ember); behind the play head they turn ECL_COL with RED_GLOW x ECL_BLUR of glow */   /* ECL_LINE: the eclipsed ring's own stroke colour (the corona is ECL_COL) */ STAGE_FLOOR_DARK = 0.62, STAGE_FLOOR_COL = '9,9,12', STAGE_FLOOR_TOP = 0.45, STAGE_ABSORB_R = 2.7,   /* ABSORB_R: pool radius (in r0) at which the veiled disc shows = the first sound; the pool goes on shrinking to the centre */   /* FLOOR_TOP: share of FLOOR_DARK right under the line (the floor deepens toward the bottom instead of a flat slab) */   /* the pool shrinks linearly over ABSORB_S and reaches the disc's outer-ring radius exactly at the first sound — that is when the disc shows; FLOOR_DARK/COL: the floor paints over the wallpaper (its blue tint would read as an uncovered patch) */   /* while the bottom piano is veiled the lower half is a floor: no stars, a faint mirror of the upper half (FLOOR_A, fading out over FLOOR_FADE of the half height); ABSORB_S seconds before that piano first sounds (FIRST_LV: sample amplitude that counts, scanned from its buffer) the floor's dark is drawn into the disc's centre, then the disc appears. ECL_COL: the eclipse glow (10 %) */   /* XFADE_MS: between two pieces the glow of a piano that has played fades out over this long instead of cutting; VEIL_MS: a veiled piano (piece.veil) is not drawn at all until it first sounds, then appears over this long */   /* PAUSE_DECAY: per-frame fall of the visuals while paused (~2 s to settle) */   /* RING_A / RING_R: brightness and radius (share of r0) of the soft inner ring */   /* RING_IN: inner radius of the ring as a share of r0 — the sphere's edge stays visible (and shrinks out visibly) even when the wave is at zero */ STAGE_R0 = 0.415;   /* R0: half-disc radius as a share of the horizontal edge-to-centre distance (same for all four edges; diameter on the edge) */   /* TOP_INSET: the top edge's base sits under the menubar; MIN_H: 0 = with no sound the edge shows nothing at all (the range is built only from real band levels) */   /* PUNCH: extra height when the instant level jumps above its slow average (an accent); BAND_GAMMA: band contrast */   /* SMOOTH: analyser smoothing (0.8 on the desktop bars — here low so hits jump); RELEASE: per-frame fall after a hit */   /* FLOOR_LV: band level treated as silence (the desktop bars keep a −96 dB floor; here an empty band must read as empty) */
-  /* LEAD: one 6/8 bar at quarter = 120 (six eighths of 0.25 s). GROW_DELAY: the glows appear only once the bars have sunk and the line has moved up.
+  var STAGE_SQ_COL = '255,250,240', STAGE_SQ_A = 0.9, STAGE_SQ_CORONA = 0.30, STAGE_SQ_RED = 0.55, STAGE_SQ_IN_MS = 900, STAGE_MIDI_CHANCE = 0.30, STAGE_MWF_LEAD_S = 4, STAGE_MWF_LO = 21, STAGE_MWF_HI = 108, STAGE_MWF_SEMI = 2, STAGE_MWF_MIN_W = 4, STAGE_MWF_FLASH_S = 0.3, STAGE_MWF_OUT_MS = 450, STAGE_MWF_IN_MS = 600, STAGE_MWF_EXIT_MS = 700, STAGE_SPARK_N = 3, STAGE_SPARK_MS = 1200, STAGE_SPARK_MAX = 320;   /* MIDI_CHANCE: the form is rolled at each piece start until it fires (its flag forces the first roll, one-shot); never together with the star-trail egg. SQ_IN_MS: fired mid-run, the square scales out of the centre. SEMI 2: notes may overlap a little — bigger blocks read better. OUT/IN/EXIT_MS: piece change = each corridor's notes run back and the square collects them, the new piece fades in and grows out of the square; leaving the stage = each corridor scatters outward along its own direction (left notes left, top notes up...) */   /* third form (the MIDI egg's stage): the centre square's side = the discs' diameter (STAGE_R0), its four edges emit each piano's notes down a corridor never wider than that disc, cleared on the WINDOW boundary exactly when they sound. LEAD_S: travel time on every side (each corridor at its own speed — a chord meets all four edges at once). LO..HI: MIDI pitch range across an edge; SEMI: note thickness in semitones (MIN_W px floor); FLASH_S as the desktop waterfall's; SPARK_*: bokeh sparks at each clearing. SQ_*: the square = the eclipse treatment in white light; it reddens behind the play head like the effects, plus SQ_RED of extra eclipse red */
+  /* LEAD: the DEFAULT count-in — one 6/8 bar at quarter = 120 (six eighths of 0.25 s, the second movement's own bar); a piece's demo.json count_in {beats, bpm} overrides it (I. Prelude: eight 4/4 beats at 180 = 2.67 s). GROW_DELAY: the glows appear only once the bars have sunk and the line has moved up.
      REACH_X/Y: at 100 % the left/right (top/bottom) silhouette's tip gets this far along the way from its edge to the centre. SPAN_X/Y: half-width of a silhouette along its edge (fraction of W / H).
      F_LO..F_HI: the band range shown (no top octaves — a piano has nothing there); lows sit at the two ends of an edge, the busiest upper mids at its midpoint.
      RELEASE / LVL_RELEASE / PUNCH_RELEASE: per-frame fall of the bands / the glow level / the accent boost — lower = snappier, accents stand out more. */
@@ -806,6 +807,8 @@
     var KEYS = ['C', 'B', 'L', 'R'], UNIT = { C: [0, -1], B: [0, 1], L: [-1, 0], R: [1, 0] };   /* stage space: the centre is (0,0), every piano one unit out along its axis = on its screen edge */
     var exitPending = null, startSeq = 0;   /* {e0, wasDucked, timers} while the exit choreography runs — a quick re-entry must cancel it (or its unduck would bring the music back under the stage) */
     var langSeen = null, redHold = null, flS = 0, trails = false, trailT0 = 0;   /* trails: star-trail egg for this stage run */   /* redHold: {x, t0} while the red fades out in place; flS: smoothed floor */
+    var smuted = false, mgain = null;   /* stage mute (the transport's speaker button while the stage runs); reset on each stage start */
+    var midiForm = false, midiT0 = 0, mwfRun = 0, sparks = [], mwfOld = null, mwfAnim = null;   /* third form (the MIDI egg): outward waterfalls + the white square; midiT0: when the form fired (the square scales in from then); mwfRun: playback pass counter so sparks fire once per pass; mwfOld/mwfAnim: the leaving layer (frozen clock) and the swap/exit choreography */
     var fxc = null, fxg = null, fxr = null, fxrg = null, trc = null, trg = null;   /* effects layer + its red copy (see tick) */
     var el = null, head = null, cv = null, g2 = null, ctx = null, ch = null, vis = {}, ann = {}, lastT = 0, stars = [], pieces = [], idx = -1, active = false, ducked = false, lx = -1, ly = -1, raf = 0, moved = false, hint = null, ttl = null, geo = null, growT0 = 0, growDir = 1, grow = 0, demo = null, master = null;
     function build(d) {
@@ -834,7 +837,7 @@
       for (var si = 0; si < sN; si++) { sd = (sd * 16807) % 2147483647; var sx = sd / 2147483647; sd = (sd * 16807) % 2147483647; var sy = sd / 2147483647; sd = (sd * 16807) % 2147483647; var sz = sd / 2147483647; stars.push({ x0: (sx * 2 - 1) * sR, y0: (sy * 2 - 1) * sR, rad: Math.hypot((sx * 2 - 1) * sR, (sy * 2 - 1) * sR), ang: Math.atan2((sy * 2 - 1) * sR, (sx * 2 - 1) * sR), x: 0, y: 0, r: sz < 0.08 ? 1.6 : sz < 0.3 ? 1.1 : 0.7, a: 0.25 + 0.6 * sz, ph: sz * 6.28, sp: 0.3 + sz * 0.9 }); }
     }
     function start(d) {
-      if (active) stop(true); active = true; moved = false; lx = ly = -1; demo = d; vis = {}; ann = {}; lastT = 0; redHold = null; flS = 0; trails = false; trailT0 = 0;
+      if (active) stop(true); active = true; moved = false; lx = ly = -1; demo = d; vis = {}; ann = {}; lastT = 0; redHold = null; flS = 0; trails = false; trailT0 = 0; midiForm = false; midiT0 = 0; sparks = []; mwfOld = null; mwfAnim = null; smuted = false;   /* the third form is rolled per piece in load() (the MIDI egg's flag forces the first roll); a fresh stage always starts audible */
       var carry = false; if (exitPending) { exitPending.timers.forEach(clearTimeout); if (exitPending.e0) exitPending.e0.remove(); carry = exitPending.wasDucked; exitPending = null; wave.reflowCancel(); }   /* re-entered mid-exit: drop the pending restore; the music stays ducked and is released by this run's exit */
       pieces = d.pieces || []; idx = -1; wave.sweep(true, player.state().frac || 0); wave.squash(true); wave.centre(true); build(d); var runId = ++startSeq; setTimeout(function () { if (active && startSeq === runId) wave.tint(STAGE_ECL_LINE, STAGE_ECL_COL); }, STAGE_TINT_AT_MS);   /* the line stays amber while the music's played part sweeps off; it turns red once it is on the stage */   /* the music's played part (line and bars) sweeps off from where it was, like a track change */   /* centre first: layout() reads the line's target height */
       if (player.isPlaying()) { ducked = true; player.duck(true); } else if (carry) ducked = true;
@@ -842,7 +845,9 @@
     }
     function onKey(e) { if (e.key === 'Escape') stop(); }
     function next() {
-      var was = ch; if (was && was.playing) { wave.sweep(true, src.state().frac); redHold = { x: redHold ? redHold.x : wave.head(), t0: performance.now(), k0: redHold ? redK() : 1 }; } unload(); idx++;   /* same as a desktop track change: the played line sweeps off right-to-left from where it was */
+      var was = ch; if (was && was.playing) { wave.sweep(true, src.state().frac); redHold = { x: redHold ? redHold.x : wave.head(), t0: performance.now(), k0: redHold ? redK() : 1 }; }   /* same as a desktop track change: the played line sweeps off right-to-left from where it was */
+      if (midiForm && was && was.mwf && was.playing && ctx) { mwfOld = { mw: was.mwf, tp: ctx.currentTime - was.t0 + was.mwf.off, lead: was.lead || STAGE_LEAD_S }; mwfAnim = { mode: 'out', t0: performance.now(), ms: STAGE_MWF_OUT_MS }; }   /* the old notes keep their clock and run back down their corridors — the square collects them */
+      unload(); idx++;
       if (idx >= pieces.length) return stop();   /* playlist exhausted -> leave the stage, music comes back */
       ch = was; load(pieces[idx]);   /* load() reads the previous channel's lit state, then replaces it */
     }
@@ -851,11 +856,13 @@
         ctx = new (window.AudioContext || window.webkitAudioContext)();
         var lim = ctx.createDynamicsCompressor(); lim.threshold.value = -3; lim.knee.value = 6; lim.ratio.value = 12; lim.attack.value = 0.003; lim.release.value = 0.15;
         master = ctx.createAnalyser(); master.fftSize = 2048; master.minDecibels = -96; master.maxDecibels = 6; master.smoothingTimeConstant = 0.8;
-        lim.connect(master); master.connect(ctx.destination); ctx.__out = lim;
+        mgain = ctx.createGain(); mgain.gain.value = smuted ? 0.0001 : 1;   /* the transport's mute drives THIS while the stage runs (the OS player is ducked and muting it would do nothing audible) */
+        lim.connect(master); master.connect(mgain); mgain.connect(ctx.destination); ctx.__out = lim;
       }
       if (ctx.state === 'suspended') ctx.resume();
       if (ttl) ttl.textContent = p.title || ''; langSeen = D.lang;
-      if (!trails && (EE.st || Math.random() < STAGE_TRAIL_CHANCE)) { trails = true; trailT0 = performance.now(); EE.st = false; }   /* the forced flag is one-shot, like the heartbeat's: it fires once, then the odds are back to normal */   /* star-trail egg: rolled at each piece start until it fires; then it stays until the stage is left */
+      if (!midiForm && !trails && (EE.midi || Math.random() < STAGE_MIDI_CHANCE)) { midiForm = true; midiT0 = performance.now(); EE.midi = false; }   /* the MIDI form: rolled at each piece start until it fires (the flag forces it, one-shot); it stays for the stage run — fired mid-run, the square scales out of the centre at this piece's start */
+      if (!trails && !midiForm && (EE.st || Math.random() < STAGE_TRAIL_CHANCE)) { trails = true; trailT0 = performance.now(); EE.st = false; }   /* the forced flag is one-shot, like the heartbeat's: it fires once, then the odds are back to normal */   /* star-trail egg: rolled at each piece start until it fires; then it stays until the stage is left — never together with the MIDI form */
       var prev = ch, veil = p.veil || [], mine = ch = { playing: false, paused: false, t0: 0, dur: 0, piece: p };
       KEYS.forEach(function (k) {
         var g = ctx.createGain(), pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null, lp = ctx.createBiquadFilter(), an = ctx.createAnalyser();
@@ -868,6 +875,18 @@
           ctx.decodeAudioData(ab, function (buf) { if (ch !== mine) return; mine[k].buf = buf; mine[k].firstAt = firstSound(buf); if (KEYS.every(function (x) { return mine[x].buf; })) playAll(); }, fail);
         });
       });
+      mine.mwf = null; mwfRun++;   /* third form: this piece's waterfall data (per-direction note lists); a missing/failed file just means no notes */
+      if (midiForm && p.notes) fetch('../' + p.notes).then(function (r) { return r.json(); }).then(function (j) {
+        if (ch !== mine) return;
+        var T = {}, ord = ['L', 'C', 'R', 'B'];   /* dir straight from the JSON; the L,C,R,B track order is only the safety net for data built before dir existed */
+        (j.tracks || []).forEach(function (tr, ti) {
+          var dk = tr.dir || ord[ti]; if (!UNIT[dk] || !tr.notes || !tr.notes.length) return;
+          var v = parseInt((tr.color || '#e0b04a').slice(1), 16), md = 0;
+          tr.notes.forEach(function (nn) { if (nn[1] - nn[0] > md) md = nn[1] - nn[0]; });
+          T[dk] = { rgb: [(v >> 16) & 255, (v >> 8) & 255, v & 255].join(','), maxDur: md, notes: tr.notes };
+        });
+        mine.mwf = { off: (j.offset_ms || 0) / 1000, T: T };
+      }).catch(function () {});
     }
     function firstSound(buf) {   /* first time (s) any sample exceeds STAGE_FIRST_LV — lets the stage prepare a piano's entrance before it happens */
       var n = buf.numberOfChannels, best = buf.duration;
@@ -888,7 +907,8 @@
     }
     function playAll() {
       if (!ch || !ctx || ch.playing) return; ch.playing = true;
-      var mine = ch, t0 = ctx.currentTime + STAGE_LEAD_S; mine.t0 = t0; mine.dur = 0;   /* count-in: one 6/8 bar of silence, then all four together */
+      var ci = ch.piece && ch.piece.count_in, leadS = ci && ci.beats > 0 && ci.bpm > 0 ? ci.beats * 60 / ci.bpm : STAGE_LEAD_S;   /* count-in in the piece's own meter (demo.json count_in: I. Prelude = eight 4/4 beats at 180); without one, the second movement's 6/8 bar */
+      var mine = ch, t0 = ctx.currentTime + leadS; mine.t0 = t0; mine.dur = 0; mine.lead = leadS;   /* count-in of silence, then all four together */
       KEYS.forEach(function (k) {
         var c = mine[k], s = ctx.createBufferSource(); s.buffer = c.buf; s.connect(c.g); s.start(t0); c.src = s; if (c.buf.duration > mine.dur) mine.dur = c.buf.duration;
         if (k === 'C') s.onended = function () { if (ch === mine) next(); };
@@ -904,7 +924,7 @@
       restart();
     }
     function restart() {
-      if (!ctx || !ch || !ch.playing) return; var mine = ch, t0 = ctx.currentTime + 0.1; wave.sweep(true, src.state().frac); redHold = { x: redHold ? redHold.x : wave.head(), t0: performance.now(), k0: redHold ? redK() : 1 }; if (mine.paused) { mine.paused = false; ctx.resume(); }
+      if (!ctx || !ch || !ch.playing) return; var mine = ch, t0 = ctx.currentTime + 0.1; mwfRun++; wave.sweep(true, src.state().frac); redHold = { x: redHold ? redHold.x : wave.head(), t0: performance.now(), k0: redHold ? redK() : 1 }; if (mine.paused) { mine.paused = false; ctx.resume(); }   /* a fresh pass: the sparks may fire again */
       KEYS.forEach(function (k) { var c = mine[k]; if (c.src) { c.src.onended = null; try { c.src.stop(); } catch (e) {} } var s = ctx.createBufferSource(); s.buffer = c.buf; s.connect(c.g); s.start(t0); c.src = s; if (k === 'C') s.onended = function () { if (ch === mine) next(); }; });
       mine.t0 = t0;
     }
@@ -951,6 +971,107 @@
         out[i] = Math.pow(v / 255, 0.7);
       }
       return out;
+    }
+    function lowerBound(notes, t) { var lo = 0, hi = notes.length; while (lo < hi) { var m = (lo + hi) >> 1; if (notes[m][0] < t) lo = m + 1; else hi = m; } return lo; }
+    function rrSq(x, y, w, h, r) { r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2); g2.beginPath(); g2.moveTo(x + r, y); g2.lineTo(x + w - r, y); g2.quadraticCurveTo(x + w, y, x + w, y + r); g2.lineTo(x + w, y + h - r); g2.quadraticCurveTo(x + w, y + h, x + w - r, y + h); g2.lineTo(x + r, y + h); g2.quadraticCurveTo(x, y + h, x, y + h - r); g2.lineTo(x, y + r); g2.quadraticCurveTo(x, y, x + r, y); g2.closePath(); }
+    /* third form (the MIDI egg): a square on the stage centre — its side = the discs' diameter — whose four edges emit each piano's
+       notes down a corridor never wider than that disc; the WINDOW boundary clears them (rhythm-game timing: a note reaches the
+       screen edge exactly when it sounds — not the wave ring: the notes pass under the disc on their way out) with a burst on the
+       edge and a few bokeh sparks splashing back inward. All four sides launch a note LEAD_S before it sounds, so the four
+       corridors run at their own speeds and a chord meets all four edges at once. A piano's notes carry its current volume:
+       10 % -> barely there, 75 % -> normal, toward 100 % -> they glow. Everything — notes, sparks, the square — goes through the
+       effects layer and reddens behind the play head; the square gets an extra shot of eclipse red on top (STAGE_SQ_RED). */
+    function mwfPass(t, now, RK, RX) {
+      var sqK = midiT0 ? easeOut(Math.min(1, (now - midiT0) / STAGE_SQ_IN_MS)) : 1, sq = STAGE_R0 * geo.ey * grow * sqK; if (sq < 2) return;   /* the square's side = the discs' diameter; fired mid-run it scales out of the centre */
+      var mw = ch && ch.mwf, tp = null;
+      if (mw && ch.playing && ctx) tp = t - ch.t0 + mw.off;
+      var RXc = Math.max(0, Math.min(geo.W, RX));
+      /* which layer is on: a leaving piece's notes (frozen clock — on a piece change each corridor is COLLECTED back into the square, the reverse of the exit's outward scatter) or the live piece's, fading in (its notes emerge from the square by themselves) */
+      var leadD = ch ? (ch.lead || STAGE_LEAD_S) : STAGE_LEAD_S, layerA = 1, exitK = 0, outK = 0;
+      if (mwfAnim && mwfOld && (mwfAnim.mode === 'out' || mwfAnim.mode === 'exit')) {
+        var pA = Math.min(1, (now - mwfAnim.t0) / mwfAnim.ms);
+        if (pA >= 1) { mwfOld = null; mwfAnim = null; mw = null; tp = null; }
+        else { if (mwfAnim.mode === 'out') outK = pA * pA; else exitK = pA * pA; layerA = 1 - pA; mw = mwfOld.mw; tp = mwfOld.tp; leadD = mwfOld.lead; }
+      } else if (mw && tp != null) {
+        if (!ch.mwfIn) { ch.mwfIn = true; mwfAnim = { mode: 'in', t0: now, ms: STAGE_MWF_IN_MS }; }
+        if (mwfAnim && mwfAnim.mode === 'in') { var pI = Math.min(1, (now - mwfAnim.t0) / mwfAnim.ms); if (pI >= 1) mwfAnim = null; else layerA = pI; }   /* fade only: the square releases the new piece */
+      } else mw = null;
+      var gM = g2; g2 = fxLayer(); g2.lineWidth = 1; g2.lineJoin = 'round';
+      if (mw && tp != null) { KEYS.forEach(function (k) {
+        var T = mw.T[k]; if (!T) return;
+        var u = UNIT[k], horiz = !!u[0];
+        var bnd = horiz ? (u[0] < 0 ? geo.cx : geo.W - geo.cx) : (u[1] < 0 ? geo.cy : geo.H - geo.cy), Dk = bnd - sq; if (Dk <= 6) return;   /* corridor: square edge -> this side's window boundary */
+        var leadIn = leadD, leadK = STAGE_MWF_LEAD_S, ang = Math.atan2(u[1], u[0]), ca = Math.cos(ang), sa2 = Math.sin(ang);
+        var vv = vis[k], gvk = STAGE_FAR + (STAGE_NEAR - STAGE_FAR) * (vv ? vv.rel : 0);
+        var appK = vv ? easeOut(vv.app == null ? 1 : vv.app) : 1; if (appK <= 0.01) return;   /* a veiled piano's notes appear with its disc — the floor has to be gone first, never earlier */
+        var dim = Math.max(0.1, Math.min(1, 0.1 + 0.9 * (gvk - STAGE_FAR) / (STAGE_MID - STAGE_FAR))), glowK = Math.max(0, Math.min(1, (gvk - STAGE_MID) / (STAGE_NEAR - STAGE_MID)));   /* this piano's volume drives its notes: 10 % -> 10 % opacity, 75 % -> full, above -> glow */
+        var w = Math.max(STAGE_MWF_MIN_W, 2 * sq / (STAGE_MWF_HI - STAGE_MWF_LO) * STAGE_MWF_SEMI);
+        g2.save(); g2.translate(geo.cx, geo.cy); g2.rotate(ang); g2.globalAlpha = dim * layerA * appK;
+        g2.beginPath(); g2.rect(sq, -sq, Dk + 10, 2 * sq); g2.clip();   /* never wider than the disc; the few px past the boundary let the clearing burst sit ON the edge */
+        if (exitK) g2.translate((Dk + 40) * exitK, 0); else if (outK) g2.translate(-(Dk + 40) * outK, 0);   /* the clip stays put, only the notes slide: leaving the stage they accelerate outward through the boundary (left notes left, top notes up...); on a piece change they run back down their corridor and the square swallows them */
+        var notes = T.notes, i = lowerBound(notes, tp - STAGE_MWF_FLASH_S - T.maxDur), end = tp + leadK;
+        for (; i < notes.length && notes[i][0] < end; i++) {
+          var nt = notes[i], n0 = nt[0], n1 = Math.max(nt[1], n0 + 0.05), vel = nt[3] / 127;
+          if (tp - n1 > STAGE_MWF_FLASH_S) continue;
+          var Ln = Math.max(0.3, Math.min(STAGE_MWF_LEAD_S, leadIn + n0)), ppsN = Dk / Ln;   /* a note near the piece's start has less than the full lead: it compresses its trip so it still leaves the square (at the count-in's start at the earliest) instead of popping up mid-corridor */
+          var dL = bnd - (n0 - tp) * ppsN, dT = dL - (n1 - n0) * ppsN;   /* head = onset, tail = release; the head meets the window boundary exactly at the onset */
+          var x0 = Math.max(sq, dT), x1 = Math.min(bnd, dL);
+          var f = Math.max(0, Math.min(1, (nt[2] - STAGE_MWF_LO) / (STAGE_MWF_HI - STAGE_MWF_LO))) * 2 - 1;
+          var lat = f * (sq - w / 2 - 1), live = n0 <= tp && tp < n1, qm = Math.max(0, Math.min(1, ((x0 + x1) / 2 - sq) / Dk));
+          if (x1 > x0 + 0.5) {
+            var fa = (0.32 + 0.45 * (0.5 + 0.5 * vel) * (0.35 + 0.65 * qm)) * (1 + 0.3 * glowK);
+            rrSq(x0 + 0.5, lat - w / 2 + 0.5, Math.max(0.5, x1 - x0 - 1), Math.max(1, w - 1), 2);
+            if (live || glowK > 0) { g2.shadowColor = 'rgba(' + T.rgb + ',.95)'; g2.shadowBlur = live ? 14 : 12 * glowK; if (live) fa = 0.95; }
+            else { g2.shadowColor = 'rgba(0,0,0,.8)'; g2.shadowBlur = 6; }
+            g2.fillStyle = 'rgba(' + T.rgb + ',' + Math.min(1, fa).toFixed(3) + ')'; g2.fill(); g2.shadowBlur = 0;
+            g2.strokeStyle = 'rgba(' + T.rgb + ',' + (live ? 1 : 0.5 + 0.5 * qm).toFixed(3) + ')'; g2.stroke();
+          }
+          var age = tp - n0, kf = 0;
+          if (age >= 0) { if (tp < n1) kf = 0.55 + 0.45 * Math.max(0, 1 - age / STAGE_MWF_FLASH_S); else kf = 0.55 * (1 - (tp - n1) / STAGE_MWF_FLASH_S); }
+          if (kf > 0 && !outK && !exitK) {   /* the clearing: a white-hot burst on the window edge while the note sounds, fading after release (not while the layer is being collected or scattered) */
+            var ex = w * (0.6 + 1.2 * (1 - kf)), fh = 3 + 5 * kf;
+            g2.shadowColor = 'rgba(' + T.rgb + ',1)'; g2.shadowBlur = 26 * kf;
+            g2.fillStyle = 'rgba(255,255,255,' + (0.85 * kf).toFixed(3) + ')'; g2.fillRect(bnd - fh / 2, lat - (w + ex) / 2, fh, w + ex);
+            g2.fillStyle = 'rgba(' + T.rgb + ',' + (0.6 * kf).toFixed(3) + ')'; g2.fillRect(bnd - fh, lat - (w + ex * 2) / 2, fh * 2, w + ex * 2);
+            g2.shadowBlur = 0;
+          }
+          if (age >= 0 && age < 0.12 && nt._s !== mwfRun && !outK && !exitK) {   /* bokeh sparks, once per playback pass; they carry the piano's dimness with them */
+            nt._s = mwfRun;
+            var px0 = geo.cx + ca * bnd - sa2 * lat, py0 = geo.cy + sa2 * bnd + ca * lat;
+            for (var sj = 0; sj < STAGE_SPARK_N; sj++) sparks.push({ x: px0, y: py0, vx: -u[0] * (26 + 70 * Math.random()) + (Math.random() - 0.5) * 30, vy: -u[1] * (26 + 70 * Math.random()) + (Math.random() - 0.5) * 30, r: 1 + 2.4 * Math.random(), col: Math.random() < 0.4 ? '255,255,255' : T.rgb, a: dim, t0: now, life: STAGE_SPARK_MS * (0.6 + 0.8 * Math.random()) });   /* splash back INTO the window (outward would leave the screen), floating a good way up the corridor before they die */
+            if (sparks.length > STAGE_SPARK_MAX) sparks.splice(0, sparks.length - STAGE_SPARK_MAX);
+          }
+        }
+        g2.restore();
+      }); }
+      if (sparks.length) {   /* the bokeh itself: soft additive dots drifting off the boundary back into the window, shrinking as they fade */
+        g2.save(); g2.globalCompositeOperation = 'lighter';
+        for (var si2 = sparks.length - 1; si2 >= 0; si2--) {
+          var sp2 = sparks[si2], ag2 = now - sp2.t0, kk = 1 - ag2 / sp2.life;
+          if (kk <= 0) { sparks.splice(si2, 1); continue; }
+          g2.shadowColor = 'rgba(' + sp2.col + ',.9)'; g2.shadowBlur = 9 * kk;
+          g2.fillStyle = 'rgba(' + sp2.col + ',' + (0.75 * kk * (sp2.a == null ? 1 : sp2.a)).toFixed(3) + ')'; g2.beginPath(); g2.arc(sp2.x + sp2.vx * ag2 / 1000, sp2.y + sp2.vy * ag2 / 1000, sp2.r * (0.5 + 0.5 * kk), 0, Math.PI * 2); g2.fill();
+        }
+        g2.shadowBlur = 0; g2.restore();
+      }
+      /* the white eclipse, into the same layer (so it reddens behind the play head with everything else): a blurred corona hugging
+         the square plus a glowing line, breathing with the loudest piano */
+      var lvm = 0; KEYS.forEach(function (k2) { var v2 = vis[k2]; if (v2 && v2.lvl > lvm) lvm = v2.lvl; });
+      var qa = (0.55 + 0.45 * lvm) * grow * sqK;   /* the square's light scales in with it when the form fires mid-run */
+      g2.save(); g2.globalCompositeOperation = 'lighter';
+      try { g2.filter = 'blur(8px)'; } catch (e) {}
+      g2.lineWidth = 6; g2.strokeStyle = 'rgba(255,255,255,' + (STAGE_SQ_CORONA * qa).toFixed(3) + ')'; g2.strokeRect(geo.cx - sq, geo.cy - sq, 2 * sq, 2 * sq);
+      try { g2.filter = 'none'; } catch (e) {}
+      g2.globalCompositeOperation = 'source-over'; g2.lineWidth = STAGE_RING_W;
+      g2.strokeStyle = 'rgba(' + STAGE_SQ_COL + ',' + (STAGE_SQ_A * qa).toFixed(3) + ')'; g2.shadowColor = 'rgba(255,255,255,.95)'; g2.shadowBlur = STAGE_ECL_BLUR * (0.6 + 0.4 * lvm);
+      g2.strokeRect(geo.cx - sq, geo.cy - sq, 2 * sq, 2 * sq); g2.shadowBlur = 0; g2.restore();
+      g2 = gM; redComposite(RXc, 1, RK);
+      if (RK > 0) {   /* "and a little redder": an extra eclipse pass over the square alone, feathered at the play head like the caption */
+        var rg2 = g2.createLinearGradient(RXc - STAGE_RED_FEATHER, 0, RXc + STAGE_RED_FEATHER * 0.35, 0);
+        rg2.addColorStop(0, 'rgba(' + STAGE_ECL_COL + ',' + Math.min(1, STAGE_SQ_RED * RK * qa).toFixed(3) + ')'); rg2.addColorStop(1, 'rgba(' + STAGE_ECL_COL + ',0)');
+        g2.save(); g2.strokeStyle = rg2; g2.lineWidth = STAGE_RING_W + 0.4; g2.shadowColor = 'rgba(' + STAGE_ECL_COL + ',.95)'; g2.shadowBlur = STAGE_ECL_BLUR * STAGE_RED_GLOW * RK;
+        g2.strokeRect(geo.cx - sq, geo.cy - sq, 2 * sq, 2 * sq); g2.restore();
+      }
     }
     function tick() {
       raf = 0; if (!el || !geo) return;
@@ -1049,8 +1170,8 @@
         var gMain = g2; g2 = fxLayer();
         var gv = STAGE_FAR + (STAGE_NEAR - STAGE_FAR) * rel, st = ann[k] || (ann[k] = { r: [0, 0, 0], t: 0, rot: 0, on: false }), step = dtm / STAGE_RING_MS;
         if (app < 0.999) step *= app;   /* while a veiled piano is still appearing its rings ease in with it */
-        for (var ri = 0; ri < STAGE_RINGS.length; ri++) st.r[ri] = !trails && gv + STAGE_EPS >= STAGE_RINGS[ri][0] ? Math.min(1, st.r[ri] + step) : Math.max(0, st.r[ri] - step);   /* under the star-trail egg the disc stops at the wave ring */
-        st.on = !trails && (st.on ? gv + STAGE_EPS >= STAGE_SIGIL_OFF : gv + STAGE_EPS >= STAGE_SIGIL_ON);   /* hysteresis: appears at 75, leaves below 70 */
+        for (var ri = 0; ri < STAGE_RINGS.length; ri++) st.r[ri] = !trails && !midiForm && gv + STAGE_EPS >= STAGE_RINGS[ri][0] ? Math.min(1, st.r[ri] + step) : Math.max(0, st.r[ri] - step);   /* under the star-trail egg (and the MIDI form) the disc stops at the wave ring */
+        st.on = !trails && !midiForm && (st.on ? gv + STAGE_EPS >= STAGE_SIGIL_OFF : gv + STAGE_EPS >= STAGE_SIGIL_ON);   /* hysteresis: appears at 75, leaves below 70 */
         st.t = st.on ? Math.min(1, st.t + step * 0.6) : Math.max(0, st.t - step * 0.6);
         var rIn = r0 * STAGE_RING_R, rw = gv + STAGE_EPS >= STAGE_ECLIPSE ? r0 : rIn + (r0 - rIn) * Math.max(0, Math.min(1, (gv - STAGE_ECLIPSE_END) / (STAGE_ECLIPSE - STAGE_ECLIPSE_END)));   /* eclipse: 50 -> 20 % the wave ring sinks onto the inner ring and stays there */
         var ov = Math.max(0, Math.min(1, (STAGE_ECLIPSE_GLOW + 0.03 - gv) / 0.03));   /* from 10 % the eclipsed rings glow */
@@ -1205,6 +1326,7 @@
       var under = vb && vb.lit <= 0 && vb.app > 0 ? 'B' : null;   /* the veiled disc on its way out is drawn first: the floor fades in over it */
       if (under) drawPiano(under);
       if (fl > 0) { var fd = g2.createLinearGradient(0, geo.cy, 0, geo.H); fd.addColorStop(0, 'rgba(' + STAGE_FLOOR_COL + ',' + (STAGE_FLOOR_DARK * STAGE_FLOOR_TOP * fl * grow).toFixed(3) + ')'); fd.addColorStop(1, 'rgba(' + STAGE_FLOOR_COL + ',' + (STAGE_FLOOR_DARK * fl * grow).toFixed(3) + ')'); g2.fillStyle = fd; g2.fillRect(0, geo.cy, geo.W, geo.H - geo.cy); }   /* the floor itself: near-black over the wallpaper, under the pianos (the side discs still straddle the line) */
+      if (midiForm) mwfPass(t, now, RK, RX);   /* third form: the outward waterfalls and the white square sit above the floor, under the pianos */
       KEYS.forEach(function (k) { if (k !== under) drawPiano(k); });
       g2.globalCompositeOperation = 'source-over';
       if (fl > 0) {   /* floor: below the line the sky is mirrored — only the stars and a faint pool of the top piano's light; the rings and sigils do not reflect */
@@ -1264,6 +1386,7 @@
     }
     function stop(immediate) {
       if (!active) return; active = false; var exitFrac = src.state().frac || 0; if (immediate) wave.tint(null);   /* the choreographed exit keeps the red until the line has slid back out */ var tEl0 = document.querySelector('#np-desktop .np-title'); if (tEl0) { [tEl0].concat(Array.prototype.slice.call(tEl0.querySelectorAll('.np-tag, .np-rest'))).forEach(function (e_) { e_.style.color = ''; e_.style.textShadow = ''; e_.style.backgroundImage = ''; e_.style.webkitBackgroundClip = ''; e_.style.backgroundClip = ''; }); }
+      if (midiForm && !immediate && ch && ch.mwf && ch.playing && ctx) { mwfOld = { mw: ch.mwf, tp: ctx.currentTime - ch.t0 + ch.mwf.off, lead: ch.lead || STAGE_LEAD_S }; mwfAnim = { mode: 'exit', t0: performance.now(), ms: STAGE_MWF_EXIT_MS }; }   /* leaving the stage: each corridor scatters outward along its own direction while the discs shrink */
       unload(); if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; master = null; }
       document.removeEventListener('keydown', onKey); window.removeEventListener('resize', layout); desktop.removeEventListener('pointermove', onMove); desktop.removeEventListener('click', onClick);
       var e0 = el, wasDucked = ducked; ducked = false;
@@ -1287,12 +1410,13 @@
         var dt = (dNow ? dNow.title : '').split(/\s+[-\u2013\u2212]\s+/), dh = dt[0] || '', dtl = dt.slice(1).join(' - ');   /* "四鋼琴環繞 - 非和諧不等式" -> head | tail: the bar replaces the design title's own dash */
         var tag = dtl ? TITLES.demos + ' - ' + dh : TITLES.demos, rest = (dtl ? dtl + ' ' : dh + ' ') + (pNow ? pNow.title : '');   /* a title without its own dash (en: "Asymmetric Dissonant for Four Pianos") sits whole after the bar: "Design | <title> <piece>" */
         if (head && D.lang !== langSeen) { langSeen = D.lang; var xb = head.querySelector('.st-exit'); if (xb) xb.textContent = U.stage_exit; }   /* the stage header follows the language too */
-        return { title: tag + ' | ' + rest, parts: { tag: tag, rest: rest }, id: 'stage', pos: pos, dur: dur, playing: !!(ch && ch.playing && !ch.paused), started: true, frac: dur ? pos / dur : 0, muted: false, vol: 1, notes: '', sr: ctx ? ctx.sampleRate : 48000, active: true };
+        return { title: tag + ' | ' + rest, parts: { tag: tag, rest: rest }, id: 'stage', pos: pos, dur: dur, playing: !!(ch && ch.playing && !ch.paused), started: true, frac: dur ? pos / dur : 0, muted: smuted, vol: 1, notes: '', sr: ctx ? ctx.sampleRate : 48000, active: true };
       },
       analyser: function () { return master; }
     };
     return { start: start, stop: function () { stop(false); }, active: function () { return active; }, src: function () { return src; }, toggle: toggle, prev: prev, next: function () { if (active) next(); },
-             debug: function () { var o = { active: active, ctx: ctx ? ctx.state : '-', idx: idx, playing: !!(ch && ch.playing), pos: ch && ch.playing && ctx ? +(ctx.currentTime - ch.t0).toFixed(2) : 0, dur: ch ? +ch.dur.toFixed(1) : 0, grow: +grow.toFixed(2), lx: Math.round(lx), ly: Math.round(ly), geo: geo }; if (ch) KEYS.forEach(function (k) { var c = ch[k]; o[k] = { buf: !!c.buf, g: +c.g.gain.value.toFixed(3), pan: c.pan ? +c.pan.pan.value.toFixed(2) : null, lp: Math.round(c.lp.frequency.value) }; }); return o; } };
+             toggleMute: function () { smuted = !smuted; if (mgain && ctx) mgain.gain.setTargetAtTime(smuted ? 0.0001 : 1, ctx.currentTime, 0.03); },
+             debug: function () { var o = { active: active, ctx: ctx ? ctx.state : '-', idx: idx, playing: !!(ch && ch.playing), pos: ch && ch.playing && ctx ? +(ctx.currentTime - ch.t0).toFixed(2) : 0, dur: ch ? +ch.dur.toFixed(1) : 0, grow: +grow.toFixed(2), lx: Math.round(lx), ly: Math.round(ly), geo: geo, mwf: midiForm ? { data: !!(ch && ch.mwf), run: mwfRun, sparks: sparks.length } : false }; if (ch) KEYS.forEach(function (k) { var c = ch[k]; o[k] = { buf: !!c.buf, g: +c.g.gain.value.toFixed(3), pan: c.pan ? +c.pan.pan.value.toFixed(2) : null, lp: Math.round(c.lp.frequency.value) }; }); return o; } };
   })();
 
   function openApp(app) {
@@ -1699,6 +1823,53 @@
                paused: audio ? audio.paused : '-', rs: audio ? audio.readyState : '-', ns: audio ? audio.networkState : '-', t: audio ? audio.currentTime.toFixed(1) : '-', err: audio && audio.error ? audio.error.code : 0, gain: master ? master.gain.value.toFixed(3) : '-', out: out ? out.gain.value.toFixed(2) : '-' }; } };
   })();
   if (/[?&]debug/.test(location.search)) window.__player = player;   /* ?debug: console access for testing (seek / state) */
+  (function () {   /* liquid-glass lens: the displacement maps must cover each pane's box in real px (percent feImage sizing is unreliable inside backdrop-filter), so the filter regions follow the layout */
+    if (PHONE) return;
+    function fit(fid, el) {
+      var f = document.getElementById(fid); if (!f || !el) return;
+      var r = el.getBoundingClientRect(), w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
+      f.setAttribute('width', w); f.setAttribute('height', h);
+      f.querySelectorAll('feImage').forEach(function (im) { im.setAttribute('width', w); im.setAttribute('height', h); });
+    }
+    var dk = document.getElementById('dock'), mb = document.querySelector('.menubar');
+    function all() { fit('lg-lens', dk); fit('lg-lens-y', mb); }
+    if (window.ResizeObserver) { all.ro = new ResizeObserver(all); if (dk) all.ro.observe(dk); if (mb) all.ro.observe(mb); }   /* the dock's width follows its labels (language switch included); the reference lives on `all` so the observer cannot be collected */
+    window.addEventListener('resize', all); all(); [400, 1500, 4000].forEach(function (ms) { setTimeout(all, ms); });   /* the dock is empty until the desktop renders — remeasure after boot regardless */
+  })();
+  (function () {   /* liquid-glass hover bubble (app column + dock): a glass lozenge appears under the pointed item and GLIDES to the next one, like a droplet running along the bar */
+    if (PHONE) return;
+    var PILL_HOLE = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 100 40\' preserveAspectRatio=\'none\'%3E%3Crect width=\'100\' height=\'40\' rx=\'20\' fill=\'black\'/%3E%3C/svg%3E"), linear-gradient(%23fff 0 0)'.replace('%23', '#');
+    function attach(box, sel, pill, overlay) {
+      if (!box) return;
+      var host = overlay ? (document.querySelector('.desktop') || box) : box;   /* the dock's bubble lives above the bar so its ring is not clipped by the bar's own mask */
+      var b = document.createElement('i'); b.className = 'hovbub' + (pill ? ' pill' : '') + (overlay ? ' ov' : ''); b.setAttribute('aria-hidden', 'true');
+      if (overlay) host.appendChild(b); else box.insertBefore(b, box.firstChild);
+      var on = false, cx = 0, cy = 0, cw = 0, chh = 0, hx = 0, hy = 0, holeT = 0;
+      function put(s) { b.style.transform = 'translate(' + cx + 'px,' + cy + 'px) scale(' + s + ')'; b.style.width = cw + 'px'; b.style.height = chh + 'px'; }
+      function setHole(x, y, w, h) {   /* the "glass" of the dock's bubble: a pill-shaped hole cut in the CHROME's mask (::before, via custom props) — inside it the bar's background, glass and border are simply absent; the buttons above stay */
+        box.style.setProperty('--dkm', PILL_HOLE); box.style.setProperty('--dkp', x + 'px ' + y + 'px, 0 0'); box.style.setProperty('--dks', Math.max(0.01, w) + 'px ' + Math.max(0.01, h) + 'px, 100% 100%');
+      }
+      function clearHole() { box.style.removeProperty('--dkm'); box.style.removeProperty('--dkp'); box.style.removeProperty('--dks'); }
+      box.addEventListener('pointerover', function (e) {
+        var t = e.target && e.target.closest ? e.target.closest(sel) : null; if (!t || !box.contains(t) || t === b) return;
+        if (overlay) { var r = t.getBoundingClientRect(), hr = host.getBoundingClientRect(); cx = r.left - hr.left; cy = r.top - hr.top; cw = r.width; chh = r.height; hx = t.offsetLeft - box.scrollLeft; hy = t.offsetTop - box.scrollTop; }   /* the mask lives in box coords: subtract the pill's scroll */
+        else { cx = t.offsetLeft; cy = t.offsetTop; cw = t.offsetWidth; chh = t.offsetHeight; }
+        if (holeT) { clearTimeout(holeT); holeT = 0; }
+        if (!on) {   /* first landing: it WELLS OUT of the item's centre instead of gliding across from a stale spot */
+          b.style.transition = 'none'; put(0.3); b.style.opacity = 0; void b.offsetWidth; b.style.transition = ''; on = true;
+          if (overlay) { box.classList.add('snap'); setHole(hx + cw / 2, hy + chh / 2, 0, 0); void box.offsetWidth; box.classList.remove('snap'); }
+        }
+        put(1); b.style.opacity = 1;
+        if (overlay) setHole(hx, hy, cw, chh);
+      });
+      box.addEventListener('pointerleave', function () {   /* and shrinks back into its centre on the way out, like a droplet being taken up */
+        on = false; put(0.45); b.style.opacity = 0;
+        if (overlay) { setHole(hx + cw / 2, hy + chh / 2, 0, 0); holeT = setTimeout(function () { clearHole(); holeT = 0; }, 260); }
+      });
+    }
+    attach(document.getElementById('icons'), '.icon');
+    attach(document.getElementById('dock'), 'button', true, true);
+  })();
   player.onTrack(function (fromFrac) { wave.sweep(true, fromFrac); phoneWave.sweep(true, fromFrac); });   // new track: sweep the amber off the line and the bars
 
   // ============================================================ search ("尋找": Spotlight-style app launcher + command line)

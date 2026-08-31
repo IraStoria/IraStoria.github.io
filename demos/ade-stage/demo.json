@@ -26,7 +26,12 @@
       },
       "veil": [
         "B"
-      ]
+      ],
+      "notes": "assets/notes/ade1.json",
+      "count_in": {
+        "beats": 8,
+        "bpm": 180
+      }
     },
     {
       "id": "ade",
@@ -39,7 +44,8 @@
         "R": "assets/audio/ade/R.mp3",
         "C": "assets/audio/ade/C.mp3",
         "B": "assets/audio/ade/B.mp3"
-      }
+      },
+      "notes": "assets/notes/ade.json"
     }
   ],
   "concept_level_checked": true,

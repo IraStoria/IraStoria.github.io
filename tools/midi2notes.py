@@ -125,7 +125,7 @@ def main(a):
         # public reduction: only what the waterfall draws leaves this machine — anonymous track ids, 4-step velocity, 1 ms timing (source names / dynamics / tempo map stay private)
         tid = 't%d' % len(keep); alias[t['name']] = tid
         for n in notes: n[0] = round(n[0], 3); n[1] = round(n[1], 3); n[3] = min(127, ((int(n[3]) * 4) // 128) * 32 + 32)
-        keep.append({'name': tid, 'lane': (cfg or {}).get('lane', 'pitch'), 'color': (cfg or {}).get('color', '#e0b04a'), 'row': (cfg or {}).get('row'), 'label': (cfg or {}).get('label'), 'notes': notes})
+        keep.append({'name': tid, 'lane': (cfg or {}).get('lane', 'pitch'), 'color': (cfg or {}).get('color', '#e0b04a'), 'row': (cfg or {}).get('row'), 'label': (cfg or {}).get('label'), 'dir': (cfg or {}).get('dir'), 'notes': notes})   # dir: which stage piano (L/C/R/B) this track belongs to — the stage's outward waterfalls need it (names are anonymized)
     pub = lambda d: {k: v for k, v in d.items() if not k.startswith('_')}   # '_' keys are private authoring notes
     scenes = [pub(dict(sc, pulse=alias[sc['pulse']]) if sc.get('pulse') else sc) for sc in mp.get('scenes', [])]
     lights = mp.get('lights')

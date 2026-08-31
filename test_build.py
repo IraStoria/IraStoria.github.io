@@ -116,7 +116,7 @@ for p, h in pages.items():
     base = Path(p).parent
     for m in re.finditer(r'(?:href|src)="([^"#]+)"', h):
         u = m.group(1).split("?")[0]
-        if u.startswith(("http", "mailto:", "#")) or u == "#":
+        if u.startswith(("http", "mailto:", "data:", "#")) or u == "#":   # data: URIs (e.g. inline SVG displacement maps) are content, not links
             continue
         target = (base / u) if not u.startswith("/") else Path(u.lstrip("/"))
         parts = [x for x in target.as_posix().split("/") if x not in ("", ".")]
