@@ -147,7 +147,7 @@
     return new Promise(function (res, rej) {
       decodeQueue.push(function () {
         decoding++;
-        var done = function (fn) { return function (v) { decoding--; if (document.hidden) pump(); else setTimeout(pump, DECODE_GAP_MS); fn(v); }; };   /* the gap lets the host's animation frames through between allocations — hidden tabs have no frames to protect (and their timers are throttled to 1 s), so they decode flat out */
+        var done = function (fn) { return function (v) { decoding--; schedulePump(); fn(v); }; };
         try {
           var p = ctx.decodeAudioData(ab, done(res), done(function (e) { rej(e || new Error('decode failed')); }));
           if (p && p.then) p.then(function () {}, function () {});   /* promise form resolves through the callbacks above; swallow the duplicate rejection */
@@ -157,6 +157,11 @@
     });
   }
   function pump() { while (decoding < DECODE_AT_ONCE && decodeQueue.length) decodeQueue.shift()(); }
+  function schedulePump() {   /* the next decode runs only in the IDLE time after the host's animation frame — animations always come first; a hidden tab (no frames, and 1 s timer throttling) decodes flat out */
+    if (document.hidden) pump();
+    else if (window.requestIdleCallback) requestIdleCallback(function () { pump(); }, { timeout: 400 });
+    else setTimeout(pump, DECODE_GAP_MS);
+  }
   /* fetches are capped too: twenty simultaneous responses landing at once (plus their decodes) is the first-launch stutter */
   var FETCH_AT_ONCE = 2, fetchQueue = [], fetching = 0;
   function fpump() { while (fetching < FETCH_AT_ONCE && fetchQueue.length) fetchQueue.shift()(); }
@@ -466,7 +471,7 @@
       optRules.checked = true; optExclude.checked = false;
       var first = INTRO || SEG[0], bpm = first.bpmIn || first.bpmOut || 120;
       stageLead = 4 * 60 / bpm; stageT0 = null;   /* four 4/4 beats at the theme's tempo (145 -> ~1.7 s of load time) */
-      setTimeout(start, 500);   /* let the stage's entrance animation land before the fetch/decode burst — the count-in begins with the loading */
+      setTimeout(start, 1100);   /* NOTHING loads while the entrance plays: the panel and button fade-ins own the thread until they have landed; the count-in begins with the loading */
     }
   });
   /* stage: the parent's click opened the stage, but autoplay activation does not always reach the iframe — the first tap inside revives a
