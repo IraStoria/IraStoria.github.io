@@ -755,8 +755,11 @@
     els.forEach(function (el) {
       var pp = el.querySelector('.np-pp'), pv = el.querySelector('.np-prev'), nx = el.querySelector('.np-next');
       if (pp) pp.addEventListener('click', function () { if (stage.active()) stage.toggle(); else if (secStage.active()) secStage.toggle(); else { var ax = ext.api(); if (ax && ax.toggle) ax.toggle(); else player.toggle(); } refresh(); });   /* on the ADE stage the transport drives the four stems; an active section player (its state IS the caption) takes the pause too — never the background music */
-      if (pv) pv.addEventListener('click', function () { if (stage.active()) stage.prev(); else player.prev(); refresh(); });
-      if (nx) nx.addEventListener('click', function () { if (stage.active()) stage.next(); else player.next(); refresh(); });
+      /* prev/next follow the SAME ownership chain as pause and mute: an active section stage (or a demo holding the
+         audio) owns the transport, and neither has a next track to go to — the buttons must NOT fall through to the
+         background music (pressing ⏭ on the section stage started the OS playlist underneath the show). */
+      if (pv) pv.addEventListener('click', function () { if (stage.active()) stage.prev(); else if (!secStage.active() && !ext.api()) player.prev(); refresh(); });
+      if (nx) nx.addEventListener('click', function () { if (stage.active()) stage.next(); else if (!secStage.active() && !ext.api()) player.next(); refresh(); });
       var mu = el.querySelector('.np-mute'); if (mu) mu.addEventListener('click', function () { if (stage.active()) stage.toggleMute(); else if (secStage.active()) secStage.toggleMute(); else { var ax2 = ext.api(); if (ax2 && ax2.toggleMute) ax2.toggleMute(); else player.toggleMute(); } refresh(); });   /* on the stage the speaker silences the four stems; an active section player takes the mute the same way (the OS music is already ducked) */
       var t = el.querySelector('.np-title'); if (t) t.addEventListener('click', function () { openApp('player'); });
     });
