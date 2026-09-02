@@ -508,8 +508,9 @@
   function makeWave(cv, yRatio, withNotes) {
     var wf = withNotes ? makeWaterfall() : null;
     var headPx = -1;
+    var restoreT0 = 0, restoreDur = 1400, gleam = null, dimK = null, dimCv = null;   /* gleam: this frame's travelling flash band; dimK: the tail's in-canvas dim floor (the LINE is spared); dimCv: the reused keep-mask offscreen */   /* LOG-112 追記⑬: after the outro door's hand-back the LINE is already on screen (it lived through the door) - the grey, unplayed part fades back in in place, ADE-style, instead of regrowing from the left */
     var tintFrom = ['224,176,74', '224,176,74'], tintTo = ['224,176,74', '224,176,74'], tintT0 = 0, tintDur = 1, tintCur = ['224,176,74', '224,176,74'], TINT_MS = 900, TINT_OUT_MS = 2200, TINT_BLUR = 22, TINT_W = 1.2, TINT_A = 1.0, TINT_CORONA = 32, TINT_CORONA_A = 0.40, tintShadow = '255,110,90';   /* tint = the stage's eclipsed ring: STAGE_RING_W, its brightness, STAGE_ECL_BLUR corona in STAGE_ECL_COL */
-    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000, squash = 1, squashTo = 1, SQUASH_MS = 600, boostK = 1, decayK = 1, ghostT0 = 0, ghostFrac = 0, ghostCol = null, GHOST_MS = 7000, collT0 = 0, COLL_MS = 900, blankW = false, regrowT0 = 0, REGROW_MS = 900,   /* decayK: bar-fall exponent (stage: faster fall = clearer bounce); ghost: the previous section's filled colour fading out in place; coll/regrow: the outro farewell — both edges retract to the centre, later the line grows back from the left */ yCur = yRatio, yTo = yRatio, Y_MS = 700, reflowT0 = 0, reflowFrom = 0, REFLOW_IN_MS = 900, REFLOW_OUT_MS = 650, reflowHold = 0, hbMix = 0, HB_MORPH_MS = 700, liveT0 = 0, GRID_FADE_MS = 3000, AMB0 = '224,176,74', GRN = '61,255,122', SLATE = '96,104,122', DIMG = '30,120,62';   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
+    var g2 = cv ? cv.getContext('2d') : null, connectT0 = 0, mode = 'idle', raf = null, onConnected = null, levels = [], lastT = 0, glow = 1, clearT0 = 0, clearBars = false, clearFrom = 1, CLEAR_MS = 1000, squash = 1, squashTo = 1, SQUASH_MS = 600, boostK = 1, decayK = 1, ghostT0 = 0, ghostFrac = 0, ghostCol = null, GHOST_MS = 7000, collT0 = 0, COLL_MS = 900, blankW = false, regrowT0 = 0, REGROW_MS = 900,   /* decayK: bar-fall exponent (stage: faster fall = clearer bounce); ghost: the previous section's filled colour fading out in place; coll/regrow: the outro farewell — both edges retract to the centre, later the line grows back from the left */ yCur = yRatio, yTo = yRatio, Y_MS = 700, markCur = null, MARK_MS = 700, reflowT0 = 0, reflowFrom = 0, REFLOW_IN_MS = 900, REFLOW_OUT_MS = 650, reflowHold = 0, hbMix = 0, HB_MORPH_MS = 700, liveT0 = 0, GRID_FADE_MS = 3000, AMB0 = '224,176,74', GRN = '61,255,122', SLATE = '96,104,122', DIMG = '30,120,62';   /* clearFrom: where the sweep starts (1 = right edge for the boot sweep; the old play-head frac on a track change) */
     function grad(y0, y1, rgb, a0, a1) { var g = g2.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + rgb + ',' + a0 + ')'); g.addColorStop(1, 'rgba(' + rgb + ',' + a1 + ')'); return g; }
     var DPR = 1;   /* backing store at device resolution (capped at 2x): at 1x an iPhone upscales the layer 3x and the label text, note rims and the line go soft */
     function size() { DPR = Math.min(2, Math.max(1, window.devicePixelRatio || 1)); var pw = Math.round(cv.clientWidth * DPR), ph = Math.round(cv.clientHeight * DPR); if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; } }
@@ -543,7 +544,7 @@
       if (blankW) return;
       if (regrowT0) { var rw2 = (now - regrowT0) / REGROW_MS; if (rw2 >= 1) regrowT0 = 0; else { winX1 = W * ease(rw2); winClip = true; } }
       if (winClip) { g2.save(); g2.beginPath(); g2.rect(winX0, 0, Math.max(0, winX1 - winX0), H); g2.clip(); }
-      var an = ext.analyser();
+      var an = ext.analyser(), paintLine = null;
       if (mode === 'live' && an) {
         // spectrum bars (same log-frequency mapping as the player). On pause the bars fall gradually instead of vanishing.
         var n = Math.max(W < 700 ? PHONE_MIN_BARS : 48, Math.min(128, Math.floor(W / 12))), bw = W / n, maxH = H * 0.28 * boostK, any = false;   /* phone: no 48-bar floor, so the bars keep desktop proportions instead of turning into 6 px sticks */   /* boostK: the section stage raises the bars so the bass/bk hits read clearly */
@@ -552,7 +553,8 @@
         g2.shadowBlur = 0;
         // the whole spectrum doubles as the progress bar: bars/baseline left of the play head are amber, the unplayed part is a quiet grey (frac frozen while paused)
         var st = ext.state(), fracNow = Math.max(0, Math.min(1, st.frac || 0));
-        if (st.frozen) for (var zi = 0; zi < n; zi++) lv[zi] = 0;   /* paused section player: its suspended analyser holds the last frame forever — feed silence so the bars sink like a normal pause */
+        var ra = 1; if (restoreT0) { var rp2 = (now - restoreT0) / restoreDur; if (rp2 >= 1) restoreT0 = 0; else ra = ease(rp2); }   /* the grey part's fade-back (restore) */
+        if (st.frozen || st.playing === false) for (var zi = 0; zi < n; zi++) lv[zi] = 0;   /* paused section player: its suspended analyser holds the last frame forever — feed silence so the bars sink like a normal pause. 追記㊱: the same staleness, as a CLASS — any source that says it is not playing (the DUCKED os player above all: duck() suspends its context, freezing the analyser on the last pre-stage frame, and the stage hand-back flipped the wave onto it - "音樂都還沒出來音量條就會彈一下") is fed silence too; a truly silent pause decays identically, so nothing else changes */
         if (reflowT0) {   /* after the stage: the play head runs back to the left edge, then slides out again to where the track really is */
           var rel_ = now - reflowT0; if (rel_ >= reflowHold + REFLOW_OUT_MS) reflowT0 = 0; else if (rel_ < REFLOW_IN_MS) fracNow = reflowFrom * (1 - ease(rel_ / REFLOW_IN_MS)); else if (rel_ < reflowHold) fracNow = 0; else fracNow = fracNow * ease((rel_ - reflowHold) / REFLOW_OUT_MS);   /* retreat to the left edge (with the colour change), wait for the line to glide down, then slide out to where the track is */
         }
@@ -591,8 +593,10 @@
           // vertical gradients: bars are dim where they meet the baseline and brighten upward (reflection fades downward),
           // so the line reads as its own element without a gap; no per-bar shadow (it smears)
           if (lit && h > 0.5) { g2.globalCompositeOperation = 'destination-out'; g2.fillStyle = '#000'; g2.fillRect(x, y - h, w, h + h * 0.45); g2.globalCompositeOperation = 'source-over'; }   /* the bar occludes the lamp */
+          if (ra < 1) g2.globalAlpha = ra;   /* restore: the unplayed grey fades back in in place */
           g2.fillStyle = gGrey; g2.fillRect(x, y - h, w, h);
           g2.fillStyle = gGreyR; g2.fillRect(x, y, w, h * 0.45);
+          if (ra < 1) g2.globalAlpha = 1;
           var aw = Math.min(w, px - x);
           if (aw > 0) { if (tg > 0) { g2.shadowColor = 'rgba(' + tintShadow + ',' + (0.85 * tg).toFixed(2) + ')'; g2.shadowBlur = TINT_BLUR * tg; } g2.fillStyle = gAmb; g2.fillRect(x, y - h, aw, h); g2.shadowBlur = 0; g2.fillStyle = gAmbR; g2.fillRect(x, y, aw, h * 0.45); }   /* tinted: the played bars glow like the eclipsed rings, and the glow fades with the tint */
         }
@@ -656,6 +660,7 @@
         // baseline glow eases between 'sound' (1) and 'silence' (.55) instead of snapping — no more glow dropping out when a track starts quietly
         glow += ((any ? 1 : 0.55) - glow) * 0.05;
         // hb mode: the trace IS the line — the flat baseline fades out with the morph so there is only one line
+        paintLine = function () {   /* ★ THE RULE, learnt three times over (追記㉓): a line that must stay bright is REDRAWN - never spared through a mask band, because bar slices cross any band ("音量條的小股包"). The whole baseline (corona, amber, grey, play head, mark) lives in this closure so the dim mask can call it back at full strength. */
         if (lpx > edge && tg > 0) {   /* corona: a wide soft band of the eclipse colour under the line (vertical falloff) with a radial cap of the same falloff at the play head — one pass, no blur, so there is no seam */
           g2.save(); g2.globalCompositeOperation = 'lighter';
           var cg = g2.createLinearGradient(0, y - TINT_CORONA, 0, y + TINT_CORONA); cg.addColorStop(0, 'rgba(' + tintShadow + ',0)'); cg.addColorStop(0.25, 'rgba(' + tintShadow + ',' + (TINT_CORONA_A * 0.22 * tg).toFixed(3) + ')'); cg.addColorStop(0.5, 'rgba(' + tintShadow + ',' + (TINT_CORONA_A * tg).toFixed(3) + ')'); cg.addColorStop(0.75, 'rgba(' + tintShadow + ',' + (TINT_CORONA_A * 0.22 * tg).toFixed(3) + ')'); cg.addColorStop(1, 'rgba(' + tintShadow + ',0)');   /* hollow-ish: bright only near the line, a long thin tail */
@@ -664,23 +669,43 @@
           g2.fillStyle = cc; g2.fillRect(lpx, y - TINT_CORONA, TINT_CORONA, TINT_CORONA * 2); g2.restore();
         }
         if (lpx > edge) { g2.lineWidth = 2 + (TINT_W - 2) * tg; g2.strokeStyle = 'rgba(' + AMB + ',' + ((0.28 + 0.62 * glow) * (1 - tg) + TINT_A * tg).toFixed(3) + ')'; g2.shadowColor = 'rgba(' + lerpCol(AMB, tintShadow, tg) + ',' + (0.6 + 0.35 * tg).toFixed(2) + ')'; g2.shadowBlur = 18 * glow * (1 - tg) + TINT_BLUR * tg;   /* tinted: the same line as the eclipsed rings — thin warm stroke, red corona */ g2.beginPath(); g2.moveTo(edge, y); g2.lineTo(lpx, y); g2.stroke(); }
-        var ux = Math.max(lpx, edge); if (ux < W) { g2.lineWidth = 2; g2.strokeStyle = 'rgba(255,255,255,.22)'; g2.shadowBlur = 0; g2.beginPath(); g2.moveTo(ux, y); g2.lineTo(W, y); g2.stroke(); }
+        var ux = Math.max(lpx, edge); if (ux < W) { g2.lineWidth = 2; g2.strokeStyle = 'rgba(255,255,255,' + (0.22 * ra).toFixed(3) + ')'; g2.shadowBlur = 0; g2.beginPath(); g2.moveTo(ux, y); g2.lineTo(W, y); g2.stroke(); }
         // play head: same amber as the line (no highlight), just a stronger halo at the amber/grey boundary
         if (px0 >= edge) { g2.lineWidth = 2 + (TINT_W - 2) * tg; g2.strokeStyle = 'rgba(' + AMB + ',.9)'; g2.shadowColor = 'rgba(' + lerpCol(AMB, tintShadow, tg) + ',.9)'; g2.shadowBlur = 24 * (1 - tg) + TINT_BLUR * tg; g2.beginPath(); g2.moveTo(Math.max(edge, lpx - 14), y); g2.lineTo(lpx, y); g2.stroke(); }
         /* ECG side: no play-head halo — the bright/dim split of the trace is the play head */   /* ECG side: the same plain horizontal halo, in green */
+        if (st.mark == null) markCur = null;
+        else if (markCur === null) markCur = st.mark;   /* first sight: it is simply there. Only a CHANGE slides */
+        else if (Math.abs(st.mark - markCur) > 1e-4) markCur += (st.mark - markCur) * (1 - Math.pow(0.002, dk_dt(now, prevT) / MARK_MS));   /* the lock point is a different fraction in every section (decisionLead / dur), so it used to jump the moment the section changed. Frame-rate independent approach, ~MARK_MS to arrive */
         if (st.mark != null && m <= 0) {   /* section player: the decision-lock point as an ADE-style tick on the line — white with the old bar marker's glow */
-          var mx = Math.round(W * Math.max(0, Math.min(1, st.mark))) + 0.5;
+          var mx = Math.round(W * Math.max(0, Math.min(1, markCur == null ? st.mark : markCur))) + 0.5;
           g2.lineWidth = 2; g2.strokeStyle = 'rgba(255,255,255,.9)'; g2.shadowColor = 'rgba(255,255,255,.8)'; g2.shadowBlur = 8;
           g2.beginPath(); g2.moveTo(mx, y - 9); g2.lineTo(mx, y + 9); g2.stroke();
           g2.shadowBlur = 6; g2.fillStyle = 'rgba(255,255,255,.9)';
           g2.beginPath(); g2.moveTo(mx - 4, y - 15); g2.lineTo(mx + 4, y - 15); g2.lineTo(mx, y - 9); g2.closePath(); g2.fill();
         }
         g2.shadowBlur = 0;
+        };
+        paintLine();
       } else {
         g2.strokeStyle = 'rgba(' + AMB + ',.28)'; g2.shadowBlur = 0;
         g2.beginPath(); g2.moveTo(0, y); g2.lineTo(W, y); g2.stroke();
       }
       if (winClip) g2.restore();
+      if (dimK != null || gleam) {   /* 追記⑲/㉒: the tail's in-canvas light plan - ONE keep-mask built per frame: the dim floor everywhere, a spared band so the LINE never goes dark, and the travelling gleam band whose peak restores the bars' true brightness. Composed on an offscreen and applied in a single destination-in: atomic, no opacity races. */
+        if (!dimCv) { dimCv = document.createElement('canvas'); }
+        if (dimCv.width !== cv.width || dimCv.height !== cv.height) { dimCv.width = cv.width; dimCv.height = cv.height; }
+        var mg = dimCv.getContext('2d'); mg.setTransform(DPR, 0, 0, DPR, 0, 0); mg.clearRect(0, 0, W, H);
+        var fl0 = dimK == null ? 1 : dimK;
+        mg.fillStyle = 'rgba(0,0,0,' + fl0.toFixed(3) + ')'; mg.fillRect(0, 0, W, H);   /* UNIFORM floor - no spared band ever again (追記㉓): the line is REDRAWN after the mask instead */
+        if (gleam && gleam.a > 0.005) {
+          var gx = gleam.dir < 0 ? W * gleam.p : W - W * gleam.p, bw2 = W * 0.18, pl = Math.min(0.4, 68 / bw2);   /* a FLAT top ~9 bars wide on a wider band (追記㉔: 亮度跟中間亮的範圍再增加) */
+          var ggl = mg.createLinearGradient(gx - bw2, 0, gx + bw2, 0);
+          ggl.addColorStop(0, 'rgba(0,0,0,0)'); ggl.addColorStop(0.5 - pl, 'rgba(0,0,0,' + gleam.a.toFixed(3) + ')'); ggl.addColorStop(0.5 + pl, 'rgba(0,0,0,' + gleam.a.toFixed(3) + ')'); ggl.addColorStop(1, 'rgba(0,0,0,0)');
+          mg.globalCompositeOperation = 'lighter'; mg.fillStyle = ggl; mg.fillRect(0, 0, W, H); mg.globalCompositeOperation = 'source-over';
+        }
+        g2.save(); g2.setTransform(1, 0, 0, 1, 0, 0); g2.globalCompositeOperation = 'destination-in'; g2.drawImage(dimCv, 0, 0); g2.restore();
+        if (dimK != null && paintLine) { g2.setTransform(DPR, 0, 0, DPR, 0, 0); paintLine(); }   /* the baseline comes back at FULL strength - redrawn, not spared (追記㉓) */
+      }
     }
     function start(m) { if (!cv) return; mode = m || 'idle'; if (!raf) draw(); }
     function connect(cb, lead) { if (!cv) { cb(); return; } onConnected = cb; connectT0 = performance.now(); if (wf && lead) wf.preroll(connectT0, lead); start('connect'); }   /* lead: waterfall pre-roll seconds */
@@ -690,7 +715,8 @@
              ghost: function (frac) { ghostT0 = performance.now(); ghostFrac = Math.max(0, Math.min(1, frac == null ? 1 : frac)); ghostCol = tintCur[0]; }, tintNow: function () { return tintCur[0]; },   /* snapshot the outgoing fill: it fades out where it stood; tintNow = the line's current eased colour (the caption paints with the same brush) */
              ghostInfo: function () { if (!ghostT0) return null; var gp = (performance.now() - ghostT0) / GHOST_MS; return gp >= 1 ? null : { col: ghostCol, k: 1 - ease(gp) };
  },   /* the fading previous colour (k 1->0 on the ghost clock) — the caption's not-yet-repainted part wears it */
-             farewell: function () { if (!collT0 && !blankW) collT0 = performance.now(); }, reappear: function () { blankW = false; collT0 = 0; if (!regrowT0) regrowT0 = performance.now(); }, reflowCancel: function () { reflowT0 = 0; }, reflow: function (fromFrac, holdMs) { reflowT0 = performance.now(); reflowFrom = Math.max(0, Math.min(1, fromFrac || 0)); reflowHold = Math.max(REFLOW_IN_MS, holdMs || REFLOW_IN_MS); }, baseY: function () { return cv ? cv.clientHeight * yTo : 0; } };
+             restore: function (ms) { restoreT0 = performance.now(); restoreDur = Math.max(50, ms || 1400); },   /* the grey part fades back in in place (the line itself never left) */
+             farewell: function () { if (!collT0 && !blankW) collT0 = performance.now(); }, reappear: function () { blankW = false; collT0 = 0; if (!regrowT0) regrowT0 = performance.now(); }, reflowCancel: function () { reflowT0 = 0; }, gleamSet: function (g_) { gleam = g_ || null; }, dimSet: function (k_) { dimK = (k_ == null || k_ >= 0.999) ? null : Math.max(0, k_); }, reflow: function (fromFrac, holdMs) { reflowT0 = performance.now(); reflowFrom = Math.max(0, Math.min(1, fromFrac || 0)); reflowHold = Math.max(REFLOW_IN_MS, holdMs || REFLOW_IN_MS); }, baseY: function () { return cv ? cv.clientHeight * yTo : 0; } };
   }
   var wave = makeWave($('#wave'), 0.58, true), phoneWave = makeWave($('#ph-wave'), 0.47, true);   /* waterfall on both shells */  // phone: slightly above centre
 
@@ -1507,17 +1533,18 @@
      running right in the shell: no iframe, no second document sharing the main thread, nothing left to stutter the entrance.
      The desktop line, caption, transport and duck follow through the same ext contract (state() keeps the iframe shape);
      the phone keeps its iframe panel and the demo page itself is untouched. Escape or the「離開舞台」button leaves. */
-  var DSTAGE_OUT_MS = 420;
+  var DSTAGE_OUT_MS = 420, DSTAGE_TAIL_MS = 3800;   /* TAIL: after the door's hand-back the outro's tail is still singing (I: 12 beats @172 ~ 4.2 s past the logical end) - the desktop's bars and music wait this long before rising, so the ear and the bars never disagree (追記⑰: "tail還沒播完音量條就被切回桌面") */
   function makeSecPlayer(base, ver, host, onBye) {
     /* base = '../demos/interactive-player/' — files in segments.json are relative to the demo directory (like the ADE stems) */
     var LOOKAHEAD = 0.25, TICK = 25;
+    var FREEJUMP = /[?&]debug/.test(location.search);   /* 追記㉜ ?debug: choose()/key() may queue ANY section, allow list or not (A straight to I) - reviewing the outro meant walking the whole legal path every time. The pair rule steps aside for it too; the automatic flow (decide's own picks) still obeys every rule, so the show itself is unchanged */
     var CFG = null, TH = null, SEG = [], byId = {}, GROUPS = [], byGroup = {}, INTRO = null, OUTRO = null;
     var ctx = null, master = null, analyser = null, mgain = null, buffers = {};
     var running = false, timer = null, paused = false, muted = false, loadProg = null, dead = false;
     var stageLead = 0, stageT0 = null, startTimer = 0;   /* four 4/4 beats at the theme's tempo before the first entry — load time, like the ADE stage's count-in */
     var cur = null, nxt = null, queued = null, later = null;
     var randomAuto = false, lastId = null, loopCount = 0, mate = null, autoMode = 'seq';   /* loopCount: consecutive passes of the loop segment (it leaves only on an even count); mate: the OTHER version of the group just entered — whichever version is picked plays first, its mate follows before anything else */
-    var trackListeners = [], byeTimer = null;
+    var trackListeners = [], byeFired = false;   /* the two-bars-out farewell is fired from tick() ON THE AUDIO CLOCK - never from a wall-clock timer (see the outro branch) */
     function fireTrack(fromFrac) { trackListeners.forEach(function (fn) { try { fn(fromFrac); } catch (e) {} }); }
     function markPair(seg) {   /* entering a section: does it complete a pair, or open one? */
       if (mate && seg.id === mate.id) { mate = null; return; }
@@ -1543,6 +1570,55 @@
     function nameOf(seg) { return seg.id.replace('_', ' '); }
     function groupVersions(seg) { return SEG.filter(function (s) { return s.group === seg.group; }); }
     function verIdx(seg) { return isBookend(seg) ? 0 : groupVersions(seg).indexOf(seg); }
+    /* ---- tempo clock (LOG-110): the night-city scene rides the AUDIO clock, never animation time — a pause freezes the
+       whole scene where it stands and a backgrounded tab returns in step. Per segment the tempo is a piecewise-linear
+       curve: optional `tempoMap` [[posSec, bpm], ...] relative to the LOGICAL start, otherwise the plain bpmIn -> bpmOut
+       ramp. Beats are the integral of that curve; the inverse gives the sounding time of any beat, INCLUDING beats
+       extrapolated past the segment's end — that is how the road can put a beat on the tarmac 2.6 s before the section
+       it belongs to has even been decided (the file model guarantees a logical start lands on a bar line). */
+    var tempoCache = {};
+    function tempoOf(seg) {
+      var T = logicalSec(seg) || Math.max(0.1, barSec(seg.bpmIn || 120)), k = TH.id + ':' + seg.id, c = tempoCache[k];
+      if (c && Math.abs(c.T - T) < 1e-6) return c;   /* keyed on the logical length: before the buffer decodes it is 0 */
+      var pts = [];
+      if (seg.tempoMap && seg.tempoMap.length) {
+        seg.tempoMap.forEach(function (p) { pts.push([Math.max(0, +p[0]), +p[1]]); });
+        pts.sort(function (a, b) { return a[0] - b[0]; });
+        if (pts[0][0] > 0) pts.unshift([0, pts[0][1]]);
+        if (pts[pts.length - 1][0] < T) pts.push([T, pts[pts.length - 1][1]]);
+      } else pts = [[0, seg.bpmIn || 120], [T, seg.bpmOut || seg.bpmIn || 120]];   /* fallback: the straight ramp (E1 145 -> 172; the real automation curve drops in as a tempoMap without touching this code) */
+      var P = [], acc = 0;
+      for (var i = 0; i < pts.length - 1; i++) {
+        var a = pts[i], b = pts[i + 1], d = Math.max(0, b[0] - a[0]), bt = d * (a[1] + b[1]) / 120;   /* ∫ bpm/60 dt over a linear ramp = the trapezoid */
+        P.push({ t0: a[0], t1: b[0], b0: a[1], b1: b[1], beat0: acc, beats: bt }); acc += bt;
+      }
+      c = { P: P, total: acc, T: T, bpmIn: pts[0][1], bpmOut: pts[pts.length - 1][1] };
+      tempoCache[k] = c; return c;
+    }
+    function tmPiece(tm, rel) { for (var i = 0; i < tm.P.length; i++) if (rel <= tm.P[i].t1 || i === tm.P.length - 1) return tm.P[i]; return tm.P[0]; }
+    function bpmAt(tm, rel) {
+      if (rel <= 0) return tm.bpmIn; if (rel >= tm.T) return tm.bpmOut;
+      var p = tmPiece(tm, rel), L = p.t1 - p.t0; return L > 0 ? p.b0 + (p.b1 - p.b0) * (rel - p.t0) / L : p.b0;
+    }
+    function beatAt(tm, rel) {
+      if (rel <= 0) return rel * tm.bpmIn / 60;                            /* the pick-up and the count-in run at the incoming tempo (negative beats) */
+      if (rel >= tm.T) return tm.total + (rel - tm.T) * tm.bpmOut / 60;    /* past the logical end: extrapolated, so the road crosses the seam with no gap */
+      var p = tmPiece(tm, rel), d = rel - p.t0, L = p.t1 - p.t0, bn = L > 0 ? p.b0 + (p.b1 - p.b0) * d / L : p.b0;
+      return p.beat0 + d * (p.b0 + bn) / 120;
+    }
+    function relAt(tm, b) {   /* the inverse: which second does beat b sound on (a quadratic per linear tempo piece) */
+      if (b <= 0) return b * 60 / tm.bpmIn;
+      if (b >= tm.total) return tm.T + (b - tm.total) * 60 / tm.bpmOut;
+      for (var i = 0; i < tm.P.length; i++) {
+        var p = tm.P[i]; if (b > p.beat0 + p.beats && i < tm.P.length - 1) continue;
+        var db = b - p.beat0, L = p.t1 - p.t0; if (L <= 0) return p.t0;
+        if (p.b0 === p.b1) return p.t0 + db * 60 / p.b0;
+        var A = (p.b1 - p.b0) / L / 2, C = -60 * db;   /* A d² + b0 d + C = 0 */
+        return p.t0 + (-p.b0 + Math.sqrt(Math.max(0, p.b0 * p.b0 - 4 * A * C))) / (2 * A);
+      }
+      return tm.T;
+    }
+    function signLetter(seg) { return isBookend(seg) ? seg.id : (seg.loop ? 'I' : seg.group); }   /* what the neon sign reads: A / I for the bookends, the group letter otherwise */
     function hexHsl(hex) {   /* -> [h 0-360, s 0-1, l 0-1] */
       var v = parseInt(hex.slice(1), 16), r = ((v >> 16) & 255) / 255, g = ((v >> 8) & 255) / 255, b = (v & 255) / 255;
       var mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn, h = 0, s = 0;
@@ -1646,8 +1722,13 @@
       /* a group plays out whole, in the order it was entered: whichever version was picked plays first, its mate ALWAYS follows
          (any queued pick waits for the decision after); the outro loop leaves only after an even number of passes */
       var forced = null;
+      if (FREEJUMP && queued && byId[queued] && byId[queued] !== INTRO && ready(byId[queued])) {   /* ?debug: the free jump outranks the pair rule too - queueing I from inside a half-played group must not detour through the mate (追記㉜) */
+        mate = null; randomAuto = false;
+        nxt = schedule(byId[queued], cur.end); queued = null; fadeOut(cur); render(); return;
+      }
       if (cur.seg.loop && loopCount % 2 === 1) forced = cur.seg;
-      else if (mate) forced = mate;   /* the pair rule is the user's own design — it outranks the allow list (schedule() still honours pre-entry/tail timing) */
+      else if (mate && allowed(cur.seg.id, mate.id)) forced = mate;   /* the pair rule is the user's own design — but it may NOT drive a move the allow list forbids (LOG-113) */
+      else if (mate) mate = null;   /* ★ THE PAIR CANNOT BE COMPLETED BACKWARDS. Entering the E group at E2 (the pre-zone is allowed to jump straight there) opened a pair whose mate is E1, and forcing it drove E2 -> E1 - the one reversal the rules forbid - after which E1's only legal successor is E2, which opened the pair again: E2 -> E1 -> E2 -> E1 with no way out of the middle zone. The pair is dropped instead, and the decision below is the ordinary one (E2 -> the post zone). Every other two-version group is allowed both ways, so nothing else changes: checked mechanically against the allow table, and the only forbidden pair move in it is E2 -> E1. */
       if (forced && !ready(forced)) forced = null;   /* still decoding under the music (early-intro edge only) — fall through to a decoded pick */
       if (forced) { randomAuto = false; nxt = schedule(forced, cur.end); fadeOut(cur); render(); return; }   /* `queued` is left untouched — it applies after the pair completes */
       var choice = null;
@@ -1661,6 +1742,11 @@
     function tick() {
       var now = ctx.currentTime;
       if (cur.seg === OUTRO) {                /* terminal: let it finish, then stop (the shell's farewell normally leaves first) */
+        /* TWO bars before the outro's logical end: the surface compresses and the OS line retracts - the desktop
+           player runs straight back out under the closing bars. Checked HERE, on the audio clock: this used to be a
+           wall-clock setTimeout armed at the outro's entry, and a pause (ctx suspended, `now` frozen) let it keep
+           counting and close the stage while the music stood still (the user found it: 按了暫停他會自動結束然後退出). */
+        if (!byeFired && now >= cur.end - 2 * barSec(OUTRO.bpmOut)) { byeFired = true; onBye(); }
         if (now >= cur.end + postSec(cur.seg) + 0.05) stop();
         return;
       }
@@ -1670,7 +1756,6 @@
         loopCount = cur.seg.loop ? loopCount + 1 : 0;
         markPair(cur.seg);
         if (later) { queued = later; later = null; }
-        if (cur.seg === OUTRO && !byeTimer) byeTimer = setTimeout(function () { if (running) onBye(); }, Math.max(0, (cur.end - ctx.currentTime - 2 * barSec(OUTRO.bpmOut)) * 1000));   /* TWO bars before the outro's logical end: the surface compresses and the OS line retracts — the desktop player runs straight back out under the closing bars */
         render();
       }
     }
@@ -1710,7 +1795,6 @@
     }
     function stop() {   /* hard stop (manual exit): everything ramps out in 100 ms, the context closes right after */
       running = false; dead = true; clearInterval(timer); if (startTimer) { clearTimeout(startTimer); startTimer = 0; }
-      if (byeTimer) { clearTimeout(byeTimer); byeTimer = null; }
       if (paused) { paused = false; try { ctx.resume(); } catch (e) {} }   /* never leave the context suspended: the fade-out needs a running clock */
       [cur, nxt].forEach(function (it) { if (it) { try { it.gain.gain.cancelScheduledValues(0); it.gain.gain.setValueAtTime(it.gain.gain.value, ctx.currentTime); it.gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1); it.src.stop(ctx.currentTime + 0.12); } catch (e) {} } });
       cur = nxt = null; queued = later = null; randomAuto = false; render();
@@ -1718,14 +1802,15 @@
     }
     function finish() {   /* graceful stop (after the farewell): scheduling ends but nothing is cut — the outro's scheduled tail rings out on its own, then the context closes. The native win: no frame to keep alive for the sake of the last note. */
       var tail = 1; try { if (cur) tail = Math.max(0.3, cur.end + postSec(cur.seg) - ctx.currentTime + 0.3); } catch (e) {}
-      running = false; dead = true; clearInterval(timer); if (byeTimer) { clearTimeout(byeTimer); byeTimer = null; }
+      running = false; dead = true; clearInterval(timer);
       cur = nxt = null;
       var c = ctx; ctx = null; if (c) setTimeout(function () { try { c.close(); } catch (e) {} }, tail * 1000);
     }
     function choose(id) {
       if (!running) return;
-      if (nxt) { if (allowed(nxt.seg.id, id)) later = id; }        /* decision already locked → after next */
-      else if (allowed(cur.seg.id, id)) { queued = id; randomAuto = false; }
+      var free = FREEJUMP && byId[id] && byId[id] !== INTRO;   /* ?debug: any section may be queued (追記㉜) */
+      if (nxt) { if (free || allowed(nxt.seg.id, id)) later = id; }        /* decision already locked → after next */
+      else if (free || allowed(cur.seg.id, id)) { queued = id; randomAuto = false; }
       render();
     }
     function key(k) {   /* a letter queues that group's first version; the same letter again cycles its versions; I = outro, L = the loop */
@@ -1781,7 +1866,7 @@
         b.classList.toggle('playing', isCur);
         var isQ = (nxt && nxt.seg.id === s.id) || (!nxt && queued === s.id);
         b.classList.toggle('queued', (!!isQ && !(isCur && s.loop)) || later === s.id);
-        var ok = !running || allowed((nxt || cur).seg.id, s.id);
+        var ok = !running || FREEJUMP || allowed((nxt || cur).seg.id, s.id);   /* ?debug: every button stays live (追記㉜) */
         b.disabled = !running || !ok;
         b.classList.toggle('off', running && !ok && !isCur && later !== s.id);   /* a blocked section fades off the stage — but never the one PLAYING (the outro may not follow itself, yet it must stay lit) or already picked */
       });
@@ -1846,6 +1931,56 @@
         muted = !muted;
         if (mgain && ctx) mgain.gain.setTargetAtTime(muted ? 0.0001 : 1, ctx.currentTime, 0.03);
       },
+      clock: function () {   /* LOG-110: the night city's single source of time — where the beat is, how fast it is going, and what the sign should read */
+        if (!running || !cur || !ctx) return null;
+        var tm = tempoOf(cur.seg), rel = ctx.currentTime - cur.start, b = beatAt(tm, rel), bi = Math.floor(b), bpb = CFG.beatsPerBar || 4;
+        return { t: ctx.currentTime, lat: (ctx.outputLatency || ctx.baseLatency || 0), rel: rel,   /* lat: how far ahead ctx.currentTime runs of what the ear actually hears - the usual reason visuals feel out with the music */ bpm: bpmAt(tm, rel), beat: b, beatIndex: bi, beatPhase: b - bi, barBeat: ((bi % bpb) + bpb) % bpb, bpb: bpb,
+                 ramp: tm.bpmOut !== tm.bpmIn ? Math.max(0, Math.min(1, tm.T ? rel / tm.T : 0)) : null, bpmIn: tm.bpmIn, bpmOut: tm.bpmOut,
+                 id: cur.seg.id, color: segColor(cur.seg), letter: signLetter(cur.seg),
+                 ver: (isBookend(cur.seg) || groupVersions(cur.seg).length < 2) ? 0 : verIdx(cur.seg) + 1,   /* which lamp is lit; 0 = a single-version group (the bookends, the loop) shows no lamps at all */
+                 group: isBookend(cur.seg) ? cur.seg.id : cur.seg.group, theme: TH.version || 'V1', startAt: cur.start, endAt: cur.end, paused: paused,
+                 /* THE SECTION ALREADY LOCKED IN. The decision is taken `decisionLead()` before the end, so anything
+                    that has to be on screen BEFORE the seam - the roadside board that sweeps past on the next
+                    section's bar 1 beat 1 - can wear the right letter and colour for its whole approach. */
+                 nextId: nxt ? nxt.seg.id : null, nextLetter: nxt ? signLetter(nxt.seg) : null, nextColor: nxt ? segColor(nxt.seg) : null,
+                 nextRamp: nxt ? Math.abs((nxt.seg.bpmOut || 0) - (nxt.seg.bpmIn || 0)) : null };
+      },
+      notesIn: function (t0, t1) {
+        /* THE ROAD'S TRAFFIC, as authored. `seg.road` is the display track (tools/roadnotes.py): [beat, semitones]
+           per note, beat counted in quarter notes from the section's own logical start - tempo-free, so the tempoMap's
+           audio scaling never touches it. Returns null when a section has no table, and the caller falls back to the
+           bare beat grid it used before.
+           PAST THE SECTION'S END the table stops but the road must not: the next section has not been chosen yet this
+           far ahead (the decision is two beats out, the road looks 2.6 s out), so the seam is still carried by the
+           extrapolated grid, exactly as beatsIn does it - one plain centre note, which is what every section opens on. */
+        if (!running || !cur || !ctx) return [];
+        var R = cur.seg.road; if (!R || !R.length) return null;
+        var tm = tempoOf(cur.seg), bpb = CFG.beatsPerBar || 4, out = [], i;
+        for (i = 0; i < R.length; i++) {
+          var b = R[i][0], t = cur.start + relAt(tm, b);
+          if (t >= t0 && t <= t1) out.push({ i: b, t: t, lane: R[i][1] || 0, down: b % bpb === 0, tail: false });
+        }
+        /* ★ THE TAIL IS COUNTED FROM THE SEAM, not from this section's own beat numbering. Extrapolating the beat
+           INDEX past the end assumes the next section's grid is a continuation of this one's - true only while every
+           bar is whole. C2 ends on a 3/16 bar, so its logical length is 32.75 beats: beat 33 falls a quarter-beat
+           INSIDE D1 instead of on its downbeat, and that stray strike is the extra line the user saw pop out at the
+           3/16. Counted from `cur.end` the first tail note IS the next section's downbeat, whatever the meter did. */
+        var bs = 60 / Math.max(1, tm.bpmOut || 120);   /* the tail runs at the outgoing tempo, as the audio's own tail does */
+        for (i = 0; i <= 64; i++) {
+          var tt = cur.end + i * bs;
+          if (tt > t1) break;
+          if (tt >= t0) out.push({ i: i, t: tt, lane: 0, down: ((i % bpb) + bpb) % bpb === 0, tail: true });
+        }
+        return out;
+      },
+      beatsIn: function (t0, t1) {   /* every beat sounding in [t0, t1] — the road spawns each one a travel-time early, so it asks across the seam */
+        if (!running || !cur || !ctx) return [];
+        var tm = tempoOf(cur.seg), bpb = CFG.beatsPerBar || 4;
+        var i0 = Math.ceil(beatAt(tm, t0 - cur.start) - 1e-6), i1 = Math.floor(beatAt(tm, t1 - cur.start) + 1e-6), out = [];
+        if (i1 - i0 > 256) i1 = i0 + 256;   /* a nonsense window must never hang the frame */
+        for (var i = i0; i <= i1; i++) out.push({ i: i, t: cur.start + relAt(tm, i), down: ((i % bpb) + bpb) % bpb === 0 });
+        return out;
+      },
       analyser: function () { return running ? analyser : null; },
       onTrack: function (fn) { trackListeners.push(fn); },
       poke: function () { if (ctx && ctx.state === 'suspended' && !paused) ctx.resume(); },   /* autoplay refused (the entrance's click was a while ago): the next tap on the stage revives the context — never while paused (pause IS a suspend) */
@@ -1853,8 +1988,2241 @@
       choose: choose, key: key, stop: stop, finish: finish
     };
   }
+  /* ---- ?debug: A REFERENCE GRID, purely so a change can be described by naming a cell instead of by pointing at a
+     screenshot ("the smoke is too thick around F3"). 20 columns x 10 rows = 200 cells, lettered A-T across and 1-10
+     down, fixed to the VIEWPORT so a cell's name means the same thing whatever is running underneath. It never takes
+     a click (pointer-events: none) and it is never built unless it is asked for. */
+  var gridEl = null;
+  function refGrid(on, cols, rows) {
+    cols = Math.max(1, Math.min(52, cols || 20)); rows = Math.max(1, Math.min(52, rows || 10));
+    if (on === false) { if (gridEl) { gridEl.remove(); gridEl = null; } return false; }
+    if (gridEl && gridEl.getAttribute('data-n') === cols + 'x' + rows) { gridEl.remove(); gridEl = null; return false; }   /* calling it again with the same shape toggles it off */
+    if (gridEl) gridEl.remove();
+    var L = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    function colName(i) { return i < 26 ? L.charAt(i) : L.charAt(Math.floor(i / 26) - 1) + L.charAt(i % 26); }
+    var d = document.createElement('div');
+    d.className = 'refgrid'; d.setAttribute('data-n', cols + 'x' + rows); d.setAttribute('aria-hidden', 'true');
+    d.style.setProperty('--gc', cols); d.style.setProperty('--gr', rows);
+    var html = '';
+    for (var r = 0; r < rows; r++) for (var c = 0; c < cols; c++) html += '<i>' + colName(c) + (r + 1) + '</i>';
+    d.innerHTML = html;
+    document.body.appendChild(d); gridEl = d;
+    return cols + 'x' + rows + ' = ' + (cols * rows) + ' cells (A1 top-left, ' + colName(cols - 1) + rows + ' bottom-right)';
+  }
+  if (/[?&]debug/.test(location.search)) {
+    window.__grid = refGrid;   /* available the moment the page loads, not only once the section stage is running */
+    var gq = /[?&]grid(=(\d+)x(\d+))?/.exec(location.search);   /* ?grid brings it up ON LOAD - handing over a URL is one step, telling someone to open a console is three */
+    if (gq) { var go = function () { refGrid(true, +gq[2] || 20, +gq[3] || 10); }; if (document.body) go(); else document.addEventListener('DOMContentLoaded', go); }
+  }
+
+  /* ============================================================ LOG-110 「夜城地平線」— the section stage's scene.
+     The progress line IS the horizon. Above it the night sky carries neon: the section's sign (F1) and the tempo
+     milestone (F2). Below it a perspective road (F3) runs the beat toward the viewer, every beat struck out on the near
+     line at the instant it sounds. All three read ONE clock — the engine's audio clock (`eng.clock()`), so a pause
+     freezes the city where it stands, a backgrounded tab comes back in step, and nothing drifts against the music.
+     Every glow is a sprite baked ONCE and redrawn with drawImage: per-frame shadowBlur is what cost 52 fps on the ADE
+     stage (LOG-107) and it never happens in the frame loop here.
+     ALL geometry lives in SEC_CITY, so the layout can be moved without reading the drawing code; with ?debug,
+     window.__road.tune({road:{lineUp:120}}) nudges it live. */
+  var SEC_CITY = {
+    on: true,
+    road: { lineUp: 96,                  /* elimination line: px above the desktop's bottom edge (the empty band over the dock) */
+            width: 0.94, widthMax: 1800, /* road width AT the line: min(94vw, 1800px), centred under the vanishing point — the road runs nearly the full width of the desktop */
+            depth: 18,                   /* perspective: the spawn point is this many times further off than the line (bigger = flatter, slower far end, and the traffic emerges closer to the horizon) */
+            travel: 2.6,                 /* seconds from the vanishing point down to the line */
+            lanes: 1,                    /* how many VERGE lines the road is drawn with (1 = the two edges); the notes' own lanes come from the display track, not from here */
+            laneSpan: 6, laneK: 0.86,    /* the display track's lanes: this many semitones either side of the centre pitch reaches laneK of the way to the road's edge (the widest the piece uses is -6/+5, on B's downbeat) */
+            countIn: true,               /* the count-in beats drive up the road too, so the first downbeat is SEEN before it sounds */
+            note: 13, down: 1.4,         /* note radius at the line; a bar's first beat is this much bigger and brighter */
+            gridFar: 0.06, gridNear: 0.17, edge: 0.26,   /* the rolling cross-lines and the road edges: a wide road spreads the same ink over far more pixels, so it needs a little more */
+            growS: 1.15,                 /* the entrance: seconds for the road to unfold OUT of the vanishing point (the farewell's fold, run backwards) */
+            edgeGlow: [[8, 0.09], [4, 0.17], [1.8, 0.30]], edgeCore: '255,236,206', edgeCoreA: 0.85,   /* the verges are lit lines, not hairlines: [width px, alpha x edge] bloom passes in the section's colour under a near-white core (the eclipse's ECL_LINE). Stacked strokes, NOT a shadowBlur - the blur is a bake-time tool here and these lines move every frame */
+            offset: 0, autoLat: true,
+            /* ctx.currentTime is the time of the audio ALREADY HANDED to the device; what the ear hears is that minus
+               the output latency (measured 72 ms on this machine, and it differs per device). Drawing straight off
+               currentTime therefore puts every note on the line that much BEFORE it is heard. autoLat delays the whole
+               beat-driven layer by the latency the browser reports, so the strike and the sound land together; offset is
+               a manual nudge on top, in seconds, minus = earlier. Live: __road.offset(-30). */
+            sparkMs: 90, ringMs: 420, ringR: 46, shardMs: 550, hitMs: 560, hitW: 90 },
+    neon: { scales: [1, 0.86, 0.72, 0.58],   /* the board is placed by SEARCH, not by fixed anchors: it takes the biggest of these that lands on empty sky (see place()) */
+            scanX: 24, scanY: 12, minMove: 260, tilts: [0, 0, -3, 3, -2, 2],
+            /* the board's type is the SITE'S OWN body face — the one the small V1 row has always worn, so a board reads as
+               one sign and not two. Each of the four numbers below is a RANGE, rolled once per board: no two signs in the
+               city are struck at quite the same size, wall, core or brightness. */
+            size: [200, 280], sizeMin: 76,   /* the letter's height in px (never taller than the sky can hold) */
+            wall: [0.008, 0.02],             /* the hollow letter's glass wall, as a fraction of the letter */
+            core: [0.70, 0.90],              /* how much of that wall the white-hot discharge takes, down its middle */
+            glow: [0.9, 1.4],                /* the halo it throws on the night */
+            wK: 1.55, hK: 1.68, smallK: 0.30,   /* the board, in letter heights: two rows only (theme version + letter) */
+            tubeChance: 0.5,             /* rolled per board: the letter carved HOLLOW out of the face's outline, or set SOLID the way the small row is */
+            gap: 0.26,                   /* a beat of darkness between the old board cutting out and the new one striking */
+            breath: 0.06, buzz: 0.22, alpha: 0.92 },
+    tempo: { dx: -400, dy: -46,          /* the milestone stands at the line's right end (offset in from it), a road sign rather than a sky sign; with the road running nearly edge to edge it sits just ABOVE the line, clear of the sticky note in the corner */
+             font: 34, unit: 11, big: 1.4,
+             rampMin: 0.5,               /* a bpm difference this big counts as an accelerando and turns the whole show on */
+             /* THE READOUT. The grid's tempo map is scaled to the audio and steps a bar at a time; neither is what
+                should be on the sign. `read` gives a section its own end points IN SCORE UNITS and the number travels
+                between them along that section's own eight-bar shape (clock().read, a ratio, so the scaling cancels).
+                `dec` = show this many decimals, small, between the number and the tag - the last of the accelerando is
+                too fine to read as whole numbers. stepMs bounds how often the digits are re-baked. */
+             colorS: 1.2,                /* the marking does not change colour in one frame either: the number and its tag cross to the new section's colour over this long. The DECIMALS are not crossed - they belong to the section that has just started and arrive already in its colour */
+             read: { stepMs: 0, decK: 0.44, decDy: 0.30, reserve: 3,   /* stepMs 0 = the readout moves every frame (see readOut: the rebake is 0.42 ms, measured). reserve: EVERY read section lays out as if it had this many decimals, so the number is the same size in E1 as in E2 - the marking is sized to fit its whole content, and a fraction appearing would otherwise shrink the digits mid-accelerando */
+                     ids: { E1: { from: 145, to: 170, ease: 2.2 },   /* E1: whole numbers only, and NOT an even climb - `ease` bends it so it starts slow and keeps gaining (p^ease) */
+                            E2: { from: 170, to: 172, dec: 3 } } },  /* E2: picks up exactly where E1 stopped and runs the thousandths up to 172.000, arriving ON the hand-over */
+             chev: 3, chevGap: 22, chevDx: 0.5, chevK: 0.09,   /* the arrow stream climbs UPWARD beside the number: chevK = a chevron's width as a share of the marking's, chevDx = how far outside its left edge they sit, in chevron widths */
+             groundFar: 0.42, groundNear: 0.92,   /* the band of road the marking covers (horizon 0 -> elimination line 1). These two, with groundW, are the WHOLE geometry: taper, height and foreshortening all fall out of them and stay in step with the road */
+             groundW: 1,             /* the INK (digits + gap + tag) spans this share of the road's width at its own depth: at 1 the tag's last letter finishes exactly on the road's edge */
+             groundGap: 0.07,        /* the space between the number and its tag, in font-size units */
+             groundTrack: '-0.05em', /* the digits are tracked IN so they read as one block, not three loose glyphs */
+             groundAlpha: 0.5, groundGlow: 0.55,   /* paint on a road, not a lamp: dimmer and more transparent than the roadside sign — and it does NOT flicker (see drawTempo) */
+             groundPad: 0.05,        /* margin round the ink inside the plate, so the bloom is never clipped to a square */
+             groundH: 1.30,          /* the ink box's height, in measured cap-heights */
+             groundUnit: 0.13,       /* the BPM tag's size, in digit-heights — small, so the digits get most of the road */
+             moveMs: 700,        /* the roadside sign handing over to the road marking */
+             fadeMs: 4500,       /* locked at the target: the readout fades off for the rest of the run */
+             lockMs: 900 },
+    /* LOG-111 the section letter, five ways. WHERE a letter may land is given in fractions of the desktop, so the
+       composition survives any window size; the 10 x 10 marking grid maps straight onto it (col = x/10, row = y/10).
+       Anything the spectrum bars would cross is drawn on the FRONT canvas over a baked shadow - see makeSecRoad. */
+    letter: {
+      preview: false,        /* ?debug: every style on screen at once, labelled - the position-review tool; the picker below is what actually runs */
+      /* WHICH of the seven ways the letter appears is drawn fresh every time the section changes GROUP, uniformly from
+         the pool the current mode allows. They are mutually exclusive: one letter, one way, at a time. */
+      mode: 'basic',
+      modes: {
+        basic: { road: false, tempo: false, chance: 0.30, drop: ['pass'] },   /* the plain player: no city at all. A letter shows at all on one 30% roll made ONCE per run; the roadside board is out of the pool (nothing to stand beside) and the road letter falls back to bare ground */
+        midi:  { road: true,  tempo: 'roll', chance: 0.30, drop: [] },        /* EE_midi: the road always; the letter AND the tempo marking together on one 30% roll per run */
+        game:  { road: true,  tempo: true,  chance: 1,    drop: [] }          /* the rhythm game: everything, every time */
+      },
+      showTheme: false,      /* the small V1 row above the letter: off for now (the version is told by colour alone) */
+      game: false,           /* the rhythm-game mode has no section buttons, so the left zone opens all the way up */
+      barsH: 0.406,          /* how far the spectrum bars reach above the line (wave: H * 0.28 * the stage's 1.45 boost) */
+      zones: [[0.4, 0.00, 0.8, 0.6],     /* E1-H3 on the 10x5 grid = E1-H6 on the 10x10 one */
+              [0.1, 0.20, 0.4, 0.6]],    /* B2-D3 = B3-D6 */
+      gameZones: [[0.4, 0.0, 0.8, 0.6],
+                  [0.1, 0.0, 0.4, 0.6]], /* B1-D3: the buttons are gone */
+      fade: { inS: 0.5, outS: 0.35, holeFrom: 0.55 },   /* NOTHING here cuts in. Every way the letter appears eases up and eases away; the only exception is the neon board, which keeps its own strike-and-cut flicker (that IS its entrance). holeFrom: the cut-out opens from this share of its size, like an iris - a mask cannot be faded without rebuilding its image every frame */
+      refl: { on: true, k: 0.52, alpha: 0.30, fade: 1.35, holeA: 1 },   /* the floor's reflection: k = how flat it is squashed; fade = how far it survives measured in the LETTER'S OWN HEIGHTS from its foot (1 = it dies exactly at the letter's far end, so anything below 1 reflects only part of the glyph); holeA: how much of the cut-out is mirrored onto the bars' own reflection */
+      wall: 0.013, core: 0.8,   /* the glass wall's thickness and how much of it the white-hot discharge takes - same language as the neon board */
+      shadow: { blur: 0.05, alpha: 0.45, pass: 2 },   /* the shadow must be TIGHTER than the glow, not merely weaker. The neon's halo spreads about 60 px; a black shadow spread over the same distance is subtracted from exactly where the halo is added, the two cancel, and the tube comes back as a bare outline with no glow at all. Hugging the glyph, it still lifts it off a lit bar and leaves the halo room to show. */   /* blur = a CSS blur RADIUS in letter heights (roughly half the old shadowBlur figure); laid down `pass` times */   /* baked under every front-layer glyph: a soft black shadow ONLY - no outline, no dark edge. blur is in letter heights; pass = how many times it is laid down (depth without a hard rim) */
+      cloud: { size: 0.95, cx: 0.5, style: 'tube', alpha: 0.16, glow: 0.5, driftPx: 26, driftS: 46 },   /* (1) the sky afterimage: enormous, barely there, drifting - it STANDS ON the horizon like everything else here */
+      ground: { bottomY: 0.80, lenZ: 2.28, w: 0.30, wNoRoad: 0.34, alpha: 0.34, glow: 0.45, skipRamp: true, noise: 0.55, noiseHz: 8 },   /* noise (追記㊲→㊷): DOT-STATIC jitter on the marking - three seeded speck variants cycled at noiseHz so the dots dance like signal noise; 0 = clean */   /* wNoRoad: with no road under it (the plain mode) the marking takes this share of the screen instead of the road's width */   /* skipRamp: during an accelerando the TEMPO marking moves onto this same tarmac (E1/E2), so the letter stands down rather than overlapping it */   /* (2) painted on the tarmac: its near edge lands on this share of the screen height (0.80 = the top line of row 9), and it covers this much GROUND behind that (Z units, so moving it up the road makes it smaller and narrower exactly as the road does) */
+      focal: { size: 0.42, dy: 0, style: 'tube', alpha: 0.92, glow: 1.0, hole: true, holeA: 1, holeRing: 1.9, holeRingA: 1.35 },   /* holeA: how much of the spectrum is taken away inside the tube (1 = erased). holeRing/holeRingA: how far and how strongly the cut's black glow bleeds out onto the bars around it */   /* hole: the hollow tube also has its INSIDE cut out of the bars, so the lamp stands in clear air instead of over a hedge of bars */
+      hole: { size: 0.28, dy: 0, tubeChance: 0, glow: 1,   /* tubeChance 0 = ALWAYS solid. The hollow version was tried and dropped: a tube's walls are a few px of missing bar, and inside the spectrum they simply cannot be seen (worst on a narrow letter like I) */
+              rings: [[0.52, 0.46], [0.25, 0.50], [0.10, 0.54]],   /* the black glow, as [CSS blur radius, alpha] pairs in letter heights: a WIDE faint ring, a middle one and a tight strong one. Stacked they give a real falloff - the bars thin out over a distance instead of stopping dead on an edge nobody can see. glow scales all three at once */
+              previewDx: -0.30, previewDx2: -0.13 },
+      smoke: { size: 0.95, style: 'fill', cutBars: 0.6, beamChance: 0.5,   /* cutBars: how much of the spectrum is taken away INSIDE the letter (0 = none, 1 = erased). Partial reads better: the letter is a dark shape you can still see the music through */ mottle: 0, mottleN: 6,   /* superseded by the drifting fog: a static mottle under a moving one just reads as dirt on the lens */ fog: { on: true, scale: 1.12, amp: 0.18,   /* scale is now a MARGIN over the sheet's own worst case, not a multiple of the screen */ depth: 0.62, thick: 0.5, vert: 1.5, speed: [0.2, 0.13, 0.09], rot: [0, 0.05, -0.032], add: [0, 0, 1] },   /* vert: the vertical swing, as a multiple of the horizontal one - taller than wide, so the sheets roll rather than pan */   /* add: this sheet thickens instead of thinning */   /* fog: the drifting sheets. scale/amp = how much bigger than the sky it is and how far it wanders; depth = how deeply it eats the light; speed = one sheet per entry, in radians a second */ beamWide: 0.42, hazeWide: 1,   /* beam = a long shaft across its axis; haze = EXACTLY round (1), so it has no axis at all. At 1.25 it was stretched along the lamp-to-letter line and read as a beam inside the fog - the 'line' the user could still see in the haze. */ alpha: 0.55, spread: 0.34, beamTop: 0.55, aimY: 1,   /* 1 = the beams land ON the horizon (the progress line), which is where the letter's foot is */ feather: 0.075, front: false,   /* spread: half-width of the pool the beams land in, as a share of the screen; aimY: how far down the sky they are aimed (1 = the horizon) */
+               inS: 0.9, outS: 2.6, riseS: 2.6, colorS: 5,   /* (the expanding-disc entrance for A's fog was tried and withdrawn - 追記⑯: 煙霧字母只淡入/淡出) */   /* ★ THE LETTER'S DEADLINE. This letter is not drawn - it is a hole in the lamps' light - so it cannot be seen one moment before the light is. At inS 6.6 / riseS 14 the letter's foot was at alpha 0.034 one second in and did not reach half until 3.4 s, while every other style is fully up in 0.50 s: measured, and the reason 'some letters show up very late'. The fog still climbs from the ground and still drifts; it just gets there in time to announce the section. */ frontMix: 1.5, frontTop: 0.45, frontBot: 0.70, frontFeather: 0.075, frontFeatherBot: 0.032,   /* the two ramps are NOT the same length: the top one is long because that edge is the one on show, the bottom one is short so the haze is still at full strength ON the horizon and then goes quickly */   /* the FRONT haze's band, as shares of the DESKTOP's height: nothing above frontTop (the bars' tops stay clear), nothing below frontBot (it just reaches the track title), and frontFeather of soft ramp at each edge so neither edge is ever a line */ letterInS: 0.35, letterOutS: 0.25,   /* short on purpose: the letter announces the section and must be right AT the change, however slowly the fog moves */ wipeChance: 0.5, wipeS: 0.34, circChance: 0.5, circS: 1.2,   /* circChance/circS (追記㊷): the disc entrance - the fog revealed by a circle growing out of the vanishing point over circS, rolled per group */   /* the letter has its own quick fade. wipeChance: how often the fog LEAVES by being swept off left to right instead of fading - rolled per group; after a sweep the next group may not be fog again, and fog can never come back without a full fade-in */   /* colorS: seconds to cross from the old section colour to the new one - the light never changes colour in one frame */   /* riseS: seconds for the fog to climb from the ground to the top of the sky */ rise: 0.55, lift: 0.8,   /* rise: how soft the rising front is, in sky heights (there is no hard edge anywhere in it); lift: how far below the sky the sheets start, so they visibly rise into place */   /* smoke does not switch on: it takes its time drifting in from the edges and longer still to clear. creep 0.85 = it is still rolling in until the brightness is nearly up */   /* creep: the share of the fade-in over which it has finished rolling in from the edges; frontMix: how much of it also shows in front of the bars */   /* the lamps come UP and go DOWN over these many seconds - they never cut in; a switch-on that lights the whole sky in one frame is what read as wrong */
+               veil: '64,68,78', dim: 0.26 },   /* veil: the haze's own colour (the airlight everything converges toward); dim: how far it is taken (0 = fully the veil's colour, 1 = untouched) */   /* how far the bars are taken down INSIDE the haze's band (0 = gone, 1 = untouched). It is no longer the whole spectrum canvas - the light and the letter behind it have to be readable. It eases back on its own (CSS transition on .wave) */   /* front: the lamps over the bars instead of behind them - behind, the bars hide most of the letter */   /* (7) CORNER LAMPS: one thrown in from each top corner in the section's colour - a beam or a haze, rolled per group - and the letter TAKEN OUT of that light, so it is the one uncoloured shape in the sky. span = how far across the screen each lamp reaches */   /* (5) BLACK LIGHT: not drawn at all - the letter is CUT OUT of the spectrum bars, so the wallpaper's own colour shows through it. Same place as (3). style: 'tube' cuts only the glass walls (the counter keeps its bars), 'fill' cuts the whole glyph. Kept SMALL on purpose: a cut-out taller than the bars themselves reads as a hole torn in the page rather than a letter in the music. The two previewDx move the two variants aside in the preview only */   /* (3) standing on the vanishing point, centred on it, in front of the bars. size = the letter's font size as a share of the horizon's height (its INK is about 0.72 of that) */
+      /* LOG-111 the section's own staged ending. At `letterBeat` the letter is simply THERE (this is the one place a
+         cut is wanted). BEAT 0 IS THE SECTION'S FIRST DOWNBEAT: the engine counts from the logical start, so a pick-up
+         is already excluded and must not be counted again here; from `dimBeat` everything but the road sinks toward darkness; over the last `tailBeats` the room
+         flashes once a beat, and the next section takes over. */
+      roadless: ['I'],   /* sections that may not use a road-mounted letter (the outro: the road is being folded away under it) */
+      /* LOG-112 THE OUTRO'S EXIT (the user's design). The last section's own letter comes UP THE ROAD out of the
+         vanishing point: over `bars` bars it grows on the road's own geometry, and its foot lands ON the elimination
+         line - the line every MIDI note is struck out on - exactly on `crossBeat`. From that instant the glyph is a
+         HOLE: its frame sweeps outward and everything it passes over goes with it (the section buttons, the fog, the
+         road and its traffic, the marking, the spectrum bars). `sweepBeats` later nothing is left, and `holdBeats`
+         after that the stage hands back to the desktop. The stage is not faded out - it is COLLECTED by the letter on
+         its way past. The letter is the focal one to the pixel: hollow tube, its inside cut out of the bars.
+         A background tab runs no frames, so none of this can happen there: the engine's own two-bars-out `onBye` is
+         still armed underneath and takes the old farewell if this never ran. */
+      exit: { on: true, ids: ['I'], fromBeat: 16, crossBeat: 31,
+              /* ★★ THE CONSTRUCTION IS LOCKED (the user, 2026-09-02, on seeing the ride verified: "終於看起來對了，
+                 先記錄這個構造然後不要隨便改"): a bar line born deeper (exitDepth), width = the road's width at its
+                 depth every frame, glass drawn INSIDE the box so the visible boundary rides the verges. Do not
+                 rework any of it without the user's say-so. ★★ */
+              /* fromBeat 16 = the set-off waits for the LAST FOUR BARS (the user: "將放大的動作換到最後4小節再開始，
+                 但是一樣最後一拍過門" - the approach shortened from eight bars to four, the crossing still the last
+                 beat). Before it the outro plays with no door. */
+              /* ★ BOTH BEATS ARE THE ENGINE'S, COUNTED FROM ZERO. The user's spec is "the 32nd beat" / "bar 8
+                 beat 4", which is beat 31 here (beat 0 = bar 1 beat 1). I is 44 beats: 0-31 are the music, 32-43 are
+                 tail, and the road's own display track also stops at 31 - the three agree. */
+              /* ★ SHAPE AND LAW ARE TWO SEPARATE RULINGS (the user, 2026-09-02, after the bar-line analogy was
+                 wrongly taken as a shape and a road-wide frame built from it: "我要的是你理解那個下邊跟小節線的
+                 放大比例是一樣的，叫你套用到I的比例放大跟路徑上面"):
+                   - SHAPE: the letter I - the hollow-tube glyph at its own letter proportions (the user's pick
+                     from the three-way shape ruling), the same lamp as the focal letter;
+                   - LAW: the bar line's, applied TO that letter - born AT the vanishing point at 1/depth of its
+                     crossing size (visible from the first frame, like every bar line), its bottom edge riding the
+                     road surface exactly as a bar line does (p linear over the 32 beats, k = proj(p)), slow far
+                     off, faster and faster into the line, foot ON the MIDI line at the crossing, and the pass-by
+                     is the SAME axis carried past the eye - one law, no seam. */
+              /* SIZE: one law, three pins (the user, 2026-09-02, after the red-line test AND after both a power
+                 law and a blend window were caught visibly off the red lines mid-approach): the door is a bar
+                 line BORN DEEPER - at the depth where the road is exactly as wide as the focal letter's natural
+                 width (exitDepth, ~60 against the road's 18). Width = THE ROAD'S WIDTH AT ITS DEPTH, every frame:
+                   - START = the focal letter's own natural size, standing AT the vanishing point;
+                   - EVERY FRAME BETWEEN = bottom corners ON the edge lines - the bar line's own growth;
+                   - END = the LOCKED final passing size: the road's full width at the MIDI line, height = width x
+                     the letter's aspect - "比例不變，寬度絕對不能變". */
+              cloudDim: 0.4,
+              auraInS: 9,         /* seconds for the mask door's aura to build (追記㉒/㉖: 擴散發光延長到9秒) */
+              holeAura: 0.42,     /* the MASK door's outward bloom strength in the section's colour (0 = none) - the inside stays void (追記⑳; 0.6 → 0.42 ㉝: 四周光暈散射再更淺一點) */
+              fromBeatHole: 0,    /* the MASK form's own set-off beat (追記⑲) - it starts moving from bar 1, its whole approach the original eight bars */      /* the cloud door: how far the bars inside it are taken toward invisible (0 = untouched, 1 = gone) - a partial wave mask, nothing else on screen is touched (追記⑰) */
+              wallPx: 10,         /* the tube's glass CAP, px: the glass starts at the focal letter's own (letter.wall at the natural size, ~2.8 px), grows with the letter, and holds at this once reached - never thicker, never a scaled bitmap */
+              asp: null,          /* height / width override; null = the glyph's own measured aspect */
+              ease: 1,            /* the p-curve BEFORE the projection: 1 = the bar line's own constant world speed. (Screen-space ramps were tried twice - 等速放大 read as "not approaching", u^2 fixed that but was still a second law next to the road's; proj(u) is the road's.) */
+              sweepBeats: 'road', holdBeats: 1,   /* 'road' = the pass-by is the road's own arithmetic rather than a number I picked: how much depth is left to cover, at the constant-speed rate. The stage hands back holdBeats after the last of it has left the frame (the user's call: one beat of empty room) */
+              inS: 0.5, cloudInS: 0.3, cutInS: 0.9,   /* cutInS (追記㉕/㉗): seconds for the door's interior VOID to breathe in - the standing lamp dissolves INTO it in place. 0.5 read as the glow dying too fast, 1.6 left the lamp hanging as a ghost; 0.9 is the middle that does neither */   /* nothing in this city cuts in: the far-off door eases up over half a second - the cloud's quicker, so its crossfade with the standing cloud never dips (追記⑳) */
+              refl: true,         /* the VISUAL floor reflection under the foot (putRefl, the focal letter's own wet-road lamp) - the grounding cue against "插在地板裡". 追記②'s mirrored destination-out CUT stays banned - that one took the floor itself away */
+              light: true,        /* ★ THE HOLLOW TUBE IS THE DOOR - it always was. false = nothing is drawn and only the cut remains */
+              alpha: 0.92, glow: 1,
+              cut: true,          /* ★ THE MASK INSIDE THE TUBE IS THE POINT OF THE TRANSITION - and it is there FROM BIRTH (the user: "期間中間部分永遠維持遮罩模式…看起來像是I裡面是另一個空間一樣"): all through the approach the tube's INTERIOR (inside the glass) masks everything the stage shows - the fog, the road, its traffic, the marking, the spectrum bars, the section buttons. From the crossing on the cut is the whole box and only ever grows: what it takes it keeps. */
+              coverK: 1.02 },     /* margin on "have all four walls left the frame yet" */
+      seq: { ids: ['A'], letterBeat: 0, dimBeat: 8, darkTail: 8, tailBeats: 2, dimTo: 0, flashA: 1, flashS: 0.16, flashGamma: 2.2, gleamS: 0.3, wipeR: 0.10, unlitA: 0.6 },   /* wipeR (追記㊵): the letter's half-extent as a share of the screen, for the second gleam's right-to-left bite - the wipe starts when the front enters cx+wipeR and the cut dies as it leaves cx-wipeR */   /* unlitA (追記㊶→㊷): the tube glass's brightness under FULL strike light - the glass is invisible in the dark and lit only where the gleam band is passing */   /* gleamS (追記⑲): seconds for each tail flash's gleam band to run from its edge to the centre of the bars */   /* darkTail: fully black this many beats before the end (8 = two bars) and it stays there; tailBeats: the last beats each get a flash; leaving a sequenced section, the hand-over is a CUT on both sides */   /* dimTo 0 = the bars and the section buttons are GONE, not merely faint: at 0.02 they were still legible in the dark, and a flash over something you can already see reads as a brightening rather than as a reveal. flashA 1 = each flash is the lights full on again; flashGamma: the decay curve - lightning is an instant strike and a fast fall, and a straight ramp down read as a soft pulse */
+      pass: { size: 0.30, side: 1.45, leftChance: 0.5, style: 'tube', cycle: 0, atBeats: [0, 12], travel: 2.6,
+             seamEarly: true,   /* The board that sweeps past on the NEXT section's bar 1 beat 1 is launched a travel-time
+                                   early, which lands inside THIS section - that is how a roadside sign works and it is
+                                   meant to be seen coming. What must never happen is it arriving ON TOP of this
+                                   section's own letter (a board flying in over the cloud): the moment it launches,
+                                   this section's letter is told to leave (`seamOut`), so the screen still only ever
+                                   carries one form at a time. false = no seam board at all, and bar 1 has none. */
+             maxK: 5, bake: 520, alpha: 0.62, glow: 0.7 }   /* (4) the roadside board: it stands ON the verge (side > 1 = clear of the tarmac), on a side rolled per board, and it does not fade out - it keeps coming until it is bigger than the screen and gone past (maxK = how far past the elimination line it is followed; bake = the sprite size it is drawn from, so the last frames are not a blur) */
+    }
+  };
+  function makeSecRoad(getEng, onExit) {   /* onExit: the outro's letter has swept the stage away and the room has had its beat of quiet - hand back to the desktop (LOG-112) */
+    var el = null, g = null, raf = 0, geo = null, cache = {}, MONO = 'monospace', SANS = 'sans-serif', BG = '13,14,18';
+    function rgbOf(c) {   /* '#0d0e12' | 'rgb(13, 14, 18)' -> '13,14,18' */
+      if (!c) return null;
+      var m = /^#?([0-9a-f]{6})$/i.exec(c.replace('#', '#'));
+      if (m) return [parseInt(m[1].slice(0, 2), 16), parseInt(m[1].slice(2, 4), 16), parseInt(m[1].slice(4, 6), 16)].join(',');
+      var r = /rgba?\(([^)]+)\)/.exec(c);
+      return r ? r[1].split(',').slice(0, 3).map(function (v) { return Math.round(parseFloat(v)); }).join(',') : null;
+    }
+    var elF = null, gf = null, passes = [], lastPassBeat = -1e9, lastPassSeg = null, seamDone = false, seamOut = false, passSide = 1, passLog = [];
+    var curStyle = 'board', nextStyle = null, nextStyleFor = null, styleKey = null, holeTube = true, smokeBeam = true, smokeCirc = false, runRoll = true, wipeExit = false, banSmoke = false;   /* smokeCirc (追記㊷): this group's fog enters as a disc expanding from the vanishing point instead of the plain fade */   /* the per-group draw (which way the letter appears, and that way's own coin flips) and the per-run 30% gate */
+    /* elF = .ds-sky, the layer IN FRONT of the spectrum bars (LOG-111). passSide: which verge THIS SET of boards stands on */
+    var beads = [], sign = null, oldSign = null, lastPos = null, keep = null, byeT0 = 0, now = 0, hiT0 = 0, hiOn = false, tempoT0 = 0;
+    var exitFired = false, stageKey = null, stageEls = null;   /* LOG-112: the outro's exit has handed back (once only); and the cut currently written onto the stage's own layers */   /* hiT0/hiOn: the road's own entrance clock (it cannot ride `now` alone - the audio clock sits at 0 until the first sound) */
+    var wasRamp = false, lockT0 = 0, groundT0 = 0, doorNow = null, smT = null, smP = 0, dcollT0 = 0, dcoll = 0;   /* dcollT0/dcoll: the tube door's line-collection after the pass-by (追記㉝) */   /* doorNow: this frame's exit door (exitAt), so no other bar-cut is pushed while it stands (mask XOR - 追記⑮); smT/smP: the audio-clock smoothing anchors */
+    var IGNITE = [0.85, 0.06, 1, 0.1, 1], SHUT = [1, 0.1, 0.85, 0.04, 0.3, 0];   /* striking the tube / cutting the power: fixed blip patterns, ~60 ms a step — a discrete event, not a running flicker */
+    function rnd(r) { return r[0] + Math.random() * (r[1] - r[0]); }   /* one draw from a [min, max] range */
+    function blip(seq, age, step) { var i = Math.floor(age / step); return i < 0 ? seq[0] : (i < seq.length ? seq[i] : -1); }   /* -1 = the pattern has run out */
+    function beatNow(ck) {
+      /* the audio time whose sound is reaching the listener RIGHT NOW. Everything that has to land on a beat is drawn
+         against this, not against ctx.currentTime. */
+      var R = SEC_CITY.road;
+      return now - R.offset - (R.autoLat && ck && ck.lat ? ck.lat : 0);
+    }
+    function proj(p) { var r = SEC_CITY.road.depth; p = Math.max(0, Math.min(1, p)); return 1 / (r - (r - 1) * p); }   /* constant world speed through a pinhole camera: small and slow far away, big and fast at the line */
+    /* ---- sprites: baked once at this DPR, then only drawImage (the frame loop never blurs) */
+    function spr(key, w, h, paint) {
+      var c = cache[key]; if (c) return c;
+      var dpr = geo ? geo.dpr : 1;
+      c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * dpr)); c.height = Math.max(1, Math.round(h * dpr));
+      var x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.textAlign = 'center'; x.textBaseline = 'middle';
+      paint(x, w, h); cache[key] = c; return c;
+    }
+    function sprOnce(store, key, w, h, paint) {
+      /* ONE canvas, rebaked in place when the key changes. spr()'s cache is permanent and keyed by content, which is
+         right for a fixed alphabet and catastrophic for a value that moves every frame: the tempo readout's three
+         decimals would leave a full-size canvas behind for every number it ever showed. */
+      var dpr = geo ? geo.dpr : 1, W = Math.max(1, Math.round(w * dpr)), H = Math.max(1, Math.round(h * dpr));
+      var c = store.cv;
+      if (!c) { c = store.cv = document.createElement('canvas'); store.key = null; }
+      if (store.key === key && c.width === W && c.height === H) return c;
+      c.width = W; c.height = H;
+      var x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.textAlign = 'center'; x.textBaseline = 'middle';
+      paint(x, w, h); store.key = key; return c;
+    }
+    function glow(rgb) { return spr('g|' + rgb, 64, 64, function (x) { var gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(' + rgb + ',.95)'); gr.addColorStop(0.26, 'rgba(' + rgb + ',.42)'); gr.addColorStop(0.62, 'rgba(' + rgb + ',.12)'); gr.addColorStop(1, 'rgba(' + rgb + ',0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); }); }
+    function tube(x, str, px, weight, rgb, cx, cy, css, k) {   /* SOLID neon type, at BAKE time only (the one place a blur is allowed): a coloured bloom around a white-hot core */
+      k = k || 1;
+      x.font = weight + ' ' + px + 'px ' + (css || MONO); x.shadowColor = 'rgba(' + rgb + ',.95)';
+      x.fillStyle = 'rgba(' + rgb + ',.92)'; x.shadowBlur = Math.min(64, px * 0.42) * k; x.fillText(str, cx, cy);
+      x.shadowBlur = Math.min(32, px * 0.2) * k; x.fillText(str, cx, cy);
+      x.shadowBlur = Math.min(16, px * 0.1) * k; x.fillStyle = 'rgba(255,255,255,.9)'; x.fillText(str, cx, cy); x.shadowBlur = 0;
+    }
+    /* ---- the letters, carved out of the FACE ITSELF. Two techno faces travel with the site (Orbitron and Michroma,
+       both SIL OFL, self-hosted): a board rolls one of them, and rolls whether its letter is set solid or carved hollow.
+       The hollow carve is two strokes of the same glyph:
+         1. stroke the outline with a band 2 x wall wide — half of it falls outside the letter, half inside;
+         2. destination-in the FILLED glyph — which keeps only the half that fell inside.
+       What survives is a wall of even thickness hugging the true letterform, so every corner, junction and terminal is
+       the face's own: no seams, no doubled lines, nothing to hand-tune per letter. (A hand-bent skeleton alphabet was
+       tried first and could never match a real face's proportions.) */
+    var carveCv = null, carveG = null;   /* the carve needs its own layer: destination-in on the board would erase everything else on it */
+    function buildCarve(ch, px, rgb, sg) {   /* the hollow letter itself, alone on carveCv; returns its size in CSS px */
+      var dpr = geo ? geo.dpr : 1, wall = Math.max(1, px * sg.wall);
+      var lw = Math.ceil(px * 2.1), lh = Math.ceil(px * 1.8);
+      if (!carveCv) { carveCv = document.createElement('canvas'); carveG = carveCv.getContext('2d'); }
+      var pw = Math.round(lw * dpr), phh = Math.round(lh * dpr);
+      if (carveCv.width !== pw || carveCv.height !== phh) { carveCv.width = pw; carveCv.height = phh; }
+      var r = carveG; r.setTransform(dpr, 0, 0, dpr, 0, 0); r.clearRect(0, 0, lw, lh);
+      r.font = '700 ' + px + 'px ' + SANS; r.textAlign = 'center'; r.textBaseline = 'middle'; r.lineJoin = 'round'; r.lineCap = 'round';
+      r.globalCompositeOperation = 'source-over';
+      r.strokeStyle = 'rgba(' + rgb + ',.95)'; r.lineWidth = wall * 2; r.strokeText(ch, lw / 2, lh / 2);
+      r.globalCompositeOperation = 'destination-in';
+      r.fillStyle = '#000'; r.fillText(ch, lw / 2, lh / 2);
+      /* the discharge runs down the MIDDLE of the wall, with coloured glass either side of it — a stroke is centred on the
+         outline, so painting white out to `coreOut` and then the colour back in to `coreIn` leaves the hot core banded
+         between them. (White laid straight over the wall put the hot line on the outer edge, which read back to front.) */
+      var inK = (1 - sg.core) / 2, outK = inK + sg.core;
+      r.globalCompositeOperation = 'source-atop';
+      r.strokeStyle = 'rgba(255,255,255,.95)'; r.lineWidth = wall * 2 * outK; r.strokeText(ch, lw / 2, lh / 2);
+      r.strokeStyle = 'rgba(' + rgb + ',.95)'; r.lineWidth = wall * 2 * inK; r.strokeText(ch, lw / 2, lh / 2);
+      r.globalCompositeOperation = 'source-over';
+      return { lw: lw, lh: lh };
+    }
+    function neonGlyph(x, ch, cx, cy, px, rgb, sg) {
+      var c = buildCarve(ch, px, rgb, sg), lw = c.lw, lh = c.lh, k = sg.glow;
+      x.save(); x.shadowColor = 'rgba(' + rgb + ',.95)';
+      var dx = cx - lw / 2, dy = cy - lh / 2;
+      x.shadowBlur = Math.min(60, px * 0.45) * k; x.drawImage(carveCv, dx, dy, lw, lh);   /* the halo it throws on the night, then the glass itself, crisp */
+      x.shadowBlur = Math.min(26, px * 0.2) * k; x.drawImage(carveCv, dx, dy, lw, lh);
+      x.shadowBlur = 0; x.drawImage(carveCv, dx, dy, lw, lh);
+      x.restore(); return true;
+    }
+    var shdCv = null, shdG = null;
+    function blackOf(src, w, h) {   /* a BLACK silhouette of something already drawn, so it can be blurred into a shadow */
+      var dpr = geo ? geo.dpr : 1;
+      if (!shdCv) { shdCv = document.createElement('canvas'); shdG = shdCv.getContext('2d'); }
+      var pw = Math.max(1, Math.round(w * dpr)), ph = Math.max(1, Math.round(h * dpr));
+      if (shdCv.width !== pw || shdCv.height !== ph) { shdCv.width = pw; shdCv.height = ph; }
+      var r = shdG; r.setTransform(dpr, 0, 0, dpr, 0, 0); r.clearRect(0, 0, w, h);
+      r.globalCompositeOperation = 'source-over'; r.drawImage(src, 0, 0, w, h);
+      r.globalCompositeOperation = 'source-in'; r.fillStyle = '#000'; r.fillRect(0, 0, w, h);
+      r.globalCompositeOperation = 'source-over';
+      return shdCv;
+    }
+    function blurred(x, blurPx, alpha, paint) {
+      /* ONE soft black mark. It uses ctx.filter, not shadowBlur.
+         WHY: the earlier version drew the glyph 8000 px off the canvas with a matching shadowOffsetX, meaning to keep the
+         cast and throw the mark away. Measured, that produced NOTHING AT ALL - every pixel came back alpha 0, because a
+         primitive entirely outside the surface is culled before its shadow is ever rasterised. Every "shadow" and every
+         "black glow" built that way was invisible. A real blur is drawn here instead, and it can be measured. */
+      if (typeof x.filter !== 'string') return false;   /* no filter support: no halo rather than a hard blob */
+      x.save(); x.filter = 'blur(' + Math.max(0.5, blurPx).toFixed(2) + 'px)'; x.globalAlpha = Math.max(0, Math.min(1, alpha));
+      paint(x); x.filter = 'none'; x.restore(); return true;
+    }
+    function carveShadow(x, ch, cx, cy, px, rgb, sg) {
+      /* LOG-111: a hollow letter must NOT be backed by a filled black glyph - that plugs the counter and the light-box
+         reads as a solid dark slab with a bright rim. So the shadow is cast BY THE TUBE: a black silhouette of the carve,
+         blurred - it follows the glass walls and leaves the inside of the letter open. */
+      var c = buildCarve(ch, px, rgb, sg), S = SEC_CITY.letter.shadow, blk = blackOf(carveCv, c.lw, c.lh);
+      for (var q = 0; q < (S.pass || 3); q++) blurred(x, px * S.blur, S.alpha, function (t) { t.drawImage(blk, cx - c.lw / 2, cy - c.lh / 2, c.lw, c.lh); });
+    }
+    function fillShadow(x, ch, cx, cy, px) {   /* the solid letter's shadow: the glyph itself, laid down black through a wide blur */
+      var S = SEC_CITY.letter.shadow;
+      for (var q = 0; q < (S.pass || 3); q++) blurred(x, px * S.blur, S.alpha, function (t) {
+        t.font = '700 ' + px + 'px ' + SANS; t.textAlign = 'center'; t.textBaseline = 'middle';
+        t.fillStyle = '#000'; t.fillText(ch, cx, cy);
+      });
+    }
+    function chev(rgb) { return spr('c|' + rgb, 26, 20, function (x, w, h) { x.lineCap = 'round'; x.lineJoin = 'round'; x.shadowColor = 'rgba(' + rgb + ',.9)'; x.shadowBlur = 12; x.lineWidth = 3; x.strokeStyle = 'rgba(' + rgb + ',.95)'; x.beginPath(); x.moveTo(5, h - 5); x.lineTo(w / 2, 5); x.lineTo(w - 5, h - 5); x.stroke(); x.shadowBlur = 5; x.lineWidth = 1.5; x.strokeStyle = 'rgba(255,255,255,.85)'; x.stroke(); x.shadowBlur = 0; }); }   /* points UP: the accelerando climbs */
+    /* ---- F1 the sign: three rows — the theme version in small tube, the group letter big, and the two version lamps.
+       The version PLAYING is lit in the section's own colour; the other is unpowered glass (outline only). A/I and the
+       loop are a single big letter with no lamps. Two layers so only the LIT one flickers and breathes. */
+    function signSpr(ck, sg) {   /* two rows and nothing else: the theme version small, the section's letter huge. WHICH version
+         is playing is told by COLOUR alone (v1 = the group's colour, v2 = its deep shade) — the same language the line, the
+         bars and the buttons already speak, so the board does not repeat it back as lamps. */
+      var rgb = hexRgb(ck.color);
+      return spr('s|' + ck.id + '|' + rgb + '|' + sg.letter + '|' + sg.style + '|' + (SEC_CITY.letter.showTheme ? 1 : 0) + (sg.front ? 'F' : 'B') + '|' + sg.wall.toFixed(4) + '|' + sg.core.toFixed(3) + '|' + sg.glow.toFixed(2), sg.w, sg.h, function (x, w, h) {
+        var ty = SEC_CITY.letter.showTheme ? 0.63 : 0.52;   /* LOG-111: with the version row off, the letter is the whole board and sits centred */
+        if (SEC_CITY.letter.showTheme) tube(x, ck.theme, sg.small, '600', rgb, w / 2, h * 0.20, SANS, sg.glow);
+        if (sg.style === 'tube') neonGlyph(x, ck.letter, w / 2, h * ty, sg.letter, rgb, sg);   /* carved hollow out of the face's own outline */
+        else tube(x, ck.letter, sg.letter, '700', rgb, w / 2, h * ty, SANS, sg.glow);   /* the other roll: set SOLID, exactly the way the small row is */
+      });
+    }
+    function signShadowSpr(ck, sg) {   /* the board's shadow: same box, same place in it, shadow only */
+      var S = SEC_CITY.letter.shadow, ty = SEC_CITY.letter.showTheme ? 0.63 : 0.52;
+      return spr('ss|' + ck.letter + '|' + sg.letter + '|' + sg.style + '|' + S.alpha + '|' + S.blur + '|' + S.pass, sg.w, sg.h, function (x, w, h) {
+        if (sg.style === 'tube') carveShadow(x, ck.letter, w / 2, h * ty, sg.letter, '255,255,255', sg);
+        else fillShadow(x, ck.letter, w / 2, h * ty, sg.letter);
+      });
+    }
+    function skyRects() {   /* what the board must not sit on: it is drawn at z0, so everything the desktop puts over it reads as a mess */
+      var dr = desktop.getBoundingClientRect(), out = [];
+      Array.prototype.forEach.call(document.querySelectorAll('.menubar,.icons,.hero-text,.sticky,.updates,#np-desktop,.dock,.ds-secs .seg,.ds-secs .zlab'), function (e) {
+        var r = e.getBoundingClientRect(); if (r.width < 3 || r.height < 3) return;
+        out.push({ x0: r.left - dr.left - 6, y0: r.top - dr.top - 6, x1: r.right - dr.left + 6, y1: r.bottom - dr.top + 6 });
+      });
+      return out;
+    }
+    function place(bw, bh) {   /* the board's patch of sky, found rather than hard-coded: scan the sky at full size and take a random
+         CLEAR spot; if nothing at that size is clear, shrink a step and scan again. Big is the goal — but never on top of the
+         name, the tagline or the section buttons. */
+      var N = SEC_CITY.neon, obs = skyRects(), Z = zonesPx();
+      for (var si = 0; si < N.scales.length; si++) {
+        var k = N.scales[si], w = bw * k, h = bh * k, free = [];
+        for (var z = 0; z < Z.length; z++) {   /* LOG-111: the board's whole box has to sit INSIDE one of the marked zones - it may never spill out of them */
+          var zx0 = Math.max(Z[z][0], 8), zy0 = Math.max(Z[z][1], 34), zx1 = Math.min(Z[z][2], geo.W - 8), zy1 = Math.min(Z[z][3], geo.yH - 6);
+          var x0 = zx0 + w / 2, x1 = zx1 - w / 2, y0 = zy0 + h / 2, y1 = zy1 - h / 2;
+          if (x1 < x0 || y1 < y0) continue;
+          for (var i = 0; i <= N.scanX; i++) for (var j = 0; j <= N.scanY; j++) {
+            var cx = x0 + (x1 - x0) * (N.scanX ? i / N.scanX : 0.5), cy = y0 + (y1 - y0) * (N.scanY ? j / N.scanY : 0.5);
+            var a = cx - w / 2, b = cy - h / 2, c = a + w, d = b + h, hit = false;
+            for (var q = 0; q < obs.length && !hit; q++) { var o = obs[q]; if (Math.min(c, o.x1) > Math.max(a, o.x0) && Math.min(d, o.y1) > Math.max(b, o.y0)) hit = true; }
+            if (!hit) free.push([cx, cy]);
+          }
+        }
+        if (!free.length) continue;
+        var pool = free.filter(function (p) { return !lastPos || Math.hypot(p[0] - lastPos[0], p[1] - lastPos[1]) > N.minMove; });   /* never the same patch of sky twice running */
+        if (!pool.length) pool = free;
+        var p = pool[Math.floor(Math.random() * pool.length)];
+        lastPos = p; return { x: p[0], y: p[1], k: k };
+      }
+      lastPos = null; return { x: geo.W * 0.6, y: Math.max(bh * 0.3 + 34, geo.yH / 2), k: N.scales[N.scales.length - 1] };   /* nowhere in the zones is clear: smallest, in the middle of the right-hand zone */
+    }
+    function setSign(ck, cut) {   /* a new GROUP takes a new patch of sky; a mate hand-over inside one group never moves the board (see frame) */   /* cut: taking over from a sequenced section - the board is simply ON, with neither its wait nor its strike */
+      if (sign) { sign.off = now; oldSign = sign; }
+      var N = SEC_CITY.neon;
+      var fit = (geo.yH - 40) / N.hK;   /* the tallest letter whose board still stands clear of the menu bar and the horizon */
+      var L = Math.round(Math.max(N.sizeMin, Math.min(rnd(N.size), fit)));
+      var bw = Math.round(L * N.wK), bh = Math.round(L * N.hK);
+      var p = keep || place(bw, bh); keep = null;
+      var sg = { group: ck.group, id: ck.id, x: p.x, y: p.y, k: p.k, rot: N.tilts[Math.floor(Math.random() * N.tilts.length)],
+                 w: Math.round(bw * p.k), h: Math.round(bh * p.k), letter: Math.round(L * p.k), small: Math.round(L * N.smallK * p.k),
+                 wall: rnd(N.wall), core: rnd(N.core), glow: rnd(N.glow),   /* this sign's own glass, discharge and brightness */
+                 style: Math.random() < N.tubeChance ? 'tube' : 'fill', t0: cut ? now : now + N.gap, cut: !!cut, off: 0 };
+      sg.x = Math.max(sg.w / 2 + 8, Math.min(sg.x, geo.W - sg.w / 2 - 8));
+      sg.y = Math.max(sg.h / 2 + 34, Math.min(sg.y, geo.yH - sg.h / 2 - 6));   /* a carried-over position (resize) still has to land in the sky */
+      sg.front = meetsBars(sg.y - sg.h / 2, sg.y + sg.h / 2);   /* LOG-111: a board the bars would cross is drawn IN FRONT of them, over its own shadow; one clear of them stays behind, in the city */
+      sg.spr = signSpr(ck, sg);
+      sg.shd = sg.front ? signShadowSpr(ck, sg) : null;   /* LOG-111: a separate image, drawn source-over UNDER the board so the glass itself can still be composited 'lighter' and glow */
+      sign = sg;
+    }
+    function drawSign(s, ck) {
+      var N = SEC_CITY.neon, a;
+      if (s.off) { a = blip(SHUT, now - s.off, 0.065); if (a < 0) return false; }   /* dark and done: drop it */
+      else if (now < s.t0) return true;
+      else if (s.cut) a = 1;   /* it follows a sequenced section: the letter changes ON the beat, so there is no room for a strike-and-flicker */
+      else { a = blip(IGNITE, now - s.t0, 0.06); if (a < 0) a = 1; }
+      var ph = ck ? ck.beatPhase : 0, breath = 1 + N.breath * (1 - ph) * (1 - ph);
+      var dip = Math.max(0, Math.sin(now * 0.71) * Math.sin(now * 0.29) * Math.sin(now * 1.13));   /* mains sag: slow, irregular, and it only ever DIMS — an old tube, not a strobe */
+      var t = s.front ? gf : g; if (!t) return true;   /* LOG-111: in front of the bars, or behind them in the city */
+      t.save(); t.translate(s.x, s.y); if (s.rot) t.rotate(s.rot * Math.PI / 180);
+      t.globalAlpha = Math.max(0, Math.min(1, N.alpha * a * breath * (1 - N.buzz * dip)));
+      if (s.shd) { t.globalCompositeOperation = 'source-over'; t.drawImage(s.shd, -s.w / 2, -s.h / 2, s.w, s.h); }   /* the shadow DARKENS the bars behind the board... */
+      t.globalCompositeOperation = 'lighter';   /* ...and the glass then BURNS on top of it, which is what makes it read as a lamp rather than a sticker */
+      t.drawImage(s.spr, -s.w / 2, -s.h / 2, s.w, s.h);
+      t.restore(); return true;
+    }
+    /* ---- LOG-111 THE SECTION LETTER, FIVE WAYS ------------------------------------------------------------
+       All five draw the same character (ck.letter) in the section's own colour and differ only in where the letter
+       lives and how it is projected. Two canvases carry them: `g` is the city BEHIND the spectrum bars, `gf` is
+       `.ds-sky` in FRONT of them (z1 - still under the icons, the windows, the menu bar and the dock). Anything the
+       bars would cross goes on gf over a BAKED shadow, so a bar can never blend into a glyph or cut it in half.
+       Every glyph is a sprite: the frame loop only ever calls drawImage (LOG-110's performance rule holds). */
+    function LT() { return SEC_CITY.letter; }
+    var STYLES = ['board', 'cloud', 'focal', 'ground', 'pass', 'hole', 'smoke'];
+    function MD() { var L = LT(); return (L.modes && L.modes[L.mode]) || L.modes.basic; }
+    function forced() {   /* a forced flag picks the mode AND makes it certain, for that one boot only (the flag is consumed on load) */
+      if (EE.v6_c) return 'game';
+      if (EE.v6_m) return 'midi';
+      if (EE.v6_p || EE.v6) return 'basic';
+      return null;
+    }
+    function rollRun() { var f = forced(); if (f) LT().mode = f; runRoll = f ? true : Math.random() < MD().chance; return runRoll; }
+    var forceStyle = null;   /* ?debug: __road.style('smoke') pins the letter's form so an effect can actually be LOOKED at - one in seven per group, on top of the run's own gate, is not a rate you can review anything at */
+    var exitSeq = /[?&]debug/.test(location.search);   /* 追記㉛ ?debug: the outro's three doors come IN ORDER (cloud→focal→hole), one per run, instead of by the roll - reviewing a specific door meant replaying the whole ending until the dice cooperated ("測試抽不出來我要繼續浪費時間嗎"). The counter lives in sessionStorage so it survives the stage reopening; __road.style() still pins over it */
+    function pickStyle(pool, id) {
+      var EXP = LT().exit;
+      if (exitSeq && pool.length > 1 && id && EXP && EXP.on && EXP.ids && EXP.ids.indexOf(id) >= 0) {
+        var n = 0; try { n = parseInt(sessionStorage.getItem('v6exq') || '0', 10) || 0; sessionStorage.setItem('v6exq', String(n + 1)); } catch (e) {}
+        return pool[n % pool.length];
+      }
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+    function stylePool(id, ramping, noFog, afterRamp, afterSeq) {
+      if (forceStyle) return [forceStyle];
+      var M = MD(), drop = (M.drop || []).slice();
+      if (afterSeq) drop.push('pass');   /* ★ 追記㊸ (the user's ruling: A的下一個接續字母不可以是路牌): the section AFTER a staged ending never wears the roadside board - its seam board would have to fly in through A's dark-and-flashes finale */
+      if (noFog) drop.push('smoke');   /* the fog was swept off last time: it does not come straight back */
+      if (ramping && LT().ground.skipRamp) drop.push('ground');   /* the TEMPO marking owns the tarmac through an accelerando, so the road letter stands down there - rolling it anyway meant the section simply had no letter at all */
+      if (afterRamp && LT().ground.skipRamp) drop.push('ground');   /* ...and the section right AFTER one: the read-out's own disappearing act is still on the tarmac at the seam (the user: "E2後面字母選項不可為地標(會與BPM消失動畫衝突)") */
+      if (id && (LT().roadless || []).indexOf(id) >= 0) { drop.push('pass'); drop.push('ground'); }   /* the outro folds the road back into the horizon, so anything STANDING on it is cut off half-way */
+      if (id && LT().seq.ids.indexOf(id) >= 0) drop.push('pass');   /* a SEQUENCED section's letter has to be there ON the beat, and the roadside board cannot be */
+      var EXP = LT().exit;
+      if (EXP && EXP.on && EXP.fog !== false && id && EXP.ids && EXP.ids.indexOf(id) >= 0) return ['cloud', 'focal', 'hole'];   /* THE OUTRO WEARS ONE OF THE THREE CENTRED FORMS (the user, 追記⑬/⑭: the four bars before the set-off show the letter standing at the centre - the door then departs AS that form, same law, its own birth size and frame design). Never the board: peekNext reads a centred form for the outro, so nothing is launched at its first downbeat */
+      var pool = STYLES.filter(function (s) { return drop.indexOf(s) < 0; });
+      return pool.length ? pool : STYLES.slice();
+    }
+    /* THE NEXT GROUP'S STYLE, ROLLED AS SOON AS THE SECTION IS LOCKED IN. The roadside board has to be on screen
+       before the seam, and it may only be there if the section it announces is actually going to wear it - otherwise
+       a board flies in over every single change and the screen carries two letter styles at once. Rolling the style
+       early is what makes that decidable; the group change then simply adopts what was already rolled. */
+    function peekNext(ck) {
+      if (!ck || !ck.nextId) { nextStyleFor = null; nextStyle = null; return; }
+      if (nextStyleFor === ck.nextId) return;
+      var E2 = LT().exit, toOutro = !!(E2 && E2.on && E2.ids && E2.ids.indexOf(ck.nextId) >= 0);
+      if (!toOutro && ck.nextLetter && ck.nextLetter === ck.letter) { nextStyleFor = ck.nextId; nextStyle = curStyle; return; }
+      /* ★ 追記㉟: A SAME-LETTER SUCCESSOR NEVER RE-ROLLS - the group key (letter|group) does not change, so the
+         arrival keeps curStyle by construction (the mate takeover, and any debug jump inside the group). Rolling a
+         promise for it anyway was FICTION - and a fictional 'pass' launched the seam board while the letter it
+         announced went on being worn by the OTHER form ("路標跟其他顯示法同時出現...兩種顯示同個段落" - the (59)
+         invariant broken from a hole that predates it: every second hand-over is a mate, times 1/7 for the roll).
+         The promise is now simply the truth: what is showing is what arrives. The outro is exempt - its pool is the
+         three centred doors whatever the letters say. */
+      var pool = stylePool(ck.nextId, ck.nextRamp != null && ck.nextRamp >= SEC_CITY.tempo.rampMin, banSmoke,
+                           ck.ramp != null && Math.abs(ck.bpmOut - ck.bpmIn) >= SEC_CITY.tempo.rampMin,
+                           LT().seq.ids.indexOf(ck.id) >= 0);   /* afterRamp: the section being rolled follows THIS accelerando; afterSeq (追記㊸): it follows the staged ending */
+      nextStyleFor = ck.nextId; nextStyle = pickStyle(pool, ck.nextId);   /* 追記㉛: the outro's pick runs the debug sequence when it is on */
+    }
+    function rollGroup(ck0, forced) {
+      var id = ck0 && ck0.id;
+      var pool = stylePool(id, ck0 && ck0.ramp != null && Math.abs(ck0.bpmOut - ck0.bpmIn) >= SEC_CITY.tempo.rampMin, banSmoke, wasRamp,
+                           !!(prevId && LT().seq.ids.indexOf(prevId) >= 0));   /* wasRamp: the section we are leaving was still accelerating on its last drawn frame; afterSeq (追記㊸): it follows the staged ending - never the board */
+      banSmoke = false;
+      wipeExit = Math.random() < LT().smoke.wipeChance;   /* will this fog be swept off, or fade? rolled when it arrives */
+      curStyle = (forced && pool.indexOf(forced) >= 0) ? forced : pickStyle(pool, id);   /* adopt the style that was rolled early for this section, so what the seam promised is what arrives; unrolled, the pick honours the debug sequence too (追記㉛) */
+      nextStyle = null; nextStyleFor = null;
+      holeTube = Math.random() < LT().hole.tubeChance;      /* hollow or solid, same coin the neon board tosses */
+      smokeBeam = Math.random() < LT().smoke.beamChance;    /* a beam, or a haze */
+      smokeCirc = Math.random() < (LT().smoke.circChance == null ? 0.5 : LT().smoke.circChance);   /* 追記㊷ (the user: 煙霧效果多一個從中間(消失點)往外圓形擴散的出現方式): rolled per group, like the beam/haze coin */
+      passSide = Math.random() < LT().pass.leftChance ? -1 : 1;   /* one verge for the WHOLE set of boards in this group */
+    }
+    function letterOn() { return runRoll; }
+    function zonesPx() {   /* the marked zones, in px for this window */
+      return (LT().game ? LT().gameZones : LT().zones).map(function (z) { return [z[0] * geo.W, z[1] * geo.H, z[2] * geo.W, z[3] * geo.H]; });
+    }
+    function barsTop() { return geo.yH - geo.H * LT().barsH; }   /* the highest a spectrum bar can ever reach */
+    function meetsBars(y0, y1) { return y1 > barsTop() && y0 < geo.yH; }   /* -> draw it in front, with its shadow */
+    function letterSpr(ch, px, rgb, style, glow) {   /* the LIGHT: one letter, carved hollow out of the face's own outline, or set solid */
+      var w = Math.ceil(px * 2.1), h = Math.ceil(px * 1.8), sg = { wall: LT().wall, core: LT().core, glow: glow };
+      return spr('L|' + ch + '|' + px + '|' + rgb + '|' + style + '|' + glow.toFixed(2), w, h, function (x) {
+        if (style === 'tube') neonGlyph(x, ch, w / 2, h / 2, px, rgb, sg);
+        else tube(x, ch, px, '700', rgb, w / 2, h / 2, SANS, glow);
+      });
+    }
+    function letterShadowSpr(ch, px, style) {   /* the SHADOW, on its own image - never an outline: a stroked edge read as a black frame round the letter */
+      var w = Math.ceil(px * 3.0), h = Math.ceil(px * 2.6), S = LT().shadow;   /* a wider box than the glyph's: a blur clipped by its own canvas edge shows as a straight cut */
+      return spr('LS|' + ch + '|' + px + '|' + style + '|' + S.alpha + '|' + S.blur + '|' + S.pass, w, h, function (x) {
+        if (style === 'tube') carveShadow(x, ch, w / 2, h / 2, px, '255,255,255', { wall: LT().wall, core: LT().core, glow: 1 });   /* cast by the glass, so the letter stays hollow */
+        else fillShadow(x, ch, w / 2, h / 2, px);
+      });
+    }
+    function reflSpr(ch, px, rgb, style, glow) {
+      /* the letter as it lies on the floor: the same glyph, flipped, and dissolving as it goes away from the line it
+         stands on. Baked, so a reflection costs one more drawImage and nothing else. */
+      var w = Math.ceil(px * 2.1), h = Math.ceil(px * 1.8), R = LT().refl;
+      return spr('rf|' + ch + '|' + px + '|' + rgb + '|' + style + '|' + glow.toFixed(2) + '|' + R.fade, w, h, function (x, W, H) {
+        x.save(); x.translate(0, H); x.scale(1, -1);
+        x.drawImage(letterSpr(ch, px, rgb, style, glow), 0, 0, W, H);
+        x.restore();
+        /* THE FADE IS MEASURED FROM THE WATERLINE, not from the top of the sprite box. The flip leaves ~28 % of empty
+           box above the reflected ink, so a gradient run from y=0 had already spent nearly half of itself before it
+           reached the glyph at all: measured, the foot came out at 0.46 alpha (x refl.alpha = 0.13 - invisible) and
+           the bottom 40 % of the letter was erased outright. Anchored here, `fade` means what it says: how far down
+           ITS OWN HEIGHT the reflection survives, brightest where it touches the letter's foot. */
+        var mR = midBox(ch, '700'), y0 = H / 2 - mR.desc * px, ink = (mR.asc + mR.desc) * px;
+        var gm = x.createLinearGradient(0, y0, 0, y0 + Math.max(0.05, R.fade) * ink);
+        gm.addColorStop(0, 'rgba(0,0,0,1)'); gm.addColorStop(1, 'rgba(0,0,0,0)');
+        x.globalCompositeOperation = 'destination-in'; x.fillStyle = gm; x.fillRect(0, 0, W, H);
+        x.globalCompositeOperation = 'source-over';
+      });
+    }
+    function putRefl(cx2, footY, ch, px, rgb, style, glow, alpha, front, k) {
+      /* stood on `footY` and squashed into the floor by the road's own foreshortening */
+      var R = LT().refl; if (!R.on || alpha <= 0.003) return;
+      var t = front ? gf : g; if (!t) return;
+      var sp = reflSpr(ch, px, rgb, style, glow), dpr = geo.dpr || 1;
+      var w = sp.width / dpr * (k || 1), h = sp.height / dpr * (k || 1), d = midBox(ch, '700').desc * px * (k || 1);
+      t.save(); t.globalCompositeOperation = 'lighter'; t.globalAlpha = Math.max(0, Math.min(1, alpha * R.alpha));
+      t.translate(cx2, footY); t.scale(1, R.k);
+      t.drawImage(sp, -w / 2, d - h / 2, w, h);
+      t.restore();
+    }
+    function putSpr(at, s, sprite, alpha, front, comp) {   /* one sprite, centred at `at`, scaled by s */
+      var dpr = geo.dpr || 1, w = sprite.width / dpr * s, h = sprite.height / dpr * s, t = front ? gf : g;
+      if (!t) return;
+      t.save(); t.globalCompositeOperation = comp || 'lighter'; t.globalAlpha = Math.max(0, Math.min(1, alpha));
+      t.drawImage(sprite, at[0] - w / 2, at[1] - h / 2, w, h); t.restore();
+    }
+    function putLetter(at, s, ch, px, rgb, style, glow, alpha, front) {
+      /* a shadow and a light are not the same kind of mark and cannot share one image: the shadow has to DARKEN what is
+         behind it (source-over), the neon has to ADD to it (lighter). Baked apart and drawn as two images. Putting both
+         in one sprite and compositing it source-over is what flattened the halo into a dull patch and killed the glow. */
+      if (front) putSpr(at, s, letterShadowSpr(ch, px, style), alpha, true, 'source-over');
+      putSpr(at, s, letterSpr(ch, px, rgb, style, glow), alpha, front, 'lighter');
+    }
+    /* (1) THE CLOUD: one letter, enormous and barely there, drifting slowly across the night above the horizon. It is
+       weather, not signage - so it lives behind the bars and carries no shadow. */
+    function drawCloud(ch, rgb, a, ck) {
+      var C = LT().cloud, px = fitPx(ch, Math.round(geo.yH * C.size), geo.W * 0.94, geo.yH * 0.98), cap = Math.min(520, px);
+      var st = ck && exitOn(ck);   /* the OUTRO's cloud stands still, dead centre (the user, 追記⑮: 起始位置置中不位移或飄動) - the door departs from exactly where it stands */
+      var k = px / cap, dx = st ? 0 : Math.sin(now / C.driftS * 6.2832) * C.driftPx;
+      var footY = geo.yH;   /* 追記㉛→㉜: the standing cloud and its door meet ON THE PLAY LINE. ㉛ moved the standing cloud DOWN to the strict-law birth foot; the user ruled the opposite way round ("初始的位置應該是I的底部=撥放線") - so the cloud stays here and exitBox() lifts the DOOR's birth foot up to the line instead */
+      putLetter([geo.W * (st ? 0.5 : C.cx) + dx, footY - midBox(ch, '700').desc * px], k, ch, cap, rgb, C.style || 'fill', C.glow, C.alpha * a, st);   /* its foot rests on the horizon, like (3) - measured, not guessed. In the OUTRO it moves IN FRONT of the bars (追記⑯: 雲朵特效移至音量條前) */
+    }
+    /* (2) ON THE TARMAC, by the same two rules as the BPM marking (LOG-110): every row takes THE ROAD's width at that
+       row, and the texture runs linear in ground distance (Z = 1/f). There is nothing else to tune. */
+    function groundGlyph(ch, rgb, nv) {
+      var G = LT().ground, yh = geo.yH, yL = geo.yL, span = yL - yh, dpr = geo.dpr || 1, pad = 0.06;
+      var m = textEm(ch, '700');
+      /* the near edge is placed where the user marked it (a share of the screen height); the far edge then sits lenZ
+         units of GROUND behind it. Working back through Z = 1/f is what keeps the marking glued to the road: move it
+         up the road and it gets narrower and shorter by exactly the road's own rate, with nothing to re-tune. */
+      var f1 = Math.max(0.06, Math.min(0.999, (G.bottomY * geo.H - yh) / Math.max(1, span)));
+      var f0 = Math.max(0.02, Math.min(f1 - 0.01, 1 / (1 / f1 + G.lenZ)));
+      var y0 = yh + span * f0, y1 = yh + span * f1;
+      var Wp = Math.max(8, Math.round(MD().road ? 2 * geo.half * f1 * G.w : geo.W * G.wNoRoad)), Hp = Math.max(4, Math.round(y1 - y0));   /* with no road under it there is no road width to take, so it falls back to a share of the screen */
+      var Ac = (m.cap * (1 - 2 * pad) / m.w) + 2 * pad;   /* the flat plate's height per unit of its width */
+      var sprite = spr('gl|' + rgb + '|' + ch + '|' + Wp + 'x' + Hp + '|' + f0.toFixed(3) + '|' + G.glow + '|' + (G.noise || 0) + 'n' + (nv || 0) + '|' + (MD().road ? 1 : 0), Wp, Hp, function (x, W, H) {
+        var Wc = W * (1 - 2 * pad), fs = Math.max(8, Wc / m.w), fh = Math.max(2, Math.round(W * Ac));
+        if (!flatCv) { flatCv = document.createElement('canvas'); flatG = flatCv.getContext('2d'); }
+        var pw = Math.round(W * dpr), ph = Math.round(fh * dpr);
+        flatCv.width = pw; flatCv.height = ph;
+        var fg = flatG; fg.setTransform(dpr, 0, 0, dpr, 0, 0); fg.clearRect(0, 0, W, fh);
+        fg.textAlign = 'center'; fg.textBaseline = 'alphabetic';
+        tube(fg, ch, fs, '700', rgb, W / 2, fh / 2 + m.cap * fs / 2, SANS, G.glow);
+        if (G.noise > 0) {
+          /* 追記㊲→㊷: DOT STATIC, not grime (the user: 類似點狀雜訊的抖動不是看起來髒髒的). Small round-ish specks
+             only - no scratches (a scratch reads as dirt, a dancing dot reads as signal noise) - taken OUT of the
+             flat plate BEFORE the perspective rows so they foreshorten with the tarmac. Seeded per VARIANT (nv):
+             drawGround cycles three variants on noiseHz, so the dots JITTER like static while each frame is still a
+             cached bake, never per-frame drawing. */
+          var sd3 = 11 + (nv || 0) * 7919, sk = ch + '|' + rgb; for (var si2 = 0; si2 < sk.length; si2++) sd3 = (sd3 * 31 + sk.charCodeAt(si2)) % 2147483647;
+          function r3() { sd3 = (sd3 * 16807) % 2147483647; return sd3 / 2147483647; }
+          fg.save(); fg.globalCompositeOperation = 'destination-out'; fg.fillStyle = '#000';
+          var nN = Math.round(W * fh / 42 * G.noise);
+          for (var ni = 0; ni < nN; ni++) {
+            fg.globalAlpha = 0.18 + r3() * 0.5;
+            var nd = 1 + r3() * 1.6;
+            fg.fillRect(r3() * W, r3() * fh, nd, nd);
+          }
+          fg.restore();
+        }
+        var step = 1 / dpr, Z0 = 1 / f0, Z1 = 1 / f1;
+        var vAt = function (u) { var f = f0 + u * (f1 - f0); return (Z0 - 1 / f) / (Z0 - Z1); };
+        x.imageSmoothingQuality = 'high';
+        for (var yy = 0; yy < H; yy += step) {
+          var u = yy / H, f = f0 + u * (f1 - f0), sw = W * (f / f1);
+          var va = vAt(u), vb = vAt(Math.min(1, (yy + step) / H));
+          x.drawImage(flatCv, 0, va * (ph - 1), pw, Math.max(1, (vb - va) * (ph - 1)), (W - sw) / 2, yy, sw, step * 1.04);
+        }
+        flatCv.width = flatCv.height = 1;
+      });
+      return { spr: sprite, y0: y0, y1: y1, w: Wp, h: Hp };
+    }
+    function groundBusy(ck) {
+      /* is the TEMPO marking on the tarmac? It moves down onto the road for the accelerando and stays through the lock
+         and its fade - E1/E2 in this piece. Read from the tempo state rather than from section names, so it stays true
+         whatever the data says. */
+      var T = SEC_CITY.tempo;
+      if (!ck || !LT().ground.skipRamp) return false;
+      if (ck.ramp != null && Math.abs(ck.bpmOut - ck.bpmIn) >= T.rampMin) return true;
+      if (!groundT0) return false;
+      return !lockT0 || (now - lockT0) < (T.lockMs + T.fadeMs) / 1000;
+    }
+    function drawGround(ch, rgb, a) {
+      var G = LT().ground, nv = G.noise > 0 ? Math.floor(now * (G.noiseHz == null ? 8 : G.noiseHz)) % 3 : 0;   /* 追記㊷: three noise seeds, cycled - the dots dance */
+      var m = groundGlyph(ch, rgb, nv);
+      g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = G.alpha * a;
+      g.drawImage(m.spr, geo.cx - m.w / 2, m.y0, m.w, m.h); g.restore();
+      return m;
+    }
+    /* (3) STANDING ON THE VANISHING POINT: centred on it left and right, its foot ON the horizon. The bars run straight
+       through this one, so it is the front layer's whole reason for existing - shadow baked, drawn over the bars. */
+    function drawFocal(ch, rgb, a, ck) {
+      var F = LT().focal, px = fitPx(ch, Math.round(geo.yH * F.size), geo.W * 0.94, geo.yH * 0.98);
+      var footY = geo.yH + geo.H * F.dy;
+      if (ck && exitOn(ck)) footY = geo.yH + (geo.yL - geo.yH) / exitDepth(ch);   /* 追記㉕: in the OUTRO the tube already stands ON the door's birth foot (a span/D lower) - standing on the horizon and being born a few px below it was the bottom's blink at the set-off ("底部有一個瞬間淡出淡入") */
+      var kd = 1;
+      if (doorNow && exitForm() === 'focal') {
+        /* 追記㉚: THE LAMP RIDES ITS OWN DOOR. Dissolving it IN PLACE (㉗) left a second I standing at the birth
+           spot, fading inside the departing tube ("裡面會有一個不知名的I形狀淡化殘影") - two letters on screen where
+           the user ruled there is only ever one. So the standing sprite scales and moves WITH the door's box (the
+           very law exitHole() already gives the bar cut: same coordinates, same size, kd = 1 at the set-off frame)
+           while its light breathes out on the same cutInS clock the void breathes in on - one I, thinning into the
+           door's glass as it goes. */
+        var Ed = EX(), b0d = Ed.fromBeat == null ? 0 : Ed.fromBeat;
+        var cQ = Math.min(1, Math.max(0, (doorNow.b - b0d)) * (60 / Math.max(1, (ck && ck.bpm) || 172)) / Math.max(0.1, Ed.cutInS == null ? 0.9 : Ed.cutInS));
+        a *= 1 - cQ;
+        if (a <= 0.003) return;
+        kd = doorNow.box.w / exitGlyph(ch).w0;
+        footY = doorNow.box.y1;
+      }
+      var y = footY - midBox(ch, '700').desc * px * kd;
+      var Rf = LT().refl;
+      if (F.hole && (F.style || 'fill') === 'tube' && !doorNow) {   /* while the door exists its rect is the ONLY cut - a second, overlapping glyph cut XOR-cancels (追記⑮) */
+        holeWant.push({ ch: ch, px: px, style: 'fill', x: geo.cx, y: y, a: F.holeA, ring: F.holeRing, ringA: F.holeRingA });   /* the tube's inside is taken clean out of the bars, and its black glow is allowed to bleed further onto them (holeRing/holeRingA) so the lamp sits in its own pool of darkness */
+        /* AND THE SAME CUT, REFLECTED. The spectrum is mirrored under the progress line, so a letter that takes the
+           bars away above the line but leaves their reflection untouched below it reads as a letter floating over an
+           unbroken pool. The mask is mirrored about the letter's foot and squashed by the reflection's own `k`. */
+        if (Rf.on && Rf.holeA > 0) holeWant.push({ ch: ch, px: px, style: 'fill', flip: true, x: geo.cx, y: footY + Rf.k * midBox(ch, '700').desc * px, ky: Rf.k, a: F.holeA * Rf.holeA, ring: F.holeRing, ringA: F.holeRingA });
+      }
+      var aF = a;
+      if (seqHoldF && !(ck && exitOn(ck))) {
+        /* 追記㊶→㊷ (the user's correction: 暗下去時看不到A，但是閃電照過去時顯現的A上有燈管): in the dark the glass
+           is INVISIBLE like everything else - it is LIT BY THE STRIKES: the glass's alpha follows the gleam band's
+           own local brightness where the letter stands, so each flash sweeping past reveals the tube on the letter
+           and takes it back with it. */
+        var gl2 = 0;
+        if (seqGleam) {
+          var gxL = seqGleam.dir < 0 ? geo.W * seqGleam.p : geo.W - geo.W * seqGleam.p, bw3 = geo.W * 0.18;
+          var dxL = Math.abs(geo.cx - gxL);
+          gl2 = seqGleam.a * Math.max(0, Math.min(1, 1 - Math.max(0, dxL - bw3 * 0.4) / (bw3 * 0.6)));   /* the wave's own band shape: flat near the centre, falling off over the rest */
+        }
+        aF = Math.max(a, (LT().seq.unlitA == null ? 0.6 : LT().seq.unlitA) * gl2);
+      }
+      var clipW = seqHoldF && seqWipeX != null && gf;
+      if (clipW) { gf.save(); gf.beginPath(); gf.rect(0, 0, seqWipeX, geo.H); gf.clip(); }   /* 追記㊶: the second gleam eats the glass right-to-left, in step with the cut's clip variants */
+      putLetter([geo.cx, y], kd, ch, px, rgb, F.style || 'fill', F.glow, F.alpha * aF, true);   /* measured: the glyph's FOOT lands on the progress line, not its sprite box */
+      putRefl(geo.cx, footY, ch, px, rgb, F.style || 'fill', F.glow, F.alpha * aF, true, kd);   /* and its reflection on the floor below the line */
+      if (clipW) gf.restore();
+    }
+    /* (7) CORNER LAMPS: two lights thrown in from the top corners in the section's own colour, and the letter taken OUT
+       of them with destination-out - so the letter is not drawn at all, it is simply the one place the light never
+       reaches. Both lamps are baked sprites; the cut is one drawImage. It sits BEHIND the spectrum bars (it is weather,
+       not signage), and above the horizon, where nothing else has been drawn yet this frame - which is what makes the
+       destination-out safe: it can only take away the light itself. */
+    function lampSpr(rgb, kind, w, h, sgn, tx, ty, spread) {
+      /* ONE lamp: a soft field of light thrown in from a top corner toward the letter.
+         It is an ELLIPTICAL falloff around the lamp-to-letter axis, and nothing else - there is no polygon, no clip and
+         no edge anywhere in it. A clipped cone was tried twice: blurred or not, a straight edge stays straight, and the
+         light read as a cut-out shape rather than as light. 'beam' is that field stretched along the axis, 'haze' is the
+         same field left round. */
+      return spr('lp|' + rgb + '|' + kind + '|' + w + 'x' + h + '|' + sgn + '|' + Math.round(tx) + '|' + Math.round(ty) + '|' + Math.round(spread), w, h, function (x, W, H) {
+        var S = LT().smoke, ox = sgn < 0 ? 0 : W, dx = tx - ox, dy = ty, len = Math.max(40, Math.hypot(dx, dy));
+        var wide = kind === 'haze' ? S.hazeWide : S.beamWide;   /* how far the light spreads ACROSS its axis, as a share of its reach. Taken from the config, NOT derived from `spread`: derived, a wide spread made the "beam" rounder than the "haze" and the two were indistinguishable */
+        x.save();
+        x.translate(ox, 0); x.rotate(Math.atan2(dy, dx)); x.scale(1, wide);
+        var R = len * 1.35;
+        var gr = x.createRadialGradient(0, 0, 0, 0, 0, R);
+        gr.addColorStop(0, 'rgba(' + rgb + ',.52)'); gr.addColorStop(0.35, 'rgba(' + rgb + ',.34)');
+        gr.addColorStop(0.68, 'rgba(' + rgb + ',.17)'); gr.addColorStop(0.88, 'rgba(' + rgb + ',.05)');
+        gr.addColorStop(1, 'rgba(' + rgb + ',0)');
+        x.fillStyle = gr; x.beginPath(); x.arc(0, 0, R, 0, 6.2832); x.fill();
+        x.restore();
+      });
+    }
+    function shapeSpr(ch, px, style) {   /* the letter as a plain alpha shape - for taking it OUT of something */
+      var w = Math.ceil(px * 2.1), h = Math.ceil(px * 1.8);
+      return spr('SH|' + ch + '|' + px + '|' + style, w, h, function (x) {
+        if (style === 'tube') { var c = buildCarve(ch, px, '255,255,255', { wall: LT().wall, core: LT().core, glow: 1 }); x.drawImage(blackOf(carveCv, c.lw, c.lh), w / 2 - c.lw / 2, h / 2 - c.lh / 2, c.lw, c.lh); }
+        else { x.font = '700 ' + px + 'px ' + SANS; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = '#000'; x.fillText(ch, w / 2, h / 2); }
+      });
+    }
+    function mottle(x, W, H, rgb, seed) {
+      /* ATMOSPHERE. A handful of enormous, very soft patches that thin the light here and thicken it there, so it reads
+         as air with something in it - a club with haze in it - instead of as a clean gradient. Blobs only: it can never
+         introduce a line. Seeded from the layer's own key, so it is the same air every time that layer is rebuilt. */
+      var S = LT().smoke, M = S.mottle;
+      if (!(M > 0)) return;
+      var sd = 7; for (var i0 = 0; i0 < seed.length; i0++) sd = (sd * 31 + seed.charCodeAt(i0)) % 2147483647;
+      function r2() { sd = (sd * 16807) % 2147483647; return sd / 2147483647; }
+      var big = Math.max(W, H);
+      for (var i = 0; i < S.mottleN; i++) {
+        var bx = r2() * W, by = r2() * H * 1.1, br = (0.22 + r2() * 0.42) * big, thin = r2() < 0.62, aa = M * (0.25 + r2() * 0.75);
+        var gr = x.createRadialGradient(bx, by, 0, bx, by, br);
+        gr.addColorStop(0, thin ? 'rgba(0,0,0,' + aa.toFixed(3) + ')' : 'rgba(' + rgb + ',' + (aa * 0.55).toFixed(3) + ')');
+        gr.addColorStop(0.6, thin ? 'rgba(0,0,0,' + (aa * 0.45).toFixed(3) + ')' : 'rgba(' + rgb + ',' + (aa * 0.22).toFixed(3) + ')');
+        gr.addColorStop(1, thin ? 'rgba(0,0,0,0)' : 'rgba(' + rgb + ',0)');
+        x.globalCompositeOperation = thin ? 'destination-out' : 'lighter';
+        x.fillStyle = gr; x.fillRect(0, 0, W, H);
+      }
+      x.globalCompositeOperation = 'source-over';
+    }
+    function fogSpr(rgb, w, h, seed) {
+      /* one sheet of fog. Not circles: every puff is an ELLIPSE at its own angle, its own aspect and its own density,
+         over a wide range of sizes - a few big banks, a lot of small wisps. That irregularity is what stops a sheet
+         reading as a texture; round blobs of one size read as bubbles however slowly they move. Painted in the section's
+         own colour, so the same sheet can be used to eat the light (destination-out, alpha only) or to thicken it
+         (lighter, colour and all). */
+      return spr('fg|' + rgb + '|' + w + 'x' + h + '|' + seed, w, h, function (x, W, H) {
+        var sd = seed, big = Math.max(W, H);
+        function r2() { sd = (sd * 16807) % 2147483647; return sd / 2147483647; }
+        for (var i = 0; i < 34; i++) {
+          var t = r2(), br = (0.018 + t * t * 0.15) * big;            /* squared: many small wisps, a few big banks. Kept WELL under the screen: puffs a screen wide move without anything appearing to move (measured: 4.8 s of drift changed a sampled pixel by 2/255) */
+          var bx = r2() * W, by = r2() * H, aa = 0.10 + r2() * 0.55;
+          var asp = 0.28 + r2() * 0.7, ang = r2() * 6.2832;
+          x.save(); x.translate(bx, by); x.rotate(ang); x.scale(1, asp);
+          var gr = x.createRadialGradient(0, 0, 0, 0, 0, br);
+          gr.addColorStop(0, 'rgba(' + rgb + ',' + aa.toFixed(3) + ')');
+          gr.addColorStop(0.5, 'rgba(' + rgb + ',' + (aa * 0.42).toFixed(3) + ')');
+          gr.addColorStop(1, 'rgba(' + rgb + ',0)');
+          x.fillStyle = gr; x.beginPath(); x.arc(0, 0, br, 0, 6.2832); x.fill();
+          x.restore();
+        }
+      });
+    }
+    var fogCv = null, fogG = null;
+    function fogLayer(W, H, rgb, lift, rise, cuts) {
+      /* the light with the fog moving through it: rebuilt every frame (the drift is the point), but only ever out of
+         sprites - no gradients, no blurs and no text in here. */
+      var F = LT().smoke.fog, dpr = geo.dpr || 1;
+      if (!fogCv) { fogCv = document.createElement('canvas'); fogG = fogCv.getContext('2d'); }
+      var pw = Math.round(W * dpr), ph = Math.round(H * dpr);
+      if (fogCv.width !== pw || fogCv.height !== ph) { fogCv.width = pw; fogCv.height = ph; }
+      var q = fogG; q.setTransform(dpr, 0, 0, dpr, 0, 0);
+      q.globalCompositeOperation = 'source-over'; q.globalAlpha = 1; q.clearRect(0, 0, W, H);
+      var S0 = LT().smoke, mix = lampOldOn ? Math.min(1, Math.max(0, (now - lampT0) / Math.max(0.05, S0.colorS))) : 1;
+      if (mix < 1 && lampOld) { q.globalAlpha = 1 - mix; q.drawImage(lampOld, 0, 0, W, H); }   /* the section's colour changes by CROSSING between two layers, never by swapping one out */
+      q.globalAlpha = mix; q.drawImage(lampCv, 0, 0, W, H); q.globalAlpha = 1;
+      if (mix >= 1) lampOldOn = false;
+      if (F && F.on) {
+        /* the sheet is SQUARE and big enough that, at any rotation and anywhere in its drift, its own rectangular edge
+           is still off screen. A sheet merely "bigger than the screen" turns until a corner sweeps across it, and that
+           edge is a dead straight line through the fog - which is exactly the line the user could still see. */
+        var need = (Math.hypot(W, H) + 2 * F.amp * W) * F.scale, fw = Math.round(need), fh = fw;
+        for (var i = 0; i < F.speed.length; i++) {
+          /* each sheet drifts on its own ellipse and turns slowly on its own axis. Two sheets sliding past each other at
+             different speeds AND rotating is what makes the shapes curl and re-form; two sheets merely sliding read as
+             one texture being panned. The numbers are in RADIANS A SECOND: 0.02 looked reasonable and turned out to be
+             one lap every five minutes, which measured as no movement at all. */
+          var sp = F.speed[i], ph2 = i * 2.1, rt = (F.rot && F.rot[i]) || 0, add = F.add && F.add[i];
+          var ox = Math.sin(now * sp + ph2) * W * F.amp, oy = Math.cos(now * sp * 0.63 + ph2) * H * F.amp * F.vert + lift;   /* lift: on the way in the sheets sit low and rise into place - the fog is blown up from below rather than wiped across */
+          q.globalCompositeOperation = add ? 'lighter' : 'destination-out';   /* some sheets eat the light, one lays more on: that is where the near/far, thick/thin of it comes from */
+          q.save(); q.globalAlpha = add ? F.thick : F.depth;
+          q.translate(W / 2 + ox, H / 2 + oy); if (rt) q.rotate(now * rt);
+          q.drawImage(fogSpr(rgb, fw, fh, 101 + i * 7717), -fw / 2, -fh / 2, fw, fh);
+          q.restore();
+        }
+        q.globalAlpha = 1; q.globalCompositeOperation = 'source-over';
+      }
+      /* THE LETTER, cut out of the finished light EVERY FRAME - never baked into the layer.
+         Baked in, it was carried along by the 5 s colour cross-fade, so the old section's letter sat on top of the new
+         one for five seconds (A showing through B). Cut here, only ever one letter exists, and it has its own fade. */
+      /* `cuts` is a LIST because two fog groups can run back to back: then the outgoing letter is still being taken
+         out of the light at a falling alpha while the incoming one is taken out at a rising one, and the two
+         negative spaces dissolve through each other. One at a time was the cut. */
+      for (var ci = 0; ci < cuts.length; ci++) {
+        var cu = cuts[ci]; if (!cu || cu.a <= 0.002) continue;
+        var ms3 = shapeSpr(cu.ch, cu.px, LT().smoke.style || 'fill'), dpr3 = geo.dpr || 1;
+        var mw3 = ms3.width / dpr3, mh3 = ms3.height / dpr3;
+        q.globalCompositeOperation = 'destination-out'; q.globalAlpha = cu.a;
+        q.drawImage(ms3, geo.cx - mw3 / 2, geo.yH - midBox(cu.ch, '700').desc * cu.px - mh3 / 2, mw3, mh3);
+        q.globalCompositeOperation = 'source-over'; q.globalAlpha = 1;
+      }
+      /* THE ENTRANCE. Not a clip: a soft vertical ramp multiplied into the whole layer, rising from the horizon. A rect
+         clip growing in from the edges has a straight advancing edge by definition, which is what read as a curtain
+         being drawn. A gradient has no edge to see - the fog simply becomes present, from the ground up. */
+      if (rise < 0.999) {
+        var S2 = LT().smoke, soft = Math.max(0.05, S2.rise), yF = H - rise * H * (1 + soft), yT = yF - soft * H;
+        var gm = q.createLinearGradient(0, yT, 0, yF);
+        gm.addColorStop(0, 'rgba(0,0,0,0)'); gm.addColorStop(1, 'rgba(0,0,0,1)');
+        q.globalCompositeOperation = 'destination-in'; q.globalAlpha = 1;
+        q.fillStyle = gm; q.fillRect(0, 0, W, H);
+        q.globalCompositeOperation = 'source-over';
+      }
+      return fogCv;
+    }
+    var lampCv = null, lampG = null, lampKey = null, lampOld = null, lampOldOn = false, lampT0 = 0, lampCut = false;   /* two layers: the one that is current and the one it is still crossing from */
+    var frontCv = null, frontG = null;
+    function frontLayer(src, W, hh, H) {
+      /* THE FOG IN FRONT OF THE BARS. Not the whole sheet dimmed - a BAND, and the band is measured on the DESKTOP,
+         not on the sky, because what it has to respect is the spectrum: the TOPS of the bars stay clear, and the haze
+         lies only across their feet, the progress line, and a little of their reflection (frontTop -> frontBot as
+         shares of the desktop's height). Both edges are long ramps, and the thing being ramped is the drifting fog
+         itself, so the boundary is never a line - it is wherever that night's fog happens to thin out. */
+      var S = LT().smoke, dpr = geo.dpr || 1;
+      if (!frontCv) { frontCv = document.createElement('canvas'); frontG = frontCv.getContext('2d'); }
+      var pw = Math.round(W * dpr), ph = Math.round(H * dpr);
+      if (frontCv.width !== pw || frontCv.height !== ph) { frontCv.width = pw; frontCv.height = ph; }
+      var q = frontG; q.setTransform(dpr, 0, 0, dpr, 0, 0);
+      q.globalCompositeOperation = 'source-over'; q.globalAlpha = 1; q.clearRect(0, 0, W, H);
+      q.drawImage(src, 0, 0, W, hh);
+      q.save(); q.translate(0, 2 * hh); q.scale(1, -1); q.drawImage(src, 0, 0, W, hh); q.restore();   /* under the line the bars are mirrored, so the haze lying over them is mirrored too */
+      var y0 = H * (S.frontTop == null ? 0.45 : S.frontTop), y1 = H * (S.frontBot == null ? 0.70 : S.frontBot);
+      var span = Math.max(1, y1 - y0);
+      var f = Math.min(0.49, Math.max(0.01, S.frontFeather == null ? 0.075 : S.frontFeather) * H / span);
+      var fb = Math.min(0.49, Math.max(0.005, S.frontFeatherBot == null ? S.frontFeather : S.frontFeatherBot) * H / span);
+      var gm = q.createLinearGradient(0, y0, 0, y1);
+      gm.addColorStop(0, 'rgba(0,0,0,0)'); gm.addColorStop(f, 'rgba(0,0,0,1)');
+      gm.addColorStop(Math.max(f + 0.001, 1 - fb), 'rgba(0,0,0,1)'); gm.addColorStop(1, 'rgba(0,0,0,0)');
+      q.globalCompositeOperation = 'destination-in'; q.fillStyle = gm; q.fillRect(0, 0, W, H);
+      q.globalCompositeOperation = 'source-over';
+      return frontCv;
+    }
+    var veilCv = null, veilG = null;
+    function veilShape(fl, W, H) {
+      /* THE DIMMING, CUT TO THE FOG'S OWN SHAPE. A plain vertical gradient of the desktop's colour dims the right
+         band - and announces itself as a soft horizontal LINE across the screen, which is the one thing this effect
+         must never have. Filling the desktop's colour and then taking the fog out of it with destination-in gives a
+         veil whose every edge is the fog's edge: it thins where the fog thins, and there is no line anywhere in it. */
+      var dpr = geo.dpr || 1;
+      if (!veilCv) { veilCv = document.createElement('canvas'); veilG = veilCv.getContext('2d'); }
+      var pw = Math.round(W * dpr), ph = Math.round(H * dpr);
+      if (veilCv.width !== pw || veilCv.height !== ph) { veilCv.width = pw; veilCv.height = ph; }
+      var q = veilG; q.setTransform(dpr, 0, 0, dpr, 0, 0);
+      q.globalCompositeOperation = 'source-over'; q.globalAlpha = 1; q.clearRect(0, 0, W, H);
+      q.fillStyle = 'rgb(' + (LT().smoke.veil || BG) + ')'; q.fillRect(0, 0, W, H);   /* the AIRLIGHT: what everything inside the haze converges toward. The desktop's own near-black only ever DARKENED; a mid-dark neutral pulls the bright bars down AND lifts the gaps between them, and it is that collapse of contrast - not the dimming - that the eye reads as fog */
+      q.globalCompositeOperation = 'destination-in'; q.drawImage(fl, 0, 0, W, H);
+      q.globalCompositeOperation = 'source-over';
+      return veilCv;
+    }
+    function drawSmoke(ch, rgb, a, ck) {
+      /* The two lamps and the letter cut out of them are built ONCE, on their own layer, and that layer is what gets
+         drawn. Two reasons, both of them things the eye catches straight away:
+           - the lamps are combined with 'lighten' (the BRIGHTER of the two), not added. Added, their overlap in the
+             middle showed as a bright wedge with hard seams down its sides - light that no lamp accounts for;
+           - the letter is cut from the finished layer, so it is one clean silhouette rather than a hole punched twice. */
+      var S = LT().smoke, W = geo.W, hh = Math.max(8, Math.round(geo.yH));
+      var kind = smokeBeam ? 'beam' : 'haze', dpr = geo.dpr || 1, t = (S.front && gf) ? gf : g;   /* behind the bars (weather) or in front of them (the light fills the room) */
+      if (a <= 0.002) return;
+      var px = fitPx(ch, Math.round(geo.yH * S.size), geo.W * 0.94, geo.yH * 0.98);
+      var tx = geo.cx, ty = geo.yH * S.aimY, spread = Math.round(W * S.spread);   /* the beams land on the horizon, where the letter's foot is */
+      var key = rgb + '|' + kind + '|' + W + 'x' + hh + '|' + spread + '|' + S.spread + '|' + S.beamTop + '|' + S.feather;   /* no letter in the key: only the light's own look rebuilds it */
+      if (key !== lampKey) {
+        if (!lampCv) { lampCv = document.createElement('canvas'); lampG = lampCv.getContext('2d'); }
+        if (!lampOld) { lampOld = document.createElement('canvas'); }
+        if (lampKey && lampCv.width && !lampCut) {   /* keep what is on screen and cross to the new colour from it (lampCut: fog into fog on the same letter - cut instead) */
+          if (lampOld.width !== lampCv.width || lampOld.height !== lampCv.height) { lampOld.width = lampCv.width; lampOld.height = lampCv.height; }
+          var og = lampOld.getContext('2d'); og.setTransform(1, 0, 0, 1, 0, 0);
+          og.clearRect(0, 0, lampOld.width, lampOld.height); og.drawImage(lampCv, 0, 0);
+          lampOldOn = true; lampT0 = now;
+        }
+        var pw = Math.round(W * dpr), ph = Math.round(hh * dpr);
+        if (lampCv.width !== pw || lampCv.height !== ph) { lampCv.width = pw; lampCv.height = ph; lampOldOn = false; }
+        var q = lampG; q.setTransform(dpr, 0, 0, dpr, 0, 0);
+        q.globalCompositeOperation = 'source-over'; q.globalAlpha = 1; q.clearRect(0, 0, W, hh);
+        /* Each lamp is painted only on ITS OWN HALF of the sky. The two fields are exact mirrors of each other about
+           the centre line, so at that line they are equal to the last decimal - the join is invisible, and the light
+           where they meet is the same brightness as either lamp alone.
+           ('lighten' was tried first and is not enough: it takes the brighter COLOUR, but the source-over alpha of the
+           two still adds up, which is precisely the brighter triangle down the middle.) */
+        q.save(); q.beginPath(); q.rect(0, 0, geo.cx, hh); q.clip();
+        q.drawImage(lampSpr(rgb, kind, W, hh, -1, tx, ty, spread), 0, 0, W, hh); q.restore();
+        q.save(); q.beginPath(); q.rect(geo.cx, 0, W - geo.cx, hh); q.clip();
+        q.drawImage(lampSpr(rgb, kind, W, hh, 1, tx, ty, spread), 0, 0, W, hh); q.restore();
+        mottle(q, W, hh, rgb, key);   /* the air in the light: applied to the COMBINED layer, never per lamp - per lamp it would differ either side of the centre line and make the mirror seam visible */
+        lampKey = key;   /* the layer is LIGHT ONLY now: the letter is cut per frame in fogLayer, so a change of letter never has to rebuild or cross-fade this */
+      }
+      lampCut = false;   /* one group change, one decision */
+      /* ENTRANCE: it rolls in from both edges toward the middle, and gets there well before the brightness has finished
+         coming up. LEAVING: it does not roll back - it stands where it is and fades out slowly. */
+      /* the RISE has its own clock, not the brightness fade's: how long the fog takes to climb the sky is a different
+         thing from how long it takes to become visible, and tying them together meant one could not be slowed without
+         the other. On the way out it does not come back down - it stands where it is and fades. */
+      var creep = (styleGoal === 1 && !snapIn) ? Math.min(1, Math.max(0, (now - styleT0) / Math.max(0.05, S.riseS))) : 1;   /* snapIn: after a sequenced section the fog does not get its slow climb - it is simply there (the letter with it) */
+      var e = creep * creep * (3 - 2 * creep);
+      /* A SEQUENCED SECTION'S FOG ONLY FADES (追記⑯: 煙霧/雲朵特效字母只淡入/淡出，不再縮放 - the expanding-disc
+         entrance is withdrawn). The fog arrives fully formed (e = 1, no climb) and its alpha rides the beat-anchored
+         fade that frame() applies through `a` (sa), starting ON the letter's beat. */
+      if (ck && LT().seq.ids.indexOf(ck.id) >= 0 && styleGoal === 1) e = 1;
+      /* the letter has its OWN, much shorter fade: the fog may take ten seconds to fill the sky, but the letter
+         announcing the section should be legible almost at once and gone almost at once. */
+      /* THE LETTER IS TIMED FROM THE MUSIC, NOT FROM THE EFFECT. It used to ride the style's own fade, so with fog that
+         takes seven seconds to fill the sky the letter was still arriving (or still leaving) halfway through the next
+         section. It now starts its short fade the moment the letter itself changes, whatever the fog is doing. */
+      var lIn = seqCut ? 0 : S.letterInS;
+      var lp = lIn > 0 ? Math.min(1, (now - letT0) / lIn) : 1;
+      if (styleGoal === 0) { var lOut = seqCut ? 0 : S.letterOutS; lp = Math.min(lp, lOut > 0 ? Math.max(0, 1 - (now - styleT0) / lOut) : 0); }
+      lp = lp * lp * (3 - 2 * lp);
+      var sq = seqLetterNow(ck);
+      if (sq >= 0) lp = sq <= 0 ? 0 : Math.min(lp, Math.max(0, Math.min(1, (ck.beat - (LT().seq.letterBeat || 0)) * (60 / Math.max(1, ck.bpm)) / Math.max(0.05, S.letterInS))));   /* sequenced section: the fog's letter FADES from its beat (追記⑯: 只淡入/淡出，不再瞬切/縮放) - nothing before the beat, then letterInS of fade */
+      lp *= (1 - seqDark);
+      /* THE OUTGOING LETTER (fog straight into fog only - see frame()). It leaves on its own `letterOutS`, timed from
+         the same instant the new one starts arriving, so the two genuinely cross rather than one following the other. */
+      var cuts = exitOn(ck) ? [] : [{ ch: ch, px: px, a: lp }];   /* LOG-112: in the outro the fog is only weather - the letter that announces the ending is coming up the road, and cutting a second one into the light would put two forms on screen at once */
+      if (cuts.length && letPrev && letPrev !== ch) {
+        var lo = S.letterOutS > 0 ? Math.max(0, 1 - (now - letT0) / S.letterOutS) : 0;
+        lo = lo * lo * (3 - 2 * lo) * (1 - seqDark);
+        if (lo <= 0.002) letPrev = null;
+        else cuts.push({ ch: letPrev, px: fitPx(letPrev, Math.round(geo.yH * S.size), geo.W * 0.94, geo.yH * 0.98), a: lo });
+      }
+      var src = fogLayer(W, hh, rgb, (1 - e) * hh * S.lift, e, cuts);   /* the light with the fog drifting through it, blown up from below */
+      /* ONE OF THE TWO WAYS THE FOG LEAVES (rolled per group): swept off left to right in a third of a second, like a
+         curtain pulled. Deliberately the one hard edge in the whole thing - and the reason a swept-off fog is barred
+         from the very next group, so it can never appear to snap straight back. */
+      var wipe = -1;
+      if (wipeExit && styleGoal === 0) { wipe = Math.min(1, (now - styleT0) / Math.max(0.03, S.wipeS)); if (wipe >= 1) { banSmoke = true; return; } }
+      /* 追記㊷ (the user: 煙霧效果多一個從中間(消失點)往外圓形擴散的出現方式): the disc entrance, back BY THE USER'S
+         OWN ASK (⑯ withdrew an earlier scaling entrance; this one is a REVEAL - the fog is drawn fully formed and a
+         growing circle about the vanishing point uncovers it, nothing is resized). A soft rim: the outer 25 % ring is
+         drawn at 40 % alpha first, the full disc over it. */
+      var circR = -1;
+      if (smokeCirc && styleGoal === 1 && !snapIn) {
+        var pcc = Math.min(1, (now - styleT0) / Math.max(0.05, S.circS == null ? 1.2 : S.circS));
+        if (pcc < 1) { var pce = pcc * pcc * (3 - 2 * pcc); circR = pce * (Math.hypot(Math.max(geo.cx, W - geo.cx), Math.max(geo.yH, geo.H - geo.yH)) + 40); }
+      }
+      function circClip(dst, rr) { dst.beginPath(); dst.arc(geo.cx, geo.yH, Math.max(1, rr), 0, 6.2832); dst.clip(); }
+      function lay(dst, alpha, img) {
+        if (alpha <= 0.002) return;
+        function one(rr, aa2) {
+          dst.save(); dst.globalCompositeOperation = 'lighter'; dst.globalAlpha = aa2;
+          if (wipe >= 0) { dst.beginPath(); dst.rect(wipe * W, 0, W - wipe * W, hh); dst.clip(); }
+          if (rr >= 0) circClip(dst, rr);
+          dst.drawImage(img, 0, 0, W, hh);
+          dst.restore();
+        }
+        if (circR >= 0) { one(circR * 1.25, alpha * 0.4); one(circR, alpha); }
+        else one(-1, alpha);
+      }
+      lay(t, S.alpha * a, src);
+      var fl = (gf && t !== gf) ? frontLayer(src, W, hh, geo.H) : null;   /* built once: the additive light AND the dimming veil are the same cloud */
+      if (fl) {   /* the same haze IN FRONT of the bars, but only across the band that may be covered */
+        var fa = S.alpha * a * S.frontMix;
+        if (fa > 0.002) {
+          gf.save(); gf.globalCompositeOperation = 'lighter'; gf.globalAlpha = Math.min(1, fa);
+          if (wipe >= 0) { gf.beginPath(); gf.rect(wipe * W, 0, W - wipe * W, geo.H); gf.clip(); }
+          if (circR >= 0) circClip(gf, circR * 1.1);   /* the front haze rides the same disc (追記㊷) */
+          gf.drawImage(fl, 0, 0, W, geo.H);
+          gf.restore();
+        }
+      }
+      /* AND THE BARS INSIDE THE BAND GO DOWN. Not the whole canvas - only where the haze is, on the same soft ramps,
+         so the tops of the bars stay at full brightness and the contrast between the clear part and the hazed part is
+         the thing you actually see. It fades them toward the DESKTOP'S OWN colour (never black: black reads as a hole
+         cut in the page, and the room's flashes are unbearable against it). */
+      if (gf && S.dim < 1) {
+        var vk = (1 - S.dim) * a;
+        if (vk > 0.002) {
+          gf.save(); gf.globalCompositeOperation = 'source-over'; gf.globalAlpha = vk;
+          if (wipe >= 0) { gf.beginPath(); gf.rect(wipe * W, 0, W - wipe * W, geo.H); gf.clip(); }
+          if (circR >= 0) circClip(gf, circR * 1.1);   /* and the veil (追記㊷) */
+          gf.drawImage(veilShape(fl, W, geo.H), 0, 0, W, geo.H); gf.restore();
+        }
+      }
+      /* The letter over the SPECTRUM. Not a CSS mask: a mask has no opacity of its own, so it can only be switched on
+         and off - which is exactly the letter appearing and vanishing in one frame. Painted instead, in the night's own
+         colour, at an alpha that rides the style's fade: the bars inside the letter are turned down, and they are turned
+         down gradually. */
+      if (gf && S.cutBars > 0) {
+        for (var c2 = 0; c2 < cuts.length; c2++) {   /* the same pair, over the bars: both letters, each at its own alpha */
+          var cv2 = cuts[c2]; if (!cv2 || cv2.a <= 0.002) continue;
+          var ms2 = shapeSpr(cv2.ch, cv2.px, S.style || 'fill'), mw2 = ms2.width / dpr, mh2 = ms2.height / dpr;
+          gf.save(); gf.globalCompositeOperation = 'source-over'; gf.globalAlpha = S.cutBars * cv2.a;
+          if (wipe >= 0) { gf.beginPath(); gf.rect(wipe * W, 0, W - wipe * W, hh); gf.clip(); }
+          gf.drawImage(ms2, geo.cx - mw2 / 2, geo.yH - midBox(cv2.ch, '700').desc * cv2.px - mh2 / 2, mw2, mh2);
+          gf.restore();
+        }
+      }
+    }
+    /* (5) BLACK LIGHT: the letter is not drawn at all - it is a HOLE in the spectrum bars, so inside it the bars are
+       simply absent and the wallpaper's own colour comes through. Nothing painted from above can do this (the bars live
+       on their own canvas, below ours), so it is done the way the dock's hover bubble cuts the bar: a mask on #wave,
+       written through custom properties. The mask is an image of the glyph, rebuilt ONLY when the letter or its place
+       changes - never per frame (an SVG mask re-rasterised every canvas frame is what dropped frames in LOG-108). */
+    var holeKey = null, holeEl = null;
+    function waveEl() { if (!holeEl || !holeEl.isConnected) holeEl = $('#wave'); return holeEl; }
+    function holeSpr(ch, px, style, cutA, ringK, ringA, flip) {
+      /* the mask image. A CSS mask reads ALPHA, so black is only a convenience here - what matters is how opaque each
+         pixel is, because that is how much of the spectrum bar gets taken away there. Hence two marks in one image:
+           - a partial-alpha HALO round the letter (the "black glow": the bars thin out toward the glyph instead of
+             stopping dead on its edge), and
+           - the letter itself at full alpha (the bars are simply gone inside it).
+         'tube' cuts only the glass walls, so the counter of the letter keeps its bars and the cut-out reads as a neon
+         tube made of absence; 'fill' takes the whole glyph. */
+      var Hc = LT().hole, w = Math.ceil(px * 3.2), h = Math.ceil(px * 2.8);   /* wide box: the outermost ring must not be cut off by the canvas edge */
+      cutA = cutA == null ? 1 : Math.max(0, Math.min(1, cutA));
+      ringK = ringK == null ? 1 : ringK; ringA = ringA == null ? 1 : ringA;   /* per hole: how far and how strongly its black glow bleeds onto the bars */   /* a CSS mask reads alpha, so a partial alpha here takes away only PART of the bar: the letter shows the spectrum through it, dimmed, instead of erasing it */
+      var c = document.createElement('canvas'), dpr = px > 260 ? 1 : 2;   /* a sky-sized letter would encode a 3000px PNG at 2x; the cut is a soft shape, 1x is plenty for it */
+      c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+      var x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (flip) { x.translate(0, h); x.scale(1, -1); }   /* the same cut, upside down: what the letter takes out of the bars, its reflection takes out of the bars' own reflection */
+      var cv = null, blk = null;
+      if (style === 'tube') { cv = buildCarve(ch, px, '255,255,255', { wall: LT().wall, core: LT().core, glow: 1 }); blk = blackOf(carveCv, cv.lw, cv.lh); }
+      function mark(t) {
+        if (cv) t.drawImage(blk, w / 2 - cv.lw / 2, h / 2 - cv.lh / 2, cv.lw, cv.lh);
+        else { t.font = '700 ' + px + 'px ' + SANS; t.textAlign = 'center'; t.textBaseline = 'middle'; t.fillStyle = '#000'; t.fillText(ch, w / 2, h / 2); }
+      }
+      var rings = Hc.rings || [];
+      for (var q = 0; q < rings.length; q++) {   /* a real blurred copy per ring: wide and faint, then tighter and stronger */
+        var a = Math.min(1, rings[q][1] * (Hc.glow == null ? 1 : Hc.glow) * cutA * ringA);
+        if (a <= 0.002) continue;
+        blurred(x, px * rings[q][0] * ringK, a, mark);
+      }
+      x.globalAlpha = cutA; mark(x); x.globalAlpha = 1;
+      var clipL = arguments.length > 7 ? arguments[7] : null;
+      if (clipL != null && clipL < 1) { x.save(); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(w * clipL, 0, w - w * clipL, h); x.restore(); }   /* 追記㊵: the flash-wipe variants - only the LEFT clipL share of the cut survives (the second gleam eats the letter right to left) */
+      return { url: c.toDataURL('image/png'), w: w, h: h };
+    }
+    var holeImg = {};
+    function holeKeyOf(o) { var Hc = LT().hole; return o.ch + '|' + o.px + '|' + o.style + '|' + (o.a == null ? 1 : o.a) + '|' + (o.ring == null ? 1 : o.ring) + '|' + (o.ringA == null ? 1 : o.ringA) + '|' + Hc.glow + '|' + JSON.stringify(Hc.rings) + (o.flip ? '|f' : '') + (o.clip != null && o.clip < 1 ? '|c' + o.clip : ''); }
+    function holeFor(o) { var ik = holeKeyOf(o); return holeImg[ik] || (holeImg[ik] = holeSpr(o.ch, o.px, o.style, o.a == null ? 1 : o.a, o.ring == null ? 1 : o.ring, o.ringA == null ? 1 : o.ringA, o.flip, o.clip)); }
+    var warmGap = 0, warmGap2 = 0;
+    function warmExitBakes(ck) {
+      /* ★ 追記㊲ (the user: 雲朵以外的I段落滑出的時候都會有動畫卡頓): the tube's and the mask's travelling cut re-bakes
+         in power-of-two tiers as the door grows (追記⑲) - and each tier is a holeSpr on a canvas up to ~3800 px wide,
+         three blur rings and a synchronous toDataURL: tens of ms, fired MID-SWEEP at every tier flip. The cloud never
+         stutters because its cut is a rect. So the tiers this journey will need are baked HERE, during the stand,
+         one bake every ~15 frames where nothing on stage moves fast - the sweep then hits a warm cache only. */
+      var form = arguments.length > 1 ? arguments[1] : exitForm(); if (form === 'cloud') return;
+      if (warmGap > 0) { warmGap--; return; }
+      var ch = (typeof ck === 'string' ? ck : (ck && ck.letter)) || 'I', FS = LT()[form] || LT().focal;
+      var px = fitPx(ch, Math.round(geo.yH * FS.size), geo.W * 0.94, geo.yH * 0.98);
+      var o = { ch: ch, px: px, style: 'fill' };
+      if (form === 'focal') { var Ff = LT().focal; o.a = Ff.holeA; o.ring = Ff.holeRing; o.ringA = Ff.holeRingA; }
+      for (var t = 2; ; t *= 2) {
+        var pxB = Math.min(1200, Math.round(px * t));
+        o.px = pxB;
+        if (!holeImg[holeKeyOf(o)]) { holeFor(o); warmGap = 15; return; }   /* one tier per pass, spread out - never two strikes in one frame */
+        if (pxB >= 1200) return;
+      }
+    }
+    function maskParts(list) {
+      /* The IMAGE is built only when the letter, its size or the glow changes (it is a toDataURL - never per frame).
+         The scale k is written straight into mask-size, so the cut-out can open and close like an iris without the
+         picture being rebuilt at all. It returns the three custom-property values; WHO wears them is the caller's
+         business (LOG-112: the outro's exit puts the very same cut on the stage's own layers). */
+      var Hc = LT().hole;
+      var m = [], p = [], s = [];
+      list.forEach(function (o) {
+        if (o.rect) {   /* LOG-112: the outro's door is a RECTANGLE - a solid gradient layer is exact, costs no image and no toDataURL. o.a < 1 = a PARTIAL cut: the bars inside show dimmed instead of gone (the cloud door - 追記⑰) */
+          var ra2 = o.a == null ? 1 : o.a;
+          m.push(ra2 >= 1 ? 'linear-gradient(#fff 0 0)' : 'linear-gradient(rgba(255,255,255,' + ra2 + ') 0 0)');
+          p.push(o.rect[0].toFixed(2) + 'px ' + o.rect[1].toFixed(2) + 'px');   /* SUB-PIXEL (追記⑰): Math.round stepped the mask a whole px at a time and the naked mask edge visibly juddered on a slow-moving door */
+          s.push(Math.max(0, o.rect[2]).toFixed(2) + 'px ' + Math.max(0, o.rect[3]).toFixed(2) + 'px');
+          return;
+        }
+        var q = holeFor(o);
+        var k = o.k == null ? 1 : Math.max(0.02, o.k);   /* per hole, not one scale for the list: the tube's own cut-out must always be exactly the size of the tube */
+        var ky = o.ky == null ? 1 : Math.max(0.02, o.ky);   /* a reflected cut is the same width and a squashed height */
+        var w = q.w * k, h = q.h * k * ky;
+        m.push('url("' + q.url + '")'); p.push((o.x - w / 2).toFixed(2) + 'px ' + (o.y - h / 2).toFixed(2) + 'px'); s.push(w.toFixed(2) + 'px ' + h.toFixed(2) + 'px');   /* sub-pixel too (追記⑰) */
+      });
+      m.push('linear-gradient(#fff 0 0)'); p.push('0 0'); s.push('100% 100%');   /* the last layer is everything; composited 'exclude' = everything MINUS the letters */
+      return { m: m.join(', '), p: p.join(', '), s: s.join(', ') };
+    }
+    function setHoles(list) {
+      var el = waveEl(); if (!el) return;
+      var q = maskParts(list), key = q.p + '|' + q.s + '|' + q.m.length;
+      if (key === holeKey) return;   /* the DOM is touched only when something actually moved */
+      holeKey = key;
+      el.style.setProperty('--wvm', q.m);
+      el.style.setProperty('--wvp', q.p);
+      el.style.setProperty('--wvs', q.s);
+    }
+    function clearHole() {
+      if (holeKey === null) return;
+      var el = waveEl();
+      if (el) { el.style.removeProperty('--wvm'); el.style.removeProperty('--wvp'); el.style.removeProperty('--wvs'); }
+      holeKey = null;
+    }
+    var holeWant = [];   /* what the frame wants cut out of the bars; written once, at the end, so an unchanged mask is never rebuilt */
+    function drawHole(ch, both, ck) {
+      var Hc = LT().hole, px = fitPx(ch, Math.round(geo.yH * Hc.size), geo.W * 0.94, geo.yH * 0.98);
+      var y = geo.yH + geo.H * Hc.dy - midBox(ch, '700').desc * px;
+      var tube = holeTube && !(ck && exitOn(ck));   /* the OUTRO's mask is always the WHOLE glyph (追記⑮: the tube coin left the counter's bars standing - "遮罩是消除中間會有兩根音量條") */
+      if (!both && ck && exitOn(ck)) return;   /* the OUTRO's standing mask is the door's own BIRTH cut, pushed by frame() from beat 0 (追記⑱: 把遮罩I從一開始就遮掉進度線) - pushing a second, differently-anchored one here would XOR against it */
+      if (!both && doorNow) return;   /* the door's rect has taken over this style's whole existence - a second cut on top XOR-cancels (追記⑮) */
+      if (!both) {
+        holeWant.push({ ch: ch, px: px, style: tube ? 'tube' : 'fill', x: geo.cx, y: y, k: 'iris' });
+        /* AND ITS REFLECTION. This style IS a mask - the letter is never drawn, it is the one place the bars are
+           missing - so its reflection can only be the same absence, mirrored: the bars are mirrored under the
+           progress line too, and cutting the letter out above it while leaving the pool below unbroken is what
+           gave the hole away as a sticker. Same mask flipped, squashed by the reflection's own k, opening on the
+           same iris. (drawFocal does the same for the tube's inner cut.) */
+        var Rh = LT().refl, footH = geo.yH + geo.H * Hc.dy;
+        if (Rh.on && Rh.holeA > 0) holeWant.push({ ch: ch, px: px, style: tube ? 'tube' : 'fill', flip: true, x: geo.cx, y: footH + Rh.k * midBox(ch, '700').desc * px, ky: Rh.k, a: Rh.holeA, k: 'iris' });
+        return;
+      }
+      holeWant.push({ ch: ch, px: px, style: 'fill', x: geo.cx + geo.W * Hc.previewDx, y: y });
+      holeWant.push({ ch: ch, px: px, style: 'tube', x: geo.cx + geo.W * Hc.previewDx2, y: y });   /* preview: solid cut-out and hollow-tube cut-out, side by side */
+    }
+    /* (4) THE ROADSIDE BOARD: struck on a chosen beat, it rises out of the horizon beside the road and sweeps past on
+       the road's own projection - small and slow far off, huge and quick as it goes by, then out of frame. */
+    function passK(p) {   /* the road's own projection, UNCLAMPED: past the elimination line the board goes on growing and
+         accelerating exactly as a real sign does when it passes the car, until maxK - by which point it is off the edge.
+         (proj() clamps at the line, which made the board simply stop and vanish mid-screen.) */
+      var r = SEC_CITY.road.depth, d = r - (r - 1) * Math.max(0, p);
+      return 1 / Math.max(1 / LT().pass.maxK, d);
+    }
+    function passEnd() { var r = SEC_CITY.road.depth; return (r - 1 / LT().pass.maxK) / (r - 1); }   /* the p at which it has reached maxK and is long gone */
+    function passAt(ch, rgb, p, a, sd) {
+      var P = LT().pass, pr = passK(p), side = (sd || 1) * P.side;
+      var y = geo.yH + (geo.yL - geo.yH) * pr;
+      var x = geo.cx + side * geo.half * pr;
+      var px = Math.max(8, Math.round(P.size * geo.H)), bake = Math.max(px, Math.min(P.bake, px * 2));
+      var k = pr * px / bake;   /* baked bigger than it starts, so the last few frames going past are still sharp */
+      putLetter([x, y - midBox(ch, '700').desc * px * pr], k, ch, bake, rgb, P.style || 'fill', P.glow, P.alpha * a * Math.min(1, p / 0.06), true);   /* it STANDS on the verge at its own depth - centred on that row it was half sunk into the ground */
+      putRefl(x, y, ch, bake, rgb, P.style || 'fill', P.glow, P.alpha * a * Math.min(1, p / 0.06), true, k);   /* the board reflected in the tarmac it stands beside */
+    }
+    function spawnPasses(ck) {
+      /* Launching a board is NOT the same job as drawing one, and it must not depend on which style happens to be
+         showing: a board has to leave one travel-time before its beat, so the NEXT section's bar-1 board leaves while
+         the CURRENT section is still playing. When this lived inside drawPasses it only ever ran if the current section
+         also happened to have rolled 'pass' - which is why bar 1 was there in a pass-only test and missing in real play. */
+      var P = LT().pass;
+      if (ck && ck.startAt !== lastPassSeg) { lastPassSeg = ck.startAt; lastPassBeat = -1e9; seamDone = false; seamOut = false; }
+      if (!ck || byeT0 || !P.atBeats || !P.atBeats.length) return;
+      /* `atBeats` is the beat the board SWEEPS PAST on, so it has to leave a travel-time earlier. That is right for
+         every beat whose launch still falls inside this section - and impossible for bar 1 beat 1, whose launch is in
+         the PREVIOUS section. That one is handled by the seam below.
+         (Launching ON the beat instead was tried and is worse: it moves every other board a whole travel-time late -
+         bar 4's board passed at beat 18 instead of 12 - and the rhythm goes with it.) */
+      var bn = beatNow(ck);
+      var want = []; try { want = getEng().beatsIn(bn, bn + P.travel); } catch (e) { want = []; }
+      for (var i = 0; i < want.length; i++) {
+        var b = want[i]; if (b.i <= 0) continue;   /* beat 0 is the seam's job: the board that passes on THIS section's downbeat was launched by the section before it */
+        var slot = P.cycle > 0 ? ((b.i % P.cycle) + P.cycle) % P.cycle : b.i;
+        if (P.atBeats.indexOf(slot) < 0 || b.i <= lastPassBeat) continue;
+        if (ck.endAt && b.t >= ck.endAt - 1e-6) continue;   /* past this section's end - again the seam's job, not an extrapolated beat's */
+        lastPassBeat = b.i; passes.push({ hit: b.t, sd: passSide, seg: ck.startAt });
+        passLog.push({ id: ck.id, beat: b.i, bar: 1 + Math.floor(b.i / (ck.bpb || 4)), beatInBar: 1 + (b.i % (ck.bpb || 4)), passesAt: +b.t.toFixed(3) });
+        if (passLog.length > 40) passLog.shift();
+      }
+      /* ★ THE SEAM, taken from `cur.end` ITSELF and never from an extrapolated beat index. The next section's bar 1
+         beat 1 IS this section's end, whatever the meter did on the way - C2 finishes on a 3/16 bar (32.75 beats), so
+         the extrapolated beat 33 missed `endAt` by 0.103 s and the old |b.t - endAt| < 0.03 test silently stopped
+         matching. Reading endAt directly cannot drift. */
+      if (P.seamEarly && !seamDone && nextStyle === 'pass' && P.atBeats.indexOf(0) >= 0 && ck.endAt && ck.endAt >= bn && ck.endAt <= bn + P.travel) {
+        seamOut = true;   /* ★ this section's own letter bows out now: the board is on its way in, and two forms may never share the screen */   /* ★ only if the section it announces will actually be wearing the roadside board - AND only if the early seam board is switched on at all (see pass.seamEarly) */
+        seamDone = true; passes.push({ hit: ck.endAt, sd: passSide, seg: ck.endAt });
+        passLog.push({ id: ck.id + '→next', beat: 0, bar: 1, beatInBar: 1, passesAt: +ck.endAt.toFixed(3) });
+        if (passLog.length > 40) passLog.shift();
+      }
+    }
+    function drawPasses(ck, ch, rgb, a) {
+      var P = LT().pass;
+      var pe = passEnd();
+      for (var k2 = passes.length - 1; k2 >= 0; k2--) {
+        var pb = passes[k2], p = 1 + (beatNow(ck) - pb.hit) / P.travel;
+        if (p > pe) { passes.splice(k2, 1); continue; }
+        if (ck && pb.seg != null && pb.seg < ck.startAt - 0.05) continue;   /* a board belongs to the section it was launched FOR: an older one never bleeds into this one */
+        if (ck && pb.seg != null && pb.seg > ck.startAt + 0.05) continue;   /* ...and the one aimed at the NEXT section's downbeat is drawn by drawSeam(), not here */
+        if (p >= 0) passAt(ch, rgb, p, a, pb.sd);
+      }
+    }
+    function drawSeam(ck, a) {
+      /* THE BOARD FOR THE NEXT SECTION'S BAR 1 BEAT 1. Its whole approach falls inside THIS section, so it has to be
+         drawn here whatever letter style this section happens to be wearing - otherwise it is invisible until it is
+         already on the line (measured: passEnd() 1.047, i.e. 0.12 s of life) and the user simply never sees it.
+         It wears the NEXT section's letter and colour from the first frame, which is what `decisionLead()` is for:
+         the choice is locked well before the seam, and decisionLeadBeats is set so that lock lands at least one
+         travel-time out. Until it is locked it stays at the vanishing point's own size and shows nothing readable. */
+      var P = LT().pass, pe = passEnd();
+      for (var k3 = passes.length - 1; k3 >= 0; k3--) {
+        var pb = passes[k3];
+        if (pb.seg == null || pb.seg <= ck.startAt + 0.05) continue;
+        var p = 1 + (beatNow(ck) - pb.hit) / P.travel;
+        if (p > pe) { passes.splice(k3, 1); continue; }
+        if (p >= 0 && ck.nextLetter) passAt(ck.nextLetter, hexRgb(ck.nextColor || ck.color), p, a, pb.sd);
+      }
+    }
+    /* ---- the staged ending (see SEC_CITY.seq). Returns how dark the room is and how hard it is flashing. */
+    var seqDark = 0, seqFlash = 0, seqGleam = null, gleamArmed = false, seqHoldF = false, seqWipeX = null;   /* seqHoldF/seqWipeX (追記㊶): the tube keeps its unlit glass through the dark, and the second gleam's front (px) eats sprite and cut alike */   /* seqGleam (追記⑲): A's last-two-beat flashes are no longer the whole room - each is a wave-shaped gleam running along the BARS, one in from the left, one in from the right, dying at the centre. Same lighting principle: a strike that decays. */
+    function seqStep(ck) {
+      var Q = LT().seq;
+      seqDark = 0; seqFlash = 0; seqGleam = null;
+      if (!ck || !Q || !Q.ids || Q.ids.indexOf(ck.id) < 0 || !ck.endAt) return;
+      var beatS = 60 / Math.max(1, ck.bpm), left = (ck.endAt - now) / beatS;
+      if (ck.beat > Q.dimBeat) {   /* everything but the road sinks from dimBeat and is FULLY out by darkTail beats from the end (two bars), and stays out */
+        var total = (ck.endAt - ck.startAt) / beatS;
+        var darkEnd = Math.max(Q.dimBeat + 1, total - (Q.darkTail || 8));
+        seqDark = Math.max(0, Math.min(1, (ck.beat - Q.dimBeat) / (darkEnd - Q.dimBeat)));
+      }
+      if (left <= Q.tailBeats && left > 0) {   /* one flash on each of the last beats */
+        var since = (1 - (left - Math.floor(left))) * beatS;
+        var fk = Math.max(0, 1 - since / Math.max(0.02, Q.flashS));
+        seqFlash = Q.flashA * Math.pow(fk, Q.flashGamma == null ? 1 : Q.flashGamma);   /* LIGHTNING: it strikes on the beat and is gone - the room is only lit while the eye is still catching up, which is what makes the furniture read as revealed out of the dark rather than faded up */
+        var trav = Math.min(1, since / Math.max(0.05, Q.gleamS == null ? 0.3 : Q.gleamS));   /* 追記⑲: the strike now TRAVELS - in from an edge, dead at the centre */
+        var gEnv = trav < 0.7 ? 1 : Math.pow(Math.max(0, 1 - (trav - 0.7) / 0.3), 1.5);   /* 追記㉔: full brightness the whole run, dying only over the last 30% into the far edge ("根本還沒亮到最亮就暗下去" was the strike decaying from the first frame) */
+        seqGleam = { p: trav, dir: Math.ceil(left) % 2 === 0 ? -1 : 1, a: Q.flashA * gEnv };   /* first flash from the left, second from the right */
+      }
+    }
+    function seqLetterNow(ck) {   /* in a sequenced section the letter does not fade in: it is there, on its beat */
+      var Q = LT().seq;
+      if (!ck || !Q || !Q.ids || Q.ids.indexOf(ck.id) < 0) return -1;
+      return ck.beat >= Q.letterBeat ? 1 : 0;
+    }
+    /* ---- LOG-112 THE OUTRO'S EXIT = THE LETTER I MOVING LIKE A BAR LINE (see SEC_CITY.letter.exit for the
+       user's own words). Shape is the glyph's; the geometry of motion is the road's and nothing else:
+         - k = the pinhole projection with p linear over the approach - the exact law every bar line and note on
+           the road already obeys - taken in the door's OWN depth (exitDepth ~60: born where the road is exactly
+           the focal letter's natural width, slow far off, fast into the line);
+         - at depth k the glyph's width is THE ROAD'S OWN WIDTH THERE, centred on the vanishing point, its FOOT on
+           the road surface `yH + (yL - yH) * k` - the foot IS the bar line, so at p = 1 it lands ON the
+           elimination line with the letter towering past the screen;
+         - past the line the same depth axis carries on until every wall has left the frame. Nothing else needs to
+           be tuned, and the door can never be out of step with the road. */
+    function EX() { return LT().exit || {}; }
+    function exitOn(ck) {
+      /* ★ WHEN DOES THE DOOR ENDING RUN AT ALL (the user's closing ruling, 追記㉞: 這個結尾僅會在字母出現時觸發，
+         沒有字母時採正常收尾): only on a run whose letter gate rolled ON. A run that never showed a letter ends the
+         old way - the engine's two-bars-out farewell, the surface compressing, the line retracting - with no door,
+         no centred letter, and no road unfolding for it. (letterOn() is the per-run roll; __road.style() lifts it
+         for review, so the debug path is unchanged.) */
+      var E = EX(); return !!(E.on && letterOn() && ck && ck.id && E.ids && E.ids.indexOf(ck.id) >= 0);
+    }
+    function exitForm() {
+      /* WHICH CENTRED FORM IS SETTING OFF (the user, 追記⑭: 正中雲朵跟遮罩I其實原理一樣 - same law, its own birth
+         size, its own frame design). Whatever this group rolled among the three; anything else falls back to the
+         hollow tube. */
+      return (curStyle === 'hole' || curStyle === 'cloud') ? curStyle : 'focal';
+    }
+    function exitGlyph(ch) {
+      /* THE DOOR IS THE CENTRE-STAGE LETTER SETTING OFF DOWN THE ROAD (the user, 2026-09-02, after locking the
+         final passing size: the outro's letter starts AS the centred form at ITS OWN NATURAL SIZE and must arrive
+         at the MIDI line at EXACTLY the locked final size, proportions intact, width untouchable). So the glyph
+         contributes three numbers: its aspect, its natural ink width AT THIS FORM'S OWN SIZE (追記⑭: 初始比例從
+         這兩者開始 - the mask and the cloud set off at their own scales), and the tube's natural glass. */
+      var m = midBox(ch || 'I', '700'), hU = (m.asc + m.desc) || 1, wU = (m.l + m.r) || 1;
+      var FS = LT()[exitForm()] || LT().focal, px0 = fitPx(ch || 'I', Math.round(geo.yH * FS.size), geo.W * 0.94, geo.yH * 0.98);
+      return { asp: hU / wU, w0: Math.max(4, wU * px0), wn: Math.max(1, px0 * (LT().wall || 0.013)) };
+    }
+    function exitDepth(ch) {
+      /* THE DOOR IS A BAR LINE BORN DEEPER. Its own depth is not the road's 18 but the depth AT WHICH THE ROAD IS
+         EXACTLY AS WIDE AS THE FOCAL LETTER'S NATURAL WIDTH (~60): born there, w = the road's width at every depth
+         gives the natural size at birth, the road's full width at the crossing, and the bottom corners ON the edge
+         lines every frame in between - all three of the user's pins from ONE law, no blend, no snap. (The 追記⑨
+         power law held the two ends but hung mid-approach at a third of the road - "沒有按照小節線邏輯放大，只有在
+         最後一點點的時候才瞬間放大"; a natural-to-full-share blend window was still visibly OFF the red lines.) */
+      return Math.max(2, geo.half * 2 / exitGlyph(ch).w0);
+    }
+    function exitBox(k, ch) {
+      /* the door's box, centred on the vanishing point, its bottom ON the road surface (the MIDI line at k = 1).
+         WIDTH = THE ROAD'S WIDTH AT THAT DEPTH - the red-line test's own rule, holding from the first frame to the
+         last. HEIGHT = width * the letter's aspect at every k (the ruling: the door is the letter enlarged). */
+      var E = EX(), Gm = exitGlyph(ch), W1 = geo.half * 2;
+      var w = W1 * k, hw = w / 2, h = w * (E.asp == null ? Gm.asp : E.asp);
+      var kf = k;
+      if (exitForm() === 'cloud') {
+        /* 追記㉜: THE CLOUD IS BORN WITH ITS FOOT ON THE PLAY LINE (the user: 初始的位置應該是I的底部=撥放線，現在在撥
+           放線下). The strict bar-line law puts the birth foot span/D BELOW the line - invisible for the tube (D~60)
+           but the cloud's great natural width makes D shallow and the drop plain. The foot's depth is remapped
+           linearly so birth (k = 1/D) sits exactly ON the line and the crossing (k = 1) still lands exactly on the
+           MIDI line - the two pins hold, only the path between them lifts. Width keeps the road's own law untouched;
+           the tube and the mask keep the strict law (the corners-on-the-verges ruling ⑩ is theirs). */
+        var k0 = 1 / exitDepth(ch);
+        kf = Math.max(0, (k - k0) / Math.max(0.001, 1 - k0));
+      }
+      var y1 = geo.yH + (geo.yL - geo.yH) * kf;
+      return { x0: geo.cx - hw, x1: geo.cx + hw, y0: y1 - h, y1: y1, w: w, h: h };
+    }
+    function exitCover(ch) {
+      /* WHEN HAS THE LAST OF IT LEFT THE FRAME? The side walls' inner edges must pass the left/right screen edges
+         (inverted through the width power law) and the bottom bar must drop below the bottom edge; the top was
+         gone from the first frame. */
+      var E = EX(), W1 = geo.half * 2, wp = E.wallPx == null ? 10 : E.wallPx;
+      var kx = 2 * (Math.max(geo.cx, geo.W - geo.cx) + wp) / W1;                                    /* the side walls' inner edges past the screen edges (past the blend w = W1 * k, so the inversion is linear) */
+      var kb = (geo.H - geo.yH + wp) / Math.max(1, geo.yL - geo.yH);                                /* the bottom bar below the bottom edge */
+      return Math.max(1.05, kx, kb) * (E.coverK == null ? 1.02 : E.coverK);
+    }
+    function pCover(cover, D) { return (D - 1 / cover) / (D - 1); }   /* the depth at which it has passed every edge (passEnd()'s arithmetic, in the door's own depth) */
+    function exitSweepBeats(cover, approachBeats, D) {
+      /* HOW LONG THE PASS-BY TAKES, when the road says so: how much depth is left, at the constant-speed rate -
+         in the door's OWN depth (~60), so the pass-by is quicker than the old road-depth arithmetic gave
+         (~0.15 beat): the door arrives at the line at its own projection's speed and nothing decelerates at the
+         eye. A number in sweepBeats slows it back down at the cost of that seam. */
+      var E = EX(); if (typeof E.sweepBeats === 'number' && E.sweepBeats > 0) return E.sweepBeats;
+      return Math.max(0.05, (pCover(cover, D) - 1) * approachBeats);
+    }
+    function exitAt(ck) {
+      if (!geo || !exitOn(ck)) return null;
+      var E = EX(), cross = E.crossBeat == null ? 31 : E.crossBeat, b0 = E.fromBeat == null ? 0 : E.fromBeat;
+      if (exitForm() === 'hole') b0 = E.fromBeatHole == null ? 0 : E.fromBeatHole;   /* 追記⑲: the MASK sets off from bar 1 again (the user: 將遮罩開始移動的時間從4小節退回原來第一小節時就開始) - the tube and the cloud keep the four-bar stand */
+      var beatS = 60 / Math.max(1, ck.bpm), b = ck.beat - (now - beatNow(ck)) / beatS;   /* the beat the EAR is on */
+      if (b < b0) return null;
+      var D = exitDepth(ck.letter), cover = exitCover(ck.letter), sweep = exitSweepBeats(cover, cross - b0, D), k, p, s = 0, past = b > cross;
+      if (!past) p = Math.pow(Math.max(0, Math.min(1, (b - b0) / Math.max(0.001, cross - b0))), E.ease == null ? 1 : E.ease);   /* THE BAR LINE'S OWN LAW: p linear over the approach - born at 1/D of its crossing size (visible from its first frame, at the focal letter's own natural width), slow far off, faster and faster into the line */
+      else {
+        s = Math.min(1, (b - cross) / Math.max(0.01, sweep));
+        p = 1 + s * (pCover(cover, D) - 1);   /* it does not stop at the line: the same depth axis carries on past the eye */
+      }
+      k = 1 / Math.max(1e-4, D - (D - 1) * p);   /* the pinhole projection, in the door's own depth */
+      var kv = Math.min(k, cover);
+      return { b: b, k: k, kv: kv, s: s, past: past, cover: cover, sweep: sweep, box: exitBox(kv, ck.letter),
+               a: Math.min(1, (b - b0) * beatS / Math.max(0.01, exitForm() === 'cloud' ? (E.cloudInS == null ? 0.3 : E.cloudInS) : (E.inS == null ? 0.5 : E.inS))),   /* the cloud's door comes up QUICKER than the standing cloud fades (追記⑳: its 0.5s-in/0.5s-out crossfade dipped mid-way and read as a flicker) */
+               done: past && (b - cross) >= sweep + (E.holdBeats == null ? 1 : E.holdBeats) };
+    }
+    function exitGlass(B, ch) {
+      /* the frame's thickness, by form (追記⑭): the MASK form has no frame at all - the moving mask IS the door
+         ("遮罩沒有白色外框，直接將遮罩前移跟門一樣"); the CLOUD wears its soft band at the cap width; the TUBE's
+         glass is the focal letter's own at the natural size, growing with the letter until it reaches wallPx,
+         then constant. */
+      var form = exitForm(), E = EX(), wp0 = E.wallPx == null ? 10 : E.wallPx;
+      if (form === 'hole') return 0;
+      if (form === 'cloud') return wp0;
+      var Gm = exitGlyph(ch);
+      return Math.min(wp0, Math.max(1, Gm.wn * B.w / Gm.w0));
+    }
+    function exitCutRect(ex, ch) {
+      /* THE INSIDE IS ANOTHER SPACE (the user: "看起來像是I裡面是另一個空間一樣"): from birth, the tube's interior
+         - inside the glass - is the cut. From the crossing on it is the whole box (the walls are flying out), and
+         from there it only ever grows. */
+      var B = ex.box;
+      if (ex.past) return [B.x0, B.y0, B.w, B.h];
+      var wp = exitGlass(B, ch);
+      return [B.x0 + wp, B.y0 + wp, Math.max(0, B.w - 2 * wp), Math.max(0, B.h - 2 * wp)];
+    }
+    function blit(t, img, dx, dy, dw, dh, alpha, comp) {
+      /* the last frames are far bigger than the screen: handing drawImage a destination that size asks for the whole
+         sprite to be scaled and then thrown away. Only the part that lands on the canvas is drawn. */
+      if (!t || dw <= 0 || dh <= 0 || alpha <= 0.002) return;
+      var x0 = Math.max(0, dx), y0 = Math.max(0, dy), x1 = Math.min(geo.W, dx + dw), y1 = Math.min(geo.H, dy + dh);
+      if (x1 <= x0 || y1 <= y0) return;
+      var sw = img.width, sh = img.height;
+      var sx = (x0 - dx) / dw * sw, sy = (y0 - dy) / dh * sh, sw2 = (x1 - x0) / dw * sw, sh2 = (y1 - y0) / dh * sh;
+      t.save(); t.globalCompositeOperation = comp || 'lighter'; t.globalAlpha = Math.max(0, Math.min(1, alpha));
+      t.drawImage(img, sx, sy, Math.max(0.01, sw2), Math.max(0.01, sh2), x0, y0, x1 - x0, y1 - y0);
+      t.restore();
+    }
+    function mistRect(t, B, sp, rgb, a, inw) {
+      /* A FOG-FACED BLOOM hugging a rectangle (追記㉑: the stacked-stroke glow read as concentric hard lines -
+         "點陣圖線條感生硬的光暈" - and shadowBlur is banned in the frame loop). Pure gradients instead: four side
+         strips with a gaussian-ish falloff and four radial corners, outward; `inw` mirrors it inward too. Canvas
+         gradients interpolate continuously - nothing to band. */
+      if (!t || a <= 0.003 || B.w <= 1) return;
+      var SS = inw ? [[0, 0.55], [0.3, 0.26], [0.6, 0.09], [1, 0]] : [[0, 0.10], [0.16, 0.42], [0.5, 0.16], [1, 0]];   /* outward-only (the mask's aura): the peak sits OFF the edge - peaking right at it put a bright rim against the void ("邊框還是會有光條") */
+      function stops(gr) { SS.forEach(function (q) { gr.addColorStop(q[0], 'rgba(' + rgb + ',' + (q[1] * a).toFixed(3) + ')'); }); }
+      var x0 = B.x0, y0 = B.y0, x1 = B.x0 + B.w, y1 = B.y0 + B.h;
+      t.save(); t.globalCompositeOperation = 'lighter';
+      function side(x, y, w, h, gx0, gy0, gx1, gy1) { var gr = t.createLinearGradient(gx0, gy0, gx1, gy1); stops(gr); t.fillStyle = gr; t.fillRect(x, y, w, h); }
+      function corner(cx2, cy2, qx, qy) { var gr = t.createRadialGradient(cx2, cy2, 0, cx2, cy2, sp); stops(gr); t.fillStyle = gr; t.fillRect(qx, qy, sp, sp); }
+      side(x0 - sp, y0, sp, B.h, x0, 0, x0 - sp, 0); side(x1, y0, sp, B.h, x1, 0, x1 + sp, 0);
+      side(x0, y0 - sp, B.w, sp, 0, y0, 0, y0 - sp); side(x0, y1, B.w, sp, 0, y1, 0, y1 + sp);
+      corner(x0, y0, x0 - sp, y0 - sp); corner(x1, y0, x1, y0 - sp); corner(x0, y1, x0 - sp, y1); corner(x1, y1, x1, y1);
+      if (inw) {
+        var si = Math.min(sp, B.w / 2, B.h / 2);
+        side(x0, y0, si, B.h, x0, 0, x0 + si, 0); side(x1 - si, y0, si, B.h, x1, 0, x1 - si, 0);
+        side(x0, y0, B.w, si, 0, y0, 0, y0 + si); side(x0, y1 - si, B.w, si, 0, y1, 0, y1 - si);
+      }
+      t.restore();
+    }
+    function exitFrame(t, B, wp, rgb, glow, alpha, soft) {   /* soft (追記⑭): the CLOUD form's frame - the same geometry in its own dress: wide dim bloom, no white heat core */
+      /* THE DOOR, DRAWN AS LINES EVERY FRAME - no sprite, no bitmap scaling (the user: "不要用圖片放大，這樣啦大
+         會看到點陣很粗糙"), and the tube's glass is a CONSTANT wp px however big the door grows ("中空燈管部分不
+         用變粗") - the same discipline as the road's own edge lines. The bloom is stacked strokes, not a
+         shadowBlur: blur is a bake-time tool and these lines move every frame. */
+      if (!t || alpha <= 0.003) return;
+      /* THE STROKE SITS INSIDE THE BOX (the user: "I的邊界永遠與紅線重疊"): strokeRect centres its line on the
+         path, which hung half the glass OUTSIDE the corner points - and near the horizon the road widens ~6.5 px
+         per px of height, so the half of the bottom bar above the foot read as "wider than the red lines". The
+         box edge is where the geometry is exact, so the glass's OUTER face is drawn ON it: the visible boundary
+         of the letter, not the invisible centreline, is what rides the verges. Only the bloom breathes past. */
+      t.save(); t.globalCompositeOperation = 'lighter'; t.globalAlpha = Math.max(0, Math.min(1, alpha)); t.lineJoin = 'miter';
+      var hw = wp / 2, rx = B.x0 + hw, ry = B.y0 + hw, rw = Math.max(0.01, B.w - wp), rh = Math.max(0.01, B.h - wp);
+      /* the stacked glow passes are GONE (追記㉒: they read as banded strips - "還是條狀的感覺"): the glass is the
+         two crisp cores alone, and its bloom is a mistRect drawn by the caller. */
+      t.strokeStyle = 'rgba(' + rgb + ',.95)'; t.lineWidth = wp; t.strokeRect(rx, ry, rw, rh);
+      t.strokeStyle = 'rgba(255,255,255,.95)'; t.lineWidth = Math.max(1, wp * 0.42); t.strokeRect(rx, ry, rw, rh);
+      t.restore();
+    }
+    function doorLine(t, CR, rgb) {
+      /* ★ THE LINE THROUGH A DOOR IS THE REAL LINE'S TWIN (追記㉔ - painted as a uniform bright rod TWICE, and
+         caught by the user twice: "還沒到卻自己亮了"). It splits at the PLAY HEAD exactly as the wave does: lit
+         corona + core up to frac, the quiet grey line beyond. One painter for every form - no third copy to rot. */
+      var fr = 0; try { fr = Math.max(0, Math.min(1, getEng().state().frac || 0)); } catch (e) {}
+      var pxh = geo.W * fr, x0 = CR[0], x1 = CR[0] + CR[2], yln = geo.yH, lit1 = Math.min(x1, pxh);
+      t.save(); t.globalCompositeOperation = 'source-over';
+      if (dcoll > 0) {
+        /* 追記㉝ (the user: 中空燈管結束時白色進度條沒有往左邊收掉變暗): after the tube door's pass-by the line is
+           REELED IN - the lit part's head runs back to the left edge while the whole line dims, ON THIS CANVAS,
+           before the hand-back fires. (The ㉜ attempt swept the desktop wave's line instead - the white line the
+           user was looking at lives here and just faded with the road canvas.) */
+        var ce = dcoll * dcoll * (3 - 2 * dcoll), xL = Math.max(0, x0);
+        t.globalAlpha = 1 - ce;
+        lit1 = xL + Math.max(0, lit1 - xL) * (1 - ce);
+        pxh = lit1;
+      }
+      if (lit1 > x0) {
+        var cg2 = t.createLinearGradient(0, yln - 32, 0, yln + 32);
+        [[0, 0], [0.25, 0.088], [0.5, 0.40], [0.75, 0.088], [1, 0]].forEach(function (q) { cg2.addColorStop(q[0], 'rgba(' + rgb + ',' + q[1].toFixed(3) + ')'); });
+        t.fillStyle = cg2; t.fillRect(x0, yln - 32, lit1 - x0, 64);
+        if (lit1 < x1) {   /* the play head's radial cap, exactly as the wave wears it (追記㉕: without it the corona ended in a hard vertical cut - "頭部的光擴散渲染有一點被截斷") */
+          var ccd = t.createRadialGradient(lit1, yln, 0, lit1, yln, 32);
+          ccd.addColorStop(0, 'rgba(' + rgb + ',0.40)'); ccd.addColorStop(0.5, 'rgba(' + rgb + ',0.088)'); ccd.addColorStop(1, 'rgba(' + rgb + ',0)');
+          t.fillStyle = ccd; t.fillRect(lit1, yln - 32, Math.min(32, x1 - lit1), 64);
+        }
+        t.strokeStyle = 'rgba(' + rgb + ',1)'; t.lineWidth = 1.2; t.beginPath(); t.moveTo(x0, yln); t.lineTo(lit1, yln); t.stroke();
+      }
+      var gx0 = Math.max(x0, pxh);
+      if (x1 > gx0) { t.strokeStyle = 'rgba(255,255,255,.22)'; t.lineWidth = 2; t.beginPath(); t.moveTo(gx0, yln); t.lineTo(x1, yln); t.stroke(); }
+      t.restore();
+    }
+    function exitPaint(ex, ck, rgb) {
+      var E = EX(), B = ex.box, letCh2 = (ck && ck.letter) || 'I';
+      /* THE CUT, from birth: the tube's interior is taken off both canvases every frame (the whole box once past
+         the line). The canvases are cleared and redrawn every frame, so this is not an accumulation - past the
+         crossing the opening only ever grows, and that is what makes what it takes stay taken. */
+      var form = exitForm(), CR = null;
+      if (E.cut !== false) {
+        CR = exitCutRect(ex, letCh2);
+        var b0c = form === 'hole' ? (E.fromBeatHole == null ? 0 : E.fromBeatHole) : (E.fromBeat == null ? 0 : E.fromBeat);
+        var cA = form === 'cloud' ? Math.min(1, Math.max(0, (ex.b - (E.crossBeat == null ? 31 : E.crossBeat)) / 1.5))
+               : Math.min(1, Math.max(0, (ex.b - b0c)) * (60 / Math.max(1, (ck && ck.bpm) || 172)) / Math.max(0.1, E.cutInS == null ? 0.9 : E.cutInS));   /* the cloud's collect eases in over 1.5 beats from the crossing (追記㉓); every other door's void breathes in on its own longer clock (追記㉕: 中間光暈淡出的時間再拉長 - cutInS) */
+        if ((form !== 'cloud' || ex.past) && cA > 0.003) [g, gf].forEach(function (t) {
+          if (!t) return;
+          t.save(); t.globalCompositeOperation = 'destination-out'; t.globalAlpha = cA;
+          t.fillStyle = '#000'; t.fillRect(CR[0], CR[1], CR[2], CR[3]); t.restore();
+        });
+        /* THE PROGRESS LINE, DRAWN BACK INTO THE OPENING (追記⑭: the spared wave strip showed the volume bars'
+           little stubs crossing the line - "門內還是看得到音量條的小股包". So the wave is cut whole, and the door
+           paints its OWN clean line across the interior in the section's white: just the line, nothing riding it.
+           It does not fade with the pass-by - at the hand-back it is standing exactly where the desktop's line
+           comes home.) */
+        var tl = gf || g;
+        if (form === 'cloud' && tl && CR[3] > 0 && geo.yH >= CR[1] && geo.yH <= CR[1] + CR[3]) doorLine(tl, CR, rgb);   /* through the pass-by and the tail too (追記㉓): this is the line the ending runs out on - split at the play head like the real one (追記㉔) */
+        if (exitForm() === 'focal' && tl && CR[3] > 0 && geo.yH >= CR[1] && geo.yH <= CR[1] + CR[3]) doorLine(tl, CR, rgb);   /* the tube's line, split at the play head like the real one (追記㉔; the MASK form hides the line entirely - 追記⑮) */
+      }
+      if (!E.light) return;
+      if (form === 'hole') {
+        /* the MASK form has no frame - but it RADIATES (追記⑳: 遮罩I嘗試向外散射I使用色的光暈): a bloom in the
+           section's own colour spills OUTWARD from the opening's edge, clipped so the inside stays exactly the
+           lightless void it is ("遮罩門中還是一樣無光"). */
+        var wpB = E.wallPx == null ? 10 : E.wallPx, tB = gf || g;
+        var b0h = E.fromBeatHole == null ? 0 : E.fromBeatHole, beatS2 = 60 / Math.max(1, (ck && ck.bpm) || 172);
+        var envA = Math.min(1, Math.max(0, (ex.b - b0h) * beatS2) / Math.max(0.1, E.auraInS == null ? 9 : E.auraInS));   /* 追記㉒: the aura builds over seven slow seconds ("白光暈7秒淡入慢亮") */
+        var aaB = (E.alpha == null ? 0.92 : E.alpha) * envA * (ex.past ? Math.max(0, 1 - Math.pow(ex.s, 1.5)) : 1) * (E.holeAura == null ? 0.6 : E.holeAura);
+        mistRect(tB, B, Math.min(340, Math.max(wpB * 5, B.w * 0.25)), wave.tintNow(), aaB, false);   /* 追記㉑/㉓/㉖: a MIST, outward-only, the inside void by construction - the WAVE'S OWN eased colour, reaching further as the door grows. (㉕'s play-head sweep gating was tried and withdrawn by the user.) */
+        return;
+      }
+      /* the frame: exitGlass - the tube natural at birth and capped at wallPx (the ruling: the glass must not
+         thicken); the cloud a soft band of the same geometry. */
+      var wp = exitGlass(B, letCh2);
+      var gl = E.glow == null ? 1 : E.glow, t = gf || g;
+      /* THE LIGHT DIES AS IT PASSES: by s = 1 of the sweep the walls are past every screen edge - they fly out at
+         full light early in the sweep and their glow goes with them. The CUT above never fades - what the door
+         took stays taken. */
+      var aBase = form === 'cloud' ? Math.min(1, (LT().cloud.alpha || 0.16) * 1.2) : (E.alpha == null ? 0.92 : E.alpha);   /* the cloud door keeps the CLOUD'S OWN brightness (追記⑮: 顯現時維持原有顏色及亮度，不要邊框突然變亮) - the frame is the same barely-there glass the standing cloud wears */
+      var aa = aBase * ex.a * (ex.past ? Math.max(0, 1 - Math.pow(ex.s, 1.5)) : 1);
+      if (form === 'cloud') mistRect(t, B, Math.min(wp * 3, Math.max(wp * 1.6, B.w * 0.25)), rgb, aa * 1.5, true);   /* 追記㉑: the cloud's frame is a soft luminous mist straddling the edge - no strokes, no banding ("霧面擴散"). 追記㉝: its reach starts at the STANDING CLOUD'S OWN glow and grows with the door up to the old wp*3 - a fixed 30 px band read ~20 % wider than the sprite the moment it appeared (measured 87 px -> 105 px at the set-off row: "寬度會突然變寬") */
+      else {
+        /* the tube's scattered light, INSIDE AND OUT, held IN PROPORTION to the door (追記㉒: 內部光暈理應根據比例維持
+           - it used to be the standing sprite's glow, erased within half a second of the set-off): a mist whose
+           reach scales with the door's own width, so the lamp never loses its air as it grows. */
+        mistRect(t, B, Math.min(320, Math.max(wp * 3, B.w * 0.30)), rgb, aa * 0.55 * gl, true);
+        exitFrame(t, B, wp, rgb, gl, aa, false);
+      }
+      /* and its reflection on the wet road below the foot - the same lines, mirrored about the foot and squashed
+         by the floor's own k. The tube's alone: the cloud floats and the mask has nothing to reflect. Off once it
+         is past the line: what is flying over the camera has no floor to stand on. */
+      if (form === 'focal' && E.refl !== false && !ex.past && t) {
+        var Rf = LT().refl;
+        if (Rf.on) {
+          t.save(); t.translate(0, B.y1); t.scale(1, -(Rf.k || 0.5)); t.translate(0, -B.y1);
+          exitFrame(t, B, wp, rgb, gl, aa * (Rf.alpha == null ? 0.3 : Rf.alpha));
+          t.restore();
+        }
+      }
+    }
+    function exitHole(ex, ck) {   /* the door's opening in the spectrum bars, BY FORM (追記⑰) */
+      if (EX().cut === false) return;
+      var ch = (ck && ck.letter) || 'I', form = exitForm();
+      if (form === 'cloud') {
+        /* the cloud door touches ONLY the bars during the approach: ONE even partial mask (cloudDim) over the whole
+           interior - the spared line band was letting bar stubs through at full brightness (追記㉑: "進度線上還是有
+           一些音量條的股包是亮的"); the LINE is painted back by exitPaint in the wave's own recipe. From the crossing
+           on the cut is total, like every other door: the stage must still be swept away ("結尾時原本應該消失的跑道
+           又重新跑出來" was the cloud door never cutting). */
+        holeWant.push({ rect: exitCutRect(ex, ch), a: 1 - (EX().cloudDim == null ? 0.4 : EX().cloudDim) });   /* 追記㉓: the SAME dim through the pass-by and the tail - snapping to a full cut at the crossing took the line and everything with it in one frame ("動畫跟舞台畫面全部瞬間不見") */
+        return;
+      }
+      /* THE STANDING CUT ITSELF TRAVELS (tube and mask alike): the very glyph sprite the standing letter cuts with -
+         the mask form's plain fill, the tube's fill WITH its ring of bled darkness (追記⑰: 內圈光暈蔓延效果會瞬間消失
+         was that ring being dropped at the set-off) - scaled by the door's own growth, kd = 1 at birth: same cut,
+         same coordinates, same size, same soft edge, nothing swaps or jumps. */
+      var FS = LT()[form] || LT().focal, px = fitPx(ch, Math.round(geo.yH * FS.size), geo.W * 0.94, geo.yH * 0.98);
+      var Gm = exitGlyph(ch), kd = ex.box.w / Gm.w0;
+      /* RE-BAKED IN POWER-OF-TWO TIERS as it grows (追記⑲: the scaled-up sprite's soft halo went blocky - "邊緣類似
+         光暈但是跟點陣圖一樣粗糙"): the sprite is drawn from a bake at least half the on-screen size (cap 1200 px font,
+         a handful of bakes per journey, each cached), so the halo's falloff stays smooth however close it gets. */
+      var pxB = px, kk = kd;
+      if (kd > 1.05) { var tier = Math.pow(2, Math.ceil(Math.log(kd) / Math.LN2)); pxB = Math.min(1200, Math.round(px * tier)); kk = kd * px / pxB; }
+      var o = { ch: ch, px: pxB, style: 'fill', x: geo.cx, y: ex.box.y1 - midBox(ch, '700').desc * px * kd, k: kk };
+      if (form === 'focal') { var Ff = LT().focal; o.a = Ff.holeA; o.ring = Ff.holeRing; o.ringA = Ff.holeRingA; }
+      holeWant.push(o);
+    }
+    function stageTargets() {
+      if (!stageEls || !stageEls.length || !stageEls[0].isConnected) stageEls = [document.querySelector('.dstage'), document.querySelector('.stage-ui')].filter(function (n) { return !!n; });
+      return stageEls;
+    }
+    function setStageHole(list) {
+      var q = maskParts(list), key = q.p + '|' + q.s;
+      if (key === stageKey) return;   /* the DOM is touched only when the cut actually moved */
+      stageKey = key;
+      stageTargets().forEach(function (n) { n.style.setProperty('--dsm', q.m); n.style.setProperty('--dsp', q.p); n.style.setProperty('--dss', q.s); });
+    }
+    function clearStageHole() {
+      if (stageKey === null) return;
+      stageKey = null;
+      stageTargets().forEach(function (n) { n.style.removeProperty('--dsm'); n.style.removeProperty('--dsp'); n.style.removeProperty('--dss'); });
+      stageEls = null;
+    }
+    function drawStyle(s, ch, rgb, a, ck) {   /* ONE way, the one drawn for this group. 'board' is handled by the sign machinery above, 'smoke' by its own eased fade */
+      if (s === 'cloud') drawCloud(ch, rgb, a, ck);
+      else if (s === 'smoke') drawSmoke(ch, rgb, a, ck);
+      else if (s === 'focal') drawFocal(ch, rgb, a, ck);
+      else if (s === 'ground') { if (!groundBusy(ck)) drawGround(ch, rgb, a); }
+      else if (s === 'pass') drawPasses(ck, ch, rgb, a);
+      else if (s === 'hole') drawHole(ch, false, ck);
+
+    }
+    /* ---- the entrance and the exit, for every style but the board.
+       Nothing here is allowed to appear in one frame. The style being shown eases out before the next one eases in, so a
+       change of group reads as a hand-over rather than a cut. The board is the deliberate exception: a neon tube's
+       entrance IS its strike-and-flicker, and that is already in drawSign(). */
+    var showStyle = null, styleA = 0, styleGoal = 0, styleT0 = 0, styleFrom = 0, lastCh = 'A', lastRgb = '224,176,74', seqCut = false, snapIn = false, fastOut = false, prevId = null, letT0 = 0, letCh = null, letPrev = null;   /* fastOut (追記⑱): entering an EXIT section the outgoing style leaves in one frame - the outro's letter must appear on time, whatever the fog's own exit pace (絕對不能影響I) */   /* letPrev: the letter being dissolved OUT of, when the style itself is not changing */   /* snapIn: this entrance began off the back of a sequenced section - EVERY private entrance ramp (the fog's riseS included) snaps with it (the user: "A接任何段落時，下一個段落的字母永遠都是瞬間出現") */
+    function styleStep(want, ch, rgb) {
+      var F = LT().fade;
+      if (showStyle === null && want) { showStyle = want; styleGoal = 0; styleT0 = now; styleFrom = 0; }
+      if (want && want === showStyle) { lastCh = ch; lastRgb = rgb; }
+      var goal = (want && want === showStyle) ? 1 : 0;
+      if (goal !== styleGoal) { styleGoal = goal; styleT0 = now; styleFrom = styleA; if (goal === 1) snapIn = seqCut; }
+      var sm = showStyle === 'smoke' ? LT().smoke : null;   /* the haze has its own timing: it rolls in fast and takes its time leaving */
+      var dur = goal ? (sm ? sm.inS : F.inS) : (sm ? sm.outS : F.outS);
+      if (!goal && sm && want) dur = Math.min(dur, F.outS);   /* 追記⑱: the fog may linger only when nothing follows it - with a successor waiting, its slow exit was DELAYING the next letter's entrance ("煙霧消失的時間會影響下一個字母的出場時間") */
+      if (!goal && fastOut) dur = 0;   /* entering the outro: the old form is simply gone (絕對不能影響I) */
+      if (seqCut) dur = 0;   /* leaving a sequenced section: the old letter is gone in one frame and the new one is simply there */
+      var k = dur > 0 ? Math.max(0, Math.min(1, (now - styleT0) / dur)) : 1;
+      styleA = styleFrom + (goal - styleFrom) * (k * k * (3 - 2 * k));   /* smoothstep from wherever it was: a reversal mid-fade stays continuous */
+      if (goal === 0 && styleA <= 0.003 && want !== showStyle) {   /* the old one is gone: hand over */
+        showStyle = want; styleA = 0; lampOldOn = false; lampKey = null;   /* a fresh entrance starts clean, it does not cross from whatever was on screen a section ago */
+        if (want) { lastCh = ch; lastRgb = rgb; styleGoal = 1; styleT0 = now; styleFrom = 0; snapIn = seqCut; fastOut = false; }
+      }
+      if (seqCut && goal === 1 && styleA >= 0.999) seqCut = false;
+      if (seqCut && !want && styleA <= 0.003) seqCut = false;   /* the hand-over went to the neon board (or to no letter at all): there is nothing left for the cut to act on, and a flag left standing would cut the NEXT change too */
+      return styleA;
+    }
+    /* the position review: every style at once, each one labelled, so the whole composition can be judged in one look */
+    function drawPreview(ck) {
+      var rgb = hexRgb(ck ? ck.color : '#e0b04a'), ch = (ck && ck.letter) || 'B';
+      drawSmoke(ch, rgb, 1); drawCloud(ch, rgb, 1); drawFocal(ch, rgb, 1); drawHole(ch, true);   /* preview: everything at once, the fade bypassed */
+      var busy = groundBusy(ck), gm = busy ? null : drawGround(ch, rgb, 1);   /* E1/E2: the tempo marking owns the tarmac, so the letter stands down */
+      var pe = passEnd(), cyc = (now / 3.4) % 2;   /* PREVIEW ONLY: the full sweep shown right verge then left, so both can be judged. In play the side is rolled once per set and every board in that set uses it. */
+      passAt(ch, rgb, (cyc % 1) * pe, 1, cyc < 1 ? 1 : -1);
+      if (!gf) return;
+      var Z = zonesPx();
+      gf.save(); gf.setLineDash([12, 8]); gf.lineWidth = 2; gf.strokeStyle = 'rgba(87,224,138,.55)';
+      Z.forEach(function (z) { gf.strokeRect(z[0], z[1], z[2] - z[0], z[3] - z[1]); });
+      gf.setLineDash([]); gf.font = '700 14px system-ui,sans-serif'; gf.textAlign = 'left'; gf.textBaseline = 'middle';
+      var tags = [['(0) neon board - random inside the green zones', Z[0][0] + 10, Z[0][1] + 18, '#57e08a'],
+                  ['(1) sky cloud / afterimage  +  (7) corner lamps behind it', geo.W * 0.5 - 190, geo.yH * 0.13, 'rgba(255,255,255,.85)'],
+                  [busy ? '(2) painted on the road - STOOD DOWN (tempo marking owns the road)' : '(2) painted on the road', geo.cx - 100, gm ? gm.y1 + 16 : geo.yL - 30, '#ff9a4d'],
+                  ['(5a) hole: solid', geo.cx + geo.W * LT().hole.previewDx - 50, geo.yH + 24, '#9ad7ff'],
+                  ['(5b) hole: hollow tube   - both really sit at the vanishing point, moved aside here', geo.cx + geo.W * LT().hole.previewDx2 - 60, geo.yH + 24, '#9ad7ff'],
+                  ['(3) on the vanishing point (in front of the bars, shadowed)', geo.cx + 40, geo.yH - 10, '#ffd34d'],
+                  ['(4) roadside board sweeping past', geo.cx + geo.half * 0.45, geo.yH + 26, 'rgba(255,255,255,.9)']];
+      tags.forEach(function (t) { gf.lineWidth = 4; gf.strokeStyle = 'rgba(0,0,0,.9)'; gf.strokeText(t[0], t[1], t[2]); gf.fillStyle = t[3]; gf.fillText(t[0], t[1], t[2]); });
+      gf.restore();
+    }
+    /* ---- F2 the milestone: an odometer in neon digits at the line's right end, always on, blown up for the E sections */
+    function drawNum(str, lx, cy, sx, sy, rgb) {
+      /* the digits simply CHANGE — no odometer roll (the rolling window read as a mechanical counter, not a tempo).
+         The atlas cell is padded well past the digit's advance: a cell cut to the advance clips the bloom down both
+         sides and the number reads as a grey box. sy < sx foreshortens it, which is what puts it ON the tarmac.
+         Cell 10 is the decimal point, so a fraction composes out of the same atlas and costs no bake of its own. */
+      var T = SEC_CITY.tempo, dw = T.font * 0.66, pad = T.font * 0.42, cw = dw + pad * 2, dh = T.font * 1.9, dpr = geo.dpr;
+      var at = spr('d|' + rgb, cw * 11, dh, function (x) {
+        for (var i = 0; i < 10; i++) tube(x, String(i), T.font, '700', rgb, (i + 0.5) * cw, dh / 2);
+        tube(x, '.', T.font, '700', rgb, 10.5 * cw, dh / 2);
+      });
+      var ds = String(str).split(''), n = ds.length;
+      g.save(); g.translate(lx, cy); g.scale(sx, sy);
+      for (var j = 0; j < n; j++) {
+        var ci = ds[j] === '.' ? 10 : +ds[j];
+        g.drawImage(at, ci * cw * dpr, 0, cw * dpr, dh * dpr, j * dw - pad, -dh / 2, cw, dh);
+      }
+      g.restore();
+      return n * dw * sx;
+    }
+    var readV = null, readT = 0, readId = null;
+    function readOut(ck) {
+      /* what the sign SAYS: {int, frac}. Outside a configured section it is simply the tempo, rounded. Inside one it
+         travels from `from` to `to` along that section's own shape, and is only recomputed every stepMs - the ground
+         marking is a baked, row-warped image and cannot be rebuilt every frame. */
+      var T = SEC_CITY.tempo, R = T.read && T.read.ids ? T.read.ids[ck.id] : null;
+      var rsv = (T.read && T.read.reserve) || 0, padS = rsv ? '.' + new Array(rsv + 1).join('0') : '';   /* the SPACE a fraction takes - reserved in EVERY section, not just the ones that print one. The ground marking's font size is reverse-derived from its content width (fs = Wc / adv), so a section that stops reserving it makes the digits jump BIGGER: that is the lurch at E2 -> F1, where the readout leaves the accelerando and the marking is still on screen for its lock and fade. */
+      if (!R) { readId = null; readV = null; return { i: String(Math.round(ck.bpm)), f: '', pad: padS }; }
+      var q = Math.max(0, (T.read.stepMs || 0) / 1000);   /* 0 = every frame. Measured: the ground marking's whole bake (flat plate + 139-row warp, 1656x139 @dpr1) is 0.42 ms, so a per-frame rebake costs ~2.5% of the frame and only for the 23 s of E1+E2 - far cheaper than the visible stepping it removes */
+      if (readId !== ck.id) { readId = ck.id; readV = null; }
+      /* AN EVEN CLIMB, not the score's shape. Reading the real staircase back made the number lurch with the music
+         (the second bar alone is +13 bpm); what is wanted is the FEELING of a steady acceleration, so the readout
+         simply travels `from` -> `to` in equal steps of TIME and lands on `to` at the instant of the hand-over. */
+      var T2 = Math.max(0.05, (ck.endAt || 0) - (ck.startAt || 0)), pr = Math.max(0, Math.min(1, (ck.rel || 0) / T2));
+      if (R.ease && R.ease !== 1) pr = Math.pow(pr, R.ease);   /* a straight line up read as a machine counting; the bend is what makes it feel like something gathering speed */
+      if (readV === null || now - readT >= q) { readV = R.from + (R.to - R.from) * pr; readT = now; }
+      if (!R.dec) return { i: String(Math.round(readV)), f: '', pad: padS };
+      var iv = Math.floor(readV + 1e-9), fr = Math.round((readV - iv) * Math.pow(10, R.dec));
+      if (fr >= Math.pow(10, R.dec)) { iv += 1; fr = 0; }   /* .999 rounding up must carry, not print a fourth digit */
+      return { i: String(iv), f: '.' + ('000' + fr).slice(-R.dec), pad: padS };
+    }
+    var measG = null, emCache = {};
+    function textEm(str, weight) {   /* the string's real width and cap height, per unit of font size. Laying the marking out on
+         a guessed 0.72 em advance is what left a hole between the number and its tag (the digits are far narrower than that)
+         and pushed the tag's M past the road edge (BPM is wider than that). Nothing here is estimated any more. */
+      var tr = SEC_CITY.tempo.groundTrack, k = weight + '|' + tr + '|' + str, c = emCache[k]; if (c) return c;
+      if (!measG) { var mc = document.createElement('canvas'); mc.width = mc.height = 1; measG = mc.getContext('2d'); }
+      measG.font = weight + ' 100px ' + SANS; measG.textBaseline = 'alphabetic';   /* pinned: midBox() measures from 'middle', and a left-over baseline would silently change these numbers */
+      try { measG.letterSpacing = tr; } catch (e) {}   /* the same tracking the plate is drawn with, so the layout matches the ink exactly (ignored where unsupported — then neither side has it) */
+      var m = measG.measureText(str);
+      c = { w: m.width / 100, cap: (m.actualBoundingBoxAscent || 72) / 100 };
+      emCache[k] = c; return c;
+    }
+    var midCache = {};
+    function fitPx(ch, px, maxW, maxH) {
+      /* a hard cap on any sky letter: measured ink, not a guess, so nothing can ever run off the edge whatever the
+         window is. (A letter was reported off-screen; a sweep of every letter x every style at 1920x889 found no
+         overflow, so this is the guard rather than the fix - __road.measure() reports what a given window really does.) */
+      var m = midBox(ch, '700'), w = (m.l + m.r) || 1, h = (m.asc + m.desc) || 1;
+      return Math.max(8, Math.floor(Math.min(px, maxW / w, maxH / h)));
+    }
+    function midBox(ch, weight) {
+      /* where a glyph's ink really sits around a textBaseline='middle' draw point, per unit of font size. Every letter
+         here is baked centred in its sprite, so this is what lets one be STOOD ON a line (the horizon, the verge)
+         instead of eyeballed: bottom = the draw point + desc * fontSize. */
+      var k = weight + '|' + ch, c = midCache[k]; if (c) return c;
+      if (!measG) { var mc = document.createElement('canvas'); mc.width = mc.height = 1; measG = mc.getContext('2d'); }
+      measG.font = weight + ' 100px ' + SANS; measG.textBaseline = 'middle';
+      try { measG.letterSpacing = '0px'; } catch (e) {}
+      var m = measG.measureText(ch);
+      c = { asc: (m.actualBoundingBoxAscent || 36) / 100, desc: (m.actualBoundingBoxDescent || 36) / 100,
+            l: (m.actualBoundingBoxLeft || 30) / 100, r: (m.actualBoundingBoxRight || 30) / 100 };   /* ink left/right of a centred anchor: what a fit check has to use */
+      measG.textBaseline = 'alphabetic';
+      midCache[k] = c; return c;
+    }
+    var flatCv = null, flatG = null;
+    var gnStore = { cv: null, key: null }, gRgb = null, gGhost = null, gGhostT0 = 0;
+    function groundNum(txt, frac, rgb, half, yL, pad) {
+      /* the tempo PAINTED ON THE TARMAC.
+         The width of every row is taken STRAIGHT FROM THE ROAD at that row, so the marking's edges are the road's edges
+         scaled — they converge on the road's own vanishing point and can never overhang it. (Deriving the taper from a
+         tilt instead let the far edge come out 4.3x wider than the road under it: the marking pointed at a vanishing
+         point the scene does not have. That is what read as wrong, and it is measurable — compare markW(y) with
+         2*half*(y-yh)/span at any row.)
+         The texture runs linear in GROUND DISTANCE (Z = 1/f), not in screen rows, so equal steps of paint occupy fewer
+         rows the further off they are. Width from the road + texture in Z is the whole of the perspective; there is
+         nothing else to tune, and nothing that can drift out of agreement with the road.
+         The image is set ONCE at the size it will really occupy. Baked: redrawn only when the number changes. */
+      var T = SEC_CITY.tempo, yh = geo.yH, span = yL - yh, dpr = geo.dpr || 1;
+      var uk = T.groundUnit, pad = T.groundPad, gap = T.groundGap;
+      var RK = T.read || {}, dk = RK.decK == null ? 0.44 : RK.decK;
+      frac = frac || '';
+      var slot = pad || frac;   /* the fraction's SLOT is reserved even when this section prints no fraction: same content box, same font size, so the digits do not change size when the decimals arrive */
+      var mN = textEm(txt, '700'), mT = textEm('BPM', '600'), mF = slot ? textEm(slot, '700') : { w: 0, cap: 0 };
+      /* the DIGITS sit centred on the road; the tag hangs off their right. The content box is symmetric about that centre
+         and reaches as far right as the tag does — the number reads centred, and the tag's last letter lands ON the
+         marking's edge rather than past it. */
+      var adv = mN.w + 2 * (dk * mF.w + gap + uk * mT.w);   /* the fraction hangs off the number's right with the tag, so the NUMBER stays centred on the road */
+      var Ac = (mN.cap * T.groundH * (1 - 2 * pad) / adv) + 2 * pad;
+      var f0 = T.groundFar, f1 = T.groundNear;
+      var y0 = yh + span * f0, y1 = yh + span * f1;
+      var Wp = Math.max(8, Math.round(2 * half * f1 * T.groundW));   /* its width at the NEAR row = that share of the road THERE */
+      var Hp = Math.max(4, Math.round(y1 - y0));
+      var sprite = sprOnce(gnStore, rgb + '|' + txt + '|' + frac + '|' + Wp + 'x' + Hp + '|' + T.groundGlow, Wp, Hp, function (x, W, H) {
+        var Wc = W * (1 - 2 * pad), fs = Math.max(8, Wc / adv), fh = Math.max(2, Math.round(W * Ac));
+        if (!flatCv) { flatCv = document.createElement('canvas'); flatG = flatCv.getContext('2d'); }
+        var pw = Math.round(W * dpr), ph = Math.round(fh * dpr);
+        flatCv.width = pw; flatCv.height = ph;
+        var fg = flatG; fg.setTransform(dpr, 0, 0, dpr, 0, 0); fg.clearRect(0, 0, W, fh);
+        fg.textAlign = 'center'; fg.textBaseline = 'alphabetic';
+        var numW = mN.w * fs, uw = uk * mT.w * fs, fw = dk * mF.w * fs, by = fh / 2 + mN.cap * fs / 2;
+        try { fg.letterSpacing = T.groundTrack; } catch (e) {}      /* tracked in, so the digits read as one tight block */
+        tube(fg, txt, fs, '700', rgb, W / 2, by, null, T.groundGlow);
+        if (frac) tube(fg, frac, fs * dk, '700', rgb, W / 2 + numW / 2 + fw / 2, by, null, T.groundGlow);   /* small, sitting on the same baseline, between the number and the tag */
+        tube(fg, 'BPM', fs * uk, '600', rgb, W / 2 + numW / 2 + fw + gap * fs + uw / 2, by, null, T.groundGlow);
+        var step = 1 / dpr, Z0 = 1 / f0, Z1 = 1 / f1;
+        var vAt = function (u) { var f = f0 + u * (f1 - f0); return (Z0 - 1 / f) / (Z0 - Z1); };   /* even paint over even GROUND, which is what foreshortens */
+        x.imageSmoothingQuality = 'high';
+        for (var yy = 0; yy < H; yy += step) {
+          var u = yy / H, f = f0 + u * (f1 - f0);
+          var sw = W * (f / f1);                                    /* THE ROAD's width at this row, scaled — never anything else */
+          var va = vAt(u), vb = vAt(Math.min(1, (yy + step) / H));
+          x.drawImage(flatCv, 0, va * (ph - 1), pw, Math.max(1, (vb - va) * (ph - 1)), (W - sw) / 2, yy, sw, step * 1.04);
+        }
+        flatCv.width = flatCv.height = 1;   /* the flat plate is big at this size — let it go rather than hold it between bakes */
+      });
+      return { spr: sprite, x: geo.cx - Wp / 2, y: y0, w: Wp, h: Hp, cy: (y0 + y1) / 2, f1: f1, vk: Hp / Math.max(1, Wp * Ac) };
+    }
+    function groundArrows(ck, rgb, gm, yL, a) {
+      /* the arrow stream, lying on the same ground. Each chevron takes the road's width at ITS OWN depth, is flattened by
+         the same ground-to-screen squash, and — this is the part a plain sprite cannot fake — is TURNED to point at the
+         vanishing point: an arrow painted beside the road runs along the road, so off to the left it leans inward.
+         The turn is worked out in ground space (un-squash the y before taking the angle) and the squash applied after. */
+      var T = SEC_CITY.tempo, cs = chev(rgb), ph = (now * ck.bpm / 60) % 1;
+      var tr = Math.min(1, Math.abs(ck.bpmOut - ck.bpmIn) / 30), yh = geo.yH, span = yL - yh;
+      var yA = gm.y + gm.h * 0.95, yB = gm.y + gm.h * 0.05;
+      for (var i = 0; i < T.chev; i++) {
+        var q = (i + ph) / T.chev, y = yA + (yB - yA) * q, k = ((y - yh) / span) / gm.f1;
+        var w = gm.w * T.chevK * k, hh = w * (20 / 26), x = geo.cx - gm.w * k / 2 - w * T.chevDx;
+        var ang = Math.atan2((yh - y) / Math.max(0.05, gm.vk), geo.cx - x) + Math.PI / 2;
+        g.save(); g.translate(x, y); g.scale(1, gm.vk); g.rotate(ang);
+        g.globalAlpha = Math.sin(Math.PI * q) * (0.45 + 0.5 * tr) * a;
+        g.drawImage(cs, -w / 2, -hh / 2, w, hh);
+        g.restore();
+      }
+    }
+    function arrows(ck, rgb, lx, cy, sx, sy, a) {   /* the accelerando's stream: chevrons CLIMBING at the beat rate, stacked to the LEFT of the number, the trail lengthening with the acceleration */
+      var T = SEC_CITY.tempo, cs = chev(rgb), ph = (now * ck.bpm / 60) % 1;
+      var tr = Math.min(1, Math.abs(ck.bpmOut - ck.bpmIn) / 30), span = T.chev * T.chevGap;
+      g.save(); g.translate(lx, cy); g.scale(sx, sy);
+      for (var i = 0; i < T.chev; i++) {
+        var q = (i + ph) / T.chev;
+        g.globalAlpha = Math.sin(Math.PI * q) * (0.45 + 0.5 * tr) * a;
+        g.drawImage(cs, -T.chevDx - 26, span / 2 - q * span - 10, 26, 20);
+      }
+      g.restore();
+    }
+    /* ---- F2 the tempo, told in three acts. It is a NARRATOR, not a permanent readout:
+         ① the piece opens — a roadside milestone at the line's right end, reading the starting tempo;
+         ② the accelerando — it hands over to a number PAINTED ON THE TARMAC, foreshortened, counting up to the target;
+         ③ the target is locked (F1 and everything after) — having said all it has to say, it fades off for the rest
+            of the run and does not come back. */
+    function drawTempo(ck, half, yL, bye) {
+      var T = SEC_CITY.tempo, ramping = ck.ramp != null && Math.abs(ck.bpmOut - ck.bpmIn) >= T.rampMin;
+      if (ramping && !groundT0) groundT0 = now;                /* the first accelerando: the number starts moving down onto the road */
+      if (wasRamp && !ramping) lockT0 = now;                   /* the accelerando has arrived at its target: lock it in */
+      wasRamp = ramping;
+      if (bye == null) bye = 1;                                /* the farewell dims it out instead of dragging it up onto the horizon with the road */
+      var fade = lockT0 ? Math.max(0, 1 - (now - lockT0) / (T.fadeMs / 1000)) : 1;
+      if (fade <= 0) return;
+      var lk = lockT0 ? Math.max(0, 1 - (now - lockT0) / (T.lockMs / 1000)) : 0;
+      var gk = groundT0 ? Math.min(1, (now - groundT0) / (T.moveMs / 1000)) : 0;   /* the hand-over from roadside sign to road marking */
+      var rgb = hexRgb(ck.color);   /* the tempo changes colour with the section, the same as the line, the bars and the board — it is part of the scene, not a fixed readout */
+      var buzz = 1 + (ramping ? 0.10 : 0.03) * Math.sin(now * (ramping ? 44 : 19));
+      var breath = 1 + 0.07 * (1 - ck.beatPhase) * (1 - ck.beatPhase);
+      /* ★ THE ENTRANCE IS A STRIKE, NOT A SLIDE. The milestone used to be anchored to `half` and `yL` - the road's
+         ANIMATED width and line - so while the road unfolded out of the horizon the number was dragged along with it,
+         from the centre out to the right and downward. It is a sign standing beside the road, not part of the road:
+         it belongs at the road's FULL width from the first frame, and it arrives the way a tube does, by striking. */
+      if (!tempoT0) tempoT0 = now;
+      var ig = blip(IGNITE, now - tempoT0, 0.06); if (ig < 0) ig = 1;
+      var A = Math.max(0, Math.min(1, 0.92 * buzz * breath * bye * fade * ig));
+      var RO = readOut(ck), RK = T.read || {}, dk = RK.decK == null ? 0.44 : RK.decK;
+      var dw = T.font * 0.66, n = (RO.i + (RO.pad || RO.f)).length, unit = spr('u|' + rgb, 58, 28, function (x, ww, hh) { tube(x, 'BPM', T.unit, '600', rgb, ww / 2, hh / 2); });
+      var fx = geo.cx, fy = yL;
+      g.save(); g.globalCompositeOperation = 'lighter';
+      if (gk < 1) {   /* ① the roadside milestone */
+        var bump = ramping ? Math.min(1, ck.ramp / 0.1) : lk, sc = 1 + (T.big - 1) * bump, k1 = 1 - gk;
+        var lx = Math.min(geo.W - 12 - (n * dw + 46) * sc, geo.cx + geo.half + T.dx), cy = geo.yL + T.dy;   /* the road's FULL width and line, never the unfolding ones */
+        g.globalAlpha = A * k1; var w = drawNum(RO.i, lx, cy, sc, sc, rgb);
+        if (RO.f) { g.globalAlpha = A * k1 * 0.92; w += drawNum(RO.f, lx + w + 3 * sc, cy + T.font * (RK.decDy == null ? 0.30 : RK.decDy) * sc, sc * dk, sc * dk, rgb) + 3 * sc; }   /* the fine end of the accelerando, small, between the number and its tag */
+        g.globalAlpha = Math.max(0, Math.min(1, 0.72 * buzz * bye * fade * k1));
+        g.drawImage(unit, lx + w + 2, cy - 14, 58, 28);
+        fx = lx + w / 2; fy = cy;
+      }
+      if (gk > 0) {   /* ② painted on the road, in true ground perspective */
+        if (gRgb !== null && gRgb !== rgb && gnStore.cv && gnStore.cv.width) {   /* keep what is on the road and cross out of it - snapshot BEFORE groundNum rebakes that same canvas in the new colour */
+          if (!gGhost) gGhost = document.createElement('canvas');
+          if (gGhost.width !== gnStore.cv.width || gGhost.height !== gnStore.cv.height) { gGhost.width = gnStore.cv.width; gGhost.height = gnStore.cv.height; }
+          var og = gGhost.getContext('2d'); og.setTransform(1, 0, 0, 1, 0, 0);
+          og.clearRect(0, 0, gGhost.width, gGhost.height); og.drawImage(gnStore.cv, 0, 0); gGhostT0 = now;
+        }
+        gRgb = rgb;
+        var gm = groundNum(RO.i, RO.f, rgb, half, yL, RO.pad);
+        var xk = gGhostT0 ? Math.min(1, (now - gGhostT0) / Math.max(0.05, T.colorS)) : 1;
+        var gA = Math.max(0, Math.min(1, T.groundAlpha * bye * fade * gk));   /* no buzz, no breath: paint on tarmac does not flicker or pulse */
+        if (xk < 1 && gGhost) { g.globalAlpha = gA * (1 - xk); g.drawImage(gGhost, gm.x, gm.y, gm.w, gm.h); }
+        else if (gGhostT0 && xk >= 1) gGhostT0 = 0;
+        g.globalAlpha = gA * xk;
+        g.drawImage(gm.spr, gm.x, gm.y, gm.w, gm.h);   /* the BPM tag is inside this image, so it warps with it */
+        if (ramping) groundArrows(ck, rgb, gm, yL, gk * bye * fade * T.groundAlpha * 1.5);
+        fx = geo.cx; fy = gm.cy;
+      } else if (ramping) arrows(ck, rgb, Math.min(geo.W - 12 - (n * dw + 46), geo.cx + geo.half + T.dx), geo.yL + T.dy, 1, 1, bye);
+      if (lk > 0) {   /* locked: a white flash and a ring spreading out of the number, then it settles — and then it goes */
+        var fr = 70 * (0.4 + lk);
+        g.globalAlpha = lk * lk * 0.8; g.drawImage(glow('255,255,255'), fx - fr, fy - fr * 0.6, fr * 2, fr * 1.2);
+        g.globalAlpha = lk * 0.7; g.strokeStyle = 'rgba(255,255,255,1)'; g.lineWidth = 2 * lk + 0.4;
+        g.beginPath(); g.arc(fx, fy, 30 + 90 * (1 - lk), 0, 6.2832); g.stroke();
+      }
+      g.restore();
+    }
+    /* ---- F3 the road: the beat as traffic. One note per beat by default (the real MIDI feed lands per segment later,
+       through the same midi2notes pipeline the ADE stage uses); the bar's first beat is bigger and brighter. */
+    function drawSpark(bd, age, col) {
+      var R = SEC_CITY.road, x = bd.px, y = bd.py;
+      g.globalCompositeOperation = 'lighter';
+      var hk = 1 - age / (R.hitMs / 1000);
+      if (hk > 0) { var hw = R.hitW * (bd.down ? 1.3 : 1); g.globalAlpha = hk * hk * 0.55; g.drawImage(glow(col), x - hw, y - 15, hw * 2, 30); }   /* the line lights where it was struck, and decays */
+      var fl = 1 - age / (R.sparkMs / 1000);
+      if (fl > 0) { var fr = R.note * 3.6 * (bd.down ? 1.3 : 1); g.globalAlpha = fl; g.drawImage(glow('255,255,255'), x - fr, y - fr, fr * 2, fr * 2); }
+      var rk = age / (R.ringMs / 1000);
+      if (rk < 1) { g.globalAlpha = (1 - rk) * 0.55; g.strokeStyle = 'rgba(' + col + ',1)'; g.lineWidth = 2 * (1 - rk) + 0.4; g.beginPath(); g.arc(x, y, R.ringR * rk * (bd.down ? 1.25 : 1), 0, 6.2832); g.stroke(); }
+      var sk = age / (R.shardMs / 1000);
+      if (sk < 1) {   /* shards fly back up the road and fade — the ADE stage's spark vocabulary */
+        g.fillStyle = 'rgba(' + col + ',1)';
+        for (var q = 0; q < 5; q++) { var an = -1.5708 + (q - 2) * 0.44, dd = (26 + q * 6) * (1 - (1 - sk) * (1 - sk)); g.globalAlpha = (1 - sk) * 0.7; g.beginPath(); g.arc(x + Math.cos(an) * dd, y + Math.sin(an) * dd * 0.62, 1.7 * (1 - sk) + 0.5, 0, 6.2832); g.fill(); }
+      }
+    }
+    function drawRoad(ck, half, yL, col, bye) {
+      var R = SEC_CITY.road;
+      g.globalCompositeOperation = 'source-over'; g.globalAlpha = bye;
+      /* THE VERGES ARE LIT LINES, not hairlines: the eclipse's way of drawing one - a wide faint bloom of the
+         section's own colour, narrowing through two more passes, under a near-white core. Every pass fades to
+         nothing at the horizon, so the road still arrives out of the dark rather than being switched on there.
+         Stacked strokes and 'lighter', NOT a shadowBlur: a blur is a bake-time tool here (LOG-110) and these lines
+         are redrawn every frame while the road unfolds and while the farewell folds it back. */
+      function verges() { g.beginPath(); for (var e = 0; e <= R.lanes; e++) { var u = R.lanes > 0 ? (e / R.lanes) * 2 - 1 : 0; g.moveTo(geo.cx, geo.yH); g.lineTo(geo.cx + u * half, yL); } g.stroke(); }   /* the vanishing point IS the progress line: the edges meet exactly on the horizon */
+      function edgeGrad(rgb2, al) { var q2 = g.createLinearGradient(0, geo.yH, 0, yL); q2.addColorStop(0, 'rgba(' + rgb2 + ',0)'); q2.addColorStop(1, 'rgba(' + rgb2 + ',' + al + ')'); return q2; }
+      var EG = R.edgeGlow || [[1.2, 1]];
+      g.globalCompositeOperation = 'lighter';
+      for (var ei = 0; ei < EG.length; ei++) { g.strokeStyle = edgeGrad(col, R.edge * EG[ei][1]); g.lineWidth = EG[ei][0]; verges(); }
+      g.strokeStyle = edgeGrad(R.edgeCore || '255,236,206', R.edge * (R.edgeCoreA == null ? 0.85 : R.edgeCoreA)); g.lineWidth = 1; verges();
+      g.globalCompositeOperation = 'source-over';
+      var lg = g.createLinearGradient(geo.cx - half, 0, geo.cx + half, 0);
+      lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.12, 'rgba(255,255,255,.26)'); lg.addColorStop(0.88, 'rgba(255,255,255,.26)'); lg.addColorStop(1, 'rgba(255,255,255,0)');
+      g.strokeStyle = lg; g.lineWidth = 1.5; g.beginPath(); g.moveTo(geo.cx - half, yL); g.lineTo(geo.cx + half, yL); g.stroke();
+      if (ck && !byeT0) {   /* spawn: every note that will sound within one travel time, once */
+        var bn = beatNow(ck), eng0 = getEng();
+        var want = null; try { want = eng0.notesIn ? eng0.notesIn(bn, bn + R.travel) : null; } catch (e3) { want = null; }
+        if (want === null) { try { want = eng0.beatsIn(bn, bn + R.travel); } catch (e2) { want = []; } }   /* a section with no display track keeps the old bare beat grid */
+        for (var i = 0; i < want.length; i++) {
+          var b = want[i]; if (b.i < 0 && !R.countIn) continue;
+          var ln = (b.lane || 0) / Math.max(1, R.laneSpan) * R.laneK;
+          ln = Math.max(-1, Math.min(1, ln));
+          var dup = false;
+          for (var j = beads.length - 1; j >= 0 && !dup; j--) if (Math.abs(beads[j].hit - b.t) < 0.05 && Math.abs(beads[j].lane - ln) < 1e-4) dup = true;   /* time ALONE is not the identity: the flare into B is two notes on one instant, in two lanes - dedup on time only ate one of every pair. At the seam the outgoing extrapolated grid and the new section's own first note are still the same strike */
+          if (!dup) beads.push({ hit: b.t, at: 0, down: b.down, col: col, lane: ln, done: false, px: geo.cx + ln * half, py: yL, grid: b.lane === 0 || b.lane == null });
+        }
+      }
+      for (var k = beads.length - 1; k >= 0; k--) {
+        var bd = beads[k], p = 1 + (beatNow(ck) - bd.hit) / R.travel;
+        if (!bd.done && ck) bd.col = col;   /* a note is spawned a travel-time early, so the ones in the air at a change were struck in the OLD section's colour and kept it all the way down. The colour belongs to the section the note will land in: re-read it every frame until it is struck, and the whole road turns over on the seam */
+        if (bd.done && now - bd.at > Math.max(R.hitMs, R.ringMs, R.shardMs) / 1000) { beads.splice(k, 1); continue; }
+        if (!bd.done && p >= 1) { bd.done = true; bd.at = bd.hit + (now - beatNow(ck)); bd.px = geo.cx + bd.lane * half; bd.py = yL; }   /* struck out on the line at the instant it sounds */
+        if (!bd.done && p >= 0) {
+          var pr = proj(p), y = geo.yH + (yL - geo.yH) * pr, x = geo.cx + bd.lane * half * pr, af = Math.min(1, p / 0.08) * bye;
+          g.globalCompositeOperation = 'source-over';
+          if (bd.grid !== false) {   /* the cross-line is the ROAD'S GRID, one per note in the centre lane. A lane note is an accent riding on top of it: giving those their own full-width line turned D2's seventeen sixteenths into a ladder */
+            g.globalAlpha = (R.gridFar + (R.gridNear - R.gridFar) * pr) * af * (bd.down ? 1.8 : 1);
+            g.strokeStyle = 'rgba(' + bd.col + ',1)'; g.lineWidth = bd.down ? 1.6 : 1;
+            g.beginPath(); g.moveTo(geo.cx - half * pr, y); g.lineTo(geo.cx + half * pr, y); g.stroke();   /* the rolling cross-line the note rides in on */
+          }
+          var rr = Math.max(1.4, R.note * pr * (bd.down ? R.down : 1)), gr = rr * 3.2;
+          g.globalCompositeOperation = 'lighter';
+          g.globalAlpha = af * (bd.down ? 0.85 : 0.6); g.drawImage(glow(bd.col), x - gr, y - gr, gr * 2, gr * 2);
+          g.globalAlpha = af; g.fillStyle = 'rgba(255,255,255,' + (bd.down ? 0.95 : 0.78) + ')';
+          g.beginPath(); g.arc(x, y, rr * 0.42, 0, 6.2832); g.fill();
+          bd.px = x; bd.py = y;
+        }
+        if (bd.done) drawSpark(bd, now - bd.at, bd.col);
+      }
+      g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+    }
+    function frame() {
+      raf = requestAnimationFrame(frame);
+      if (!el || !geo || !g) return;
+      var eng = getEng(), ck = null;
+      try { ck = eng && eng.clock ? eng.clock() : null; } catch (e) { ck = null; }
+      if (ck) {
+        /* the audio clock, and nothing else - but SMOOTHED (追記⑮: ctx.currentTime advances in ~3 ms render quanta
+           while frames run at 60 fps; read raw, the door's late-stage growth - hundreds of px per beat - stuttered
+           visibly, "抖動特效". Between audio ticks the clock is extrapolated with performance.now(), clamped
+           monotone so nothing can ever step BACK a pixel; a pause freezes it exactly where it stands). */
+        var pn0 = performance.now();
+        if (ck.paused) { smT = ck.t; smP = pn0; }
+        else if (smT === ck.t) now = Math.max(now, smT + (pn0 - smP) / 1000);
+        else { smT = ck.t; smP = pn0; now = Math.max(now, ck.t); }
+      }
+      var bye = byeT0 ? Math.max(0, 1 - (now - byeT0) / 0.95) : 1;   /* the farewell folds the road back into the horizon, in step with wave.farewell() */
+      g.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0); g.clearRect(0, 0, geo.W, geo.H);
+      var col = ck ? hexRgb(ck.color) : '224,176,74', M = MD(), prev = SEC_CITY.letter.preview;
+      var ex = (ck && !prev) ? exitAt(ck) : null;   /* LOG-112: the outro's letter, once it has set off up the road */
+      if (!ex) dcollT0 = 0;
+      dcoll = (dcollT0 && ex) ? Math.min(1, (now - dcollT0) / Math.max(0.1, EX().collectS == null ? 1.0 : EX().collectS)) : 0;   /* 追記㉝: audio-clock based - a pause freezes the collection where it stands */
+      doorNow = ex;   /* 追記⑮: the wave mask's layers composite as EXCLUDE (XOR) - a standing letter's glyph cut overlapping the door's rect cut CANCELS in the overlap and the bars come back letter-shaped inside the door ("門內看見音量條"/"中間兩條音量條"). While the door exists, no other cut may be pushed. */
+      var exRoad = !!(ck && exitOn(ck) && EX().road !== false && M.road);   /* ... and the road it will come up - for the WHOLE outro, not just from the set-off (fromBeat 16 must not make the road vanish at the seam and pop back four bars later). 追記㉞ (the user: 如果有字母沒MIDI軌道時則不要出現軌道): a mode without the road - basic - keeps it out of the outro too; the door departs over the plain sky, its geometry unchanged (the road's width law needs no road on screen) */
+      /* THE ENTRANCE = THE FAREWELL, RUN BACKWARDS. The road does not fade up in place: it UNFOLDS out of the
+         vanishing point - the verges open from the horizon and the elimination line travels down to the dock. It
+         drives the same two numbers the `bye` fold drives (`half` and `yL`), so the two can never fight each other. */
+      if (!hiOn && (M.road || prev || exRoad)) { hiOn = true; hiT0 = now; }   /* the outro's road unfolds out of the vanishing point as the letter sets off up it (the entrance IS the farewell run backwards - LOG-110) */
+      var gw = prev ? 1 : (hiOn ? Math.min(1, (now - hiT0) / Math.max(0.05, SEC_CITY.road.growS)) : 0);
+      gw = gw * gw * (3 - 2 * gw);
+      var half = geo.half * bye * gw, yL = geo.yH + (geo.yL - geo.yH) * bye * gw;
+      if (ck) {   /* a new GROUP: draw the way this letter will appear, and that way's own coin flips, once */
+        var gk = ck.letter + '|' + ck.group;
+        if (gk !== styleKey) {
+          if (styleKey !== null && prevId && LT().seq.ids.indexOf(prevId) >= 0) seqCut = true;   /* the section we are leaving is a sequenced one: cut, do not fade */
+          fastOut = !!(styleKey !== null && exitOn(ck));   /* entering the outro: whatever was showing leaves NOW (追記⑱) */
+          var wasFog = (showStyle === 'smoke' && styleA > 0.5), sameCh = (letCh === ck.letter);
+          styleKey = gk; rollGroup(ck, nextStyleFor === ck.id ? nextStyle : null);
+          if (fastOut && showStyle === curStyle) fastOut = false;   /* 追記㉝: the outro wears the SAME form the last section was showing - there is nothing to throw off, and the flag armed here would sit until the next hand-over and cut the STANDING letter dead at the set-off instead (measured: the cloud vanished for 3 frames at beat 16 - the ⑳ dip, resurrected by a leftover flag) */
+          lampCut = wasFog && curStyle === 'smoke' && sameCh;   /* fog straight into fog on the SAME letter: nothing on screen moves, only the colour - and the two section colours are neighbours, so crossing them over five seconds reads as a smear rather than a change. Cut instead. */
+        }
+        prevId = ck.id;
+        if (ck.letter !== letCh) {
+          /* Two fog groups back to back: the STYLE never changes, so the style machinery never fades anything - the
+             old letter used to be replaced in the same frame the new one began its fade in, which is the cut the
+             user saw. Hold the outgoing letter and dissolve it out under the incoming one. */
+          letPrev = (showStyle === 'smoke' && curStyle === 'smoke' && styleA > 0.5) ? letCh : null;
+          letCh = ck.letter; letT0 = now;   /* the letter's own clock starts when the letter does */
+        }
+      }
+      /* A SEQUENCED SECTION'S LETTER IS NOT ALLOWED OUT EARLY. `cur` is already this section all through its
+         pick-up (rel < 0, negative beats) and through the count-in before that, so every style used to begin its
+         entrance there - the letter was fading up, or the neon was striking, while the music had not reached bar 1.
+         `seqLetterNow` is 0 until the letter's beat and 1 from it: whatever form the letter takes, it is simply
+         NOT THERE, and then it is - a cut on the downbeat. (It was already wired into the fog's own alpha; every
+         other style, and the neon board, ran without it.) */
+      var sq = ck ? seqLetterNow(ck) : -1;
+      var boardOn = prev || (ck && letterOn() && curStyle === 'board' && sq !== 0 && !seamOut);
+      if (ck && boardOn) {
+        if (!sign || sign.group !== ck.group) setSign(ck, seqCut);   /* the section we are leaving was sequenced: this board does not strike, it is already lit */
+        else if (sign.id !== ck.id) { sign.id = ck.id; sign.spr = signSpr(ck, sign); sign.shd = sign.front ? signShadowSpr(ck, sign) : null; }   /* the mate takes over: the board stays exactly where it is and keeps its face, only the colour changes */
+      } else if (sign && !sign.off) { sign.off = now; oldSign = sign; sign = null; }
+      if (gf) { gf.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0); gf.clearRect(0, 0, geo.W, geo.H); }
+      if (M.road || prev || exRoad) drawRoad(ck, half, yL, col, bye); else beads.length = 0;
+      holeWant.length = 0;
+      seqStep(ck);
+      peekNext(ck);   /* the next section's style must be known BEFORE spawnPasses decides whether to send a board */
+      if (ck && letterOn() && !prev) spawnPasses(ck);   /* launched whatever is on screen; only drawn when this section's style is the roadside board */
+      /* ★ 追記㊴ (the user: 目標是看起來兩下閃電時都還在，但是亮起來的瞬間已經變成B了): in a SEQUENCED ending the
+         cut-carrying letter may not be faded out from under its own cut - the seam board's bow-out was closing the
+         mask's iris mid-dark, a shrinking exit the user saw and vetoed ("明顯看到他縮小不見了...在這裡不要用"). The
+         cut is PINNED fully open from the letter's beat, through the dark and BOTH tail flashes, and cleared in ONE
+         frame the moment the second flash has decayed - the next section lights up with no trace of it. */
+      var sqCutAlive = false;
+      seqHoldF = false; seqWipeX = null;
+      if (sq === 1 && ck && ck.endAt && (curStyle === 'focal' || curStyle === 'hole')) {
+        /* the clear RIDES THE SECOND GLEAM'S FRONT ITSELF (the user, three rounds in: the band comes in from the
+           right, so the letter is EATEN right-to-left as the front crosses it - 嘗試消失的方式跟隨閃電移動的方向一樣
+           從右到左): the letter stands in the middle wipeR share of the screen; the cut dies the frame the front
+           leaves its left edge. The progressive bite is the clip variants below. */
+        var Qb = LT().seq, bSq2 = 60 / Math.max(1, ck.bpm), lfB = (ck.endAt - now) / bSq2;
+        var gS0 = Qb.gleamS == null ? 0.3 : Qb.gleamS, wR0 = Qb.wipeR == null ? 0.10 : Qb.wipeR;
+        sqCutAlive = lfB > 0 && !(lfB < 1 && (1 - lfB) * bSq2 >= gS0 * (0.5 + wR0));
+        seqHoldF = sqCutAlive && curStyle === 'focal';   /* 追記㊶: the unlit tube stays drawn through the dark */
+        if (sqCutAlive && lfB > 0 && lfB < 1) seqWipeX = Math.max(0, geo.W * (1 - (1 - lfB) * bSq2 / gS0));   /* the second gleam's front, in px - sprite and cut are eaten behind it together */
+      }
+      var sa = styleStep((ck && (letterOn() || exitOn(ck)) && curStyle !== 'board' && !prev && (!seamOut || sqCutAlive) && !(ex && exitForm() === 'cloud')) ? curStyle : null, ck ? ck.letter : lastCh, col);   /* the outro's letter is not on the run's 30% gate: the ending is the show's, not the roll's. THE FULL SAGA of who stands down when the door exists (⑭→⑮→㉖→㉗ - read before touching): the CLOUD stands down (its glow bleeds wider than its ink and peeks round the young door). The TUBE MUST KEEP STANDING - the standing sprite IS the lamp (the door is only thin glass and mist), and ㉖'s stand-down killed the light at the set-off ("燈突然就滅了") and flickered against the door's fade-in. It is dissolved IN PLACE by the door's void instead - on cutInS, which must stay short enough not to leave it hanging half-faded as a ghost (㉖'s ghost was cutInS 1.6 s, not the standing itself). The MASK has no canvas letter - the gate is moot for it. */
+      if (sq >= 0 && !prev && !seamOut) {
+        if (curStyle === 'smoke') { }   /* 追記㊷ (the user: 如果A確定是煙霧的話，pre-entry時就可以先出煙霧，第一拍第一小節時再出現煙霧A的字母遮罩): the FOG free-runs from the section's own start - the pick-up included - on its normal entrance (fade or disc); only the LETTER waits for bar 1 beat 1, and drawSmoke's own sq gate already times it there */
+        else if (curStyle === 'cloud') { var bSq = 60 / Math.max(1, ck.bpm), FQ = LT().fade; sa = sq <= 0 ? 0 : Math.min(sa, Math.max(0, Math.min(1, (ck.beat - (LT().seq.letterBeat || 0)) * bSq / Math.max(0.05, FQ.inS)))); }   /* 追記⑯: the cloud only FADES - from the letter's beat, over the normal fade-in, never a cut and never a scale */
+        else sa = sq;   /* every other style: on the beat, not over a fade (the sequenced cut) */
+      }
+      var saCut = sa;   /* ★ 追記㊳ (the user: 即使燈光消失，字母仍存在...他只是沒發光不是不見): the letter's EXISTENCE, read BEFORE the room light. The staged ending only puts the lamps out - the glyph itself still stands, so the cut it takes out of the bars must survive the dark (each tail flash used to show the bars blazing straight through where A stood). saCut runs the cuts; sa (dimmed below) runs the light. */
+      sa *= (1 - seqDark);   /* the light in the room goes down with everything else - the road does not */
+      if (prev) { drawPreview(ck); holeWant.forEach(function (o) { if (o.k === 'iris') o.k = 1; }); if (holeWant.length) setHoles(holeWant); else clearHole(); }
+      else {
+        var cutAlive = (showStyle === 'focal' || showStyle === 'hole') && (sq >= 0 ? sqCutAlive : saCut > 0.003);   /* 追記㊴: sequenced = the pinned window above (no fade may close it early, and past the second flash it is GONE); anything else keeps the ㊳ rule */
+        if (showStyle && (sa > 0.003 || cutAlive)) drawStyle(showStyle, lastCh, lastRgb, bye * sa, ck);   /* 追記㊳: the two cut-carrying forms are still DRAWN in the dark - their light is at zero but their absence from the bars stands */
+        var F = LT().fade, hk = F.holeFrom + (1 - F.holeFrom) * (sq >= 0 ? (sqCutAlive ? 1 : 0) : saCut);   /* the cut-out opens and closes like an iris - on saCut (追記㊳): a real fade-out still closes it, the mere dark does not. Sequenced (追記㊴): pinned wide open for its whole window - the iris NEVER creeps shut mid-dark */
+        if (ex) {
+          var nW0 = holeWant.length; exitHole(ex, ck);   /* the door's opening eats the bars too */
+          /* 追記㊲ (the user: 特殊I是新設計，但是出現的動畫可以正常進行): the outro letter ENTERS like any letter -
+             its travelling glyph cut opens on the same iris every normal letter uses, riding sa's own fade-in. Only
+             the MASK ever sees this move (its door stands from beat 0, so its birth IS its entrance); the tube sets
+             off at beat 16 with sa long at 1, and hk = 1 there is a no-op. No position moves - the iris breathes
+             about its own centre. */
+          for (var wI = nW0; wI < holeWant.length; wI++) if (typeof holeWant[wI].k === 'number') holeWant[wI].k *= hk;
+        }
+        else if (ck && exitOn(ck) && EX().cut !== false && (exitForm() === 'hole' || exitForm() === 'cloud')) exitHole({ box: exitBox(1 / exitDepth(ck.letter), ck.letter) }, ck);   /* BEFORE the set-off the door's BIRTH cut already stands (追記⑱): the mask hides the line from the outro's first beat and the cloud's dim is already in place - bar 5 then MOVES what is standing, nothing appears or swaps */
+        if (ck && exitOn(ck) && (!ex || !ex.past)) warmExitBakes(ck);   /* the sweep's sprite tiers are baked during the stand and the approach (追記㊲) */
+        else if (ck && nextStyleFor && EX().on && EX().ids && EX().ids.indexOf(nextStyleFor) >= 0 && letterOn()) warmExitBakes(ck.nextLetter || 'I', (nextStyle === 'hole' || nextStyle === 'cloud') ? nextStyle : 'focal');   /* the MASK's door stands from beat 0, so its tiers must be warm before the outro even begins - baked through the section BEFORE it, once the outro's form is rolled (追記㊲) */
+        holeWant.forEach(function (o) { if (o.k === 'iris') o.k = hk; });   /* only the cut-out STYLE opens like an iris; anything else keeps its true size */
+        if (sq === 1 && cutAlive && ck && ck.endAt && (showStyle === 'focal' || showStyle === 'hole')) {
+          /* 追記㊵ (the user: 嘗試消失的方式跟隨閃電移動的方向一樣從右到左): the second gleam sweeps in from the right;
+             as its front crosses the letter, the cut is swapped through LEFT-ONLY clip variants (1 → .75 → .5 → .25
+             → gone), so the letter is visibly EATEN in the band's own direction. The variants are baked in the dark,
+             one per pass, well before the flashes - never during them. */
+          var Qw = LT().seq, gSw = Qw.gleamS == null ? 0.3 : Qw.gleamS, wRw = Qw.wipeR == null ? 0.10 : Qw.wipeR;
+          var bSw = 60 / Math.max(1, ck.bpm), lfw = (ck.endAt - now) / bSw;
+          if (lfw > 0 && lfw < 1) {
+            var fFr = ((1 - ((1 - lfw) * bSw) / gSw) - (0.5 - wRw)) / (2 * wRw);   /* the share of the letter still LEFT of the front */
+            if (fFr < 1) { var wq = Math.max(0.25, Math.ceil(Math.max(0, Math.min(1, fFr)) * 4) / 4); if (wq < 1) holeWant.forEach(function (o) { if (!o.rect) o.clip = wq; }); }
+          }
+          if (seqDark > 0.9) {
+            if (warmGap2 > 0) warmGap2--;
+            else for (var wv = 0; wv < holeWant.length; wv++) {
+              var oW = holeWant[wv]; if (oW.rect) continue;
+              var got = false;
+              for (var cq2 = 3; cq2 >= 1; cq2--) {
+                var oc = { ch: oW.ch, px: oW.px, style: oW.style, a: oW.a, ring: oW.ring, ringA: oW.ringA, flip: oW.flip, clip: cq2 * 0.25 };
+                if (!holeImg[holeKeyOf(oc)]) { holeFor(oc); warmGap2 = 12; got = true; break; }
+              }
+              if (got) break;
+            }
+          }
+        }
+        if (holeWant.length && (saCut > 0.02 || cutAlive || ex)) setHoles(holeWant); else clearHole();   /* the exit's cut does not wait on the fog's alpha - it is not the fog's; saCut (追記㊳): the dark does not lift the letter's cut either; cutAlive (追記㊴): the sequenced window rules while it stands */
+      }
+      if (ck && !prev && LT().pass.seamEarly) drawSeam(ck, bye * (1 - seqDark));   /* the next section announcing itself, over whatever this section is showing */
+      if (oldSign && !drawSign(oldSign, ck)) oldSign = null;
+      if (sign && !drawSign(sign, ck)) sign = null;
+      if (ck && (M.tempo === true || (M.tempo === 'roll' && runRoll) || prev)) drawTempo(ck, half, yL, bye);
+      /* LAST, so that what the frame takes it takes from a FINISHED picture: the road, its traffic, the fog, the
+         marking and the sign are all already on the canvas when the glyph is cut out of them. */
+      if (ex) { exitPaint(ex, ck, col); if (EX().cut !== false) setStageHole([{ rect: exitCutRect(ex, ck.letter) }]); else if (stageKey !== null) clearStageHole(); } else if (stageKey !== null) clearStageHole();
+      if (ex && ex.done && !exitFired) {   /* the hand-back stops the road from inside this very frame: `g` and `gf` are null the moment it returns, and the tail of this function would touch both (measured: one `Cannot set properties of null` per run, on the last frame of the show) */
+        var clS = EX().collectS == null ? 1.0 : EX().collectS;
+        if (exitForm() === 'focal' && clS > 0) {
+          /* 追記㉝: the TUBE hands back only after its line has been reeled in (doorLine's dcoll above) - the stage
+             stands, swept and silent, for the second the collection takes; every other door hands back on done */
+          if (!dcollT0) dcollT0 = now;
+          if (now - dcollT0 >= clS + 0.15) { exitFired = true; if (onExit) onExit('focal'); return; }
+        } else { exitFired = true; if (onExit) onExit(exitForm()); return; }
+      }
+      roomLight(ck);
+      g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+      if (gf) { gf.globalAlpha = 1; gf.globalCompositeOperation = 'source-over'; }
+    }
+    var ROOM_SEL = '.ds-sec';
+    /* Only the SECTION BUTTONS go down with the room. The desktop's own furniture - the name, the tagline, the
+       now-playing caption, the updates panel, the app icons, the note, the dock, the menu bar - stays lit: it is the
+       computer, not the stage, and dimming it made the whole screen feel broken rather than theatrical. */
+    var wavOp = -1, roomOp = -1, veilOp = -1;
+    function roomLight(ck) {
+      /* THE HOUSE LIGHTS. Everything in the room goes down together - wallpaper, spectrum, buttons, icons, the name, the
+         dock, the menu bar - and the ROAD and its notes are the only things left burning. The road is a canvas at the
+         very bottom of the stack, so the wallpaper is darkened by a veil slipped in BENEATH it, while everything above
+         it is dimmed where it lives (opacity on the elements themselves). A single overlay could not do both.
+         A flash is not a white wash: it is the lights coming back ON for a moment, so it drives the same figure to full. */
+      var S = LT().smoke, Q = LT().seq;
+      var room = (1 - (1 - Q.dimTo) * seqDark);   /* 追記⑲: the flash no longer lights the ROOM - it lives on the bars alone (the gleam below) */
+      /* 追記㉒: while the tail dims the room, the wave ELEMENT stays at full opacity and the dimming happens
+         INSIDE the canvas (wave.dimSet): the LINE keeps a spared band and never goes dark ("進度線改成不暗下去"),
+         and the gleam's peak keeps the bars at their TRUE brightness ("閃的最亮地方跟原本亮的亮度一樣"). In-canvas
+         masking is atomic per frame, so the old one-frame opacity race is gone with the opacity juggling. */
+      var w = room;
+      if (seqDark > 0.001 && LT().seq.ids.indexOf(ck && ck.id) >= 0) { w = 1; wave.dimSet(room); }
+      else wave.dimSet(null);
+      wave.gleamSet(seqGleam ? { p: seqGleam.p, dir: seqGleam.dir, a: seqGleam.a } : null);   /* ★ the fog's own dimming is NOT applied here any more. It used to fade the WHOLE spectrum canvas to smoke.dim, which is why there was never a brighter, un-hazed upper half to see: the bars were turned down from their very tops, everywhere, whatever the fog was actually covering. It is now a veil painted inside the fog's own band (drawSmoke), so above the band the bars keep their full brightness. */
+      w = Math.max(0, Math.min(1, w)); room = Math.max(0, Math.min(1, room));
+      /* ★ these values are written EVERY FRAME, so every one of them has to have its CSS transition switched off first.
+         The desktop's entrance rule puts `transition: opacity 3s` on its direct children and .wave carried one of its
+         own: with those in place the room never reached black (it was still on its way when the section ended - measured
+         at 0.26 on the dock) and a 0.16 s flash could not appear at all. */
+      var wv = waveEl(); if (wv && Math.abs(w - wavOp) > 0.004) { wavOp = w; wv.style.transition = 'none'; wv.style.opacity = w >= 0.999 ? '' : w.toFixed(3); }
+      if (Math.abs(room - roomOp) > 0.004) {
+        roomOp = room;
+        var v = room >= 0.999 ? '' : room.toFixed(3);
+        [].forEach.call(document.querySelectorAll(ROOM_SEL), function (e) { e.style.transition = 'none'; e.style.opacity = v; });
+      }
+      var vl = veilEl(), va = 1 - room;
+      if (vl && Math.abs(va - veilOp) > 0.004) { veilOp = va; vl.style.transition = 'none'; vl.style.opacity = va <= 0.001 ? '' : va.toFixed(3); }
+    }
+    function veilEl() {
+      /* the dark under the city: it takes the wallpaper down without touching the road drawn above it.
+         ★ There is exactly ONE, found by query. It used to be found as `el.previousElementSibling`, so anything else
+         landing in front of the road canvas made the check fail and a SECOND veil was created - and every extra veil
+         multiplied the darkness and survived a reset, which is the "screen went black and stayed black" ghost. */
+      if (!el || !el.parentNode) return null;
+      var host = el.parentNode, v = host.querySelector(':scope > .ds-veil');
+      if (!v) {
+        v = document.createElement('i'); v.className = 'ds-veil'; v.setAttribute('aria-hidden', 'true');
+        host.insertBefore(v, el);
+      } else if (v.nextElementSibling !== el) host.insertBefore(v, el);   /* keep it directly under the road */
+      return v;
+    }
+    function roomReset() {
+      [].forEach.call(document.querySelectorAll(ROOM_SEL), function (e) { e.style.opacity = ''; e.style.transition = ''; });
+      [].forEach.call(document.querySelectorAll('.ds-veil'), function (v) { v.remove(); });   /* ALL of them, not the one we happen to hold */
+      wavOp = roomOp = veilOp = -1;
+    }
+    function layout() {
+      if (!el || !g) return;
+      var R = SEC_CITY.road, W = desktop.clientWidth, H = desktop.clientHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
+      el.width = Math.round(W * dpr); el.height = Math.round(H * dpr);
+      if (elF) { elF.width = el.width; elF.height = el.height; }
+      var yH = wave.baseY() || H * 0.58, geo0 = geo;
+      geo = { W: W, H: H, dpr: dpr, cx: W / 2, yH: yH, yL: H - R.lineUp, half: Math.min(W * R.width, R.widthMax) / 2 };
+      BG = rgbOf((getComputedStyle(document.body).getPropertyValue('--bg') || '').trim()) || '13,14,18';   /* what the bars fade TOWARD inside the haze: the desktop's own ground, not black */
+      MONO = ((getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace').trim()) || 'monospace';
+      SANS = ((getComputedStyle(document.body).getPropertyValue('--font') || 'sans-serif').trim()) || 'sans-serif';   /* the board's face: the site's own body type */
+      cache = {}; oldSign = null;
+      if (sign) { keep = { x: sign.x * (geo0 ? W / geo0.W : 1), y: sign.y * (geo0 ? yH / geo0.yH : 1), k: sign.k }; sign = null; }   /* the size/wall/core/glow are re-rolled with it: a resize is rare and a fresh strike is no worse than a stretched one */   /* the sprites were baked for the old size: the board rebuilds on the next frame, in the same patch of sky (scaled with the window) rather than teleporting */
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (gf) gf.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    function start() {
+      if (el || !SEC_CITY.on) return;
+      el = document.createElement('canvas'); el.className = 'ds-road'; el.setAttribute('aria-hidden', 'true');
+      g = el.getContext('2d');
+      var wv = $('#wave'); if (wv) desktop.insertBefore(el, wv); else desktop.appendChild(el);   /* z0, before the line in the DOM: icons, notes, windows and dock all stay on top of the city */
+      elF = document.createElement('canvas'); elF.className = 'ds-sky'; elF.setAttribute('aria-hidden', 'true');
+      gf = elF.getContext('2d');
+      if (wv && wv.nextSibling) desktop.insertBefore(elF, wv.nextSibling); else desktop.appendChild(elF);   /* LOG-111: AFTER the spectrum canvas - the only layer a bar cannot cover, still under icons/windows/menubar/dock */
+      beads = []; passes = []; lastPassBeat = -1e9; lastPassSeg = null; seamDone = false; seamOut = false; styleKey = null; showStyle = null; styleA = 0; styleGoal = 0; seqCut = false; fastOut = false; prevId = null; rollRun(); rollGroup(); sign = oldSign = null; lastPos = null; keep = null; byeT0 = 0; now = 0; smT = null; smP = 0; doorNow = null; hiT0 = 0; hiOn = false; letPrev = null; lampCut = false; wasRamp = false; lockT0 = 0; groundT0 = 0; tempoT0 = 0; gRgb = null; gGhostT0 = 0; readV = null; readId = null; exitFired = false; clearStageHole();
+      layout(); window.addEventListener('resize', layout);
+      var e1 = el, e1f = elF;
+      requestAnimationFrame(function () { if (e1.isConnected) { e1.classList.add('in'); e1f.classList.add('in'); } });
+      setTimeout(function () { if (el === e1) { e1.classList.add('in'); e1.style.opacity = '1'; e1f.classList.add('in'); e1f.style.opacity = '1'; } }, 700);   /* an occluded tab runs no frames: the class (and so the fade) would only start when it is looked at — pin the landed state, as the stage panel does */
+      if (!raf) raf = requestAnimationFrame(frame);
+    }
+    function bye() {   /* the outro's farewell: the board cuts out, every note on the road blows up where it stands, the road folds into the horizon */
+      if (byeT0 || !el) return;
+      byeT0 = now; if (sign && !sign.off) sign.off = now;
+      beads.forEach(function (b) { if (!b.done) { b.done = true; b.at = now; } });
+    }
+    function stop(ms) {
+      if (!el) return;
+      setTimeout(clearHole, 66);   /* #wave outlives the stage, so its cut MUST come off - but TWO FRAMES LATE (追記㉘): the canvas under the mask still holds the last fully-drawn bars, and lifting the CSS mask synchronously flashed them for the frame before the wave repainted its regrow/squash state ("遮罩出去之後接桌面都會閃一下"). CSS state is instant, the canvas is next-frame - never uncover one before the other has painted. */
+      wave.gleamSet(null); wave.dimSet(null);   /* and so must the gleam band and the tail's dim floor (追記⑲/㉒) - a stale destination-in would black the desktop wave out */
+      /* (original note: The stage's own layers must NOT: they are already gone visually and are removed a moment later - lifting their mask would flash every swept button back for the length of the exit fade */
+      stageKey = null; stageEls = null;
+      var wv0 = waveEl(); if (wv0) { wv0.classList.remove('dim'); wv0.style.opacity = ''; wv0.style.transition = ''; }
+      seqDark = seqFlash = 0; roomReset();
+      showStyle = null; styleA = 0; styleGoal = 0;
+      var e0 = el, e0f = elF; el = null; g = null; elF = null; gf = null; geo = null; beads = []; passes = []; sign = oldSign = null; cache = {};
+      window.removeEventListener('resize', layout);
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      [e0, e0f].forEach(function (c) { if (!c) return; c.style.transitionDuration = (ms || 300) + 'ms'; c.classList.remove('in'); c.style.opacity = ''; });   /* drop the pinned state so the fade-out can animate */
+      setTimeout(function () { e0.remove(); if (e0f) e0f.remove(); }, (ms || 300) + 60);
+    }
+    function tPath(path) {
+      /* 'road.growS' | 'smoke.frontTop' | 'letter.smoke.frontTop' | 'tempo.read.ids.E1.ease' -> [owner, lastKey].
+         A bare group name is resolved one level down, because almost every knob worth turning lives under `letter`
+         (smoke / refl / focal / hole / seq / pass / ...) and nobody should have to remember that. */
+      var parts = String(path).split('.'), o = SEC_CITY, i;
+      if (!(parts[0] in o)) { var L = SEC_CITY.letter; if (L && (parts[0] in L)) o = L; else return null; }
+      for (i = 0; i < parts.length - 1; i++) { o = o[parts[i]]; if (!o || typeof o !== 'object') return null; }
+      return (parts[parts.length - 1] in o) ? [o, parts[parts.length - 1]] : null;
+    }
+    function tune(o) {
+      /* ?debug: turn a knob while it runs. The OLD one merged exactly one level deep against SEC_CITY's five top
+         level keys, so every `tune({smoke:{...}})` / `tune({refl:{...}})` written in the log SILENTLY created a junk
+         top-level key and changed nothing at all - and returned the whole config, which looks like success.
+         This one walks to the leaf, resolves bare group names, REFUSES a path that does not exist, and reports
+         exactly what it changed. __road.knobs('smoke') lists what there is to turn. */
+      var changed = [], missing = [];
+      (function walk(src, prefix) {
+        Object.keys(src || {}).forEach(function (k) {
+          var v = src[k], path = prefix ? prefix + '.' + k : k;
+          if (v && typeof v === 'object' && !(v instanceof Array)) { walk(v, path); return; }
+          var t = tPath(path);
+          if (!t) { missing.push(path); return; }
+          changed.push(path + ': ' + JSON.stringify(t[0][t[1]]) + ' -> ' + JSON.stringify(v));
+          t[0][t[1]] = v;
+        });
+      })(o, '');
+      layout();
+      return missing.length ? { changed: changed, NOT_FOUND: missing } : changed;
+    }
+    function knobs(filter) {   /* ?debug: every leaf in the config, as a path you can hand straight back to tune() */
+      var out = [], f = filter == null ? null : String(filter).toLowerCase();
+      (function walk(o, p) {
+        Object.keys(o).forEach(function (k) {
+          var v = o[k], path = p ? p + '.' + k : k;
+          if (v && typeof v === 'object' && !(v instanceof Array)) walk(v, path);
+          else if (!f || path.toLowerCase().indexOf(f) >= 0) out.push(path + ' = ' + JSON.stringify(v));
+        });
+      })(SEC_CITY, '');
+      return out;
+    }
+    return { start: start, stop: stop, bye: bye, tune: tune, knobs: knobs, cfg: SEC_CITY, geo: function () { return geo; }, sign: function () { return sign; }, active: function () { return !!el; },
+             door: function () { var c = null; try { c = getEng().clock(); } catch (e) { c = null; } return c ? exitAt(c) : null; },   /* ?debug: the outro door exactly as this frame drew it (box/k/s) - measure against the verge line, not against a re-derivation */
+             preview: function (on) { SEC_CITY.letter.preview = on !== false; return SEC_CITY.letter.preview; },   /* ?debug: window.__road.preview(true) - every letter style at once */
+             zones: function () { return geo ? zonesPx() : null; },
+             mode: function (m) { if (m) { SEC_CITY.letter.mode = m; rollRun(); rollGroup(); } return SEC_CITY.letter.mode; },   /* 'basic' | 'midi' | 'game' */
+             pick: function () { return { mode: SEC_CITY.letter.mode, on: runRoll, style: curStyle, shown: showStyle, a: +styleA.toFixed(3), seamOut: seamOut, next: nextStyle, hollow: holeTube, beam: smokeBeam, side: passSide }; },
+             exit: function () {   /* ?debug: where the door is, in numbers */
+               var ck0 = null; try { var e0 = getEng(); ck0 = e0 && e0.clock ? e0.clock() : null; } catch (e) { ck0 = null; }
+               if (!ck0) return null;
+               var ex0 = exitAt(ck0);
+               if (!ex0) return { id: ck0.id, armed: exitOn(ck0), beat: +ck0.beat.toFixed(2) };
+               var B = ex0.box;
+               return { id: ck0.id, beat: +ex0.b.toFixed(2), phase: ex0.past ? 'sweep' : 'approach', k: +ex0.k.toFixed(3),
+                        box: [Math.round(B.x0), Math.round(B.y0), Math.round(B.x1), Math.round(B.y1)],
+                        w: Math.round(B.w), h: Math.round(B.h), bottom: Math.round(B.y1), midiLine: geo.yL, progressLine: +geo.yH.toFixed(1),
+                        cover: +ex0.cover.toFixed(2), sweepBeats: +ex0.sweep.toFixed(2), alpha: +ex0.a.toFixed(2), done: ex0.done };
+             },
+             reroll: function () { rollGroup(); return curStyle; },
+             style: function (s2) {   /* ?debug: pin one of board/cloud/focal/ground/pass/hole/smoke, or null to go back to the roll */
+               if (s2 === undefined) return forceStyle;
+               forceStyle = (s2 && STYLES.indexOf(s2) >= 0) ? s2 : null;
+               if (forceStyle) { LT().mode = 'game'; rollRun(); }   /* pinning implies "show me the letter", so lift the per-run 30% gate too */
+               rollGroup(); return { pinned: forceStyle, now: curStyle, mode: LT().mode };
+             },
+             styles: function () { return STYLES.slice(); },
+             passLog: function () { return passLog.slice(); },   /* ?debug: exactly which bar and beat every roadside board was launched on */
+             offset: function (ms) {   /* ?debug: __road.offset(-60) nudges every beat-driven visual 60 ms earlier; returns the current setting and the audio latency measured on this machine */
+               if (ms != null) SEC_CITY.road.offset = ms / 1000;
+               var ck = null; try { ck = getEng().clock(); } catch (e) {}
+               return { offsetMs: Math.round(SEC_CITY.road.offset * 1000), outputLatencyMs: ck ? Math.round(ck.lat * 1000) : null };
+             },
+             measure: function () {   /* ?debug: does any letter, in any style, run off the screen at this window size? */
+               if (!geo) return null;
+               var L = LT(), yH = geo.yH, out = [], all = [];
+               'ABCDEFGHI'.split('').forEach(function (ch) {
+                 var m = midBox(ch, '700');
+                 [['cloud', L.cloud.size], ['smoke', L.smoke.size], ['focal', L.focal.size], ['hole', L.hole.size]].forEach(function (p) {
+                   var px = Math.round(yH * p[1]);
+                   var x0 = geo.cx - m.l * px, x1 = geo.cx + m.r * px, y1 = yH, y0 = yH - (m.asc + m.desc) * px;
+                   var over = (x0 < 0 ? 'L' : '') + (x1 > geo.W ? 'R' : '') + (y0 < 0 ? 'T' : '') + (y1 > geo.H ? 'B' : '');
+                   var row = { style: p[0], ch: ch, px: px, box: [Math.round(x0), Math.round(y0), Math.round(x1), Math.round(y1)], over: over };
+                   all.push(row); if (over) out.push(row);
+                 });
+               });
+               return { W: geo.W, H: geo.H, yH: Math.round(yH), overflow: out, widest: all.sort(function (a, b) { return (b.box[2] - b.box[0]) - (a.box[2] - a.box[0]); })[0] };
+             } };
+  }
   var secStage = (function () {
-    var el = null, head = null, active = false, eng = null, watch = 0, seen = false, fw = false, tRaf = 0, hint = null, ducked = false, unduckPending = false, pendEl = null;   /* fw: the outro farewell has taken the line down; tRaf: the caption-tint loop; hint: the loading readout; pendEl: the previous run's surface, still animating out — a quick re-entry removes it at once (cancelling its timers alone would strand it in the DOM) */
+    var el = null, head = null, active = false, eng = null, road = null, watch = 0, seen = false, fw = false, viaDoor = false, runTok = null, tRaf = 0, hint = null, ducked = false, unduckPending = false, pendEl = null;   /* viaDoor: the exit came through the outro's letter door (LOG-112 追記⑬) - the hand-back keeps the line instead of regrowing it; runTok: which run the engine/road callbacks belong to (a stale tail's bye must not stop a newer run) */   /* fw: the outro farewell has taken the line down; tRaf: the caption-tint loop; hint: the loading readout; pendEl: the previous run's surface, still animating out — a quick re-entry removes it at once (cancelling its timers alone would strand it in the DOM) */
     var lastSec = null, aheadCol = '224,176,74', lastTint = '224,176,74';   /* the caption HOLDS the previous section's colour ahead of the play head — it never fades, only the sweeping new colour replaces it */
     var stopTimers = [];   /* the exit choreography's timers — a quick re-entry must cancel them (or the bars would pop back up mid-entrance) */
     function paintTitle() {   /* ADE's title treatment, in the section's colour: each half is a gradient clipped to its glyphs — part colour behind the play head, amber ahead, glowing with the covered share; the colour is the line's own eased tint, so both change together */
@@ -1879,9 +4247,28 @@
       }
     }
     function clearTitle() { var tEl = document.querySelector('#np-desktop .np-title'); if (!tEl) return; [tEl].concat(Array.prototype.slice.call(tEl.querySelectorAll('.np-tag, .np-rest'))).forEach(function (e_) { e_.style.color = ''; e_.style.textShadow = ''; e_.style.backgroundImage = ''; e_.style.webkitBackgroundClip = ''; e_.style.backgroundClip = ''; }); }
+    function onExitDone(form) {
+      /* LOG-112: the outro's letter has swept the stage off the screen and the room has had its beat of quiet.
+         `viaDoor` records WHICH door (追記⑮): the tube and the cloud kept the line alive inside them, so their
+         hand-back keeps it (amber straight in, grey fading back); the MASK hid everything, so its hand-back is the
+         farewell's - the desktop's line grows back from the left. Deliberately NOT `el.classList.add('bye')`: the
+         control surface is not compressed away, it was collected. */
+      if (fw || !active) return; fw = true;
+      if (form === 'cloud') {
+        /* 追記⑲ (the user: 結束之後進度條還是沒有跑完就跑移出進度條的動畫 - 雲朵I特殊處理): the cloud's door spares the
+           line, so the SECTION's own progress is still visible - let it run to 100% under the ringing tail (the
+           stage stays up, swept and silent on screen), and only then hand back. */
+        viaDoor = 'keeptail';
+        stopTimers.push(setTimeout(function () { stop(); }, DSTAGE_TAIL_MS));
+        return;
+      }
+      viaDoor = form === 'hole' ? 'regrow' : 'keep';
+      stop();
+    }
     function onBye() {   /* two bars from the outro's end (the engine's timer): the surface compresses, the line retracts into the centre, and the moment it is gone hand STRAIGHT over to the desktop player (the outro's tail sings on under it) */
       if (fw || !active) return; fw = true;
       if (el) el.classList.add('bye');
+      if (road) road.bye();   /* the night city goes down with the line: the board cuts out, the traffic blows up, the road folds into the horizon */
       wave.farewell();
       stopTimers.push(setTimeout(function () { stop(); }, 950));
     }
@@ -1909,9 +4296,11 @@
       wave.boost(1.45, 2);   /* taller bars, faster fall — each hit bounces on its own (the engine's analyser smoothing is lowered to match) */
       lastSec = null; aheadCol = '224,176,74'; lastTint = '224,176,74';
       if (!tRaf) tRaf = requestAnimationFrame(paintTitle);
-      fw = false;
-      eng = makeSecPlayer('../' + d.path + '/', d.ver, $('.ds-sec', el), onBye);
-      if (/[?&]debug/.test(location.search)) window.__sec = eng;   /* ?debug: console access for testing (state / choose / toggle) */
+      fw = false; viaDoor = false;
+      var tok = {}; runTok = tok;   /* 追記⑮: onBye/onExitDone are module functions shared across runs, and a PREVIOUS run's engine keeps its scheduled tail singing after finish() - its late two-bars-out bye must never reach into THIS run and stop it */
+      eng = makeSecPlayer('../' + d.path + '/', d.ver, $('.ds-sec', el), function () { if (runTok === tok) onBye(); });
+      road = makeSecRoad(function () { return eng; }, function (form) { if (runTok === tok) onExitDone(form); }); road.start();   /* LOG-110: the night city under and over the line (its own canvas, its own rAF, the engine's audio clock) */
+      if (/[?&]debug/.test(location.search)) { window.__sec = eng; window.__road = road; }   /* ?debug: console access for testing (state / choose / toggle · road.tune); __grid() is exported separately, at load */
       eng.onTrack(function (fromFrac) {   /* every section change: the outgoing fill dissolves in place while the new bar grows out STILL WEARING the old colour, easing into the new one over 3 s (the ADE amber-to-red logic); the caption flips */
         if (!active) return;
         var stN = eng.state();
@@ -1935,16 +4324,24 @@
       document.removeEventListener('pointerdown', onDown, true);
       if (watch) { clearInterval(watch); watch = 0; }
       if (tRaf) { cancelAnimationFrame(tRaf); tRaf = 0; } clearTitle();   /* hand the caption back unpainted (leftover paint on it double-prints the glyphs) */
-      wave.boost(1); wave.tint(null);   /* the line hands its part colour back to amber */
-      var afterFw = fw; if (fw) { wave.reappear(); fw = false; }   /* after the farewell the desktop's own line grows back from the left; the music returns once it is across */
+      wave.boost(1);
+      var afterFw = fw, byDoor = viaDoor; fw = false; viaDoor = false;
+      if (afterFw && (byDoor === 'keep' || byDoor === 'keeptail')) {
+        wave.tint('224,176,74', '224,176,74', 450); wave.squash(true);   /* keeptail (cloud): the tail has already rung out under the still-standing stage - the line is at 100% and turns amber NOW */   /* the line fills straight to amber; the BARS stay sunk into it while the outro's tail rings out (restored below, on the tail's clock) */   /* the tube/cloud door's hand-back (追記⑬): the line lived through the door in the outro's white - it fills straight over to the desktop amber, and the grey unplayed part fades back in in place, ADE-style. No regrow: the line never left. */
+      } else { wave.tint(null); if (afterFw) wave.reappear(); }   /* the old farewell - and the MASK door's (追記⑮): nothing lived inside it, so the desktop's line grows back from the left; the music returns once it is across */   /* (㉜'s desktop-wave sweep for the tube is WITHDRAWN by ㉝: the white line the user watches lives on the road canvas, so the collection happens THERE, before the hand-back ever fires) */
+      if (road) { road.stop(afterFw ? 700 : 300); road = null; }   /* after the farewell the city fades out with the retracting line; a manual exit drops it fast (`fw` has already been cleared above — read the snapshot) */
       var e0 = el, h0 = head, g0 = eng, wasDucked = ducked; el = head = eng = null; ducked = false;
       unduckPending = wasDucked;   /* until the timer below runs, a re-entry must know the music is still ducked */
       pendEl = { e0: e0, h0: h0 };
       var pn0 = $('.ds-panel', e0); if (pn0) { pn0.style.opacity = ''; pn0.style.transform = ''; }   /* drop the pinned state so .out can animate */
       e0.classList.remove('in'); e0.classList.add('out'); h0.classList.remove('in');
-      if (afterFw) {   /* seamless hand-back: the desktop line regrows at once and the music returns as it lands; the engine keeps its scheduled tail singing on its own — no frame to keep alive (LOG-109) */
+      if (afterFw) {   /* seamless hand-back: the engine keeps its scheduled tail singing on its own — no frame to keep alive (LOG-109). The keep path (tube/cloud door) waits the TAIL out before the desktop's bars and music rise (追記⑰); the regrow path returns on the old 1 s. */
         if (g0) g0.finish();
-        stopTimers.push(setTimeout(function () { unduckPending = false; caption.reset(); if (wasDucked) player.unduck(); }, 1000));
+        var keepish = byDoor === 'keep' || byDoor === 'keeptail';
+        var EXs = ((SEC_CITY.letter || {}).exit || {}), collMs = Math.round(((EXs.collectS == null ? 1.0 : EXs.collectS) + 0.15) * 1000);
+        var backMs = byDoor === 'keep' ? Math.max(300, DSTAGE_TAIL_MS - collMs) : 1000;   /* keep (tube): the bars wait the tail out from here - MINUS the line-collection the road already spent (追記㉟: the ㉝ collect pushed stop() ~1.15 s later, so the old flat 3800 landed the bars' return in the silence AFTER the tail, and the analyser taps before the duck gain, so the bars leapt up with nothing to hear - "音樂還沒開始，音量條卻自己先跳起來"); keeptail (cloud): the wait already happened before stop() */
+        stopTimers.push(setTimeout(function () { if (keepish) { wave.flush(); wave.squash(false); wave.restore(1400); } caption.reset(); }, backMs));   /* the VISUAL homecoming first: the grey line fades back, the bars stay flat (the ducked player reads as silence - 追記㊱) */
+        stopTimers.push(setTimeout(function () { unduckPending = false; if (wasDucked) player.unduck(); }, backMs + (keepish ? 700 : 0)));   /* 追記㊱/㊲: the music enters the moment the homecoming's MOTION has landed (the amber tint 450 ms and the squash release 600 ms are both done by 700) - the flat 1500 was read as sluggish ("遲緩1.5秒有點太久"); the grey restore's last quiet second finishes under the music. The bars still rise WITH the sound, never before it */
         stopTimers.push(setTimeout(function () { e0.remove(); h0.remove(); pendEl = null; }, 1200));   /* the .bye compression (.7 s) has landed; the audio no longer lives in this DOM */
       } else {   /* manual exit, ADE-style: the section bars sink into the line, then rise again as the OS music's — with the play head retreating and sliding back out to where the track really is */
         var exitFrac = 0; try { exitFrac = g0 && g0.state().frac || 0; } catch (e) {}
@@ -2430,9 +4827,10 @@
       var toks = c.trim().split(/\s+/).map(function (t) { return t.replace(/^-+/, ''); }).filter(function (t) { return t; }), a = (toks[0] || '').toLowerCase();   /* leading dashes are decoration */
       if (!a) return '';
       var eggs = toks.filter(function (t) { return /^EE_/i.test(t); }).map(function (t) { return t.replace(/^EE_/i, '').toLowerCase(); }), wantRestart = toks.some(function (t) { return t.toLowerCase() === 'restart'; });
-      if (eggs.indexOf('@') >= 0) { eggs = eggs.filter(function (k) { return k !== '@'; }); ['cat', 'midi', 'hb', 'st'].forEach(function (k) { if (eggs.indexOf(k) < 0) eggs.push(k); }); }   /* '@' = every chance-gated one at 100% for the next boot (one-shots included) */
+      if (eggs.indexOf('@') >= 0) { eggs = eggs.filter(function (k) { return k !== '@'; }); ['cat', 'midi', 'hb', 'st', 'v6_m'].forEach(function (k) { if (eggs.indexOf(k) < 0) eggs.push(k); }); }   /* '@' = every chance-gated one at 100% for the next boot (one-shots included) */
       if (eggs.length || wantRestart) {
-        var bad = eggs.filter(function (k) { return k !== 'cat' && k !== 'midi' && k !== 'hb' && k !== 'st' && SECRET_IDS.indexOf(k) < 0; });
+        var V6 = ['v6', 'v6_p', 'v6_m', 'v6_c'];
+        var bad = eggs.filter(function (k) { return k !== 'cat' && k !== 'midi' && k !== 'hb' && k !== 'st' && V6.indexOf(k) < 0 && SECRET_IDS.indexOf(k) < 0; });
         if (bad.length || !wantRestart) return U.term_unknown + c.trim();   /* never hint at the syntax: malformed = unknown command */
         try { if (eggs.length) sessionStorage.setItem('ee', eggs.join(',')); } catch (e) {}
         setTimeout(function () { location.reload(); }, 150);

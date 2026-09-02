@@ -40,11 +40,11 @@ button{font:inherit;color:inherit}
 /* ---------- desktop ---------- */
 .desktop{position:fixed;inset:0;background:radial-gradient(ellipse at 20% 0%,var(--wall1),var(--wall2) 60%);background-image:radial-gradient(ellipse at 20% 0%,var(--wall1),var(--wall2) 60%),radial-gradient(rgba(255,255,255,.06) 1px,transparent 1px);background-size:100% 100%,22px 22px}
 .desktop[hidden]{display:none}
-.wave{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+.wave{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;mask-image:var(--wvm,none);mask-composite:exclude;mask-repeat:no-repeat;mask-position:var(--wvp,0 0);mask-size:var(--wvs,auto);-webkit-mask-image:var(--wvm,none);-webkit-mask-repeat:no-repeat;-webkit-mask-position:var(--wvp,0 0);-webkit-mask-size:var(--wvs,auto)}   /* LOG-111: the corner lamps are up - the spectrum steps back so the light and the letter cut out of it can be read. Eased, never a cut. */   /* LOG-111 (5) black light: os.js writes --wvm/--wvp/--wvs to cut the section's letter clean out of the bars, the same trick the dock uses for its hover hole (layer 1 = the letter, layer 2 = everything, composited 'exclude'). Unset = mask-image:none = no mask at all. */
 /* desktop reveal: .dark = black veil over the wallpaper and everything except the line hidden; removing it fades colours + UI in together */
 .veil{position:absolute;inset:0;background:#000;z-index:0;opacity:0;pointer-events:none;transition:opacity 3s ease}
 .desktop.dark .veil{opacity:1}
-.desktop>:not(.wave):not(.veil):not(.hovbub){transition:opacity 3s ease,transform 2.4s cubic-bezier(.2,.7,.2,1)}   /* .hovbub: the dock's hover bubble lives directly on .desktop — this boot-entrance rule out-specifies .hovbub's own timing and made the ring glide at 2.4s while the mask hole snapped */
+.desktop>:not(.wave):not(.veil):not(.hovbub):not(.ds-road):not(.ds-sky){transition:opacity 3s ease,transform 2.4s cubic-bezier(.2,.7,.2,1)}   /* .hovbub: the dock's hover bubble lives directly on .desktop — this boot-entrance rule out-specifies .hovbub's own timing and made the ring glide at 2.4s while the mask hole snapped. .ds-road (the section stage's night city) is excluded for the same reason: it owns its own fade in and out */
 .desktop.dark>.icons{transform:translateX(-90px)}            /* app column slides in from the left */
 .hero-text h1{transition:transform 2.4s cubic-bezier(.2,.7,.2,1)}
 .desktop.dark .hero-text h1{transform:translateX(90px)}     /* name slides in from the right; the tagline below simply fades */
@@ -413,7 +413,7 @@ body.hb .phone *:not(.np-title,.np-title *,canvas){text-shadow:0 0 8px rgba(61,2
 /* ADE stage (LOG-096/097): lives on the desktop itself — four dots with a volume halo, the spectrum baseline is the X axis */
 .stage{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:0;transition:opacity .6s}   /* under the spectrum canvas (inserted before it): nothing on the desktop is covered */
 .stage.in{opacity:1}
-.stage-ui{position:absolute;inset:0;z-index:20;pointer-events:none;opacity:0;transition:opacity .6s}
+.stage-ui{position:absolute;inset:0;z-index:20;pointer-events:none;opacity:0;transition:opacity .6s;mask-image:var(--dsm,none);mask-composite:exclude;mask-repeat:no-repeat;mask-position:var(--dsp,0 0);mask-size:var(--dss,auto);-webkit-mask-image:var(--dsm,none);-webkit-mask-repeat:no-repeat;-webkit-mask-position:var(--dsp,0 0);-webkit-mask-size:var(--dss,auto)}   /* LOG-112: the exit button goes the same way as the section buttons - the frame sweeps it up too */
 .stage-ui.in{opacity:1}
 .stage .st-cv{position:absolute;inset:0;width:100%;height:100%}
 .stage-ui .st-hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);width:min(70vw,520px);text-align:center;color:var(--dim);font:12px/1.7 var(--mono);transition:opacity .6s}
@@ -423,7 +423,12 @@ body.hb .phone *:not(.np-title,.np-title *,canvas){text-shadow:0 0 8px rgba(61,2
 .stage-ui .st-exit{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);color:var(--fg);border-radius:999px;padding:.35rem .9rem;font:12px var(--mono);cursor:pointer}
 .stage-ui .st-exit:hover{background:rgba(255,255,255,.14)}
 /* demo stage (iframe demo on the desktop, no window): the control surface floats as one translucent card above the wallpaper */
-.dstage{position:absolute;inset:0;z-index:6;pointer-events:none}   /* above the icons/updates layers, UNDER .windows (10): an open window is never trapped behind the stage buttons */
+.ds-veil{position:absolute;inset:0;background:var(--bg);z-index:0;pointer-events:none;opacity:0}   /* LOG-111 house lights: sits UNDER .ds-road, so the wallpaper drops to the desktop's own flat colour while the road and its notes stay lit. NOT black: two flashes against pure black is unpleasant to look at. */
+.ds-road{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:0;transition:opacity .55s ease}   /* LOG-110 the night city: inserted BEFORE #wave, so the horizon line, the icons, the notes, the windows and the dock all sit on top of it */
+.ds-road.in{opacity:1}
+.ds-sky{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;opacity:0;transition:opacity .55s ease}   /* LOG-111 the letter layer the spectrum bars cannot cover: inserted AFTER #wave so it paints over the bars - still under .icons (5), .dstage (6), .windows (10), .menubar (50) and .dock (60) */
+.ds-sky.in{opacity:1}
+.dstage{position:absolute;inset:0;z-index:6;pointer-events:none;mask-image:var(--dsm,none);mask-composite:exclude;mask-repeat:no-repeat;mask-position:var(--dsp,0 0);mask-size:var(--dss,auto);-webkit-mask-image:var(--dsm,none);-webkit-mask-repeat:no-repeat;-webkit-mask-position:var(--dsp,0 0);-webkit-mask-size:var(--dss,auto)}   /* LOG-112 the outro exit: os.js writes --dsm/--dsp/--dss and the section buttons are simply NOT THERE where the letter's frame has already passed - the same cut #wave takes, in the same desktop coordinates (the stage layer is inset:0, so there is no offset to convert) */   /* above the icons/updates layers, UNDER .windows (10): an open window is never trapped behind the stage buttons */
 .dstage .ds-panel{position:absolute;left:max(110px,7vw);top:8vh;transform:translateY(26px) scale(.99);width:min(760px,72vw);height:min(430px,64vh);pointer-events:auto;opacity:0;transition:opacity .55s ease,transform .55s cubic-bezier(.2,.7,.2,1)}   /* no card: the frame is invisible — the demo's own buttons float straight on the wallpaper, in the empty upper-left, clear of the spectrum line */
 .dstage.in .ds-panel{opacity:1;transform:none}
 .dstage.out .ds-panel{opacity:0;transform:translateY(32px) scale(.99);transition:opacity .38s ease,transform .38s ease}
@@ -453,3 +458,11 @@ body.hb .phone *:not(.np-title,.np-title *,canvas){text-shadow:0 0 8px rgba(61,2
 .ds-sec .seg.outro{--c:#e8e8e4}   /* the bookends are white light (a touch grey) */
 .ds-sec .seg.random,.ds-sec .seg.seq{--c:var(--accent)}   /* Random and In-order flash the SAME colour */
 .ds-sec .hb2{position:absolute;left:0;top:0;pointer-events:none;opacity:0;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22),inset 0 1px 0 rgba(255,255,255,.30);transition:opacity .4s ease;z-index:0}
+/* ?debug only, built by __grid(): a naming grid over the whole viewport so a note can say "the smoke around F3" instead of
+   shipping a screenshot. Never present unless asked for, and it can never eat a click. */
+.refgrid{position:fixed;inset:0;z-index:9999;pointer-events:none;display:grid;
+  grid-template-columns:repeat(var(--gc,20),1fr);grid-template-rows:repeat(var(--gr,10),1fr);
+  font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace}
+.refgrid i{outline:1px solid rgba(255,255,255,.16);color:rgba(255,255,255,.5);font-style:normal;
+  padding:2px 0 0 3px;text-shadow:0 0 3px rgba(0,0,0,.9)}
+.refgrid i:nth-child(5n){outline-color:rgba(255,255,255,.3)}
