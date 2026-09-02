@@ -839,6 +839,16 @@
       var list = D.updates || [];
       updLog.innerHTML = list.length ? list.map(function (u) { return '<div class="msg"><time>' + esc(u.date) + '</time><p>' + esc(u.text) + '</p></div>'; }).join('') : '<p class="note">' + esc(U.updates_empty) + '</p>';
       $('#upd-hide').addEventListener('click', function () { upd.hidden = true; });
+      /* LOG-116追記③ (the user: 高度調低·畫面縮小時優先壓縮·盡量不要與尋找重疊): the panel's height is CAPPED at
+         runtime so its top edge always clears the app column's last icon (尋找) - when the viewport shrinks it is
+         the updates panel that gives up its space first, never the icons. Floor of 72px keeps the header usable. */
+      var updLayout = function () {
+        var vh = window.innerHeight, base = Math.round(vh * 0.36) - 84, cap = 1e9;
+        var ic = document.getElementById('icons');
+        if (ic) { var r = ic.getBoundingClientRect(); if (r.height > 0) cap = vh - 64 - r.bottom - 12; }   /* bottom:64px anchor; 12px of air under the icons */
+        upd.style.maxHeight = Math.max(72, Math.min(base, cap)) + 'px';
+      };
+      updLayout(); window.addEventListener('resize', updLayout); setTimeout(updLayout, 600);   /* once more after the boot entrance settles the icon column */
     }
     // clock
     var clock = $('#clock');
@@ -1528,7 +1538,29 @@
       b.classList.toggle('open', !!w);
       b.classList.toggle('on', !!w && !w.classList.contains('minimized') && w.classList.contains('focus'));
     });
+    updDodge();
   }
+  /* LOG-116追記①: the updates panel must NEVER share ground with an app window (the user: 最近更新無論如何都不要跟
+     應用程式重疊). Whenever any visible window's rect crosses the panel's, the panel steps aside (fades out, clicks
+     pass through) and comes back the moment the air is clear. Checked wherever a window can move: open/close/
+     minimize/focus (all pass through updateDock), drag, resize, and a viewport resize - rAF-throttled, so a drag
+     costs at most one rect sweep per frame. */
+  var updDodgeRaf = 0;
+  function updDodge() {
+    if (updDodgeRaf) return;
+    updDodgeRaf = requestAnimationFrame(function () {
+      updDodgeRaf = 0;
+      var up = document.getElementById('updates'); if (!up || up.hidden) return;
+      var r = up.getBoundingClientRect(), hit = false;
+      Object.keys(wins).forEach(function (k) {
+        var w = wins[k]; if (hit || !w.isConnected || w.classList.contains('minimized')) return;
+        var q = w.getBoundingClientRect();
+        if (q.left < r.right && q.right > r.left && q.top < r.bottom && q.bottom > r.top) hit = true;
+      });
+      up.classList.toggle('dodge', hit);
+    });
+  }
+  window.addEventListener('resize', updDodge);
 
   var spawn = 0;
   /* ============================================================ section stage (LOG-109): the interactive section player, SHELL-NATIVE.
@@ -2109,7 +2141,22 @@
       wall: 0.013, core: 0.8,   /* the glass wall's thickness and how much of it the white-hot discharge takes - same language as the neon board */
       shadow: { blur: 0.05, alpha: 0.45, pass: 2 },   /* the shadow must be TIGHTER than the glow, not merely weaker. The neon's halo spreads about 60 px; a black shadow spread over the same distance is subtracted from exactly where the halo is added, the two cancel, and the tube comes back as a bare outline with no glow at all. Hugging the glyph, it still lifts it off a lit bar and leaves the halo room to show. */   /* blur = a CSS blur RADIUS in letter heights (roughly half the old shadowBlur figure); laid down `pass` times */   /* baked under every front-layer glyph: a soft black shadow ONLY - no outline, no dark edge. blur is in letter heights; pass = how many times it is laid down (depth without a hard rim) */
       cloud: { size: 0.95, cx: 0.5, style: 'tube', alpha: 0.16, glow: 0.5, driftPx: 26, driftS: 46 },   /* (1) the sky afterimage: enormous, barely there, drifting - it STANDS ON the horizon like everything else here */
-      ground: { bottomY: 0.80, lenZ: 2.28, w: 0.30, wNoRoad: 0.34, alpha: 0.34, glow: 0.45, skipRamp: true, noise: 0.55, noiseHz: 8 },   /* noise (追記㊲→㊷): DOT-STATIC jitter on the marking - three seeded speck variants cycled at noiseHz so the dots dance like signal noise; 0 = clean */   /* wNoRoad: with no road under it (the plain mode) the marking takes this share of the screen instead of the road's width */   /* skipRamp: during an accelerando the TEMPO marking moves onto this same tarmac (E1/E2), so the letter stands down rather than overlapping it */   /* (2) painted on the tarmac: its near edge lands on this share of the screen height (0.80 = the top line of row 9), and it covers this much GROUND behind that (Z units, so moving it up the road makes it smaller and narrower exactly as the road does) */
+      ground: { bottomY: 0.80, lenZ: 2.28, w: 0.45, wBy: { A: 0.35, I: 0.20 }, wNoRoad: 0.34, alpha: 0.34, glow: 0.45, skipRamp: true, noise: 0.06, noiseHz: 8,
+                /* LOG-115 (sandboxed with the user, live-tuned values): the road letter's BAD-SIGNAL life.
+                   wBy: per-letter share of the road (the glyphs are not the same width - A and I got their own numbers, the rest take w).
+                   noise is the ㊲→㊷ dot static, dialled nearly off (0.06) - the signal look now comes from the two systems below. */
+                jitS: 0.75, jitMs: 120, jitPx: 14, jitBand: 0.05,
+                /* CORNER TWITCH (the user: 偶爾一個角抽動/橫線局部抖動·同時最多4處·方式不能一樣): every ~jitS s a narrow
+                   band (jitBand of the glyph) has ONLY its edge-side section snap sideways by up to jitPx for jitMs.
+                   Up to four at once, heights kept apart, and concurrent ones are FORCED onto different styles
+                   (side x amplitude x band-height x rate) so no two corners ever twitch the same way. */
+                swayS: 2.2, swayMs: 700, swayA: 3, swayHz: 6, swayWave: 2.2, swaySnap: 24, swayNoise: 0.55, swayQuant: 1, swayChunk: 8 },
+                /* BAD-SIGNAL SWAY (the user: 訊號不穩的左右搖晃感·要快、幅度低、粗糙不絲滑): bursts of horizontal wobble,
+                   ~swayMs long every ~swayS s, trapezoid envelope (snaps on, flat top, quick out - a sine ramp read "soft").
+                   The roughness is deliberate and layered: swaySnap steps the clock (24 Hz holds, not per-frame glide),
+                   swayNoise mixes seeded jitter into the sine, swayChunk cuts the glyph into blocks that tear as units
+                   (each block its own phase AND its own noise), and swayQuant rounds every offset to whole pixels -
+                   sub-pixel interpolation was the last of the silkiness and it goes too. */   /* wNoRoad: with no road under it (the plain mode) the marking takes this share of the screen instead of the road's width */   /* skipRamp: during an accelerando the TEMPO marking moves onto this same tarmac (E1/E2), so the letter stands down rather than overlapping it */   /* (2) painted on the tarmac: its near edge lands on this share of the screen height (0.80 = the top line of row 9), and it covers this much GROUND behind that (Z units, so moving it up the road makes it smaller and narrower exactly as the road does) */
       focal: { size: 0.42, dy: 0, style: 'tube', alpha: 0.92, glow: 1.0, hole: true, holeA: 1, holeRing: 1.9, holeRingA: 1.35 },   /* holeA: how much of the spectrum is taken away inside the tube (1 = erased). holeRing/holeRingA: how far and how strongly the cut's black glow bleeds out onto the bars around it */   /* hole: the hollow tube also has its INSIDE cut out of the bars, so the lamp stands in clear air instead of over a hedge of bars */
       hole: { size: 0.28, dy: 0, tubeChance: 0, glow: 1,   /* tubeChance 0 = ALWAYS solid. The hollow version was tried and dropped: a tube's walls are a few px of missing bar, and inside the spectrum they simply cannot be seen (worst on a narrow letter like I) */
               rings: [[0.52, 0.46], [0.25, 0.50], [0.10, 0.54]],   /* the black glow, as [CSS blur radius, alpha] pairs in letter heights: a WIDE faint ring, a middle one and a tight strong one. Stacked they give a real falloff - the bars thin out over a distance instead of stopping dead on an edge nobody can see. glow scales all three at once */
@@ -2561,7 +2608,8 @@
       var f1 = Math.max(0.06, Math.min(0.999, (G.bottomY * geo.H - yh) / Math.max(1, span)));
       var f0 = Math.max(0.02, Math.min(f1 - 0.01, 1 / (1 / f1 + G.lenZ)));
       var y0 = yh + span * f0, y1 = yh + span * f1;
-      var Wp = Math.max(8, Math.round(MD().road ? 2 * geo.half * f1 * G.w : geo.W * G.wNoRoad)), Hp = Math.max(4, Math.round(y1 - y0));   /* with no road under it there is no road width to take, so it falls back to a share of the screen */
+      var wch = (G.wBy && G.wBy[ch] != null) ? G.wBy[ch] : G.w;   /* per-letter share of the road (LOG-115): A and I are narrower glyphs and got their own widths */
+      var Wp = Math.max(8, Math.round(MD().road ? 2 * geo.half * f1 * wch : geo.W * G.wNoRoad)), Hp = Math.max(4, Math.round(y1 - y0));   /* with no road under it there is no road width to take, so it falls back to a share of the screen */
       var Ac = (m.cap * (1 - 2 * pad) / m.w) + 2 * pad;   /* the flat plate's height per unit of its width */
       var sprite = spr('gl|' + rgb + '|' + ch + '|' + Wp + 'x' + Hp + '|' + f0.toFixed(3) + '|' + G.glow + '|' + (G.noise || 0) + 'n' + (nv || 0) + '|' + (MD().road ? 1 : 0), Wp, Hp, function (x, W, H) {
         var Wc = W * (1 - 2 * pad), fs = Math.max(8, Wc / m.w), fh = Math.max(2, Math.round(W * Ac));
@@ -2598,7 +2646,7 @@
         }
         flatCv.width = flatCv.height = 1;
       });
-      return { spr: sprite, y0: y0, y1: y1, w: Wp, h: Hp };
+      return { spr: sprite, y0: y0, y1: y1, w: Wp, h: Hp, f0: f0, f1: f1 };
     }
     function groundBusy(ck) {
       /* is the TEMPO marking on the tarmac? It moves down onto the road for the accelerando and stays through the lock
@@ -2610,11 +2658,138 @@
       if (!groundT0) return false;
       return !lockT0 || (now - lockT0) < (T.lockMs + T.fadeMs) / 1000;
     }
+    /* ---- LOG-115: the road letter's bad-signal life (built in the offline sandbox with the user, ported verbatim).
+       Two independent systems, layered:
+         CORNER TWITCH - a pool of up to four glitches; each is one narrow band of the glyph whose edge-side section
+         snaps sideways for ~jitMs. Concurrent glitches are forced onto DIFFERENT styles (the user: 同時抽的話方式盡量
+         不要一樣) - side, amplitude, band height and re-roll rate all differ.
+         BAD-SIGNAL SWAY - bursts of horizontal wobble. Deliberately COARSE (the user: 要粗糙不要絲滑): stepped clock
+         (swaySnap), per-block seeded noise and phase (swayChunk tears the glyph in blocks), whole-pixel offsets
+         (swayQuant), trapezoid envelope. Everything runs off `now` (the audio clock), so a pause freezes it all. */
+    var glitches = [], jitNext = 0, sway = null, swayNext = 0, gndT = -10;
+    function gndRng(seed) {
+      var s = (Math.abs(Math.floor(seed)) % 2147483646) + 1;
+      /* warmed three turns: neighbouring seeds' FIRST outputs are linearly correlated (measured in the sandbox:
+         the twitch became a smooth drift), so the correlation is spun off before any number is used */
+      s = (s * 16807) % 2147483647; s = (s * 16807) % 2147483647; s = (s * 16807) % 2147483647;
+      return function () { s = (s * 16807) % 2147483647; return s / 2147483647; };
+    }
+    function jitStep(G) {
+      if (!(G.jitPx > 0) || !(G.jitS > 0)) { glitches.length = 0; jitNext = now + 1; return; }
+      var bh = Math.max(0.01, G.jitBand == null ? 0.05 : G.jitBand);
+      if (now >= jitNext) {
+        jitNext = now + G.jitS * (0.6 + Math.random() * 0.8);   /* irregular, but AVERAGING jitS (the user set ~0.75 s) */
+        var nSpawn = 1 + (Math.random() < 0.4 ? 1 : 0) + (Math.random() < 0.18 ? 1 : 0) + (Math.random() < 0.08 ? 1 : 0);
+        for (var s2 = 0; s2 < nSpawn && glitches.length < 4; s2++) {
+          var y2 = -1, tries = 0;
+          while (tries++ < 8) {   /* heights kept apart: a re-roll rather than two bands riding each other */
+            var cand = 0.06 + Math.random() * 0.88, clash = false;
+            for (var q2 = 0; q2 < glitches.length; q2++) if (Math.abs(glitches[q2].y - cand) < bh + 0.05) { clash = true; break; }
+            if (!clash) { y2 = cand; break; }
+          }
+          if (y2 < 0) break;
+          /* concurrent twitches must not match: four styles (side x amplitude x band height x rate), spawned AVOIDING
+             the styles already on stage - verified in the sandbox: zero duplicate pairs over a 10 s soak */
+          var STY = [{ left: true, amp: 1.00, hk: 1.00, hz: 30 }, { left: false, amp: 0.65, hk: 1.40, hz: 18 },
+                     { left: false, amp: 1.40, hk: 0.70, hz: 45 }, { left: true, amp: 0.80, hk: 1.20, hz: 24 }];
+          var used = {}, pool = [];
+          for (var u2 = 0; u2 < glitches.length; u2++) used[glitches[u2].sty] = 1;
+          for (var v2 = 0; v2 < STY.length; v2++) if (!used[v2]) pool.push(v2);
+          var si = pool.length ? pool[Math.floor(Math.random() * pool.length)] : Math.floor(Math.random() * STY.length);
+          var st2 = STY[si];
+          glitches.push({ t0: now + Math.random() * 0.09, ms: (G.jitMs || 120) * (0.6 + Math.random() * 0.9),
+                          y: y2, sty: si, left: st2.left, amp: st2.amp, hk: st2.hk, hz: st2.hz,
+                          cut: 0.25 + Math.random() * 0.5 });
+        }
+      }
+      for (var k2 = glitches.length - 1; k2 >= 0; k2--) if (now - glitches[k2].t0 > glitches[k2].ms / 1000) glitches.splice(k2, 1);
+    }
+    function swayStep(G) {
+      if (!(G.swayA > 0) || !(G.swayS > 0)) { sway = null; swayNext = now + 1; return; }
+      if (now >= swayNext) {
+        swayNext = now + G.swayS * (0.6 + Math.random() * 0.8);
+        sway = { t0: now, ms: (G.swayMs || 700) * (0.7 + Math.random() * 0.6),
+                 k: 0.6 + Math.random() * 0.8, ph: Math.random() * 6.2832, dir: Math.random() < 0.5 ? 1 : -1 };
+      }
+      if (sway && now - sway.t0 > sway.ms / 1000) sway = null;
+    }
     function drawGround(ch, rgb, a) {
       var G = LT().ground, nv = G.noise > 0 ? Math.floor(now * (G.noiseHz == null ? 8 : G.noiseHz)) % 3 : 0;   /* 追記㊷: three noise seeds, cycled - the dots dance */
       var m = groundGlyph(ch, rgb, nv);
+      /* the state machines live only while the letter does: any gap or clock jump (a new group, the stage reopened,
+         a seek) resets the pool rather than letting stale timers starve or flood the effect - the sandbox's negative-
+         clock incident, closed as a class */
+      if (now - gndT > 2 || now < gndT - 0.5) { glitches.length = 0; sway = null; jitNext = swayNext = now + 0.3; }
+      gndT = now;
+      jitStep(G); swayStep(G);
       g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = G.alpha * a;
-      g.drawImage(m.spr, geo.cx - m.w / 2, m.y0, m.w, m.h); g.restore();
+      var x0 = geo.cx - m.w / 2;
+      var act = glitches.filter(function (e2) { return now >= e2.t0; });
+      var swEnv = 0;   /* trapezoid envelope: snaps on over 0.12, flat top, out over 0.18 - a sine ramp read "soft" */
+      if (sway) { var q4 = (now - sway.t0) / (sway.ms / 1000); if (q4 >= 0 && q4 <= 1) swEnv = Math.max(0, Math.min(1, q4 / 0.12, (1 - q4) / 0.18)); }
+      var haveSway = swEnv > 0.001 && G.swayA > 0;
+      var SW = m.spr.width, SH = m.spr.height;
+      function part(sx0, sx1, sy0, sy1, ddx) {   /* one source-rect slice of the baked sprite, placed with its own offset */
+        var sw = Math.max(1, (sx1 - sx0) * SW), sh2 = Math.max(1, (sy1 - sy0) * SH);
+        g.drawImage(m.spr, sx0 * SW, sy0 * SH, sw, sh2,
+                    x0 + sx0 * m.w + ddx, m.y0 + sy0 * m.h, Math.max(0.5, (sx1 - sx0) * m.w), Math.max(0.5, (sy1 - sy0) * m.h));
+      }
+      if (!act.length && !haveSway) {
+        g.drawImage(m.spr, x0, m.y0, m.w, m.h);   /* the quiet frames: one blit, exactly the old path */
+      } else {
+        var bh = Math.max(0.01, G.jitBand == null ? 0.05 : G.jitBand), bands = [];
+        act.sort(function (p2, q3) { return p2.y - q3.y; });
+        var cur = 0;
+        for (var i2 = 0; i2 < act.length; i2++) {
+          var E = act[i2], bh2 = bh * (E.hk || 1), ya = Math.max(cur, E.y - bh2 / 2), yb = Math.min(1, E.y + bh2 / 2);
+          if (yb <= ya) continue;
+          var step = Math.floor((now - E.t0) * (E.hz || 30));   /* each style re-rolls at its own rate */
+          var ro = gndRng(step * 7919 + E.t0 * 100000 + (ch.charCodeAt(0) || 65));
+          var depthK = (m.f0 + E.y * (m.f1 - m.f0)) / m.f1;   /* the twitch is ON the tarmac: further rows move less */
+          bands.push({ ya: ya, yb: yb, left: E.left, cut: E.cut, dx: (ro() * 2 - 1) * G.jitPx * (E.amp || 1) * depthK });
+          cur = yb;
+        }
+        var swT = (G.swaySnap > 0) ? Math.floor(now * G.swaySnap) / G.swaySnap : now;   /* the stepped clock: held values, not per-frame glide */
+        var swSeed = Math.floor(swT * 997) * 6271 + (sway ? Math.floor(sway.t0 * 100000) : 0);
+        function swayDx(u) {
+          if (!haveSway) return 0;
+          var nCk = Math.max(0, Math.round(G.swayChunk || 0));
+          var uq = nCk > 0 ? (Math.floor(u * nCk) + 0.5) / nCk : u;   /* phase and noise from the BLOCK's centre: the block tears as one */
+          var dK = (m.f0 + u * (m.f1 - m.f0)) / m.f1;
+          var nzK = Math.max(0, Math.min(1, G.swayNoise || 0));
+          var base = Math.sin(sway.ph + swT * (G.swayHz || 6) * 6.2832 + uq * 6.2832 / Math.max(0.2, G.swayWave || 2.2));
+          var nz = nzK > 0 ? gndRng(swSeed + Math.floor(uq * 64) * 97)() * 2 - 1 : 0;
+          var v = sway.dir * swEnv * sway.k * G.swayA * dK * (base * (1 - nzK) + nz * nzK);
+          if (G.swayQuant > 0) v = Math.round(v / G.swayQuant) * G.swayQuant;   /* whole pixels only: sub-pixel blits were the last silkiness */
+          return v;
+        }
+        if (!haveSway) {
+          /* twitches alone: three slices per band, the rest untouched - cheap */
+          var c2 = 0;
+          for (var b2 = 0; b2 < bands.length; b2++) {
+            var B = bands[b2];
+            if (B.ya > c2) part(0, 1, c2, B.ya, 0);
+            if (B.left) { part(B.cut, 1, B.ya, B.yb, 0); part(0, B.cut, B.ya, B.yb, B.dx); }
+            else        { part(0, B.cut, B.ya, B.yb, 0); part(B.cut, 1, B.ya, B.yb, B.dx); }
+            c2 = B.yb;
+          }
+          if (c2 < 1) part(0, 1, c2, 1, 0);
+        } else {
+          /* swaying: a 2 px row scan; a row inside a twitch band gets the band's own offset ON TOP of the sway
+             (both live at once - measured in the sandbox, no frame cost worth naming) */
+          var rowPx = 2, rows = Math.max(1, Math.ceil(m.h / rowPx));
+          for (var r4 = 0; r4 < rows; r4++) {
+            var sy0 = r4 / rows, sy1 = (r4 + 1) / rows, u = (sy0 + sy1) / 2;
+            var dxs = swayDx(u), bnd = null;
+            for (var b3 = 0; b3 < bands.length; b3++) if (u >= bands[b3].ya && u < bands[b3].yb) { bnd = bands[b3]; break; }
+            if (bnd) {
+              if (bnd.left) { part(bnd.cut, 1, sy0, sy1, dxs); part(0, bnd.cut, sy0, sy1, dxs + bnd.dx); }
+              else          { part(0, bnd.cut, sy0, sy1, dxs); part(bnd.cut, 1, sy0, sy1, dxs + bnd.dx); }
+            } else part(0, 1, sy0, sy1, dxs);
+          }
+        }
+      }
+      g.restore();
       return m;
     }
     /* (3) STANDING ON THE VANISHING POINT: centred on it left and right, its foot ON the horizon. The bars run straight
@@ -4131,7 +4306,7 @@
       var wv0 = waveEl(); if (wv0) { wv0.classList.remove('dim'); wv0.style.opacity = ''; wv0.style.transition = ''; }
       seqDark = seqFlash = 0; roomReset();
       showStyle = null; styleA = 0; styleGoal = 0;
-      var e0 = el, e0f = elF; el = null; g = null; elF = null; gf = null; geo = null; beads = []; passes = []; sign = oldSign = null; cache = {};
+      var e0 = el, e0f = elF; el = null; g = null; elF = null; gf = null; geo = null; beads = []; passes = []; sign = oldSign = null; cache = {}; glitches.length = 0; sway = null; jitNext = swayNext = 0; gndT = -10;
       window.removeEventListener('resize', layout);
       if (raf) { cancelAnimationFrame(raf); raf = 0; }
       [e0, e0f].forEach(function (c) { if (!c) return; c.style.transitionDuration = (ms || 300) + 'ms'; c.classList.remove('in'); c.style.opacity = ''; });   /* drop the pinned state so the fade-out can animate */
@@ -4394,11 +4569,10 @@
     var x = Math.max(110, Math.min(vw - W - 20, 140 + (spawn % 5) * 40)), y = Math.max(8, Math.min(vh - H - 90, 30 + (spawn % 5) * 32)); spawn++;
     w.style.cssText = 'left:' + x + 'px;top:' + y + 'px;width:' + W + 'px;height:' + H + 'px;z-index:' + (++z);
     w.innerHTML = '<div class="win-bar"><span class="dots"><button class="close" title="' + esc(U.win_close) + '"></button><button class="min" title="' + esc(U.win_min) + '"></button><button class="max"></button></span>' +
-      '<span class="win-title">' + '<span class="wg">' + glyph + '</span> ' + esc(title) + '</span></div><div class="win-body"></div>' +
-      ((opts.page || PAGES[app]) ? '<div class="win-foot"><span></span><a href="' + esc(opts.page || PAGES[app]) + '">' + esc(U.open_page) + '</a></div>' : '');
+      '<span class="win-title">' + '<span class="wg">' + glyph + '</span> ' + esc(title) + '</span></div><div class="win-body"></div>';   /* LOG-116追記⑨: the "open as page" footer is gone (the user: 移除視窗「以整頁開啟」的選項) - the window IS the app; the static pages stay reachable by URL and for crawlers */
     $('.close', w).addEventListener('click', function () { closeApp(app); });
     $('.min', w).addEventListener('click', function () { minimize(app); });
-    $('.max', w).addEventListener('click', function () { w.classList.toggle('maxed'); if (w.classList.contains('maxed')) { w.dataset.prev = w.style.cssText; w.style.cssText = 'left:8px;top:8px;width:' + (vw - 16) + 'px;height:' + (vh - 90) + 'px;z-index:' + (++z); } else { w.style.cssText = w.dataset.prev; } });
+    $('.max', w).addEventListener('click', function () { w.classList.toggle('maxed'); if (w.classList.contains('maxed')) { w.dataset.prev = w.style.cssText; w.style.cssText = 'left:8px;top:8px;width:' + (vw - 16) + 'px;height:' + (vh - 90) + 'px;z-index:' + (++z); } else { w.style.cssText = w.dataset.prev; } updDodge(); });
     w.addEventListener('pointerdown', function () { focus(w); });
     makeDraggable(w, $('.win-bar', w));
     makeResizable(w);
@@ -4426,6 +4600,7 @@
         if (dir.indexOf('w') >= 0) { w = Math.max(MIN_W, ow - dx); x = ox + (ow - w); }
         if (dir.indexOf('n') >= 0) { h = Math.max(MIN_H, oh - dy); y = Math.max(0, oy + (oh - h)); h = oh + (oy - y); }
         el.style.left = x + 'px'; el.style.top = y + 'px'; el.style.width = w + 'px'; el.style.height = h + 'px';
+        updDodge();
       });
       var end = function () { on = false; el.classList.remove('resizing'); };
       g.addEventListener('pointerup', end); g.addEventListener('pointercancel', end); g.addEventListener('lostpointercapture', end);
@@ -4446,6 +4621,7 @@
       el.style.left = Math.max(-el.offsetWidth + 80, Math.min(window.innerWidth - 80, nx)) + 'px';
       el.style.top = Math.max(0, Math.min(window.innerHeight - 60, ny)) + 'px';
       el.style.right = 'auto'; el.style.bottom = 'auto'; el.style.transform = 'none';
+      if (el.classList.contains('win')) updDodge();
     });
     handle.addEventListener('pointerup', function () { dragging = false; });
     handle.addEventListener('pointercancel', function () { dragging = false; });
@@ -4807,6 +4983,7 @@
     }
     attach(document.getElementById('icons'), '.icon');
     attach(document.getElementById('dock'), 'button', true, true);
+    attach(document.querySelector('#np-desktop .np-ctl'), 'button', true, true);   /* LOG-116追記①: the corner transport (⏮ ⏯ ⏭ · mute) gets the same droplet - the ring glides between the glass chips (the user: 播放按鈕的泡泡沒看到). Overlay mode so the ring is never clipped; the mask vars it writes are unused there and harmless. */
   })();
   player.onTrack(function (fromFrac) { wave.sweep(true, fromFrac); phoneWave.sweep(true, fromFrac); });   // new track: sweep the amber off the line and the bars
 

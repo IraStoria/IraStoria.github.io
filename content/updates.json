@@ -1,5 +1,10 @@
 [
   {
+    "date": "2026-09-02",
+    "zh": "介面更新：全站按鈕換上液態玻璃質感（透光、不反光），滑鼠靠近會有玻璃泡泡回應；「最近更新」面板學會自動讓路，不再擋住視窗與圖示。段落播放器的路面字母也多了一點自己的脾氣，親自開一輪看看。",
+    "en": "UI refresh: every button in the shell now wears liquid glass (translucent, no glare) with a glass-droplet hover; the updates panel steps aside for windows and icons on its own. The road letters in the Section Player picked up a temper of their own, too - run a set and see."
+  },
+  {
     "date": "2026-09-03",
     "zh": "互動式段落播放器：夜城演出上線——段落字母有了自己的顯示方式，跑道上跑著 MIDI 音符與 tempo 讀數，各段落也有了自己的過場與收尾。桌面版「設計」內開始展示。",
     "en": "Interactive Section Player: the night-city show is live — the section letters have their own ways of appearing, MIDI notes and the tempo run along the road, and each section carries its own transitions and endings. Start it under Design (desktop)."

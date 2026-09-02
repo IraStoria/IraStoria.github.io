@@ -91,7 +91,7 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .sticky{position:absolute;right:3vw;bottom:120px;width:190px;background:#d9a33b;color:#2a1d05;padding:.8rem .9rem;font:12px/1.5 var(--mono);white-space:pre-wrap;transform:rotate(-3deg);box-shadow:0 10px 24px rgba(0,0,0,.45);border-radius:2px;z-index:2;cursor:grab}
 @media(max-width:699px){.sticky{display:none}}
 /* recent-updates panel: fixed lower-left, translucent; darkens on hover; × hides it for this visit */
-.updates{position:absolute;left:16px;bottom:64px;width:min(520px,calc(100vw - 32px));max-height:calc(42vh - 84px);display:flex;flex-direction:column;z-index:4;background:rgba(20,23,32,.35);border:1px solid rgba(255,255,255,.06);border-radius:14px;backdrop-filter:blur(10px);opacity:.45;transition:opacity .3s ease,background .3s ease,border-color .3s ease}   /* stays below the spectrum line (58%): 42vh minus bottom offset; unfocused = faint, hover = solid */
+.updates{position:absolute;left:16px;bottom:64px;width:min(520px,calc(100vw - 32px));max-height:calc(36vh - 84px);display:flex;flex-direction:column;z-index:4;background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.015) 55%,rgba(255,255,255,0)),rgba(16,19,28,.30);border:1px solid rgba(255,255,255,.10);border-radius:14px;backdrop-filter:blur(6px) saturate(190%) brightness(1.06);-webkit-backdrop-filter:blur(6px) saturate(190%) brightness(1.06);box-shadow:inset 0 1px 0 rgba(255,255,255,.20);opacity:.45;transition:opacity .3s ease,background .3s ease,border-color .3s ease}   /* LOG-116: the updates panel joins the liquid-glass family (sheen + saturate lift), no longer plain frost */   /* stays below the spectrum line (58%): 42vh minus bottom offset; unfocused = faint, hover = solid */
 .updates:hover,.updates:focus-within{opacity:1;background:rgba(20,23,32,.9);border-color:var(--border)}
 .updates[hidden]{display:none}
 .upd-head{display:flex;align-items:center;justify-content:space-between;padding:.45rem .5rem .35rem .8rem;font:600 12px var(--font);color:var(--dim);letter-spacing:.04em}
@@ -466,3 +466,77 @@ body.hb .phone *:not(.np-title,.np-title *,canvas){text-shadow:0 0 8px rgba(61,2
 .refgrid i{outline:1px solid rgba(255,255,255,.16);color:rgba(255,255,255,.5);font-style:normal;
   padding:2px 0 0 3px;text-shadow:0 0 3px rgba(0,0,0,.9)}
 .refgrid i:nth-child(5n){outline-color:rgba(255,255,255,.3)}
+
+/* ============================================================ LOG-116 liquid-glass buttons everywhere
+   (the user: 按鈕全部玻璃化—dock 及應用程式). ONE recipe = the menubar/dock pane, button-sized: light blur so what
+   passes under stays readable, saturate/brightness lift, a sheen down the face, hairline ring, top glint.
+   This block sits LAST in the file on purpose: it must win the earlier per-button paints at equal specificity. */
+/* ★追記②③ MATTE glass, by ruling (the user: 所有按鈕都不要做霧面反光): no sheen down the face, no specular glint
+   on top — the glass is the TINT + the BLUR + the hairline ring, nothing shiny. */
+.np-ctl button,.stage-ui .st-exit,.player .ctl button,.player .ctl .mute,.upd-hide,.btn,.dock button.on{
+  background:rgba(16,19,28,.30);
+  backdrop-filter:blur(4px) saturate(190%) brightness(1.07);-webkit-backdrop-filter:blur(4px) saturate(190%) brightness(1.07);
+  border:1px solid rgba(255,255,255,.13);color:var(--fg);
+  box-shadow:0 4px 12px rgba(0,0,0,.22)}
+.np-ctl button:hover,.stage-ui .st-exit:hover,.player .ctl button:hover,.upd-hide:hover,.btn:hover{
+  background:rgba(38,44,58,.38)}
+/* ★追記④→⑦ the accented buttons, final ruling (the user: 不要發光·套「更低透明度」的有顏色玻璃泡泡——低透明度
+   ≠ 改顏色): the ORIGINAL tinted-glass colour scheme, untouched - accent text, accent ring, dark pane - with ONLY
+   the colour layer set on the sandbox dial (the user landed on 3% tint, blur 0 - a whisper of colour on clear glass; text and ring carry the accent). No specular, no glow, nothing recoloured. */
+.btn,.player .ctl button.play{
+  background:color-mix(in srgb,var(--accent) 3%,rgba(16,19,28,.30));
+  border-color:color-mix(in srgb,var(--accent) 55%,rgba(255,255,255,.18));color:var(--accent);font-weight:600;
+  box-shadow:0 4px 12px rgba(0,0,0,.22);
+  backdrop-filter:blur(0) saturate(190%) brightness(1.07);-webkit-backdrop-filter:blur(0) saturate(190%) brightness(1.07)}
+.btn:hover,.player .ctl button.play:hover{background:color-mix(in srgb,var(--accent) 13%,rgba(20,24,34,.34))}
+.btn.ghost{background:rgba(16,19,28,.26);border-color:rgba(255,255,255,.13);color:var(--fg);box-shadow:0 4px 12px rgba(0,0,0,.22)}
+.btn{border-radius:999px}   /* a glass chip reads as a lozenge, not a printed slab */
+.dock button.on{
+  background:color-mix(in srgb,var(--accent2) 3%,rgba(16,19,28,.30));
+  border-color:color-mix(in srgb,var(--accent2) 55%,rgba(255,255,255,.18));color:var(--accent2);font-weight:700;box-shadow:none;
+  backdrop-filter:blur(0) saturate(190%) brightness(1.07);-webkit-backdrop-filter:blur(0) saturate(190%) brightness(1.07)}
+
+/* ★追記④ standalone buttons get the droplet IN PLACE (the user: 單獨按鈕要泡泡，可是不用滑動): the same glass
+   ring wells out around the button on hover - a pop with a little overshoot, no glide (there is nowhere to glide
+   to). Leaving fades it back down through the opacity transition. */
+@keyframes bubpop{0%{transform:scale(.65);opacity:0}55%{transform:scale(1.05);opacity:1}100%{transform:scale(1);opacity:1}}
+.btn,.stage-ui .st-exit{position:relative}
+.btn::after,.stage-ui .st-exit::after{content:"";position:absolute;inset:-3px;border-radius:999px;pointer-events:none;opacity:0;transition:opacity .35s ease;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.25),inset 0 1px 0 rgba(255,255,255,.32)}
+.btn:hover::after,.stage-ui .st-exit:hover::after{animation:bubpop .34s cubic-bezier(.3,1.4,.5,1) forwards}
+
+/* ★追記⑤→⑨ the menubar language toggle joins the glass family (the user: 上面英轉中的開關樣式): the track is the
+   same matte pane as the plain buttons; flipped to 中 it wears the buttons' own tint recipe at the user's dial
+   (色層濃度 10%); the knob is a light glass disc, not solid paint. */
+.ls-track{background:rgba(16,19,28,.30);border:1px solid rgba(255,255,255,.13);backdrop-filter:blur(4px) saturate(190%) brightness(1.07);-webkit-backdrop-filter:blur(4px) saturate(190%) brightness(1.07)}
+.lang-switch:hover .ls-track{background:rgba(38,44,58,.38)}
+body[data-lang="zh"] .ls-track{background:color-mix(in srgb,var(--accent) 10%,rgba(16,19,28,.30))}
+body[data-lang="zh"] .lang-switch:hover .ls-track{background:color-mix(in srgb,var(--accent) 20%,rgba(20,24,34,.34))}
+.ls-knob{background:rgba(255,255,255,.58);box-shadow:inset 0 0 0 1px rgba(255,255,255,.55),0 1px 3px rgba(0,0,0,.5)}
+.np-ctl .np-pp{color:var(--accent)}   /* the play/pause glyph keeps its accent through the pane */
+
+/* LOG-116 the EN mode buttons: "In order" is wider than the 64px square at nowrap 14px, so it sat off-centre and
+   clipped. The label may wrap and steps down a size; 隨機/順序 (two glyphs) are untouched by either. */
+.ds-sec .seg.random .nm{white-space:normal;font-size:13px;line-height:1.12;padding:0 3px;overflow-wrap:break-word}
+
+/* LOG-116 the stage follows the language-swap choreography (the user: 模式的中英切換順暢度): its language-bound
+   texts fade out with the desktop, swap while dark, and fade back - they used to hard-cut mid-animation. Same
+   three-state pattern as the icons/dock: .swap arms the transition, .swap-out takes them to 0, .swap-in holds 0
+   with no transition for one frame, and the release lets them fade back in. */
+.desktop.swap .dstage .zlab,.desktop.swap .dstage .seg .nm,.desktop.swap .stage-ui .st-exit,.desktop.swap .stage-ui .st-hint{transition:opacity .45s ease}
+.desktop.swap-out .dstage .zlab,.desktop.swap-out .dstage .seg .nm,.desktop.swap-out .stage-ui .st-exit,.desktop.swap-out .stage-ui .st-hint{opacity:0}
+.desktop.swap-in .dstage .zlab,.desktop.swap-in .dstage .seg .nm,.desktop.swap-in .stage-ui .st-exit,.desktop.swap-in .stage-ui .st-hint{opacity:0;transition:none!important}
+
+/* LOG-116追記① the updates panel steps aside whenever an app window's rect crosses it (os.js updDodge - the user:
+   最近更新無論如何都不要跟應用程式重疊). LAST in the file: it must beat the hover/focus opacity rules above. */
+.updates.dodge{opacity:0!important;pointer-events:none}
+
+/* LOG-116追記① glass scrollbars (the user: 右邊拉桿也玻璃化). A scrollbar pseudo cannot carry a backdrop-filter,
+   so the glass is emulated: translucent rod, top glint, hairline ring, floating clear of the edge on a transparent
+   track. Scoped to the SHELL's scrollers - pages and iframes keep their own. */
+.desktop ::-webkit-scrollbar,.win-body::-webkit-scrollbar{width:9px;height:9px}
+.desktop ::-webkit-scrollbar-track{background:transparent}
+.desktop ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:999px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);background-clip:padding-box;border:2px solid transparent}   /* matte, by the same ruling as the buttons: tint + ring, no glint */
+.desktop ::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.26);background-clip:padding-box}
+.desktop ::-webkit-scrollbar-corner{background:transparent}
+.desktop .win-body,.desktop .upd-log{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.25) transparent}   /* Firefox: the closest it allows */
