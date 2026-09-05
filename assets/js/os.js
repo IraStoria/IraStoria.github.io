@@ -5077,7 +5077,10 @@
   var phone = (function () {
     var root = $('#phone'), lock = $('#ph-lock'), home = $('#ph-home'), grid = $('#ph-grid'), dockEl = $('#ph-dock'), appsEl = $('#ph-apps'), notes = $('#ph-notes'), power = $('#ph-power'), powerScr = $('#ph-power-scr'), langPick = $('#ph-lang'), ls = $('#ph-ls');
     var stack = [], unlocked = false, powered = false, swappingPh = false;
-    var HOME_APPS = ['works', 'demos', 'player', 'articles', 'pc'];   /* home grid = only what the dock does not already carry; language switching is the EN/中 slider, no tile; pc = switch to the desktop shell */
+    var HOME_APPS = ['works', 'demos', 'player', 'articles'];   /* home grid = only what the dock does not already carry; language switching is the EN/中 slider, no tile */
+    /* the「電腦版」tile ('pc') is withdrawn for now: the desktop shell does not lay out correctly at phone widths, so offering the
+       switch only leads people into a broken view. askDesktop()/toDesktop() and the pc_* strings stay put — put 'pc' back in the
+       list above once the desktop shell is verified at those sizes. ?shell=desktop still works for testing. */
     var DOCK_APPS = ['terminal', 'about', 'updates'];
     function label(a) { return a === 'lang' ? U.lang_switch : a === 'pc' ? U.pc_tile : TITLES[a]; }
     function glyph(a) { return a === 'lang' ? (lang === 'zh' ? 'EN' : '中') : (ICON[a] || GLYPH[a]); }
