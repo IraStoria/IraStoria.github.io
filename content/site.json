@@ -352,8 +352,8 @@
       "en": "FRONT|BACK|LEFT|RIGHT"
     },
     "pc_tile": {
-      "zh": "電腦版",
-      "en": "Desktop"
+      "zh": "電腦版模式",
+      "en": "Desktop mode"
     },
     "pc_confirm_title": {
       "zh": "轉換成電腦版？",
@@ -386,6 +386,22 @@
     "pc_warn_stay": {
       "zh": "饒了我的眼睛",
       "en": "Spare my eyes"
+    },
+    "pc_rotate_title": {
+      "zh": "請將手機轉為橫向",
+      "en": "Turn your phone sideways"
+    },
+    "pc_rotate_msg": {
+      "zh": "電腦版是為寬螢幕做的，直向放不下。",
+      "en": "The desktop version is built for a wide screen; it will not fit upright."
+    },
+    "pc_rotate_back": {
+      "zh": "返回手機版",
+      "en": "Back to the phone version"
+    },
+    "stage_hint_touch": {
+      "zh": "用手指拖曳，改變你在四台鋼琴之間的位置",
+      "en": "Drag a finger to move yourself between the four pianos"
     }
   },
   "about_body": {

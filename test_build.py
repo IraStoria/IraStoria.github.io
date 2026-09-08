@@ -170,6 +170,18 @@ for _js in sorted(list((B.ROOT / "assets" / "js").glob("*.js")) + list((B.ROOT /
     _bad = [i + 1 for i, ln in enumerate(_js.read_text(encoding="utf-8").splitlines()) if "://" not in ln and _swallow.search(ln)]
     ok(f"no code swallowed by // comment in {_js.relative_to(B.ROOT).as_posix()}", not _bad, f"lines {_bad}")
 
+# Forced-flag registry (eng.ee-registry): one table, and every use derived from it. The accept-list and the expansion
+# group were each spelled out by hand where they were used, and a key added to one but not the other shipped as a bug
+# once already. This guards the shape, never the contents — no key of that table belongs in a test file.
+_os_js = (B.ROOT / "assets" / "js" / "os.js").read_text(encoding="utf-8")
+ok("forced-flag registry exists", "var EE_REG = {" in _os_js)
+for _fn in ("eeKeys", "eeGroup", "eeOn", "eeTake", "eeMode"):
+    ok(f"registry accessor {_fn}() defined", re.search(r"\n  function " + _fn + r"\(", _os_js) is not None)
+# only the registry itself may touch the raw flag bag: everything else goes through an accessor
+_raw = [i + 1 for i, ln in enumerate(_os_js.splitlines())
+        if re.search(r"\bEE\s*(\.\w|\[)", ln) and "function ee" not in ln and "var EE = {}" not in ln]
+ok("no raw forced-flag reads outside the registry", not _raw, f"lines {_raw}")
+
 # ---- report
 fails = [r for r in results if not r[0]]
 for okk, name, msg in results:

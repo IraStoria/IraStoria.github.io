@@ -117,7 +117,7 @@
   function postSec(seg) { return (seg.tailBars || 0) * barSec(seg.bpmOut); }   /* tail rings at the outgoing tempo */
   function logicalSec(seg) { var b = buffers[bufKey(seg)]; return b ? Math.max(0.1, (seg.durationSec || b.duration) - preSec(seg) - postSec(seg)) : 0; }   /* durationSec: true length for files whose mp3 has no gapless tag */
   function colorOf(seg) { return (byGroup[seg.group] || {}).color || '#e0b04a'; }
-  function nameOf(seg) { return seg.id.replace('_', ' '); }
+  function nameOf(seg) { return seg === OUTRO ? seg.id + ' End' : seg.id.replace('_', ' '); }   /* LOG-135: kept in step with the shell's own player (assets/js/os.js) - the stage and this stand-alone demo must never name the same section differently */
   function groupVersions(seg) { return SEG.filter(function (s) { return s.group === seg.group; }); }
   function verIdx(seg) { return isBookend(seg) ? 0 : groupVersions(seg).indexOf(seg); }
   function hexHsl(hex) {   /* -> [h 0-360, s 0-1, l 0-1] */
@@ -356,7 +356,7 @@
     var tl = document.createElement('div'); tl.className = 'zlab'; tl.textContent = ' '; tail.appendChild(tl);
     if (OUTRO) {
       outroBtn = document.createElement('button'); outroBtn.className = 'seg outro'; outroBtn.innerHTML = '<span class="nm"></span><span class="st"></span>';
-      outroBtn.addEventListener('click', function () { choose(OUTRO.id); }); tail.appendChild(outroBtn); segBtns[OUTRO.id] = outroBtn;
+      outroBtn.addEventListener('click', function () { choose(OUTRO.id); }); (colEls[OUTRO.id + '_loop'] || colEls[OUTRO.id] || tail).appendChild(outroBtn); segBtns[OUTRO.id] = outroBtn;   /* LOG-135: under I loop, same as the shell. No ↓ link is drawn - that arrow belongs to the SEG loop above, which pairs the two VERSIONS of a group; these two are not a pair and must not be joined by one. */
     }
     randomBtn = document.createElement('button'); randomBtn.className = 'seg random'; randomBtn.innerHTML = '<span class="nm"></span><span class="st"></span>';
     randomBtn.addEventListener('click', function () { autoMode = 'random'; queued = null; later = null; randomAuto = false; render(); });

@@ -66,7 +66,10 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .lang-switch:focus-visible{outline:1px solid var(--accent);outline-offset:3px;border-radius:999px}
 
 .icons{position:absolute;top:48px;left:16px;display:grid;grid-template-columns:repeat(2,76px);gap:6px 4px;z-index:5}
-@media(min-width:700px){.icons{grid-template-columns:76px}}
+@media(min-width:700px) and (min-height:720px){.icons{grid-template-columns:76px}}   /* LOG-147 (the user: find 直接超出畫面，且近期更新與應用程式重疊): the single
+   column is the desktop's look, but it was chosen on WIDTH alone while what it costs is HEIGHT - six icons need 574 px, and the updates panel sits
+   136 px up from the bottom, so one column only works from about 720 px of viewport height. Below that the two-column grid (the base rule) is
+   correct and everything clears. This also fixes a latent bug on real desktops: a browser window under ~700 px tall had the same collision. */
 .icon{background:transparent;border:0;border-radius:10px;padding:.5rem .2rem;display:flex;flex-direction:column;align-items:center;gap:.25rem;cursor:pointer;font-size:12px;color:var(--fg);text-shadow:0 1px 2px #000}
 /* line icons (svg.ico): stroke = currentColor; sized by the context */
 .ico{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;display:inline-block;vertical-align:-.15em}
@@ -221,7 +224,25 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .ph-bar{width:130px;height:5px;border-radius:3px;background:#fff;margin:.6rem auto 0;animation:phbob 1.6s ease-in-out infinite}
 @keyframes phbob{50%{transform:translateY(-4px)}}
 /* home */
-.ph-home{position:absolute;inset:0;padding:calc(34px + env(safe-area-inset-top)) 14px 0;display:flex;flex-direction:column}
+.ph-home{position:absolute;inset:0;padding:calc(34px + env(safe-area-inset-top)) 14px 0;display:flex;flex-direction:column}   /* 34 -> 64: the top-right now carries the「電腦版」chip (LOG-141) and the tiles start below it. Free in portrait - .ph-hero's margin-top:auto was absorbing ~220 px of slack. */
+/* LOG-145 (the user: desktop 按鈕是在模擬網路訊號的點的旁邊，不要額外移出空間放她): the「電腦版」switch sits IN the fake status
+   bar, next to the signal dots - chrome among chrome, costing the home no space at all (LOG-141 had pushed the tiles down 30 px to make room).
+   margin-left:auto on the right-hand group keeps the clock at the far left and the chip against the dots. The negative margins buy a real tap
+   target out of a 20 px bar: the paint stays small, the hit area does not. Hidden until the phone is unlocked - the LOCK screen shows this bar too. */
+.ph-status .ph-right{display:flex;align-items:center;gap:8px;margin-left:auto}
+/* LOG-154: the「電腦版」chip (LOG-141/145/146) is gone from the status bar - the switch lives in 尋找 now */
+
+/* LOG-146 (the user: 硬擋要求轉橫): the desktop shell on a phone is allowed in LANDSCAPE ONLY. iOS cannot be made to rotate
+   (the Screen Orientation lock needs fullscreen and Safari does not support it), so portrait is met with a gate rather than a
+   rotation. It is a hard stop by ruling - the only way past it is to turn the phone, or to take the way back to the phone version. */
+.rot-gate{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;background:#06080c;padding:8vw}   /* OPAQUE: at .94 the desktop's collapsed portrait layout showed through behind the gate, which is the exact mess the gate exists to spare you */
+.rot-gate.on{display:flex}
+.rot-in{max-width:22rem;text-align:center;color:var(--fg);font-family:var(--font)}
+.rot-in .rot-ico{font-size:44px;line-height:1;color:var(--accent);margin-bottom:1rem;animation:rotnudge 2.6s ease-in-out infinite}
+.rot-in b{display:block;font-size:19px;margin-bottom:.5rem}
+.rot-in span{display:block;font-size:13px;color:var(--dim);line-height:1.6;margin-bottom:1.4rem}
+@keyframes rotnudge{0%,62%,100%{transform:rotate(0)}76%,88%{transform:rotate(90deg)}}
+@media(prefers-reduced-motion:reduce){.rot-in .rot-ico{animation:none}}
 .ph-home[hidden]{display:none}
 .ph-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px 8px;padding:8px 6px}
 .ph-app{background:none;border:0;display:flex;flex-direction:column;align-items:center;gap:6px;color:#fff;font-size:11px;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
@@ -277,6 +298,43 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .np-cap .np-title{display:block;font:600 16px var(--font);color:var(--accent);letter-spacing:0;text-transform:none;margin-top:2px;text-shadow:0 2px 10px rgba(0,0,0,.6)}
 .np-phone{top:auto;right:auto;text-align:left;font-size:11px;bottom:calc(124px + env(safe-area-inset-bottom));left:16px;z-index:3;color:rgba(255,255,255,.7)}
 .np-phone .np-title{cursor:pointer;pointer-events:auto;font-size:18px}
+/* LOG-137 (the user: 直立式音量條會壓到曲名…隨著變色根本看不到上面寫什麼): the phone's bars are VERTICAL and grow up THROUGH the caption,
+   and both of them are tinted with the section's colour - so the title kept meeting a background its own shade. The base
+   `0 2px 10px rgba(0,0,0,.6)` is a soft drop shadow, fine over the wallpaper and useless against a lit bar. Three layers
+   instead: a tight dark core that holds the letterform whatever it lands on, then two wider veils so the halo has no edge.
+   The same medicine LOG-126追記② gave the section buttons' labels, which sit on the same bars. */
+.np-phone .np-lbl,.np-phone .np-title{text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 6px rgba(0,0,0,.9),0 0 18px rgba(0,0,0,.72)}
+
+/* LOG-138 (the user: 手機版還是非常不清楚): the halo was never going to be enough. The phone's bars run straight through
+   the caption and are tinted with the SAME section colour the title is filled with - cyan letters on cyan bars, and a shadow can
+   draw the letter's EDGE but never its INSIDE. So the bars get darkened where the words are: a scrim that holds one level under the
+   text and fades to nothing on every open side. NOT the card LOG-126 threw out - no blur, no border, no rectangle; it has no edge to see.
+   LOG-138追記 (the user: 左上角空空的但是突然有黑色的陰影，不連貫): the first cut faded IN 16 px above the caption, which left the corner
+   above it bare and the scrim starting out of nowhere at y=52. It is now anchored at the screen's top-left corner: the top is pushed
+   up by the caption's own offset PLUS a 48 px fade-in run, so the fade-in happens
+   OFF-SCREEN in portrait and everything visible is one field from the corner down through the caption. .90 -> .78 on the same request.
+   That offset is read from --np-top, which .phone.onstage .np-phone sets and uses for its own `top` - written out as a number here it would be a
+   second copy of 68 px, and the day the caption moved, the fade-in would slide back on-screen as a visible line across the corner. One source. */
+.np-phone{--np-top:calc(68px + env(safe-area-inset-top))}   /* where the caption stands ON THE STAGE. Declared here rather than on the .onstage rule so the scrim below can still read it while the stage is LEAVING - one source, see LOG-140. */
+.phone.onstage .np-phone,.phone.offstage .np-phone{isolation:isolate}
+.phone.onstage .np-phone::before,.phone.offstage .np-phone::before{content:"";position:absolute;top:calc(-1 * var(--np-top) - 48px);right:-30px;bottom:-24px;left:-24px;z-index:-1;pointer-events:none;
+  background:linear-gradient(180deg,rgba(4,6,10,0) 0,rgba(4,6,10,.78) 48px,rgba(4,6,10,.78) calc(100% - 76px),rgba(4,6,10,0) 100%);
+  -webkit-mask-image:linear-gradient(90deg,#000 0%,#000 48%,transparent 100%);mask-image:linear-gradient(90deg,#000 0%,#000 48%,transparent 100%);transition:opacity .6s ease}
+.phone.onstage.touched .np-phone::before{opacity:0}
+.phone.pianos .ph-status,.phone.offstage .ph-status{transition:opacity .5s ease}
+.phone.pianos .ph-status{opacity:0;pointer-events:none}   /* LOG-155: on the four-piano stage the status bar (time / signal) goes too - the top disc's flat edge is the page's top edge, not that bar */   /* LOG-152: the four-piano stage keeps the scrim only until the first touch (the hint's lifetime); after that the caption stands on the stars alone */
+/* LOG-144 (the user: 為什麼直立式回到桌面時曲名深色陰影沒有消失，現在整個擋住桌面的副標題以及讓桌面看起來好像黑一塊): the scrim is anchored to where the caption stands
+   ON THE STAGE - pushed up past the top-left corner. The HOME's caption is bottom-anchored instead, so that same upward reach landed as a slab across the
+   middle of the home, over the hero's subtitle. And the home never needed it: there the caption sits BELOW the bars, not under them. So the scrim belongs
+   to the stage - kept through .offstage as well, fading, so it leaves WITH the caption instead of blinking off halfway through the return. */
+.phone.offstage .np-phone::before{opacity:0;transition:opacity .5s ease}
+/* NO rounded box: a radial scrim clipped by its own border-box left a visible card edge along the bottom and right
+   (the first attempt - the gradient had not reached zero by the time the box ended). Built out of two fades instead:
+   the paint itself dies out at the top and bottom (px stops, not %, so the runs stay the same length in both orientations),
+   a mask takes it out to the right, and the left runs off the screen (the caption starts 16 px in and this reaches 24 px past it).
+   Four edges, not one of them visible: in portrait the top one is above the screen; in landscape (caption bottom-left) the same
+   rule simply reaches 116 px up the bars and fades in there - checked, no edge, the lower-left tails just sit a little deeper.
+   The head row is not tinted - .st-head stacks above this and only its translucent glass lets the scrim show through. */
 .np-phone .np-ctl{justify-content:flex-start;margin-top:6px}
 #np-desktop .np-title{cursor:pointer;pointer-events:auto;font-size:22px;margin-top:4px}
 .np-ctl{display:flex;justify-content:flex-end;gap:4px;margin-top:8px;pointer-events:auto}
@@ -325,11 +383,11 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .phone.dark .ph-grid,.phone.dark .ph-hero,.phone.dark .ph-dock,.phone.dark .ph-ls,.phone.dark .ph-status{opacity:0;pointer-events:none}
 .phone.dark .ph-grid{transform:translateX(-70px)}.phone.dark .ph-hero{transform:translateX(70px)}
 /* in-place language swap, iPhone page-style: grid / name / dock / label slide fully past one screen edge (direction drawn at random each time, .swap-l = leaves left) and re-enter from the opposite edge, still travelling the same way */
-.phone.swap .ph-grid,.phone.swap .ph-hero,.phone.swap .ph-dock,.phone.swap .np-phone .np-lbl{transition:opacity .45s ease,transform .5s cubic-bezier(.4,0,.2,1)!important}
-.phone.swap-out.swap-l .ph-grid,.phone.swap-out.swap-l .ph-hero,.phone.swap-out.swap-l .ph-dock,.phone.swap-out.swap-l .np-phone .np-lbl{transform:translateX(-112%);opacity:.6}
-.phone.swap-out.swap-r .ph-grid,.phone.swap-out.swap-r .ph-hero,.phone.swap-out.swap-r .ph-dock,.phone.swap-out.swap-r .np-phone .np-lbl{transform:translateX(112%);opacity:.6}
-.phone.swap-in.swap-l .ph-grid,.phone.swap-in.swap-l .ph-hero,.phone.swap-in.swap-l .ph-dock,.phone.swap-in.swap-l .np-phone .np-lbl{transform:translateX(112%);opacity:.6;transition:none!important}
-.phone.swap-in.swap-r .ph-grid,.phone.swap-in.swap-r .ph-hero,.phone.swap-in.swap-r .ph-dock,.phone.swap-in.swap-r .np-phone .np-lbl{transform:translateX(-112%);opacity:.6;transition:none!important}
+.phone.swap .ph-pc,.phone.swap .ph-grid,.phone.swap .ph-hero,.phone.swap .ph-dock,.phone.swap .np-phone .np-lbl{transition:opacity .45s ease,transform .5s cubic-bezier(.4,0,.2,1)!important}
+.phone.swap-out.swap-l .ph-pc,.phone.swap-out.swap-l .ph-grid,.phone.swap-out.swap-l .ph-hero,.phone.swap-out.swap-l .ph-dock,.phone.swap-out.swap-l .np-phone .np-lbl{transform:translateX(-112%);opacity:.6}
+.phone.swap-out.swap-r .ph-pc,.phone.swap-out.swap-r .ph-grid,.phone.swap-out.swap-r .ph-hero,.phone.swap-out.swap-r .ph-dock,.phone.swap-out.swap-r .np-phone .np-lbl{transform:translateX(112%);opacity:.6}
+.phone.swap-in.swap-l .ph-pc,.phone.swap-in.swap-l .ph-grid,.phone.swap-in.swap-l .ph-hero,.phone.swap-in.swap-l .ph-dock,.phone.swap-in.swap-l .np-phone .np-lbl{transform:translateX(112%);opacity:.6;transition:none!important}
+.phone.swap-in.swap-r .ph-pc,.phone.swap-in.swap-r .ph-grid,.phone.swap-in.swap-r .ph-hero,.phone.swap-in.swap-r .ph-dock,.phone.swap-in.swap-r .np-phone .np-lbl{transform:translateX(-112%);opacity:.6;transition:none!important}
 /* demo panel: the iframe fills the body; ⛶ folds the nav away (iPhone has no real fullscreen for iframes) */
 .papp-body.frame{padding:0;overflow:hidden;display:flex}
 .papp-demo .demo-frame{flex:1;width:100%;height:100%;border:0;display:block}
@@ -341,6 +399,9 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .ph-ls{position:absolute;right:16px;bottom:calc(128px + env(safe-area-inset-bottom));z-index:3;font:13px var(--mono);gap:.5rem}
 .ph-ls .ls-track{width:58px;height:32px}.ph-ls .ls-knob{width:26px;height:26px;top:2px;left:2px}
 body[data-lang="zh"] .ph-ls .ls-knob{transform:translateX(26px)}
+/* LOG-136 (the user: 中英切換滑動的時機點是「點下去之後就要滑過去」，不是切完才滑過去): the knob's position hangs off body[data-lang],
+   which only flips AFTER the swap's fade-out - so the toggle answered the press half a second late, on both shells. os.js now ARMS
+   the switch at the press with the language it is going TO, and drops the arming once body[data-lang] agrees, so nothing jumps. */
 .ph-hero{padding-bottom:150px;text-align:center}.ph-hero span{display:block;text-align:center}
 /* transport icons: inline SVG pairs (no emoji / dingbats); play<->pause follows .np-cap.playing, sound<->muted follows .np-mute.on */
 .np-ctl button{display:inline-flex;align-items:center;justify-content:center;min-width:2.6em}
@@ -375,9 +436,9 @@ body.hb .np-ctl .i-mute path:last-child,body.hb .player .ctl .mute .i-mute path:
 .hero-text h1{transition:transform 2.4s cubic-bezier(.2,.7,.2,1),color .7s ease,text-shadow .7s ease}
 .ls-track{transition:background .25s,border-color .7s ease}.ls-knob{transition:transform .3s cubic-bezier(.2,.7,.2,1),background .7s ease,box-shadow .7s ease}
 .desktop *:not(.desktop>*,.hero-text h1,.sticky,.sticky *,.np-title,.np-title *,.ls-track,.ls-knob,.fx-clip,.fx-clip *,.hovbub,.ds-panel,.ds-panel *,canvas),   /* .hovbub and .ds-panel (with the native section stage inside it) keep their own transitions (glide / card rise / bubble fades) — this sweep would flatten them to colour-only */
-.phone *:not(.ph-grid,.ph-hero,.ph-dock,.ph-ls,.ph-status,.ph-veil,.ph-power-scr,.ph-power-scr *,.np-title,.np-title *,.np-lbl,.ls-track,.ls-knob,.ph-alert-ov,.ph-alert,canvas){transition:color .7s ease,text-shadow .7s ease,border-color .7s ease,filter .7s ease}
+.phone *:not(.ph-grid,.ph-hero,.ph-dock,.ph-ls,.ph-status,.ph-veil,.ph-power-scr,.ph-power-scr *,.np-title,.np-title *,.np-lbl,.ls-track,.ls-knob,.ph-alert-ov,.ph-alert,.ds-panel,.ds-panel *,.stage-ui,.stage-ui *,canvas){transition:color .7s ease,text-shadow .7s ease,border-color .7s ease,filter .7s ease}
 body.hb .desktop *:not(.sticky,.sticky *,.np-title,.np-title *,.ds-panel,.ds-panel *,canvas),   /* the native section stage keeps its own part colours (the iframe version was immune to hb too) */
-body.hb .phone *:not(.np-title,.np-title *,canvas){color:#3dff7a;text-shadow:0 0 12px rgba(61,255,122,.45);border-color:rgba(61,255,122,.35)}
+body.hb .phone *:not(.np-title,.np-title *,.ds-panel,.ds-panel *,canvas){color:#3dff7a;text-shadow:0 0 12px rgba(61,255,122,.45);border-color:rgba(61,255,122,.35)}
 body.hb .ico{color:#3dff7a}
 body.hb .desktop .glyph,body.hb .phone .glyph,body.hb .dock button>span,body.hb .ph-app .ic .wg,body.hb .spot-hit .g{filter:grayscale(1) sepia(1) saturate(6) hue-rotate(85deg) brightness(1.15) drop-shadow(0 0 6px rgba(61,255,122,.7))}
 body.hb .ls-knob{background:#3dff7a;box-shadow:0 0 8px rgba(61,255,122,.8)}body.hb .ls-track{border-color:rgba(61,255,122,.6)}
@@ -431,33 +492,63 @@ body.hb .phone *:not(.np-title,.np-title *,canvas){text-shadow:0 0 8px rgba(61,2
 .dstage{position:absolute;inset:0;z-index:6;pointer-events:none;mask-image:var(--dsm,none);mask-composite:exclude;mask-repeat:no-repeat;mask-position:var(--dsp,0 0);mask-size:var(--dss,auto);-webkit-mask-image:var(--dsm,none);-webkit-mask-repeat:no-repeat;-webkit-mask-position:var(--dsp,0 0);-webkit-mask-size:var(--dss,auto)}   /* LOG-112 the outro exit: os.js writes --dsm/--dsp/--dss and the section buttons are simply NOT THERE where the letter's frame has already passed - the same cut #wave takes, in the same desktop coordinates (the stage layer is inset:0, so there is no offset to convert) */   /* above the icons/updates layers, UNDER .windows (10): an open window is never trapped behind the stage buttons */
 .dstage .ds-panel{position:absolute;left:max(110px,7vw);top:8vh;transform:translateY(26px) scale(.99);width:min(760px,72vw);height:min(430px,64vh);pointer-events:auto;opacity:0;transition:opacity .55s ease,transform .55s cubic-bezier(.2,.7,.2,1)}   /* no card: the frame is invisible — the demo's own buttons float straight on the wallpaper, in the empty upper-left, clear of the spectrum line */
 .dstage.in .ds-panel{opacity:1;transform:none}
-.dstage.out .ds-panel{opacity:0;transform:translateY(32px) scale(.99);transition:opacity .38s ease,transform .38s ease}
+/* LOG-142 (the user: 我還是沒有看到按鈕消失縮小或淡出的動畫阿，直接消失了): LOG-141 faded the PANE and left the buttons standing still inside it -
+   which is exactly what 'it just disappears' looks like, because the buttons are what you are looking at. The stage already owns a gesture for
+   leaving: .dstage.bye compresses the whole control surface into its own centre when the outro takes the show away. A manual exit is the same
+   departure, so it makes the same move - only quicker, and stopping short of zero because the pane's fade finishes the job.
+   The pane now HOLDS while that happens (its fade is delayed) so the compression is what the eye actually gets. */
+.dstage.out .ds-panel{opacity:0;transform:translateY(18px);transition:opacity .34s ease,transform .5s cubic-bezier(.4,0,.6,1)}   /* added only AFTER the compression above has finished (see stop() in os.js), so the pane holds while the surface leaves */
 /* native section stage (LOG-109): the demo's stage dress (demo.css body.stage), ported as shell DOM — no iframe.
    Buttons are liquid-glass rounded squares (hairline ring + top glint); zone frames are gone, only the small labels
    remain; the pair frame wraps both versions of the group in play; a blocked section fades off until allowed again. */
 .ds-sec{position:relative;width:100%;height:100%;font-family:var(--font);line-height:1.6;color:var(--fg);transition:transform .7s cubic-bezier(.5,0,.8,.4),opacity .65s ease}
 .dstage.bye .ds-sec{transform:scale(0);opacity:0;pointer-events:none}   /* outro, two bars from the end: the whole control surface compresses into its own centre */
+/* LOG-143 (the user: 退出舞台的方式改成跟播完 I End 自動退出的 transition 一樣): there is nothing to write here. The exit button now adds THE SAME class
+   the outro's own farewell adds (onBye), on the same clock, so the two departures cannot drift apart - LOG-142 had invented a second,
+   shallower compression for the manual exit and it read as a different move. The rule above is the single definition of 'the stage leaves'. */
 .ds-secs{display:flex;gap:.6rem;align-items:stretch;flex-wrap:wrap}
 .ds-sec .zone{display:flex;flex-direction:column;gap:.35rem;padding:0 .2rem}
 .ds-sec .zlab{font-size:11px;color:var(--dim);letter-spacing:.05em;text-align:center;min-height:1em;text-shadow:0 1px 6px rgba(0,0,0,.85)}
 .ds-sec .zcols{display:flex;gap:.35rem}
 .ds-sec .col{display:flex;flex-direction:column;align-items:stretch;width:58px;border:1.5px solid transparent;border-radius:14px;padding:3px;transition:border-color .4s ease,box-shadow .4s ease}
 .ds-sec .col.pair{border-color:color-mix(in srgb,var(--c) 60%,rgba(255,255,255,.35));box-shadow:0 0 10px color-mix(in srgb,var(--c) 30%,transparent)}
-.ds-sec .seg{position:relative;z-index:1;font:inherit;font-weight:600;text-align:center;color:var(--fg);cursor:pointer;border:2px solid transparent;background:none;border-radius:12px;padding:0;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.20),inset 0 1px 0 rgba(255,255,255,.28),0 6px 16px rgba(0,0,0,.30);transition:opacity .45s ease,transform .1s,box-shadow .3s ease}
+.ds-sec .seg{position:relative;z-index:1;font:inherit;font-weight:600;text-align:center;color:var(--fg);cursor:pointer;border:2px solid transparent;background:none;border-radius:12px;padding:0;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.20),inset 0 1px 0 rgba(255,255,255,.28),0 6px 16px rgba(0,0,0,.30);transition:opacity .45s ease,transform .1s,box-shadow .3s ease,background-color .5s ease}
 .ds-sec .seg:active{transform:scale(.97)}
-.ds-sec .seg:disabled{opacity:.35;cursor:not-allowed}
-.ds-sec .seg .nm{display:block;font-size:14px;white-space:nowrap;margin:0}
-/* selected = the ECLIPSE treatment, in the part's colour: queued -> the rim itself lights up; playing -> the lit rim grows its corona; mode = a flat tinted pane behind a softer rim */
-.ds-sec .seg.queued{background:color-mix(in srgb,var(--c) 14%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--c) 80%,#fff),0 0 10px color-mix(in srgb,var(--c) 55%,transparent),0 6px 16px rgba(0,0,0,.30)}
-.ds-sec .seg.playing{background:color-mix(in srgb,var(--c) 24%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--c) 85%,#fff),0 0 12px color-mix(in srgb,var(--c) 70%,transparent),0 0 30px color-mix(in srgb,var(--c) 45%,transparent),0 6px 16px rgba(0,0,0,.30)}
+.ds-sec .seg:disabled:where(:not(.playing,.next,.queued)){opacity:.35;cursor:not-allowed}   /* LOG-124 (:where keeps the specificity where it was, so .off below still wins its .30): a state-bearing button (playing / next / queued) is never faded by `disabled` - render() no longer disables them while running, and this is the belt to that brace: the label of the section that is SOUNDING must sit at full strength on top of the pane, not sink to 35% under it (the user, 2026-09-05: 正在播放的文字應該要在按鈕上) */
+.ds-sec .seg .nm{display:block;max-width:100%;font-size:14px;white-space:nowrap;margin:0;transition:color .5s ease,text-shadow .5s ease}
+.ds-sec .seg.playing .nm{color:#fff;text-shadow:0 0 2px rgba(255,255,255,.95),0 0 5px rgba(255,255,255,.55),0 0 10px color-mix(in srgb,var(--c) 90%,#fff),0 0 20px color-mix(in srgb,var(--c) 85%,transparent),0 0 32px color-mix(in srgb,var(--c) 55%,transparent)}   /* a HOT WHITE CORE throwing the section's colour outward (the user: 高光…沒有白亮光 - tinting the glyph itself only pushed it back behind the glass). Two tight white layers are the specular core, three coloured ones are the light it casts. */   /* ★ the sounding button's LABEL lights up (the user, 2026-09-05: 正在撥放的按紐的文字發光). Since the droplet took the highlight off the button itself, the letter is what says 'this one is playing' up close - in the section's own colour, faded in on the same clock as everything else. */
+/* mode (Random / In-order) = the ECLIPSE treatment, in the part's colour: a flat tinted pane behind a softer rim */
 .ds-sec .seg.random.mode{background:color-mix(in srgb,var(--c) 11%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--c) 65%,rgba(255,255,255,.6)),0 0 8px color-mix(in srgb,var(--c) 40%,transparent),0 6px 16px rgba(0,0,0,.30)}
+/* LOG-118 ② / LOG-123 — THE STATE LADDER. Playing, next and queued used to be three shades of one eclipse (14% vs 24%
+   fill, 80% vs 85% rim) and they could not be read apart. Each now carries one cue that is NOT brightness:
+     playing - the RUNNING FRAME (.runbub below): the dock's hover droplet itself, parked on the button that is sounding.
+               One pane for the whole stage; a 1->2 (or 2->1) hand-over is the pane sliding, not two buttons changing
+               shade. The button carries NOTHING of its own for `playing` - the pane is the highlight (the user,
+               2026-09-05: 高亮跟泡泡一樣).
+     next    - a solid band on the TOP edge: the baton arrives from above. Motionless, because it is already decided.
+     queued  - a short tick on the BOTTOM edge: the pick waiting in line below. Still, quiet, the part's colour on a
+               hairline ring and nothing else lit (the user, 2026-09-05: the marching dashed ring was too loud).
+               Press it again and it is taken back - it never stops being a plain pressable button. */
+.ds-sec .seg{overflow:hidden}   /* clips the two edge marks to the glass corners; the outer glow is box-shadow, which overflow does not touch */
+.ds-sec .seg.next{background:color-mix(in srgb,var(--c) 15%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--c) 82%,#fff),0 0 10px color-mix(in srgb,var(--c) 50%,transparent),0 6px 16px rgba(0,0,0,.30)}
+.ds-sec .seg::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,color-mix(in srgb,var(--c) 60%,transparent),color-mix(in srgb,var(--c) 98%,#fff),color-mix(in srgb,var(--c) 60%,transparent));box-shadow:0 0 10px color-mix(in srgb,var(--c) 80%,transparent);pointer-events:none;opacity:0;transition:opacity .5s ease}   /* ★ the mark is on EVERY button, dark, so it has a state to fade FROM (the user, 2026-09-05: 預告淡入，不要瞬間出現). Built with the class instead, a pseudo-element has no start value and can only pop. */
+.ds-sec .seg.next::before{opacity:1}
+.ds-sec .seg.queued{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c) 55%,rgba(255,255,255,.25)),inset 0 1px 0 rgba(255,255,255,.28),0 6px 16px rgba(0,0,0,.30)}   /* no fill: the glass stays clear, only the hairline takes the colour */
+.ds-sec .seg::after{content:"";position:absolute;left:50%;bottom:0;width:38%;height:2px;transform:translateX(-50%);border-radius:1px 1px 0 0;background:color-mix(in srgb,var(--c) 88%,#fff);pointer-events:none;opacity:0;transition:opacity .5s ease}   /* the bottom tick: sits opposite the `next` band so the two read as one system (arrives from the top / waits at the bottom) - same fade, same reason */
+.ds-sec .seg.queued::after{opacity:1}
+.ds-sec .seg.tap{animation:sectap .42s ease-out}   /* the press is answered AT the press, whatever the music is doing */
+@keyframes sectap{0%{box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--c) 95%,#fff),0 0 0 0 color-mix(in srgb,var(--c) 60%,transparent)}100%{box-shadow:inset 0 0 0 1px rgba(255,255,255,.20),0 0 0 12px transparent}}
+.ds-sec .seg.nope{animation:secnope .34s ease-in-out}   /* asked for somewhere the music cannot go from here */
+@keyframes secnope{25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+@media(prefers-reduced-motion:reduce){.ds-sec .seg.tap,.ds-sec .seg.nope{animation:none}}
 @keyframes stpulse{50%{filter:brightness(1.3)}}
 .ds-sec .seg.random.auto{animation:stpulse 1s ease-in-out infinite}   /* auto hand-over breathes by brightness, not by the ring pulse */
-.ds-sec .seg.off{opacity:0;pointer-events:none}   /* not allowed after the current section: gone from the stage until it may follow again */
+.ds-sec .seg.off{opacity:.30;filter:grayscale(1);pointer-events:none}   /* not allowed after the current section: greyed out, NOT removed (the user, 2026-09-05: 顯示為不可播放時會是灰色，而不會整個看不見) - a stage that deletes half its buttons leaves you unable to see what is coming back */
 .ds-sec .zone.ctrl .seg{width:64px}
 .ds-sec .seg.outro{--c:#e8e8e4}   /* the bookends are white light (a touch grey) */
 .ds-sec .seg.random,.ds-sec .seg.seq{--c:var(--accent)}   /* Random and In-order flash the SAME colour */
-.ds-sec .hb2{position:absolute;left:0;top:0;pointer-events:none;opacity:0;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22),inset 0 1px 0 rgba(255,255,255,.30);transition:opacity .4s ease;z-index:0}
+.ds-sec .hb2,.ds-sec .runbub{position:absolute;left:0;top:0;pointer-events:none;opacity:0;border-radius:12px;background:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22),inset 0 1px 0 rgba(255,255,255,.30);transition:opacity .4s ease;z-index:0}   /* the same pane of glass as .hovbub: a hairline ring and a top glint, nothing else; transform/size come from the JS spring (os.js droplet()) */
+.ds-sec .runbub{background:color-mix(in srgb,var(--c) 12%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c) 62%,rgba(255,255,255,.40)),inset 0 1px 0 rgba(255,255,255,.34);transition:opacity .4s ease,background-color .5s ease,box-shadow .5s ease}   /* ★ 進行框 = the pointer's droplet tinted with the part's colour: a faint wash and the hairline in the colour. No outer glow, no solid stroke - it should read as the same glass as the hover bubble, only coloured. The colour transitions, so a 1->2 hand-over shades from light to deep while it slides */
 /* ?debug only, built by __grid(): a naming grid over the whole viewport so a note can say "the smoke around F3" instead of
    shipping a screenshot. Never present unless asked for, and it can never eat a click. */
 .refgrid{position:fixed;inset:0;z-index:9999;pointer-events:none;display:grid;
@@ -540,3 +631,122 @@ body[data-lang="zh"] .lang-switch:hover .ls-track{background:color-mix(in srgb,v
 .desktop ::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.26);background-clip:padding-box}
 .desktop ::-webkit-scrollbar-corner{background:transparent}
 .desktop .win-body,.desktop .upd-log{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.25) transparent}   /* Firefox: the closest it allows */
+
+/* ================= LOG-125 · the phone's native section stage =================
+   The desktop got the stage in LOG-109: no iframe, the wallpaper IS the venue, #wave is the progress line and
+   #np-desktop is the caption. The phone had been left on the old panel — the whole demo PAGE inside an iframe,
+   1725 px of content in a 773 px viewport, with the shell's own line and caption hidden behind it. Same engine,
+   same buttons, same contract; only where they sit changes.
+
+   TWO layouts, one per orientation (the user, 2026-09-05):
+     portrait  — laid out as a phone app: what is playing at the TOP, what you press at the BOTTOM. The zones
+                 become iOS grouped cards over glass and the mode row becomes a bottom toolbar.
+     landscape — the desktop's own proportions, frameless, with the buttons scaled up for a fingertip
+                 ("手機橫向直接使用電腦板橫式畫面排版比例，按鈕則合理比例放大").
+   No night city: makeSecRoad is bound to the desktop container and #wave, and the user's call was 先不上. */
+
+/* the shell steps aside — tiles, name, dock and the language switch leave the way they do for the boot veil,
+   but on the stage's clock (.5s), not the 3 s reveal. The caption TRAVELS: bottom corner -> top of the screen. */
+.phone.onstage .ph-pc,.phone.onstage .ph-grid,.phone.onstage .ph-hero,.phone.onstage .ph-dock,.phone.onstage .ph-ls{opacity:0;pointer-events:none;transition:opacity .5s ease,transform .55s cubic-bezier(.2,.7,.2,1)}
+.phone.onstage{touch-action:none}   /* LOG-151: a finger dragging across the four-piano field must keep sending pointermove - without this the browser may claim the gesture as a scroll and cancel the pointer */
+.phone.onstage .ph-grid{transform:translateX(-48px)}
+.phone.onstage.settled .ph-pc,.phone.onstage.settled .ph-grid,.phone.onstage.settled .ph-hero,.phone.onstage.settled .ph-dock,.phone.onstage.settled .ph-ls{opacity:0;transition:none}   /* landed: held there whatever the tab does */
+.phone.offstage .ph-pc,.phone.offstage .ph-grid,.phone.offstage .ph-hero,.phone.offstage .ph-dock,.phone.offstage .ph-ls,.phone.offstage .np-phone{transition:opacity .55s ease,transform .55s cubic-bezier(.2,.7,.2,1),top .55s cubic-bezier(.2,.7,.2,1),bottom .55s cubic-bezier(.2,.7,.2,1)}   /* coming home, on the exit's clock and not the boot reveal's */
+.phone.onstage .ph-hero{transform:translateX(48px)}
+.np-phone{transition:top .55s cubic-bezier(.2,.7,.2,1),bottom .55s cubic-bezier(.2,.7,.2,1)}
+.phone.onstage .np-phone{bottom:auto;top:var(--np-top);right:14px}   /* bounded on BOTH sides now: one long line ("V1 - A | Full on V6 - by Shiou Hsu") ran straight off a 390 px screen */   /* LOG-136: 44 -> 68. The head row now carries the language switch as well as the exit pill and reaches down to y=57; at 44 the caption's first line ran straight into it (in EN, where "NOW PLAYING · PLAYING" is long). Moved, not narrowed - narrowing would wrap the track title instead. */
+/* the caption becomes a phone now-playing header: the SECTION reads big (it is the thing that changes every ~13 s
+   and the thing every button on the stage is about), the piece and artist sit under it in the label's size. The
+   two halves stay separate elements — paintTitle() clips its gradient to each of them, so the play head still
+   sweeps the colour across the section name exactly as it does on the desktop. */
+.phone.onstage .np-phone .np-title{font-size:26px;line-height:1.15}
+.phone.onstage .np-phone .np-title .np-tag{display:block}
+.phone.onstage .np-phone .np-title .np-sep{display:none}
+.phone.onstage .np-phone .np-title .np-rest{display:block;font-size:13px;line-height:1.35;margin-top:3px;opacity:.9}
+.phone .stage-ui .st-head{top:calc(30px + env(safe-area-inset-top));right:14px}
+.phone.pianos .stage-ui .st-head{top:calc(10px + env(safe-area-inset-top));right:12px}   /* LOG-156: on the four-piano stage the status bar is gone (LOG-155), so the exit pill takes the top-right corner itself; the landscape rule below lists this selector too so it keeps winning there */   /* the exit pill is the iOS modal close: top-right, opposite the caption */
+/* LOG-136 (the user: 手機版播放器中還是要放中英切換鈕): the home's switch is CARRIED INTO the stage's own head row (os.js moves the element and puts it back on exit) rather than parked at some absolute spot that would have to be re-guessed for each orientation - .st-head is already a flex row placed correctly in both. */
+.phone.onstage .stage-ui .ph-ls{position:static;right:auto;bottom:auto;z-index:auto;opacity:1;pointer-events:auto;transition:opacity .5s ease}
+.phone.onstage .stage-ui .ph-ls .ls-track{width:44px;height:24px}.phone.onstage .stage-ui .ph-ls .ls-knob{width:18px;height:18px}   /* the home's switch is finger-sized for a home screen; beside a 12px exit pill it wants the menubar's proportions */
+body[data-lang="zh"] .phone.onstage .stage-ui .ph-ls .ls-knob{transform:translateX(20px)}
+
+/* LOG-136 arming, continued: the class goes on BODY, not on the switch. On the switch it lost - `body[data-lang="zh"]
+   .phone.onstage .stage-ui .ph-ls .ls-knob` is six classes deep and out-specified it, so the knob still waited for the
+   swap (measured: armed at 54 ms, knob did not move until 604 ms). On body it matches each data-lang rule's specificity
+   exactly and wins on source order alone - which is why this block must stay BELOW all of them. */
+body.to-zh .ls-knob{transform:translateX(18px)}
+body.to-en .ls-knob{transform:none}
+body.to-zh .ph-ls .ls-knob{transform:translateX(26px)}
+body.to-en .ph-ls .ls-knob{transform:none}
+body.to-zh .phone.onstage .stage-ui .ph-ls .ls-knob{transform:translateX(20px)}
+body.to-en .phone.onstage .stage-ui .ph-ls .ls-knob{transform:none}
+body.to-zh .ls-track{background:color-mix(in srgb,var(--accent) 10%,rgba(16,19,28,.30))}
+body.to-en .ls-track{background:rgba(16,19,28,.30)}   /* the track changes colour with the knob, or the toggle reads half-moved */
+.np-ctl button,.stage-ui .st-exit{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(16,19,28,.42)}   /* LOG-136 (the user: 手機版的玻璃按鈕質感比較好…電腦版的按鈕燈光不透明感反而霧霧的): LOG-126 took the blur off these chips ON THE PHONE and the reason it gave applies just as much to the desktop - they sit ON the spectrum, and blur(4px) saturate(190%) brightness(1.07) over dark, low-contrast bars is not glass, it is fog. Measured: the section buttons are IDENTICAL on both shells; this pair was the whole difference. Plain tinted glass, one rule for both shells, the hairline ring still doing the work. */
+
+.dstage.ph{z-index:4;--segw:clamp(56px,min(19vw,9vh),84px);--segbtn:calc(var(--segw) - 8px)}   /* --segbtn = a SECTION button's own width: .col spends 3px of padding and a 1px border on each side of --segw. LOG-133 (the user: 縮小 I, 隨機, 順序這三顆按鈕與其他按鈕同大小) - the control buttons had no way to say 'the same size as the others' without this. */   /* LOG-126 (the user: 段落按鈕太小, loop甚至都還被截斷): 19vw of a 390 px screen is 74 - a 68 px button against the 45 px the card padding had squeezed it to, and 'I loop' fits again */   /* under .ph-status (5) and .ph-apps (6): an alert or the search overlay still comes out on top */
+
+/* ---------- portrait: a phone app ---------- */
+.dstage.ph .ds-panel{left:12px;right:12px;top:auto;bottom:calc(14px + env(safe-area-inset-bottom));width:auto;height:auto}
+.dstage.ph.out .ds-panel{transform:translateY(40px)}   /* LOG-141/142: the phone's panel lives at the thumb, so it also drifts DOWN as it goes - the compression above is shared with the desktop, this is the only phone-specific part. See PH_EXIT_LEAD in os.js: the home waits for all of it. */   /* bottom-anchored: the operating half grows UP from the thumb, so a short screen loses spectrum, never buttons */
+.dstage.ph .ds-sec{height:auto}
+.dstage.ph .ds-secs{gap:10px}
+.dstage.ph .ds-sec .zone{flex:0 0 auto;padding:0 2px;gap:.3rem}   /* LOG-126 (the user: 按鈕後面的模糊擋板不用): NO card. The grouped-card idea cost twice - a blurred slab between the buttons and the spectrum they are reading, and ~30 px of padding out of the 366 the screen has. Frameless, exactly as on the desktop: the buttons float on the wallpaper and the line stays legible straight through. */
+.dstage.ph .ds-secs{justify-content:center}
+.dstage.ph .ds-sec .zcols{justify-content:center}
+.dstage.ph .ds-sec .zlab{text-align:center;padding-left:0;font-size:11px;opacity:.85}
+.dstage.ph .ds-sec .col{width:var(--segw)}
+.dstage.ph .ds-sec .seg .nm{font-size:14px;letter-spacing:-.01em}
+.ds-sec .seg:not(.playing) .nm{text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 8px rgba(0,0,0,.75)}   /* LOG-137 (the user: 電腦版段落按鈕的字透出來的光跟按鈕內部看起來還是很像毛玻璃，請確認設計是否跟手機版一模一樣): the glass IS identical - a property-by-property diff of .seg across both shells came back the same on background, backdrop-filter, filter, box-shadow, border and blend mode. THIS was the difference: the halo was written for the phone only (LOG-126追記②) and without it the label has no dark core to sit against, so its light spreads into the pane and reads as frost. Now both shells. (Two intended differences remain: .ds-sec sits at ~0.9 on the desktop while the night city dims the house lights, and the desktop --fg is a warm off-white against the phone's pure white.) */
+/* the mode row is a toolbar across the bottom of the panel — full width, one tap target each */
+.dstage.ph .ds-sec .zone.ctrl{flex-direction:row;align-items:center;justify-content:center;width:auto;gap:10px;padding:2px}
+.dstage.ph .ds-sec .zone.ctrl .zlab{display:none}
+.dstage.ph .ds-sec .zone.ctrl .seg{width:auto;flex:0 0 auto;min-width:calc(var(--segw) + 12px);aspect-ratio:auto;min-height:48px;border-radius:14px}   /* 48 > the 44 px iOS minimum touch target */
+.dstage.ph .ds-sec .zone.ctrl .seg .nm{font-size:15px}
+
+/* LOG-137 (the user: 手機版播放器切換語言時又變成瞬間切換，沒有淡入淡出銜接動畫): the phone's swap choreography only ever moved the HOME
+   (.ph-grid / .ph-hero / .ph-dock / the caption's label) - the stage was never given the treatment the desktop got above,
+   and .ds-panel/.stage-ui are excluded from the shell-wide colour sweep as well, so on the stage the words simply cut.
+   Same three-state pattern, same timing: .swap arms it, .swap-out fades to 0, .swap-in holds 0 for one frame, the release
+   fades back. The language switch itself is deliberately NOT in this list - the control you just pressed should not blink. */
+.phone.swap .dstage .zlab,.phone.swap .dstage .seg .nm,.phone.swap .stage-ui .st-exit,.phone.swap .stage-ui .st-hint{transition:opacity .45s ease}
+.phone.swap-out .dstage .zlab,.phone.swap-out .dstage .seg .nm,.phone.swap-out .stage-ui .st-exit,.phone.swap-out .stage-ui .st-hint{opacity:0}
+.phone.swap-in .dstage .zlab,.phone.swap-in .dstage .seg .nm,.phone.swap-in .stage-ui .st-exit,.phone.swap-in .stage-ui .st-hint{opacity:0;transition:none!important}
+/* NOTE the position: this block must sit AFTER `.dstage.ph .ds-sec .zlab` above. Both are four classes deep, so
+   source order is the whole contest - written earlier in the file, the zone labels kept their .85 and hard-cut while
+   every other stage text faded (measured). */
+
+/* ---------- landscape: the desktop's proportions, scaled for a fingertip ---------- */
+@media(orientation:landscape){
+  .dstage.ph{--segw:clamp(46px,18vh,76px)}   /* the desktop's column is 58 px (a 52 px button); 18vh of a 390 px-tall landscape phone is 70 (a 64 px button) - a third bigger, which is what a fingertip needs and what the user asked for. The zones then run ~718 px wide against the 760 the row has. */
+  .dstage.ph .ds-panel{left:max(12px,3vw);right:auto;top:max(20px,8vh);bottom:auto;width:min(780px,90vw);height:auto}   /* 8vh clears the phone's status bar; the desktop's own panel crosses the spectrum line the same way, so the mode column hanging below it is the layout, not an overflow */
+  .dstage.ph .ds-secs{flex-wrap:nowrap;gap:.6rem;align-items:stretch}
+  .dstage.ph .ds-sec .zone{background:none;backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:none;border-radius:0;padding:0 .2rem;gap:.35rem}   /* frameless, exactly as on the desktop: the buttons float on the wallpaper */
+  .dstage.ph .ds-sec .zlab{text-align:center;padding-left:0;font-size:11px}
+  .dstage.ph .ds-sec .zone.ctrl{flex-direction:column;width:auto;gap:.35rem;padding:0 .2rem;border-radius:0;justify-content:flex-start}
+  .dstage.ph .ds-sec .zone.ctrl .zlab{display:block}
+  .dstage.ph .ds-sec .zone{flex:0 0 auto}
+  .dstage.ph .ds-sec .zone.ctrl .seg{width:var(--segbtn);min-width:0;flex:none;aspect-ratio:1;min-height:0;border-radius:12px}   /* LOG-133: the same size as a section button. TWO faults here - the portrait rule above sets min-width (for its taller pills) and MIN-WIDTH BEATS WIDTH, so this block's own `width` never applied and the button stood at 82 px against the sections' 62; and even the intended +6 was a step UP, which is what pushed 順序 down onto the exit button. */
+  .dstage.ph .ds-sec .seg .nm{font-size:14px}
+  .dstage.ph .ds-sec .zone.ctrl .seg.random .nm{font-size:clamp(9px,calc(var(--segbtn) * 0.19),12px);padding:0 1px;line-height:1.15;hyphens:auto;-webkit-hyphens:auto}   /* LOG-135 (the user: 確定文字符合框框大小): 'Random' is one unbreakable word 4.8x its font-size wide - 67 px at 14 px against a 62 px square - so it was clipped. Sized from --segbtn so it fits on ONE line at every square the landscape stage makes (62 px -> 11.8 px type, the 51 px of a 330 px-tall viewport -> 9.7 px). SPECIFICITY, twice over: the first attempt lost to `.dstage.ph .ds-sec .zone.ctrl .seg .nm{font-size:15px}` (seven classes to six) - the same fault as the min-width one above, a PORTRAIT rule never reset for landscape. hyphens:auto is the safety net if a future string is longer still. 隨機/順序 are two glyphs and never came near the edge. */
+  .phone .stage-ui .st-head,.phone.pianos .stage-ui .st-head{top:auto;bottom:calc(12px + env(safe-area-inset-bottom));right:14px}   /* LOG-126追記①: top-right belongs to the mode column here (I / 隨機 / 順序 run from y 54 down) and the pill was landing on its corner. The bottom-right is free - the caption keeps to the bottom-LEFT. */
+  .phone.onstage .np-phone{top:auto;bottom:calc(10px + env(safe-area-inset-bottom));right:auto;max-width:60vw}   /* bounded so the caption can never grow under the pill */   /* the panel owns the top-left here, as it does on the desktop — the caption goes back under it, on one line */
+  .phone.onstage .np-phone .np-title{font-size:19px}
+  .phone.onstage .np-phone .np-title .np-tag,.phone.onstage .np-phone .np-title .np-rest{display:inline-block}
+  .phone.onstage .np-phone .np-title .np-sep{display:inline}
+  .phone.onstage .np-phone .np-title .np-rest{font-size:inherit;margin-top:0;opacity:1}
+
+  /* LOG-134 (the user: 橫向模式退出舞台之後會自動回正（手機版, 小畫面）): the HOME screen had no landscape treatment at all -
+     its portrait stack measured 436 px against the 390 px a landscape phone has, and #phone is overflow:hidden, so the
+     whole dock was cut off with no way to scroll to it. Everything below is the same layout, compressed to fit: the tiles
+     shrink, the hero's reserved strip shrinks with them, and the language switch stays parked just above the dock. */
+  .ph-home{padding-top:calc(20px + env(safe-area-inset-top))}
+  .ph-grid{gap:10px 8px;padding:4px 6px}
+  .ph-app .ic{width:46px;height:46px;border-radius:12px;font-size:24px}
+  .ph-app .ic svg{width:22px;height:22px}
+  .ph-app .ic.lang{font-size:16px}
+  .ph-hero{padding-bottom:96px}   /* the strip the language switch parks in - it shrinks by exactly what the switch stopped needing */
+  .ph-hero b{font-size:18px}.ph-hero span{font-size:11px}
+  .ph-dock{padding:8px 10px 6px}
+  .ph-ls{bottom:calc(104px + env(safe-area-inset-bottom))}   /* still clear of the dock, which is now shorter */
+}
