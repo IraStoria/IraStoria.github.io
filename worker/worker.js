@@ -27,8 +27,10 @@ const RATE = {
   submit: [5, 600],
   vote: [30, 600],
   wishes: [60, 60],
+  mine: [30, 60],
   totp: [5, 600],
 };
+const MINE_MAX = 10;             // ids per POST /mine (the site keeps at most 10 of the sender's own)
 const TOKEN_TTL_S = 12 * 3600;   // admin pass validity
 const PRE_TTL_S = 300;           // pre-token (between GitHub and TOTP) validity
 const STATE_TTL_S = 600;         // OAuth state validity
@@ -408,6 +410,23 @@ async function handleWishes(env, iph) {
   return json(200, { ok: true, ts: pub.ts, items: pub.items }, { 'Cache-Control': 'public, max-age=60' });
 }
 
+// POST /mine — the sender asks after their own wishes: for each id, `pending` (still waiting),
+// `public` (approved; it is in GET /wishes now) or `gone` (declined and removed). Ids are random
+// and known only to the browser that submitted them; nothing else about a wish leaves here.
+async function handleMine(request, env, iph) {
+  if (await rateLimited(env, 'mine', iph)) return fail(429, 'rate');
+  const r = await readJson(request, LIMIT.wishBody);
+  if (r.err) return r.err;
+  const ids = r.data.ids;
+  if (!Array.isArray(ids) || ids.length > MINE_MAX || !ids.every((x) => isStr(x) && x.length > 0 && x.length <= 64)) return fail(400, 'invalid');
+  const states = {};
+  for (const id of ids) {
+    const w = await getJson(env, `wish:${id}`);
+    states[id] = !w ? 'gone' : w.approved === true ? 'public' : 'pending';
+  }
+  return json(200, { ok: true, states });
+}
+
 // POST /vote — +1 on an approved wish, once per IP per day.
 async function handleVote(request, env, iph) {
   if (await rateLimited(env, 'vote', iph)) return fail(429, 'rate');
@@ -583,6 +602,7 @@ export default {
       if (path === '/submit') return withCors(method === 'POST' ? await handleSubmit(request, env, ctx, iph) : fail(405, 'method'));
       if (path === '/wishes') return withCors(method === 'GET' ? await handleWishes(env, iph) : fail(405, 'method'));
       if (path === '/vote') return withCors(method === 'POST' ? await handleVote(request, env, iph) : fail(405, 'method'));
+      if (path === '/mine') return withCors(method === 'POST' ? await handleMine(request, env, iph) : fail(405, 'method'));
 
       // OAuth (browser navigations; no CORS needed)
       if (path === '/auth/start') return method === 'GET' ? handleAuthStart(env) : fail(405, 'method');

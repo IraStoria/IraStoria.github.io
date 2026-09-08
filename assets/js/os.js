@@ -5404,10 +5404,38 @@
     return out;
   }
   function paintWall(wall, items) { if (items) wall._items = items; wall.innerHTML = wallHTML(wall._items || [], mineLoad(), wall.dataset.show === '1'); }
+  /* LOG-161 追記⑥ (the user: 有辦法就是處理過之後馬上反應嗎): the wall reflects the owner's decision at once, in every browser.
+     Two things used to lag. (1) The sender's own copy (`wish_mine`, painted as 審核中) was never checked against the Worker,
+     so a wish the owner had declined and removed stayed "pending" on the sender's screen for the 7 days the copy lives -
+     the owner's own test wish included. Now every load asks POST /mine about the copies and drops the ones that are gone;
+     the ones that became public are dropped too, because the public card now stands in their place. (2) GET /wishes is
+     cached by the browser for 60 s; the owner's browser marks `wishes_fresh` after each moderation action and the next load
+     goes round the cache with a throw-away query. The same detour runs when /mine reports a copy as public that the
+     (possibly stale) list does not show yet. */
+  function fetchWall(fresh) {
+    return pool.get('/wishes' + (fresh ? '?f=' + Date.now() : '')).then(function (r) {
+      if (!r.ok || !Array.isArray(r.items)) throw r;
+      try { sessionStorage.setItem('wishes', JSON.stringify({ ts: Date.now(), items: r.items })); } catch (e) {}
+      return r.items;
+    });
+  }
+  function reconcileMine(wall, items) {
+    var mine = mineLoad(); if (!mine.length) return;
+    var have = {}; items.forEach(function (w) { have[w.id] = 1; });
+    var keep = mine.filter(function (m) { return !(m.id && have[m.id]); });   /* already on the wall as a real card */
+    if (keep.length !== mine.length) { mineSave(keep); paintWall(wall); }
+    var ids = keep.filter(function (m) { return !!m.id; }).map(function (m) { return m.id; }); if (!ids.length) return;
+    pool.post('/mine', { ids: ids.slice(-10) }).then(function (r) {
+      if (!r.ok || !r.states) return;
+      var st = r.states, left = keep.filter(function (m) { return !m.id || !(st[m.id] === 'gone' || st[m.id] === 'public'); });
+      if (left.length !== keep.length) { mineSave(left); paintWall(wall); }
+      if (keep.some(function (m) { return st[m.id] === 'public'; })) fetchWall(true).then(function (it) { paintWall(wall, it); }).catch(function () {});   /* approved a moment ago: the cached list has not caught up */
+    }).catch(function () {});
+  }
   function loadWall(wall) {
-    var cached = null; try { cached = JSON.parse(sessionStorage.getItem('wishes') || 'null'); } catch (e) {}
+    var cached = null, fresh = false; try { cached = JSON.parse(sessionStorage.getItem('wishes') || 'null'); fresh = sessionStorage.getItem('wishes_fresh') === '1'; sessionStorage.removeItem('wishes_fresh'); } catch (e) {}
     if (cached && cached.items) paintWall(wall, cached.items);
-    pool.get('/wishes').then(function (r) { if (!r.ok || !Array.isArray(r.items)) throw r; try { sessionStorage.setItem('wishes', JSON.stringify({ ts: Date.now(), items: r.items })); } catch (e) {} paintWall(wall, r.items); })
+    fetchWall(fresh).then(function (items) { paintWall(wall, items); reconcileMine(wall, items); })
       .catch(function () { if (!(cached && cached.items)) wall.innerHTML = '<p class="note">' + esc(U.wish_error) + '</p>'; });
   }
   function wireWall(wall) {
@@ -5480,9 +5508,10 @@
       var b = ev.target.closest('button'); if (!b) return; var row = b.closest('.wrow'), id = row && row.dataset.id; if (!id) return;
       var it = (list._items || []).filter(function (x) { return x.id === id; })[0] || {}, msg = $('.msg', row);
       var say = function (t) { if (msg) { msg.textContent = t; setTimeout(function () { msg.textContent = ''; }, 1500); } };
-      var update = function (patch) { patch.id = id; return pool.post('/admin/update', patch, true).then(function (r) { if (!r.ok) throw r; try { sessionStorage.removeItem('wishes'); } catch (e) {} return r; }); };
+      var touched = function () { try { sessionStorage.removeItem('wishes'); sessionStorage.setItem('wishes_fresh', '1'); } catch (e) {} };   /* 追記⑥: the next public wall in this browser skips the 60 s cache */
+      var update = function (patch) { patch.id = id; return pool.post('/admin/update', patch, true).then(function (r) { if (!r.ok) throw r; touched(); return r; }); };
       if (b.classList.contains('ttoggle')) { var pre = $('pre.trail', row); if (pre) pre.hidden = !pre.hidden; return; }
-      if (b.classList.contains('del')) { b.disabled = true; pool.post('/admin/delete', { id: id }, true).then(function (r) { if (!r.ok) throw r; row.remove(); list._items = (list._items || []).filter(function (x) { return x.id !== id; }); if (!list.querySelector('.wrow')) list.innerHTML = '<p class="note">' + esc(U.wish_admin_empty) + '</p>'; }).catch(function () { b.disabled = false; say(U.wish_error); }); return; }
+      if (b.classList.contains('del')) { b.disabled = true; pool.post('/admin/delete', { id: id }, true).then(function (r) { if (!r.ok) throw r; touched(); row.remove(); list._items = (list._items || []).filter(function (x) { return x.id !== id; }); if (!list.querySelector('.wrow')) list.innerHTML = '<p class="note">' + esc(U.wish_admin_empty) + '</p>'; }).catch(function () { b.disabled = false; say(U.wish_error); }); return; }
       if (b.classList.contains('read')) { update({ read: !it.read }).then(load).catch(function () { say(U.wish_error); }); return; }
       if (b.classList.contains('appr')) { update({ approved: !it.approved }).then(load).catch(function () { say(U.wish_error); }); return; }
       if (b.classList.contains('save')) { b.disabled = true; update({ status: $('.status', row).value, reply: $('.reply', row).value.trim(), replyLang: lang, link: $('.link', row).value.trim() }).then(function () { say(U.wish_admin_saved); load(); }).catch(function () { say(U.wish_error); }).then(function () { b.disabled = false; }); }

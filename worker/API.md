@@ -20,7 +20,7 @@
 ## 共通規則
 - 所有回應 JSON：成功 `{ "ok": true, ... }`；失敗 `{ "ok": false, "error": "<code>" }`，HTTP 4xx/5xx。
 - CORS：`Access-Control-Allow-Origin` 只回 `ALLOWED_ORIGINS` 內符合的那個 Origin；`OPTIONS` 預檢 204。寫入端點（POST）Origin 不在名單 → 403 `origin`。GET 不擋 Origin（V11：不當主防線），但有速率限制。
-- 速率限制（KV key `rl:<route>:<ip>`，TTL 秒）：`submit` 5 次／10 分；`vote` 30 次／10 分；`wishes` 60 次／分；`totp`（`POST /auth/totp`）5 次／10 分。超過 → 429 `rate`。
+- 速率限制（KV key `rl:<route>:<ip>`，TTL 秒）：`submit` 5 次／10 分；`vote` 30 次／10 分；`wishes` 60 次／分；`mine` 30 次／分；`totp`（`POST /auth/totp`）5 次／10 分。超過 → 429 `rate`。
 - 單筆大小：body 上限 32 KB（bug 含軌跡）／wish 8 KB → 413 `size`。
 - IP 只存 SHA-256 前 16 hex（`iph`），不存原 IP、不存 UA 全文以外的識別。
 
@@ -47,6 +47,9 @@ Body：`{ type:"wish", lang, nick, cat, text }` 或 `{ type:"bug", lang, nick?, 
 
 ### `GET /wishes`
 回 `{ ok:true, ts, items:[ { id, ts, lang, nick, cat, text, status, votes, reply, replyLang, link } ] }`——**只含 `approved:true`**，且剔除 `iph`。`Cache-Control: public, max-age=60`。
+
+### `POST /mine`
+Body `{ ids:[ …最多 10 個 id ] }`（id 為非空字串 ≤ 64 字）。回 `{ ok:true, states:{ <id>: "pending" | "public" | "gone" } }`——`pending`＝存在但未核准、`public`＝已核准（此刻在 `GET /wishes` 裡）、`gone`＝不存在（被刪除、或本來就沒有；bug 的 id 也算 gone）。除這三個字以外不回任何欄位。用途：投稿者的瀏覽器把自己那份「審核中」副本（`localStorage.wish_mine`）拿來核對，被刪的立刻消失、核准的改由公開卡片接手（LOG-161 追記⑥）。速率 30 次／分；形狀不對 → 400 `invalid`。
 
 ### `POST /vote`
 Body `{ id }`。該 id 必須存在且 `approved:true`；同 IP 同 id 一天一次（已投 → 200 `{ ok:true, votes, dup:true }` 不加）。回 `{ ok:true, votes }`。投票後重建 `pub:wishes`。

@@ -640,5 +640,37 @@ await test('Bark: failing endpoint (throws / rejects / 500) never breaks the res
   await new Promise((r) => setTimeout(r, 10));
 });
 
+// --- LOG-161 追記⑥: POST /mine — the sender's own copies checked against the Worker
+await test('POST /mine: pending / public / gone per id; bugs and unknown ids read as gone', async () => {
+  const env = makeEnv();
+  const a = await call(env, '/submit', { body: WISH, ip: '10.9.0.1' });
+  const b = await call(env, '/submit', { body: { ...WISH, text: '第二個願望' }, ip: '10.9.0.2' });
+  const c = await call(env, '/submit', { body: { ...WISH, text: '第三個願望' }, ip: '10.9.0.3' });
+  const bug = await call(env, '/submit', { body: BUG, ip: '10.9.0.4' });
+  await call(env, '/admin/update', { body: { id: b.data.id, approved: true }, headers: bearer(env) });
+  await call(env, '/admin/delete', { body: { id: c.data.id }, headers: bearer(env) });
+  const r = await call(env, '/mine', { body: { ids: [a.data.id, b.data.id, c.data.id, bug.data.id, 'nope-0000'] } });
+  eq(r.status, 200); eq(r.data.ok, true);
+  eq(r.data.states, { [a.data.id]: 'pending', [b.data.id]: 'public', [c.data.id]: 'gone', [bug.data.id]: 'gone', 'nope-0000': 'gone' });
+  eq(Object.keys(r.data).sort(), ['ok', 'states'], 'nothing but the three words comes back');
+  // un-approving a public wish turns it back into pending
+  await call(env, '/admin/update', { body: { id: b.data.id, approved: false }, headers: bearer(env) });
+  eq((await call(env, '/mine', { body: { ids: [b.data.id] } })).data.states[b.data.id], 'pending');
+});
+await test('POST /mine: shape, size and origin guards; GET is 405; rate limited per IP', async () => {
+  const env = makeEnv();
+  eq((await call(env, '/mine', { body: {} })).status, 400);
+  eq((await call(env, '/mine', { body: { ids: 'x' } })).status, 400);
+  eq((await call(env, '/mine', { body: { ids: [''] } })).status, 400);
+  eq((await call(env, '/mine', { body: { ids: [1] } })).status, 400);
+  eq((await call(env, '/mine', { body: { ids: Array.from({ length: 11 }, (_, i) => 'id' + i) } })).status, 400, 'more than 10 ids');
+  eq((await call(env, '/mine', { body: { ids: [] } })).status, 200, 'empty list is fine');
+  eq((await call(env, '/mine', { body: { ids: ['a'] }, origin: 'https://evil.example' })).status, 403);
+  eq((await call(env, '/mine', { origin: null })).status, 405);
+  let last = null;
+  for (let i = 0; i < 31; i++) last = await call(env, '/mine', { body: { ids: [] }, ip: '10.9.9.9' });
+  eq(last.status, 429); eq(last.data.error, 'rate');
+});
+
 console.log(`\n${passed}/${passed + failed} passed`);
 process.exit(failed ? 1 : 0);
