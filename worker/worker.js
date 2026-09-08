@@ -27,10 +27,19 @@ const RATE = {
   submit: [5, 600],
   vote: [30, 600],
   wishes: [60, 60],
+  totp: [5, 600],
 };
 const TOKEN_TTL_S = 12 * 3600;   // admin pass validity
+const PRE_TTL_S = 300;           // pre-token (between GitHub and TOTP) validity
 const STATE_TTL_S = 600;         // OAuth state validity
 const VOTE_TTL_S = 86400;        // one vote per IP per wish per day
+// TOTP (RFC 6238): HMAC-SHA1, 30 s step, 6 digits, accept ±1 step.
+const TOTP_STEP_S = 30;
+const TOTP_DIGITS = 6;
+const TOTP_WINDOW = 1;
+// Bark push notifications
+const BARK_DEFAULT_SERVER = 'https://api.day.app';
+const BARK_GROUP = 'irastoria-pool';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -73,6 +82,77 @@ function randHex(n) {
   const a = new Uint8Array(n);
   crypto.getRandomValues(a);
   return [...a].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ---------------------------------------------------------------------------
+// TOTP (RFC 6238 over HOTP RFC 4226), by hand on Web Crypto
+// ---------------------------------------------------------------------------
+const B32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+// RFC 4648 base32 decode: case-insensitive, '=' padding and spaces ignored.
+// Returns null on any other character.
+function base32Decode(str) {
+  const s = String(str || '').toUpperCase().replace(/[=\s]/g, '');
+  const out = [];
+  let bits = 0, acc = 0;
+  for (const ch of s) {
+    const v = B32_ALPHABET.indexOf(ch);
+    if (v < 0) return null;
+    acc = (acc << 5) | v;
+    bits += 5;
+    if (bits >= 8) { bits -= 8; out.push((acc >>> bits) & 0xff); }
+  }
+  return out.length ? new Uint8Array(out) : null;
+}
+async function hotp(keyBytes, counter, digits) {
+  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+  const msg = new Uint8Array(8);
+  // 64-bit big-endian counter (counter is a safe integer here).
+  let c = counter;
+  for (let i = 7; i >= 0; i--) { msg[i] = c % 256; c = Math.floor(c / 256); }
+  const h = new Uint8Array(await crypto.subtle.sign('HMAC', key, msg));
+  const off = h[h.length - 1] & 0x0f;
+  const bin = ((h[off] & 0x7f) << 24) | (h[off + 1] << 16) | (h[off + 2] << 8) | h[off + 3];
+  return String(bin % 10 ** digits).padStart(digits, '0');
+}
+// True when `code` matches the current step or its ±TOTP_WINDOW neighbours.
+async function totpVerify(keyBytes, code) {
+  const want = String(code);
+  const step = Math.floor(Date.now() / 1000 / TOTP_STEP_S);
+  for (let d = -TOTP_WINDOW; d <= TOTP_WINDOW; d++) {
+    const c = step + d;
+    if (c < 0) continue;
+    if ((await hotp(keyBytes, c, TOTP_DIGITS)) === want) return true;
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Bark push (https://github.com/Finb/Bark). No-op without BARK_KEY; never
+// throws; runs in ctx.waitUntil so the response is not delayed.
+// ---------------------------------------------------------------------------
+function bark(env, ctx, title, body, level) {
+  try {
+    if (!env || !env.BARK_KEY) return;
+    const server = String(env.BARK_SERVER || BARK_DEFAULT_SERVER).replace(/\/+$/, '');
+    const payload = { device_key: env.BARK_KEY, title, body, group: BARK_GROUP, isArchive: '1' };
+    if (level) payload.level = level;
+    const p = fetch(server + '/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify(payload),
+    })
+      .then((r) => { try { if (r && r.body && r.body.cancel) r.body.cancel(); } catch {} })
+      .catch(() => {});
+    if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p);
+  } catch {
+    // never let a notification break a response
+  }
+}
+// "<country>/<city>" from Cloudflare's request.cf, '?' when unknown.
+function geo(request) {
+  const cf = (request && request.cf) || {};
+  const s = (v) => (isStr(v) && v ? v : '?');
+  return `${s(cf.country)}/${s(cf.city)}`;
 }
 // Length in code points (CJK/emoji count as one), used for all text limits.
 const clen = (s) => Array.from(s).length;
@@ -202,12 +282,21 @@ async function rebuildPub(env) {
 
 // ---------------------------------------------------------------------------
 // Admin pass: base64url(payload).base64url(HMAC-SHA256(payload))
+// Pre-token (same scheme, payload.pre === 1, 5 min): issued after GitHub when
+// TOTP_SECRET is set; only good for POST /auth/totp, never for /admin/*.
 // ---------------------------------------------------------------------------
-async function signToken(env, login) {
-  const payload = b64urlText(JSON.stringify({ sub: login, exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_S }));
+async function signPayload(env, obj) {
+  const payload = b64urlText(JSON.stringify(obj));
   return `${payload}.${await hmacB64url(env.TOKEN_SECRET, payload)}`;
 }
-async function verifyToken(env, token) {
+async function signToken(env, login) {
+  return signPayload(env, { sub: login, exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_S });
+}
+async function signPre(env, login) {
+  return signPayload(env, { sub: login, exp: Math.floor(Date.now() / 1000) + PRE_TTL_S, pre: 1 });
+}
+// Shared checks: signature, shape, expiry, owner. Callers decide about `pre`.
+async function readSigned(env, token) {
   if (!isStr(token) || !env.TOKEN_SECRET) return null;
   const parts = token.split('.');
   if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
@@ -217,6 +306,16 @@ async function verifyToken(env, token) {
   if (!isPlainObj(payload) || !isStr(payload.sub) || typeof payload.exp !== 'number') return null;
   if (payload.exp <= Math.floor(Date.now() / 1000)) return null;
   if (payload.sub.toLowerCase() !== String(env.OWNER_LOGIN || '').toLowerCase()) return null;
+  return payload;
+}
+async function verifyToken(env, token) {
+  const payload = await readSigned(env, token);
+  if (!payload || payload.pre !== undefined) return null;   // a pre-token is never an admin pass
+  return payload;
+}
+async function verifyPre(env, pre) {
+  const payload = await readSigned(env, pre);
+  if (!payload || payload.pre !== 1) return null;
   return payload;
 }
 async function requireAdmin(request, env) {
@@ -245,7 +344,7 @@ async function checkState(env, state) {
 // ---------------------------------------------------------------------------
 
 // POST /submit — validate and store a wish or a bug report.
-async function handleSubmit(request, env, iph) {
+async function handleSubmit(request, env, ctx, iph) {
   if (await rateLimited(env, 'submit', iph)) return fail(429, 'rate');
   const r = await readJson(request, LIMIT.bugBody);
   if (r.err) return r.err;
@@ -271,6 +370,7 @@ async function handleSubmit(request, env, iph) {
       approved: false, status: 'wishing', votes: 0, reply: '', replyLang: '', link: '', iph,
     };
     await env.POOL.put(`wish:${id}`, JSON.stringify(item));
+    notifySubmit(env, ctx, '許願池 · 新願望', nick, text);
     return json(200, { ok: true, id });
   }
 
@@ -291,7 +391,13 @@ async function handleSubmit(request, env, iph) {
   const meta = { shell: str(m.shell, 32), ua: str(m.ua, 400), vw: num(m.vw), vh: num(m.vh), ver: str(m.ver, 64), page: str(m.page, 300) };
   const item = { id, type: 'bug', ts, lang: data.lang, nick, text, trail, meta, read: false, iph };
   await env.POOL.put(`bug:${id}`, JSON.stringify(item));
+  notifySubmit(env, ctx, '恥辱柱 · 新回報', nick, text);
   return json(200, { ok: true, id });
+}
+// Bark on accepted submissions unless BARK_ON_SUBMIT is "0".
+function notifySubmit(env, ctx, title, nick, text) {
+  if (String(env.BARK_ON_SUBMIT ?? '') === '0') return;
+  bark(env, ctx, title, `${nick || '匿名'}：${text.slice(0, 80)}`, 'active');
 }
 
 // GET /wishes — cached public list (approved only, no iph).
@@ -330,14 +436,27 @@ async function handleAuthStart(env) {
   return Response.redirect(u.toString(), 302);
 }
 
-// GET /auth/callback — verify state, exchange code, check login, issue pass.
-async function handleAuthCallback(url, env) {
+// Sign-in notifications (Bark, level timeSensitive).
+function notifyLoginOk(request, env, ctx, login) {
+  bark(env, ctx, '許願池 · 登入成功', `${login} · ${geo(request)} · ${new Date().toISOString()}`, 'timeSensitive');
+}
+function notifyLoginDenied(request, env, ctx, reason, login) {
+  bark(env, ctx, '許願池 · 登入被拒', `${reason}${login ? ' · ' + login : ''} · ${geo(request)} · ${new Date().toISOString()}`, 'timeSensitive');
+}
+
+// GET /auth/callback — verify state, exchange code, check login, then either
+// issue the pass (#wp=) or, when TOTP_SECRET is set, a 5-minute pre-token
+// (#wp2=) that must be traded for the pass at POST /auth/totp.
+async function handleAuthCallback(request, url, env, ctx) {
   if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET || !env.TOKEN_SECRET || !env.SITE_URL) return fail(500, 'config');
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
   if (!(await checkState(env, state))) return fail(400, 'state');
   if (!code) return fail(400, 'invalid');
-  const denied = () => Response.redirect(env.SITE_URL + '#wp=denied', 302);
+  const denied = (reason, login) => {
+    notifyLoginDenied(request, env, ctx, reason, login);
+    return Response.redirect(env.SITE_URL + '#wp=denied', 302);
+  };
   try {
     const tr = await fetch('https://github.com/login/oauth/access_token', {
       method: 'POST',
@@ -345,18 +464,48 @@ async function handleAuthCallback(url, env) {
       body: JSON.stringify({ client_id: env.GITHUB_CLIENT_ID, client_secret: env.GITHUB_CLIENT_SECRET, code }),
     });
     const tj = await tr.json();
-    if (!tj || !tj.access_token) return denied();
+    if (!tj || !tj.access_token) return denied('github');
     const ur = await fetch('https://api.github.com/user', {
       headers: { Authorization: `Bearer ${tj.access_token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'irastoria-pool-worker' },
     });
     const uj = await ur.json();
     const login = uj && isStr(uj.login) ? uj.login : '';
-    if (!login || login.toLowerCase() !== String(env.OWNER_LOGIN || '').toLowerCase()) return denied();
+    if (!login || login.toLowerCase() !== String(env.OWNER_LOGIN || '').toLowerCase()) return denied('owner', login);
+    if (env.TOTP_SECRET) {
+      const pre = await signPre(env, login);
+      return Response.redirect(env.SITE_URL + '#wp2=' + pre, 302);
+    }
     const token = await signToken(env, login);
+    notifyLoginOk(request, env, ctx, login);
     return Response.redirect(env.SITE_URL + '#wp=' + token, 302);
   } catch {
-    return denied();
+    return denied('github');
   }
+}
+
+// POST /auth/totp — body { pre, code }: trade a valid pre-token plus the
+// current authenticator code for the 12 h pass.
+async function handleAuthTotp(request, env, ctx, iph) {
+  if (await rateLimited(env, 'totp', iph)) return fail(429, 'rate');
+  if (!env.TOKEN_SECRET || !env.TOTP_SECRET) return fail(500, 'config');
+  const r = await readJson(request, LIMIT.wishBody);
+  if (r.err) return r.err;
+  const payload = await verifyPre(env, r.data.pre);
+  if (!payload) {
+    notifyLoginDenied(request, env, ctx, 'pre');
+    return fail(401, 'pre');
+  }
+  const key = base32Decode(env.TOTP_SECRET);
+  if (!key) return fail(500, 'config');
+  const code = isStr(r.data.code) || typeof r.data.code === 'number' ? String(r.data.code).trim() : '';
+  const okCode = new RegExp(`^[0-9]{${TOTP_DIGITS}}$`).test(code) && (await totpVerify(key, code));
+  if (!okCode) {
+    notifyLoginDenied(request, env, ctx, 'code', payload.sub);
+    return fail(401, 'code');
+  }
+  const token = await signToken(env, payload.sub);
+  notifyLoginOk(request, env, ctx, payload.sub);
+  return json(200, { ok: true, token });
 }
 
 // GET /admin/list?type=wish|bug — every item, including unapproved.
@@ -431,13 +580,15 @@ export default {
       const iph = await clientHash(request);
 
       // Public routes
-      if (path === '/submit') return withCors(method === 'POST' ? await handleSubmit(request, env, iph) : fail(405, 'method'));
+      if (path === '/submit') return withCors(method === 'POST' ? await handleSubmit(request, env, ctx, iph) : fail(405, 'method'));
       if (path === '/wishes') return withCors(method === 'GET' ? await handleWishes(env, iph) : fail(405, 'method'));
       if (path === '/vote') return withCors(method === 'POST' ? await handleVote(request, env, iph) : fail(405, 'method'));
 
       // OAuth (browser navigations; no CORS needed)
       if (path === '/auth/start') return method === 'GET' ? handleAuthStart(env) : fail(405, 'method');
-      if (path === '/auth/callback') return method === 'GET' ? handleAuthCallback(url, env) : fail(405, 'method');
+      if (path === '/auth/callback') return method === 'GET' ? handleAuthCallback(request, url, env, ctx) : fail(405, 'method');
+      // TOTP second factor (XHR from the site; CORS + Origin check apply)
+      if (path === '/auth/totp') return withCors(method === 'POST' ? await handleAuthTotp(request, env, ctx, iph) : fail(405, 'method'));
 
       // Admin routes — Bearer pass required.
       if (path.startsWith('/admin/')) {

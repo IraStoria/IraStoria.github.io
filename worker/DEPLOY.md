@@ -53,6 +53,31 @@
 2. 打開 `https://<worker 網址>/auth/start`，應該跳到 GitHub 授權頁；授權後會被帶回站上，網址結尾帶 `#wp=...`（一長串）就代表登入鏈通了；若看到 `#wp=denied`，檢查 `OWNER_LOGIN` 是否拼對。
 3. 若 `/health` 回 `config`：KV 綁定名不是 `POOL`。若 `/auth/start` 回 `config`：`GITHUB_CLIENT_ID` 或 `TOKEN_SECRET` 沒填。
 
+## (e2) 選用：登入第二關（驗證器 App）與手機推播（Bark）
+
+四個變數都是**選用**，不填就維持 (e) 的行為。到 **Settings → Variables and Secrets → Add**：
+
+| 名稱 | 類型 | 填什麼 |
+|---|---|---|
+| `TOTP_SECRET` | **Secret** | 下方產出的 base32 字串。填了以後，GitHub 登入通過還要再輸入驗證器的六位數碼才拿得到通行證 |
+| `BARK_KEY` | **Secret** | Bark app（iOS）裡的 device key。填了以後登入成功／被拒、新投稿都會推到手機 |
+| `BARK_SERVER` | Text | 不填＝`https://api.day.app`（官方伺服器）；自架 Bark 才填 |
+| `BARK_ON_SUBMIT` | Text | 不填＝開；填 `0` 就只推登入通知、不推新投稿 |
+
+**產生 TOTP 祕密（在自己電腦上做，不需要網路）**：在 repo 根目錄執行
+
+```
+python worker/totp_setup.py
+```
+
+它只印三行：base32 祕密、`otpauth://` 網址、以及寫出的 `%TEMP%\totp_setup.html` 路徑。
+用瀏覽器開那個 html，會顯示一個 QR code（issuer「IraStoria pool」、帳號「IraStoria」），用 Google Authenticator／1Password 掃描；
+再把**同一串** base32 祕密貼進 Cloudflare 的 `TOTP_SECRET`（型別選 Secret）→ **Deploy**。掃完把 html 檔刪掉。
+腳本只用 Python 標準函式庫，不會把祕密送到任何地方。
+
+驗證：重跑 (e) 第 2 步，授權後回站的網址結尾應是 `#wp2=...`（不再是 `#wp=`），前端會要求輸入六位數碼；輸入正確才拿到通行證。手機端錯太多次會鎖 10 分鐘（5 次／10 分）。
+若手機時間偏差超過 30 秒，驗證會失敗——把手機時間設成自動。
+
 ## (f) 回報給 Claude
 
 **只要回報 workers.dev 網址**，例如 `https://pool.xxxx.workers.dev`（結尾不要加斜線）。
@@ -65,7 +90,7 @@ Claude 會把它填進 `site.json` 的 `backend.url`。**不要貼任何 Secret�
 - **KV 免費方案：每日 1,000 次寫入、100,000 次讀取。** 每筆投稿、每次投票、每次速率限制計數都算一次寫入；正常個人站用量綽綽有餘，但若有人灌水會先撞到這個牆（超額只是當天寫入失敗，不會收費）。
 - **Workers 免費方案：每日 100,000 次請求。**
 - **workers.dev 網址是公開的**，任何人都打得到，所以 Worker 內建了速率限制（投稿 5 次／10 分鐘、投票 30 次／10 分鐘、讀清單 60 次／分鐘）；即使有人亂打，最多也只是把自己鎖住。
-- **Secret 永不進 repo。** `GITHUB_CLIENT_SECRET`、`TOKEN_SECRET` 只存在 Cloudflare；`worker.js` 裡沒有任何金鑰，可以放心放在公開 repo。
+- **Secret 永不進 repo。** `GITHUB_CLIENT_SECRET`、`TOKEN_SECRET`、`TOTP_SECRET`、`BARK_KEY` 只存在 Cloudflare；`worker.js` 裡沒有任何金鑰，可以放心放在公開 repo。
 - Worker 不記錄、不儲存原始 IP，只存 SHA-256 前 16 碼；投稿人的暱稱與內容只有站主審核通過（`approved`）後才會公開。
 - 之後若改了 `worker.js`，重做 (a) 的第 4～6 步（Quick edit 貼上→Deploy）即可，變數與 KV 綁定都會保留。
 
@@ -80,4 +105,4 @@ https://irastoria.github.io,http://127.0.0.1:8766
 
 （逗號分隔，不要空格也可以）→ **Deploy**。測試完可以留著，本機位址對外沒有意義。
 
-另外 `worker/test_worker.mjs` 是不需要 Cloudflare 的離線自測：在 repo 根目錄執行 `node worker/test_worker.mjs`，最後一行顯示 `20/20 passed` 即代表 Worker 邏輯正常。
+另外 `worker/test_worker.mjs` 是不需要 Cloudflare 的離線自測：在 repo 根目錄執行 `node worker/test_worker.mjs`，最後一行顯示 `31/31 passed` 即代表 Worker 邏輯正常（含 TOTP 的 RFC 6238 標準向量與 Bark 推播的離線模擬）。

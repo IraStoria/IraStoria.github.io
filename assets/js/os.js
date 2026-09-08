@@ -212,7 +212,7 @@
   var skipBoot = false;
   var langSwap = false;
   var navType = ''; try { navType = (performance.getEntriesByType('navigation')[0] || {}).type || ''; } catch (e) {}
-  try { skipBoot = navType !== 'reload' && (sessionStorage.getItem('booted') === '1' || location.hash === '#desktop' || /[?&]app=/.test(location.search)); langSwap = sessionStorage.getItem('langswap') === '1'; if (langSwap) sessionStorage.removeItem('langswap'); } catch (e) {}   // a refresh always boots; coming back from a sub-page inside the same visit does not
+  try { skipBoot = navType !== 'reload' && (sessionStorage.getItem('booted') === '1' || location.hash === '#desktop' || /^#wp2?=/.test(location.hash) || /[?&]app=/.test(location.search)); langSwap = sessionStorage.getItem('langswap') === '1'; if (langSwap) sessionStorage.removeItem('langswap'); } catch (e) {}   // a refresh always boots; coming back from a sub-page inside the same visit does not
   function bootScript() { return [
     ['$ whoami', '> ' + D.author],
     ['$ cat about.md', '> ' + D.tagline + '\n  ' + D.hero_intro],
@@ -962,7 +962,11 @@
      GitHub OAuth callback; it is moved into sessionStorage on load and the fragment becomes #desktop (straight to the desktop, no second boot). */
   var pool = (function () {
     var qm = /[?&]pool=([^&#]+)/.exec(location.search), url = qm ? (qm[1] === 'off' ? '' : decodeURIComponent(qm[1]).replace(/\/$/, '')) : (D.backend || ''), arrived = false, denied = false;   /* ?pool=off = rehearse the not-wired state */
-    var hm = /[#&]wp=([^&]+)/.exec(location.hash);
+    var hm = /[#&]wp=([^&]+)/.exec(location.hash), hm2 = /[#&]wp2=([^&]+)/.exec(location.hash);
+    if (hm2) {   /* 追記③: GitHub said yes - the pre-token now needs the authenticator's six digits before it becomes a pass */
+      try { sessionStorage.setItem('wp_pre', hm2[1]); arrived = true; } catch (e) {}
+      try { history.replaceState(null, '', location.pathname + location.search + '#desktop'); } catch (e) {}
+    }
     if (hm) {
       try { if (hm[1] === 'denied') denied = true; else { localStorage.setItem('wp_token', hm[1]); arrived = true; } } catch (e) {}   /* 追記②: localStorage - the pass (12 h) outlives the tab, so a new tab is still signed in */
       try { history.replaceState(null, '', location.pathname + location.search + '#desktop'); } catch (e) {}
@@ -975,9 +979,15 @@
     }
     function fmtExp(ms) { var d = new Date(ms), sameDay = new Date().toDateString() === d.toDateString(); return (sameDay ? '' : ('0' + (d.getMonth() + 1)).slice(-2) + '/' + ('0' + d.getDate()).slice(-2) + ' ') + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
     function who(tpl) { var i = info(); return i ? String(tpl || '').replace('{login}', i.login).replace('{time}', fmtExp(i.exp)) : ''; }
-    function paintOwner() {   /* the menubar chip: shown only while the pass is valid */
-      var chip = document.getElementById('owner-chip'); if (!chip) return;
-      var i = info(); chip.hidden = !i; if (i) { chip.textContent = '\ud83d\udd11 ' + U.owner_chip; chip.title = who(U.owner_tip); chip.setAttribute('aria-label', chip.title); }
+    function paintOwner() { document.body.classList.toggle('owner', !!info()); }   /* 追記③: the bar turns amber while the pass is valid - no words, no icon */
+    function pre() { try { return sessionStorage.getItem('wp_pre') || ''; } catch (e) { return ''; } }
+    function clearPre() { try { sessionStorage.removeItem('wp_pre'); } catch (e) {} }
+    function totp(code) {
+      return req('POST', '/auth/totp', { pre: pre(), code: String(code || '') }).then(function (r) {
+        if (r.ok && r.token) { try { localStorage.setItem('wp_token', r.token); } catch (e) {} clearPre(); paintOwner(); }
+        else if (r.error === 'pre') clearPre();
+        return r;
+      });
     }
     function req(method, path, body, auth) {
       var h = { 'Content-Type': 'application/json' }; if (auth) h.Authorization = 'Bearer ' + token();
@@ -985,7 +995,41 @@
         .then(function (r) { return r.json().then(function (j) { j = j || {}; j.http = r.status; return j; }, function () { return { ok: false, error: 'bad_json', http: r.status }; }); });
     }
     return { on: function () { return !!url; }, url: function () { return url; }, get: function (p, auth) { return req('GET', p, null, auth); }, post: function (p, b, auth) { return req('POST', p, b, auth); },
-             token: token, logout: logout, info: info, who: who, paintOwner: paintOwner, arrived: function () { return arrived; }, denied: function () { return denied; }, admin: function () { return !!info() || denied || eeOn('pool'); } };
+             token: token, logout: logout, info: info, who: who, paintOwner: paintOwner, pre: pre, clearPre: clearPre, totp: totp, arrived: function () { return arrived; }, denied: function () { return denied; }, admin: function () { return !!info() || !!pre() || denied || eeOn('pool'); } };
+  })();
+
+  /* ===== LOG-161追記③ (the user: 在未登入(電源)時兩下 // 可以叫出指令欄): the boot command bar. On the desktop's boot screen two '/' within
+     700 ms open it; on the phone's lock screen two taps on the clock do. `EE_x [EE_y …]` (dashes optional, `@` for the group) stores the flags
+     and silently reloads - the page is still on the boot screen, so the flags are read at load and that boot fires them; no `restart` to type.
+     `login` goes straight to the Worker's GitHub sign-in. Anything else reads as an unknown command (the syntax is never hinted). */
+  var bootCmd = (function () {
+    var el = null, msgEl = null, lastTap = 0;
+    function open(container) {
+      if (el) { var q0 = $('.bc-q', el); if (q0) q0.focus(); return; }
+      el = document.createElement('div'); el.className = 'boot-cmd';
+      el.innerHTML = '<div class="bc-box"><span class="bc-ps">\u203a</span><input class="bc-q" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="' + esc(U.boot_cmd_placeholder) + '" aria-label="' + esc(U.boot_cmd_placeholder) + '"><span class="bc-msg"></span></div>';
+      (container || document.body).appendChild(el);
+      var q = $('.bc-q', el); msgEl = $('.bc-msg', el);
+      q.addEventListener('keydown', function (e) { e.stopPropagation(); if (e.key === 'Escape') close(); else if (e.key === 'Enter') { e.preventDefault(); say(run(q.value)); } });
+      el.addEventListener('click', function (e) { e.stopPropagation(); if (e.target === el) close(); });
+      setTimeout(function () { q.focus(); }, 30);
+    }
+    function close() { if (el) { el.remove(); el = null; msgEl = null; } }
+    function say(m) { if (msgEl) msgEl.textContent = m || ''; }
+    function run(c) {
+      var toks = c.trim().split(/\s+/).map(function (t) { return t.replace(/^-+/, ''); }).filter(function (t) { return t && t.toLowerCase() !== 'restart'; }), a = (toks[0] || '').toLowerCase();
+      if (!a) return '';
+      if (a === 'login') { if (!pool.on()) return U.wish_offline; setTimeout(function () { location.href = pool.url() + '/auth/start'; }, 150); return '\u2026'; }
+      var eggs = toks.filter(function (t) { return /^EE_/i.test(t); }).map(function (t) { return t.replace(/^EE_/i, '').toLowerCase(); });
+      if (!eggs.length || eggs.length !== toks.length) return U.term_unknown + c.trim();
+      if (eggs.indexOf('@') >= 0) { eggs = eggs.filter(function (k) { return k !== '@'; }); eeGroup().forEach(function (k) { if (eggs.indexOf(k) < 0) eggs.push(k); }); }
+      var ok = eeKeys(); if (eggs.some(function (k) { return ok.indexOf(k) < 0; })) return U.term_unknown + c.trim();
+      try { sessionStorage.setItem('ee', eggs.join(',')); } catch (e) {}
+      setTimeout(function () { location.reload(); }, 600);
+      return '\u2192 EE_' + eggs.join(' + EE_') + ' \u00b7 ' + U.boot_cmd_armed;
+    }
+    function tap() { var now = performance.now(), dbl = now - lastTap < 700; lastTap = dbl ? 0 : now; return dbl; }
+    return { open: open, close: close, active: function () { return !!el; }, tap: tap, run: run };
   })();
 
   var wins = {}, z = 20, dock = $('#dock'), windowsEl = $('#windows');
@@ -1052,7 +1096,7 @@
     var m = /[?&]app=([a-z]+)/.exec(location.search);
     if (m && APPS.indexOf(m[1]) >= 0) openApp(m[1]);
     if (pool.arrived() || pool.denied()) openApp('wishpool');   /* LOG-161: back from the Worker's GitHub OAuth callback */
-    var oc = document.getElementById('owner-chip'); if (oc) oc.addEventListener('click', function () { openApp('wishpool'); }); pool.paintOwner(); setInterval(pool.paintOwner, 60000);   /* 追記②: the chip follows the pass (and drops the moment it expires) */
+    pool.paintOwner(); setInterval(pool.paintOwner, 60000);   /* 追記②/③: the bar follows the pass (and dims the moment it expires) */
     var sm = /[?&]stage=([a-z0-9-]+)/.exec(location.search);   // deep link from the static demo page: straight onto the stage
     if (sm) setTimeout(function () { openDemo('demos/' + sm[1]); }, 1200);
     updateDock();
@@ -5443,7 +5487,17 @@
     });
     load();
   }
+  function totpHTML() { return '<div class="wish wtotp"><h2>' + esc(U.wish_totp_title) + '</h2><p class="intro">' + esc(U.wish_totp_hint) + '</p><form class="pform tform" novalidate><div class="row"><input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000"><button class="btn send" type="submit">' + esc(U.wish_totp_send) + '</button></div><p class="msg"></p></form></div>'; }
+  function wireTotp(body) {
+    var f = $('.tform', body); if (!f) return; var E = f.elements, msg = $('.msg', f), send = $('.send', f); setTimeout(function () { E.code.focus(); }, 50);
+    f.addEventListener('submit', function (ev) {
+      ev.preventDefault(); var code = E.code.value.replace(/\D/g, ''); if (code.length !== 6) { msg.className = 'msg err'; msg.textContent = U.wish_totp_bad; return; }
+      send.disabled = true; msg.className = 'msg'; msg.textContent = U.wish_totp_wait;
+      pool.totp(code).then(function (r) { if (r.ok) { RENDER.wishpool(body); return; } msg.className = 'msg err'; msg.textContent = r.error === 'pre' ? U.wish_totp_expired : U.wish_totp_bad; if (r.error === 'pre') setTimeout(function () { RENDER.wishpool(body); }, 1500); }).catch(function () { msg.className = 'msg err'; msg.textContent = U.wish_error; }).then(function () { send.disabled = false; });
+    });
+  }
   function wishpoolHTML() {
+    if (pool.pre() && !pool.info()) return totpHTML();
     if (pool.admin()) return '<div class="wish wadmin">' + adminHTML() + '</div>';
     return '<div class="wish"><p class="intro">' + esc(U.wish_intro) + '</p><h2>' + esc(U.wish_make) + '</h2>' + wishFormHTML() + '<h2>' + esc(U.wish_wall) + '</h2><div class="wall"><p class="note">' + esc(pool.on() ? U.wish_loading : U.wish_offline) + '</p></div>' + (pool.on() ? '<p class="wlogin"><a href="' + esc(pool.url() + '/auth/start') + '">' + esc(U.wish_owner_login) + '</a></p>' : '') + '</div>';
   }
@@ -5517,7 +5571,7 @@
     },
     resume: function (body, w) { body.innerHTML = resumeHTML(); setAddr(w, 'about/#experience'); },
     pillar: function (body) { body.innerHTML = pillarHTML(); wirePillar(body); },   /* LOG-161 */
-    wishpool: function (body) { body.innerHTML = wishpoolHTML(); if (pool.admin()) wireAdmin(body); else { wireWishForm(body); var wall = $('.wall', body); if (wall && pool.on()) { wireWall(wall); loadWall(wall); } } },
+    wishpool: function (body) { body.innerHTML = wishpoolHTML(); if (pool.pre() && !pool.info()) wireTotp(body); else if (pool.admin()) wireAdmin(body); else { wireWishForm(body); var wall = $('.wall', body); if (wall && pool.on()) { wireWall(wall); loadWall(wall); } } },
     contact: function (body) { body.innerHTML = contactHTML(); wireContact(body); },
     player: function (body) { player.mount(body); },
     terminal: function (body) { terminal.mount(body); },
@@ -5827,6 +5881,7 @@
       if (a === 'about' || a === 'whoami') { openApp('about'); return '> ' + D.author + ' — ' + D.tagline; }
       if (a === 'play') { openApp('player'); player.toggle(); return ''; }
       if (a === 'lang') { switchLang(); return ''; }
+      if (a === 'login') { if (!pool.on()) return U.wish_offline; setTimeout(function () { location.href = pool.url() + '/auth/start'; }, 150); return '\u2026'; }   /* 追記③ */
       if ((a === 'desktop' || a === 'pc') && hooks.desktop) { hooks.desktop(); return ''; }
       if (a === 'clear') return '\u0000';
       var r = results(a); if (r.length) { pick(r[0]); return ''; }
@@ -5939,6 +5994,7 @@
       DOCK_APPS.forEach(function (a) { dockEl.appendChild(appBtn(a)); });
       if (power) power.addEventListener('click', function (e) { e.stopPropagation(); powerOn(); });
       if (ls) ls.addEventListener('click', function (e) { e.preventDefault(); switchLang(); });
+      var lockClock = $('#ph-lock-time'); if (lockClock) lockClock.addEventListener('click', function (e) { e.stopPropagation(); if (bootCmd.tap()) bootCmd.open($('#ph-lock') || root); });   /* 追記③: two taps on the lock-screen clock = the boot command bar */
       terminal.hooks.desktop = askDesktop;   /* LOG-154: the「電腦版」switch is no longer on the home screen - 尋找 finds it by name (電腦版 / desktop) or by the command `desktop` */
       // lock screen: swipe up (or a tap) unlocks — a second gesture, so the easter-egg click sound is fine here too
       var y0 = null;
@@ -6090,7 +6146,7 @@
   else {
     bootBtn.addEventListener('click', function (e) { e.stopPropagation(); powerOn(); });
     boot.addEventListener('click', function () { if (ready) enterDesktop(); });                 // "press any key to continue": any click…
-    document.addEventListener('keydown', function (e) { if (done) return; if (!powered) { if (e.key === 'Enter' || e.key === ' ') powerOn(); } else if (ready) enterDesktop(); });   // …or any key
+    document.addEventListener('keydown', function (e) { if (done || bootCmd.active()) return; if (e.key === '/') { if (bootCmd.tap()) { e.preventDefault(); bootCmd.open(boot); } return; } if (!powered) { if (e.key === 'Enter' || e.key === ' ') powerOn(); } else if (ready) enterDesktop(); });   // …or any key; two '/' = the boot command bar (追記③)
   }
   if (ERR_UI) {   /* ERRDBG overlay (temporary) */
     var errEl = document.createElement('pre'); errEl.id = 'errdbg'; errEl.style.cssText = 'position:fixed;left:4px;bottom:4px;max-width:96vw;max-height:45vh;overflow:hidden;z-index:99999;margin:0;padding:4px 6px;font:10px/1.3 monospace;color:#ff0;background:rgba(0,0,0,.75);pointer-events:none;white-space:pre-wrap;word-break:break-all'; document.body.appendChild(errEl);

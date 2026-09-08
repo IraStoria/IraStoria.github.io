@@ -93,6 +93,52 @@ function signToken(secret, payload) {
 }
 const bearer = (env, sub = 'IraStoria', exp = Math.floor(Date.now() / 1000) + 3600) => ({ Authorization: `Bearer ${signToken(env.TOKEN_SECRET, { sub, exp })}` });
 
+// Independent TOTP reference (RFC 4226/6238, SHA-1) used to drive the worker.
+const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+function b32decode(s) {
+  const clean = s.toUpperCase().replace(/[=\s]/g, '');
+  const out = []; let bits = 0, acc = 0;
+  for (const ch of clean) { acc = (acc << 5) | B32.indexOf(ch); bits += 5; if (bits >= 8) { bits -= 8; out.push((acc >>> bits) & 0xff); } }
+  return Buffer.from(out);
+}
+function hotpRef(key, counter, digits = 6) {
+  const msg = Buffer.alloc(8); msg.writeBigUInt64BE(BigInt(counter));
+  const h = createHmac('sha1', key).update(msg).digest();
+  const off = h[h.length - 1] & 0x0f;
+  const bin = ((h[off] & 0x7f) << 24) | (h[off + 1] << 16) | (h[off + 2] << 8) | h[off + 3];
+  return String(bin % 10 ** digits).padStart(digits, '0');
+}
+const totpRef = (secretB32, tSec, digits = 6) => hotpRef(b32decode(secretB32), Math.floor(tSec / 30), digits);
+// RFC 6238 SHA-1 test secret: ASCII "12345678901234567890".
+const RFC_SECRET = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
+// Run fn with Date.now() pinned to `ms`.
+async function atTime(ms, fn) {
+  const real = Date.now;
+  Date.now = () => ms;
+  try { return await fn(); } finally { Date.now = real; }
+}
+// Mock global fetch: GitHub OAuth answers with `login`; every other URL is
+// recorded in `calls` and answered by `other` (default: 200 {code:200}).
+function mockFetch({ login = 'irastoria', other } = {}) {
+  const real = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const u = String(url);
+    if (u.includes('login/oauth/access_token')) return new Response(JSON.stringify({ access_token: 'gho_test' }), { headers: { 'Content-Type': 'application/json' } });
+    if (u.includes('api.github.com/user')) return new Response(JSON.stringify({ login }), { headers: { 'Content-Type': 'application/json' } });
+    calls.push({ url: u, method: init.method, body: init.body ? JSON.parse(init.body) : null });
+    if (other) return other(u, init);
+    return new Response(JSON.stringify({ code: 200 }), { headers: { 'Content-Type': 'application/json' } });
+  };
+  return { calls, restore() { globalThis.fetch = real; } };
+}
+// Drive /auth/start + /auth/callback (GitHub mocked) and return the redirect Location.
+async function loginRedirect(env) {
+  const state = new URL((await call(env, '/auth/start', { origin: null })).headers.get('location')).searchParams.get('state');
+  return (await call(env, `/auth/callback?code=code123&state=${state}`, { origin: null })).headers.get('location');
+}
+const decodePayload = (token) => JSON.parse(Buffer.from(token.split('.')[0].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString());
+
 const WISH = { type: 'wish', lang: 'zh', nick: '小星', cat: 'feature', text: '希望有夜間模式' };
 const BUG = { type: 'bug', lang: 'en', nick: '', text: 'Dock bubble stuck', trail: ['t+0 click #dock', 't+1 open finder', { k: 'resize', vw: 390 }], meta: { shell: 'mobile', ua: 'Mozilla/5.0 test', vw: 390, vh: 844, ver: 'abc123', page: '/zh/' } };
 
@@ -377,6 +423,221 @@ await test('misc: unknown route 404, wrong method 405, error shape { ok:false, e
   eq(b.status, 405); eq(b.data.error, 'method');
   const c = await call(env, '/submit', { origin: null });
   eq(c.status, 405);
+});
+
+// ---------------------------------------------------------------------------
+// TOTP second factor
+// ---------------------------------------------------------------------------
+
+await test('TOTP: test-side reference matches RFC 6238 / RFC 4226 SHA-1 vectors', async () => {
+  eq(totpRef(RFC_SECRET, 59, 8), '94287082'); eq(totpRef(RFC_SECRET, 59), '287082');
+  eq(totpRef(RFC_SECRET, 1111111109, 8), '07081804'); eq(totpRef(RFC_SECRET, 1234567890), '005924');
+  eq(hotpRef(b32decode(RFC_SECRET), 0), '755224'); eq(hotpRef(b32decode(RFC_SECRET), 2), '359152'); eq(hotpRef(b32decode(RFC_SECRET), 3), '969429');
+  eq(b32decode(' gezdgnbvgy3tqojqgezdgnbvgy3tqojq== ').toString(), '12345678901234567890', 'base32 case/pad/space tolerant');
+});
+
+await test('TOTP: worker accepts RFC 6238 vector 287082 at T=59 (window ±1: 755224/359152 ok, 969429 not)', async () => {
+  await atTime(59_000, async () => {
+    const env = { ...makeEnv(), TOTP_SECRET: RFC_SECRET };
+    const pre = signToken(env.TOKEN_SECRET, { sub: 'IraStoria', exp: 59 + 300, pre: 1 });
+    const r = await call(env, '/auth/totp', { body: { pre, code: '287082' }, ip: '10.9.9.1' });
+    eq(r.status, 200, 'vector code accepted'); eq(r.data.ok, true); ok(typeof r.data.token === 'string');
+    for (const [c, want] of [['755224', 200], ['359152', 200], ['969429', 401]]) {
+      const x = await call(env, '/auth/totp', { body: { pre, code: c }, ip: '10.9.9.' + c.slice(0, 2) });
+      eq(x.status, want, `code ${c}`);
+    }
+    const n = await call(env, '/auth/totp', { body: { pre, code: 287082 }, ip: '10.9.9.77' });
+    eq(n.status, 200, 'numeric code accepted');
+  });
+});
+
+await test('callback with TOTP_SECRET: redirects to #wp2= pre-token; pre-token is rejected by /admin/list', async () => {
+  const env = { ...makeEnv(), TOTP_SECRET: RFC_SECRET };
+  const m = mockFetch();
+  try {
+    const loc = await loginRedirect(env);
+    ok(loc.startsWith(env.SITE_URL + '#wp2='), 'redirects to #wp2= (got ' + loc + ')');
+    ok(!loc.includes('#wp='), 'no 12 h pass issued');
+    const pre = loc.slice((env.SITE_URL + '#wp2=').length);
+    const p = decodePayload(pre);
+    eq(p.sub, 'irastoria'); eq(p.pre, 1);
+    ok(p.exp <= Date.now() / 1000 + 300 && p.exp > Date.now() / 1000 + 250, 'pre exp ~5 min');
+    const adm = await call(env, '/admin/list?type=wish', { headers: { Authorization: 'Bearer ' + pre } });
+    eq(adm.status, 401, 'pre-token is not an admin pass'); eq(adm.data.error, 'auth');
+    eq(m.calls.length, 0, 'no Bark without BARK_KEY');
+  } finally { m.restore(); }
+});
+
+await test('callback without TOTP_SECRET keeps #wp= behaviour', async () => {
+  const env = makeEnv();
+  const m = mockFetch();
+  try {
+    const loc = await loginRedirect(env);
+    ok(loc.startsWith(env.SITE_URL + '#wp=') && !loc.includes('#wp2='), 'plain #wp=');
+    eq(decodePayload(loc.slice((env.SITE_URL + '#wp=').length)).pre, undefined);
+  } finally { m.restore(); }
+});
+
+await test('/auth/totp: right code -> 12 h token that passes /admin/list; wrong code -> 401 code', async () => {
+  const env = { ...makeEnv(), TOTP_SECRET: 'JBSWY3DPEHPK3PXP' };
+  const m = mockFetch();
+  try {
+    const now = 1_700_000_000_000;
+    await atTime(now, async () => {
+      const loc = await loginRedirect(env);
+      const pre = loc.slice((env.SITE_URL + '#wp2=').length);
+      const wrong = await call(env, '/auth/totp', { body: { pre, code: totpRef(env.TOTP_SECRET, now / 1000 + 120) } });
+      eq(wrong.status, 401); eq(wrong.data, { ok: false, error: 'code' });
+      const junk = await call(env, '/auth/totp', { body: { pre, code: 'abc' } });
+      eq(junk.status, 401); eq(junk.data.error, 'code');
+      const right = await call(env, '/auth/totp', { body: { pre, code: totpRef(env.TOTP_SECRET, now / 1000) } });
+      eq(right.status, 200); eq(right.data.ok, true);
+      eq(right.headers.get('access-control-allow-origin'), ORIGIN, 'CORS on /auth/totp');
+      const p = decodePayload(right.data.token);
+      eq(p.sub, 'irastoria'); eq(p.pre, undefined); ok(p.exp > now / 1000 + 11 * 3600, 'exp ~12h');
+      const adm = await call(env, '/admin/list?type=wish', { headers: { Authorization: 'Bearer ' + right.data.token } });
+      eq(adm.status, 200, 'token from /auth/totp works on admin endpoint');
+    });
+  } finally { m.restore(); }
+});
+
+await test('/auth/totp: forged / expired / non-pre token -> 401 pre; bad origin 403; rate limit 6th -> 429', async () => {
+  const env = { ...makeEnv(), TOTP_SECRET: 'JBSWY3DPEHPK3PXP' };
+  const code = totpRef(env.TOTP_SECRET, Date.now() / 1000);
+  const forged = await call(env, '/auth/totp', { body: { pre: signToken('wrong-secret', { sub: 'IraStoria', exp: 9999999999, pre: 1 }), code }, ip: '10.8.8.1' });
+  eq(forged.status, 401); eq(forged.data, { ok: false, error: 'pre' });
+  const expired = await call(env, '/auth/totp', { body: { pre: signToken(env.TOKEN_SECRET, { sub: 'IraStoria', exp: Math.floor(Date.now() / 1000) - 1, pre: 1 }), code }, ip: '10.8.8.2' });
+  eq(expired.status, 401); eq(expired.data.error, 'pre');
+  const pass = await call(env, '/auth/totp', { body: { pre: signToken(env.TOKEN_SECRET, { sub: 'IraStoria', exp: 9999999999 }), code }, ip: '10.8.8.3' });
+  eq(pass.status, 401, 'a real admin pass is not a pre-token'); eq(pass.data.error, 'pre');
+  const stranger = await call(env, '/auth/totp', { body: { pre: signToken(env.TOKEN_SECRET, { sub: 'someone', exp: 9999999999, pre: 1 }), code }, ip: '10.8.8.4' });
+  eq(stranger.status, 401); eq(stranger.data.error, 'pre');
+  const missing = await call(env, '/auth/totp', { body: { code }, ip: '10.8.8.5' });
+  eq(missing.status, 401); eq(missing.data.error, 'pre');
+  const badOrigin = await call(env, '/auth/totp', { body: { pre: 'x', code }, origin: 'https://evil.example' });
+  eq(badOrigin.status, 403);
+  const get = await call(env, '/auth/totp', { origin: null });
+  eq(get.status, 405);
+  const off = await call(makeEnv(), '/auth/totp', { body: { pre: 'x', code } });
+  eq(off.status, 500, 'TOTP not configured -> config'); eq(off.data.error, 'config');
+  for (let i = 0; i < 5; i++) await call(env, '/auth/totp', { body: { pre: 'x', code }, ip: '10.8.8.9' });
+  const sixth = await call(env, '/auth/totp', { body: { pre: 'x', code }, ip: '10.8.8.9' });
+  eq(sixth.status, 429); eq(sixth.data.error, 'rate');
+});
+
+// ---------------------------------------------------------------------------
+// Bark push notifications
+// ---------------------------------------------------------------------------
+
+await test('Bark: submit posts to ${BARK_SERVER}/push (default api.day.app); BARK_ON_SUBMIT="0" turns it off', async () => {
+  const env = { ...makeEnv(), BARK_KEY: 'devkey123' };
+  const m = mockFetch();
+  try {
+    const w = await call(env, '/submit', { body: WISH });
+    eq(w.status, 200);
+    eq(m.calls.length, 1, 'one push for a wish');
+    eq(m.calls[0].url, 'https://api.day.app/push'); eq(m.calls[0].method, 'POST');
+    const b = m.calls[0].body;
+    eq(b.device_key, 'devkey123'); eq(b.title, '許願池 · 新願望'); eq(b.body, '小星：希望有夜間模式');
+    eq(b.group, 'irastoria-pool'); eq(b.level, 'active');
+    const bug = await call(env, '/submit', { body: BUG, ip: '10.5.5.1' });
+    eq(bug.status, 200); eq(m.calls.length, 2);
+    eq(m.calls[1].body.title, '恥辱柱 · 新回報'); eq(m.calls[1].body.body, '匿名：Dock bubble stuck');
+    const long = await call(env, '/submit', { body: { ...WISH, text: 'x'.repeat(200) }, ip: '10.5.5.2' });
+    eq(long.status, 200); eq(m.calls[2].body.body, '小星：' + 'x'.repeat(80), 'body truncated to 80');
+    const rejected = await call(env, '/submit', { body: { ...WISH, cat: 'nope' }, ip: '10.5.5.3' });
+    eq(rejected.status, 400); eq(m.calls.length, 3, 'no push for a rejected submit');
+
+    const custom = { ...env, BARK_SERVER: 'https://bark.example.net/' };
+    await call(custom, '/submit', { body: WISH, ip: '10.5.5.4' });
+    eq(m.calls[3].url, 'https://bark.example.net/push', 'custom server, trailing slash trimmed');
+
+    const off = { ...env, BARK_ON_SUBMIT: '0' };
+    const r = await call(off, '/submit', { body: WISH, ip: '10.5.5.5' });
+    eq(r.status, 200); eq(m.calls.length, 4, 'BARK_ON_SUBMIT=0 -> no push');
+    const on = { ...env, BARK_ON_SUBMIT: '1' };
+    await call(on, '/submit', { body: WISH, ip: '10.5.5.6' });
+    eq(m.calls.length, 5);
+  } finally { m.restore(); }
+});
+
+await test('Bark: no BARK_KEY -> no push at all', async () => {
+  const env = makeEnv();
+  const m = mockFetch();
+  try {
+    await call(env, '/submit', { body: WISH });
+    await loginRedirect(env);
+    eq(m.calls.length, 0);
+  } finally { m.restore(); }
+});
+
+await test('Bark: denied login (stranger, wrong code, forged pre) pushes 登入被拒 timeSensitive', async () => {
+  const env = { ...makeEnv(), BARK_KEY: 'devkey123', TOTP_SECRET: 'JBSWY3DPEHPK3PXP' };
+  let m = mockFetch({ login: 'someone-else' });
+  try {
+    const loc = await loginRedirect(env);
+    eq(loc, env.SITE_URL + '#wp=denied');
+    eq(m.calls.length, 1); eq(m.calls[0].body.title, '許願池 · 登入被拒'); eq(m.calls[0].body.level, 'timeSensitive');
+    ok(m.calls[0].body.body.includes('owner') && m.calls[0].body.body.includes('someone-else') && m.calls[0].body.body.includes('?/?'), 'reason + login + geo: ' + m.calls[0].body.body);
+    eq(m.calls[0].body.group, 'irastoria-pool');
+  } finally { m.restore(); }
+  m = mockFetch();
+  try {
+    const pre = (await loginRedirect(env)).split('#wp2=')[1];
+    eq(m.calls.length, 0, 'GitHub-ok alone (TOTP pending) is not a success yet');
+    const wrong = await call(env, '/auth/totp', { body: { pre, code: '000000' } });
+    eq(wrong.status, 401);
+    eq(m.calls.length, 1); eq(m.calls[0].body.title, '許願池 · 登入被拒');
+    ok(m.calls[0].body.body.startsWith('code · irastoria'), 'reason code + login: ' + m.calls[0].body.body);
+    const forged = await call(env, '/auth/totp', { body: { pre: signToken('wrong-secret', { sub: 'IraStoria', exp: 9999999999, pre: 1 }), code: '000000' }, ip: '10.6.6.1' });
+    eq(forged.status, 401);
+    eq(m.calls.length, 2); ok(m.calls[1].body.body.startsWith('pre ·'), 'reason pre: ' + m.calls[1].body.body);
+  } finally { m.restore(); }
+});
+
+await test('Bark: successful sign-in pushes 登入成功 (after TOTP, and after GitHub when TOTP is off)', async () => {
+  const withTotp = { ...makeEnv(), BARK_KEY: 'devkey123', TOTP_SECRET: 'JBSWY3DPEHPK3PXP' };
+  let m = mockFetch();
+  try {
+    const pre = (await loginRedirect(withTotp)).split('#wp2=')[1];
+    const r = await call(withTotp, '/auth/totp', { body: { pre, code: totpRef(withTotp.TOTP_SECRET, Date.now() / 1000) } });
+    eq(r.status, 200);
+    eq(m.calls.length, 1); eq(m.calls[0].url, 'https://api.day.app/push');
+    eq(m.calls[0].body.title, '許願池 · 登入成功'); eq(m.calls[0].body.level, 'timeSensitive');
+    ok(/^irastoria · \?\/\? · \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(m.calls[0].body.body), 'login · country/city · ISO: ' + m.calls[0].body.body);
+  } finally { m.restore(); }
+  const noTotp = { ...makeEnv(), BARK_KEY: 'devkey123' };
+  m = mockFetch();
+  try {
+    const loc = await loginRedirect(noTotp);
+    ok(loc.startsWith(noTotp.SITE_URL + '#wp='));
+    eq(m.calls.length, 1); eq(m.calls[0].body.title, '許願池 · 登入成功');
+  } finally { m.restore(); }
+});
+
+await test('Bark: failing endpoint (throws / rejects / 500) never breaks the response', async () => {
+  const env = { ...makeEnv(), BARK_KEY: 'devkey123', TOTP_SECRET: 'JBSWY3DPEHPK3PXP' };
+  const modes = [
+    () => { throw new Error('sync boom'); },
+    () => Promise.reject(new Error('async boom')),
+    () => new Response('nope', { status: 500 }),
+    () => undefined,
+  ];
+  for (const other of modes) {
+    const m = mockFetch({ other });
+    try {
+      const w = await call(env, '/submit', { body: WISH, ip: '10.7.7.' + modes.indexOf(other) });
+      eq(w.status, 200, 'submit ok despite Bark failure'); eq(w.data.ok, true);
+      const pre = (await loginRedirect(env)).split('#wp2=')[1];
+      const r = await call(env, '/auth/totp', { body: { pre, code: totpRef(env.TOTP_SECRET, Date.now() / 1000) }, ip: '10.7.7.' + (10 + modes.indexOf(other)) });
+      eq(r.status, 200, 'totp ok despite Bark failure');
+      const d = await call(env, '/auth/totp', { body: { pre, code: '000000' }, ip: '10.7.7.' + (20 + modes.indexOf(other)) });
+      eq(d.status, 401, 'denied path still answers despite Bark failure');
+      ok(m.calls.length >= 3, 'pushes were attempted');
+    } finally { m.restore(); }
+  }
+  // Give any rejected push promises a tick to settle so nothing leaks as unhandled.
+  await new Promise((r) => setTimeout(r, 10));
 });
 
 console.log(`\n${passed}/${passed + failed} passed`);

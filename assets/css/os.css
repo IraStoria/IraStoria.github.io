@@ -867,9 +867,18 @@ body.to-en .ls-track{background:rgba(16,19,28,.30)}   /* the track changes colou
 .clinks{display:flex;gap:.4rem;flex-wrap:wrap;margin:0}
 .clinks a{display:inline-block;border:1px solid var(--border);border-radius:999px;padding:.2rem .7rem;font-size:12px;color:var(--fg);text-decoration:none}
 .clinks a:hover{border-color:var(--accent)}
-/* LOG-161追記②: the owner's chip - only while a pass is valid; the one glance that answers "am I signed in?" */
-#owner-chip{display:inline-flex;align-items:center;gap:.3rem;background:rgba(224,176,74,.16);border:1px solid rgba(224,176,74,.55);color:var(--accent);border-radius:999px;padding:.1rem .55rem;font:600 11px/1.4 var(--font);cursor:pointer;letter-spacing:.02em}
-#owner-chip:hover{background:rgba(224,176,74,.28)}
-#owner-chip[hidden]{display:none}
+/* LOG-161追記③ (the user: 登入時上面的工作條變成黃色，不要放 emoji 跟站主): the owner's state is the bar itself - amber, glowing, wordless */
+body.owner .menubar{background:linear-gradient(180deg,rgba(224,176,74,.30),rgba(224,176,74,.14));border-bottom:1px solid rgba(224,176,74,.55);box-shadow:0 0 18px rgba(224,176,74,.35),inset 0 -1px 0 rgba(255,225,160,.25);color:#f3dfa8}
+body.owner .menubar .menubar-brand,body.owner .menubar #clock{color:#ffe9b8;text-shadow:0 0 8px rgba(224,176,74,.6)}
+body.owner .ph-status{background:linear-gradient(180deg,rgba(224,176,74,.34),rgba(224,176,74,.12));box-shadow:0 0 16px rgba(224,176,74,.35);color:#ffe9b8}
 .wadmin .who{font-size:.78rem;color:var(--dim);margin:-.3rem 0 .6rem}
 .wish .wlogin{text-align:right;margin:.6rem 0 0}.wish .wlogin a{color:var(--dim);font-size:.78rem;text-decoration:none;border-bottom:1px dotted var(--border)}.wish .wlogin a:hover{color:var(--accent)}
+/* LOG-161追記③: the boot command bar - two '/' on the desktop's boot screen, two taps on the phone's lock-screen clock */
+.boot-cmd{position:absolute;inset:0;z-index:300;display:flex;align-items:flex-end;justify-content:center;padding:0 12px 14vh;background:rgba(0,0,0,.25)}
+.bc-box{display:flex;align-items:center;gap:.5rem;width:min(520px,100%);background:rgba(10,12,18,.92);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:.55rem .8rem;box-shadow:0 12px 40px rgba(0,0,0,.6);font:14px var(--mono);color:var(--fg)}
+.bc-ps{color:var(--accent)}
+.bc-q{flex:1;min-width:0;background:transparent;border:0;outline:none;color:var(--fg);font:inherit}
+.bc-q::placeholder{color:#555}
+.bc-msg{color:var(--dim);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45%}
+.phone .bc-box{font-size:16px}
+.wtotp .tform .row input{font:22px/1.2 var(--mono);letter-spacing:.35em;text-align:center;max-width:200px}

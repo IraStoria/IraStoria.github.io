@@ -841,14 +841,6 @@
       "zh": "顯示 Email",
       "en": "Show email"
     },
-    "owner_chip": {
-      "zh": "站主",
-      "en": "Owner"
-    },
-    "owner_tip": {
-      "zh": "已登入 {login} · 通行證到 {time} · 點擊開管理面板",
-      "en": "Signed in as {login} · pass valid until {time} · click for the panel"
-    },
     "wish_admin_who": {
       "zh": "已登入：{login} · 通行證到 {time}",
       "en": "Signed in: {login} · pass valid until {time}"
@@ -856,6 +848,38 @@
     "wish_owner_login": {
       "zh": "站主登入",
       "en": "Owner sign-in"
+    },
+    "boot_cmd_placeholder": {
+      "zh": "指令",
+      "en": "command"
+    },
+    "boot_cmd_armed": {
+      "zh": "已就位，重新開機中…",
+      "en": "armed, rebooting…"
+    },
+    "wish_totp_title": {
+      "zh": "輸入驗證碼",
+      "en": "Enter your code"
+    },
+    "wish_totp_hint": {
+      "zh": "GitHub 認得你了。再輸入 Authenticator 上的 6 位數。",
+      "en": "GitHub knows you. Now the 6 digits from your authenticator."
+    },
+    "wish_totp_send": {
+      "zh": "確認",
+      "en": "Confirm"
+    },
+    "wish_totp_wait": {
+      "zh": "確認中…",
+      "en": "Checking…"
+    },
+    "wish_totp_bad": {
+      "zh": "驗證碼不對，再試一次。",
+      "en": "That code is not right. Try again."
+    },
+    "wish_totp_expired": {
+      "zh": "等太久了，請重新登入。",
+      "en": "That took too long. Sign in again."
     }
   },
   "about_body": {
