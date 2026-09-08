@@ -471,7 +471,7 @@
     }
   },
   "prank_pages": {
-    "_note": "LOG-160追記⑦: the About prank's fake error pages. Each run draws 4 serious + 4 silly, shuffled. zh shows Chinese, en English.",
+    "_note": "LOG-160追記⑦/⑩: the About prank's fake error pages. Each run draws 4 serious + 4 silly, shuffled; a silly page marked always:true is in every draw (the riddle). zh shows Chinese, en English.",
     "serious": [
       {
         "code": 404,
@@ -638,7 +638,8 @@
         "msg": {
           "zh": "公告不劇透。這一頁劇透了，所以沒有這一頁，但是 EE_midi restart。",
           "en": "Announcements keep the surprises to themselves. This page didn't, so there is no page. But EE_midi restart."
-        }
+        },
+        "always": true
       }
     ]
   }

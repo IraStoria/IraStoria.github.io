@@ -1689,10 +1689,11 @@
     focus(w);
     updateDock();
   }
-  var ABOUT_PRANK_CHANCE = 0.40, ABOUT_STEP_MS = 120, ABOUT_STEP_K = 1, ABOUT_STEP_MIN = 70, ABOUT_LEFT = 160, ABOUT_CASCADE = [34, 26],   /* STEP_MS: the gap between windows; STEP_K 1 = constant pace (追記④, the user: 連續開啟速度等速) - < 1 would make the stumble speed up, down to STEP_MIN. LEFT: the cascade starts this much left of centre */ ABOUT_W = { about: 500, resume: 580 }, ABOUT_H = 560, PRANK_SIZE = [460, 340], aboutRun = false;
+  var ABOUT_PRANK_CHANCE = 0.50, ABOUT_STEP_MS = 120, ABOUT_STEP_K = 1, ABOUT_STEP_MIN = 70, ABOUT_LEFT = 160, ABOUT_CASCADE = [34, 26],   /* STEP_MS: the gap between windows; STEP_K 1 = constant pace (追記④, the user: 連續開啟速度等速) - < 1 would make the stumble speed up, down to STEP_MIN. LEFT: the cascade starts this much left of centre */ ABOUT_W = { about: 500, resume: 580 }, ABOUT_H = 560, PRANK_SIZE = [460, 340], aboutRun = false;
   function prankDraw(n) {   /* 追記⑦ (the user: 錯誤連結中文的話顯示中文；除了正經的幾個以外塞一些無厘頭的): 4 serious + 4 silly from content/site.json (already in this language), shuffled */
     var P = D.prank || {}, pick = function (pool, k) { var a = (pool || []).slice(), o = []; while (a.length && o.length < k) o.push(a.splice(Math.floor(Math.random() * a.length), 1)[0]); return o; };
-    var out = pick(P.serious, Math.ceil(n / 2)).concat(pick(P.silly, Math.floor(n / 2)));
+    var must = (P.silly || []).filter(function (p) { return p.always; }), rest = (P.silly || []).filter(function (p) { return !p.always; });   /* 追記⑩ (the user: 彩蛋謎語必定包含在錯誤頁面之中): always:true pages are in every draw */
+    var out = must.slice(0, n).concat(pick(P.serious, Math.ceil(n / 2))).concat(pick(rest, Math.max(0, Math.floor(n / 2) - must.length)));
     while (out.length < n) out.push({ code: 500, name: 'Internal Server Error', msg: '' });
     return pick(out, n);
   }
