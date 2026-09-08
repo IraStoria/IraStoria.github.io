@@ -980,7 +980,12 @@
     function fmtExp(ms) { var d = new Date(ms), sameDay = new Date().toDateString() === d.toDateString(); return (sameDay ? '' : ('0' + (d.getMonth() + 1)).slice(-2) + '/' + ('0' + d.getDate()).slice(-2) + ' ') + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
     function who(tpl) { var i = info(); return i ? String(tpl || '').replace('{login}', i.login).replace('{time}', fmtExp(i.exp)) : ''; }
     function paintOwner() { document.body.classList.toggle('owner', !!info()); }   /* 追記③: the bar turns amber while the pass is valid - no words, no icon */
-    function pre() { try { return sessionStorage.getItem('wp_pre') || ''; } catch (e) { return ''; } }
+    function pre() {   /* the 5-minute pre-token from #wp2; read through its payload so an expired one is dropped here and the code page goes away with it */
+      var t = ''; try { t = sessionStorage.getItem('wp_pre') || ''; } catch (e) {}
+      if (!t) return '';
+      try { var j = JSON.parse(atob(t.split('.')[0].replace(/-/g, '+').replace(/_/g, '/'))); if (!j || !j.pre || typeof j.exp !== 'number' || j.exp * 1000 <= Date.now()) { clearPre(); return ''; } } catch (e) { clearPre(); return ''; }
+      return t;
+    }
     function clearPre() { try { sessionStorage.removeItem('wp_pre'); } catch (e) {} }
     function totp(code) {
       return req('POST', '/auth/totp', { pre: pre(), code: String(code || '') }).then(function (r) {
@@ -5487,9 +5492,10 @@
     });
     load();
   }
-  function totpHTML() { return '<div class="wish wtotp"><h2>' + esc(U.wish_totp_title) + '</h2><p class="intro">' + esc(U.wish_totp_hint) + '</p><form class="pform tform" novalidate><div class="row"><input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000"><button class="btn send" type="submit">' + esc(U.wish_totp_send) + '</button></div><p class="msg"></p></form></div>'; }
+  function totpHTML() { return '<div class="wish wtotp"><h2>' + esc(U.wish_totp_title) + '</h2><p class="intro">' + esc(U.wish_totp_hint) + '</p><form class="pform tform" novalidate><div class="row"><input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000"><button class="btn send" type="submit">' + esc(U.wish_totp_send) + '</button></div><p class="msg"></p><div class="actions"><button class="btn sec back" type="button">' + esc(U.wish_totp_back) + '</button></div></form></div>'; }
   function wireTotp(body) {
     var f = $('.tform', body); if (!f) return; var E = f.elements, msg = $('.msg', f), send = $('.send', f); setTimeout(function () { E.code.focus(); }, 50);
+    var back = $('.back', f); if (back) back.addEventListener('click', function () { pool.clearPre(); RENDER.wishpool(body); });   /* the user (a passer-by, or the owner changing their mind): drop the ticket, show the public well */
     f.addEventListener('submit', function (ev) {
       ev.preventDefault(); var code = E.code.value.replace(/\D/g, ''); if (code.length !== 6) { msg.className = 'msg err'; msg.textContent = U.wish_totp_bad; return; }
       send.disabled = true; msg.className = 'msg'; msg.textContent = U.wish_totp_wait;
