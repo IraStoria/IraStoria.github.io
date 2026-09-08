@@ -845,10 +845,6 @@
       "zh": "已登入：{login} · 通行證到 {time}",
       "en": "Signed in: {login} · pass valid until {time}"
     },
-    "wish_owner_login": {
-      "zh": "站主登入",
-      "en": "Owner sign-in"
-    },
     "boot_cmd_placeholder": {
       "zh": "指令",
       "en": "command"

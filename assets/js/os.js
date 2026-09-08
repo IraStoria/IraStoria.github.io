@@ -962,15 +962,11 @@
      GitHub OAuth callback; it is moved into sessionStorage on load and the fragment becomes #desktop (straight to the desktop, no second boot). */
   var pool = (function () {
     var qm = /[?&]pool=([^&#]+)/.exec(location.search), url = qm ? (qm[1] === 'off' ? '' : decodeURIComponent(qm[1]).replace(/\/$/, '')) : (D.backend || ''), arrived = false, denied = false;   /* ?pool=off = rehearse the not-wired state */
-    var hm = /[#&]wp=([^&]+)/.exec(location.hash), hm2 = /[#&]wp2=([^&]+)/.exec(location.hash);
-    if (hm2) {   /* 追記③: GitHub said yes - the pre-token now needs the authenticator's six digits before it becomes a pass */
-      try { sessionStorage.setItem('wp_pre', hm2[1]); arrived = true; } catch (e) {}
-      try { history.replaceState(null, '', location.pathname + location.search + '#desktop'); } catch (e) {}
-    }
-    if (hm) {
-      try { if (hm[1] === 'denied') denied = true; else { localStorage.setItem('wp_token', hm[1]); arrived = true; } } catch (e) {}   /* 追記②: localStorage - the pass (12 h) outlives the tab, so a new tab is still signed in */
-      try { history.replaceState(null, '', location.pathname + location.search + '#desktop'); } catch (e) {}
-    }
+    var hm = /[#&]wp=([^&]+)/.exec(location.hash), hm2 = /[#&]wp2=([^&]+)/.exec(location.hash), preMem = '';
+    var intent = false; try { intent = sessionStorage.getItem('wp_login') === '1'; sessionStorage.removeItem('wp_login'); } catch (e) {}   /* 追記⑤ (the user: 僅限有輸入 login 指令才會出現登入): only a `login` typed THIS time makes the fragments count - and the note is spent on arrival, so a refresh inherits nothing */
+    if (hm2 && intent) { preMem = hm2[1]; arrived = true; }   /* 追記③: GitHub said yes - the pre-token (memory only: gone on refresh) now needs the authenticator's six digits */
+    if (hm && intent) { try { if (hm[1] === 'denied') denied = true; else { localStorage.setItem('wp_token', hm[1]); arrived = true; } } catch (e) {} }   /* 追記②: the pass itself (12 h) lives in localStorage */
+    if (hm || hm2) { try { history.replaceState(null, '', location.pathname + location.search + '#desktop'); } catch (e) {} }   /* a fragment that arrived without the note is simply dropped */
     function token() { try { return localStorage.getItem('wp_token') || sessionStorage.getItem('wp_token') || ''; } catch (e) { return ''; } }
     function logout() { try { localStorage.removeItem('wp_token'); sessionStorage.removeItem('wp_token'); } catch (e) {} denied = false; paintOwner(); }
     function info() {   /* the pass's payload (sub = login, exp = unix seconds); null when absent, malformed or expired - the Worker is still the judge, this only paints */
@@ -980,13 +976,13 @@
     function fmtExp(ms) { var d = new Date(ms), sameDay = new Date().toDateString() === d.toDateString(); return (sameDay ? '' : ('0' + (d.getMonth() + 1)).slice(-2) + '/' + ('0' + d.getDate()).slice(-2) + ' ') + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
     function who(tpl) { var i = info(); return i ? String(tpl || '').replace('{login}', i.login).replace('{time}', fmtExp(i.exp)) : ''; }
     function paintOwner() { document.body.classList.toggle('owner', !!info()); }   /* 追記③: the bar turns amber while the pass is valid - no words, no icon */
-    function pre() {   /* the 5-minute pre-token from #wp2; read through its payload so an expired one is dropped here and the code page goes away with it */
-      var t = ''; try { t = sessionStorage.getItem('wp_pre') || ''; } catch (e) {}
-      if (!t) return '';
+    function pre() {   /* the 5-minute pre-token from #wp2, memory only; read through its payload so an expired one is dropped here and the code page goes away with it */
+      var t = preMem; if (!t) return '';
       try { var j = JSON.parse(atob(t.split('.')[0].replace(/-/g, '+').replace(/_/g, '/'))); if (!j || !j.pre || typeof j.exp !== 'number' || j.exp * 1000 <= Date.now()) { clearPre(); return ''; } } catch (e) { clearPre(); return ''; }
       return t;
     }
-    function clearPre() { try { sessionStorage.removeItem('wp_pre'); } catch (e) {} }
+    function clearPre() { preMem = ''; }
+    function start() { try { sessionStorage.setItem('wp_login', '1'); } catch (e) {} setTimeout(function () { location.href = url + '/auth/start'; }, 150); }   /* the only door: leave the note, then go to the Worker's GitHub sign-in */
     function totp(code) {
       return req('POST', '/auth/totp', { pre: pre(), code: String(code || '') }).then(function (r) {
         if (r.ok && r.token) { try { localStorage.setItem('wp_token', r.token); } catch (e) {} clearPre(); paintOwner(); }
@@ -1000,7 +996,7 @@
         .then(function (r) { return r.json().then(function (j) { j = j || {}; j.http = r.status; return j; }, function () { return { ok: false, error: 'bad_json', http: r.status }; }); });
     }
     return { on: function () { return !!url; }, url: function () { return url; }, get: function (p, auth) { return req('GET', p, null, auth); }, post: function (p, b, auth) { return req('POST', p, b, auth); },
-             token: token, logout: logout, info: info, who: who, paintOwner: paintOwner, pre: pre, clearPre: clearPre, totp: totp, arrived: function () { return arrived; }, denied: function () { return denied; }, admin: function () { return !!info() || !!pre() || denied || eeOn('pool'); } };
+             token: token, logout: logout, info: info, who: who, paintOwner: paintOwner, pre: pre, clearPre: clearPre, totp: totp, start: start, arrived: function () { return arrived; }, denied: function () { return denied; }, admin: function () { return !!info() || !!pre() || denied || eeOn('pool'); } };
   })();
 
   /* ===== LOG-161追記③ (the user: 在未登入(電源)時兩下 // 可以叫出指令欄): the boot command bar. On the desktop's boot screen two '/' within
@@ -1024,7 +1020,7 @@
     function run(c) {
       var toks = c.trim().split(/\s+/).map(function (t) { return t.replace(/^-+/, ''); }).filter(function (t) { return t && t.toLowerCase() !== 'restart'; }), a = (toks[0] || '').toLowerCase();
       if (!a) return '';
-      if (a === 'login') { if (!pool.on()) return U.wish_offline; setTimeout(function () { location.href = pool.url() + '/auth/start'; }, 150); return '\u2026'; }
+      if (a === 'login') { if (!pool.on()) return U.wish_offline; pool.start(); return '\u2026'; }
       var eggs = toks.filter(function (t) { return /^EE_/i.test(t); }).map(function (t) { return t.replace(/^EE_/i, '').toLowerCase(); });
       if (!eggs.length || eggs.length !== toks.length) return U.term_unknown + c.trim();
       if (eggs.indexOf('@') >= 0) { eggs = eggs.filter(function (k) { return k !== '@'; }); eeGroup().forEach(function (k) { if (eggs.indexOf(k) < 0) eggs.push(k); }); }
@@ -5452,7 +5448,7 @@
     var tok = pool.token();
     var top = '<div class="wtop"><h2 style="margin:0">' + esc(U.app_wishpool) + ' \u00b7 ' + esc(U.wish_admin) + '</h2><span class="sp"></span>' + (tok ? '<div class="filter"><button type="button" class="on" data-t="wish">' + esc(U.wish_admin_wishes) + '</button><button type="button" data-t="bug">' + esc(U.wish_admin_bugs) + '</button></div><button type="button" class="btn sec logout">' + esc(U.wish_admin_logout) + '</button>' : '') + '</div>';
     if (!pool.on()) return top + '<p class="note">' + esc(U.wish_offline) + '</p>';
-    if (!tok) return top + (pool.denied() ? '<p class="note">' + esc(U.wish_admin_denied) + '</p>' : '') + '<p><a class="btn" href="' + esc(pool.url() + '/auth/start') + '">' + esc(U.wish_admin_login) + '</a></p>';
+    if (!tok) return top + (pool.denied() ? '<p class="note">' + esc(U.wish_admin_denied) + '</p>' : '') + '<p><button type="button" class="btn glogin">' + esc(U.wish_admin_login) + '</button></p>';
     return top + '<p class="who">' + esc(pool.who(U.wish_admin_who)) + '</p><div class="alist"><p class="note">' + esc(U.wish_loading) + '</p></div>';
   }
   function adminRow(it) {
@@ -5468,6 +5464,7 @@
   function wireAdmin(body) {
     var root = $('.wadmin', body), list = $('.alist', root), type = 'wish';
     var lo = $('.logout', root); if (lo) lo.addEventListener('click', function () { pool.logout(); RENDER.wishpool(body); });
+    var gl = $('.glogin', root); if (gl) gl.addEventListener('click', function () { pool.start(); });
     if (!list) return;
     function load() {
       list.innerHTML = '<p class="note">' + esc(U.wish_loading) + '</p>';
@@ -5505,7 +5502,7 @@
   function wishpoolHTML() {
     if (pool.pre() && !pool.info()) return totpHTML();
     if (pool.admin()) return '<div class="wish wadmin">' + adminHTML() + '</div>';
-    return '<div class="wish"><p class="intro">' + esc(U.wish_intro) + '</p><h2>' + esc(U.wish_make) + '</h2>' + wishFormHTML() + '<h2>' + esc(U.wish_wall) + '</h2><div class="wall"><p class="note">' + esc(pool.on() ? U.wish_loading : U.wish_offline) + '</p></div>' + (pool.on() ? '<p class="wlogin"><a href="' + esc(pool.url() + '/auth/start') + '">' + esc(U.wish_owner_login) + '</a></p>' : '') + '</div>';
+    return '<div class="wish"><p class="intro">' + esc(U.wish_intro) + '</p><h2>' + esc(U.wish_make) + '</h2>' + wishFormHTML() + '<h2>' + esc(U.wish_wall) + '</h2><div class="wall"><p class="note">' + esc(pool.on() ? U.wish_loading : U.wish_offline) + '</p></div></div>';   /* 追記⑤: no sign-in link on the public wall - the only door is the `login` command */
   }
 
   /* --- 合作聯絡: a card - the address (revealed on click, copied on request), what I do with a "write" button per line (mailto with a subject), the other places */
@@ -5887,7 +5884,7 @@
       if (a === 'about' || a === 'whoami') { openApp('about'); return '> ' + D.author + ' — ' + D.tagline; }
       if (a === 'play') { openApp('player'); player.toggle(); return ''; }
       if (a === 'lang') { switchLang(); return ''; }
-      if (a === 'login') { if (!pool.on()) return U.wish_offline; setTimeout(function () { location.href = pool.url() + '/auth/start'; }, 150); return '\u2026'; }   /* 追記③ */
+      if (a === 'login') { if (!pool.on()) return U.wish_offline; pool.start(); return '\u2026'; }   /* 追記③ */
       if ((a === 'desktop' || a === 'pc') && hooks.desktop) { hooks.desktop(); return ''; }
       if (a === 'clear') return '\u0000';
       var r = results(a); if (r.length) { pick(r[0]); return ''; }

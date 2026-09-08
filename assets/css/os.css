@@ -872,7 +872,6 @@ body.owner .menubar{background:linear-gradient(180deg,rgba(224,176,74,.30),rgba(
 body.owner .menubar .menubar-brand,body.owner .menubar #clock{color:#ffe9b8;text-shadow:0 0 8px rgba(224,176,74,.6)}
 body.owner .ph-status{background:linear-gradient(180deg,rgba(224,176,74,.34),rgba(224,176,74,.12));box-shadow:0 0 16px rgba(224,176,74,.35);color:#ffe9b8}
 .wadmin .who{font-size:.78rem;color:var(--dim);margin:-.3rem 0 .6rem}
-.wish .wlogin{text-align:right;margin:.6rem 0 0}.wish .wlogin a{color:var(--dim);font-size:.78rem;text-decoration:none;border-bottom:1px dotted var(--border)}.wish .wlogin a:hover{color:var(--accent)}
 /* LOG-161追記③: the boot command bar - two '/' on the desktop's boot screen, two taps on the phone's lock-screen clock */
 .boot-cmd{position:absolute;inset:0;z-index:300;display:flex;align-items:flex-end;justify-content:center;padding:0 12px 14vh;background:rgba(0,0,0,.25)}
 .bc-box{display:flex;align-items:center;gap:.5rem;width:min(520px,100%);background:rgba(10,12,18,.92);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:.55rem .8rem;box-shadow:0 12px 40px rgba(0,0,0,.6);font:14px var(--mono);color:var(--fg)}
