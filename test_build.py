@@ -205,6 +205,10 @@ def _leaves(v):
 _en = list(_leaves(B.loc_deep({k: v for k, v in _res.items() if not k.startswith("_")}, "en")))
 _leak = [s for s in _en if _CJK.search(s) and not _KANA.search(s)]   # a Japanese title keeps its kanji; anything else with CJK is Chinese leaking into English
 ok("English resume shows no Chinese (Japanese titles exempt)", not _leak, str(_leak))
+_pp = B.loc_deep(site.get("prank_pages") or {}, "en")
+_pleak = [x for x in _leaves({k: v for k, v in _pp.items() if not k.startswith("_")}) if _CJK.search(x)]
+ok("prank pages: English side has no Chinese, both pools present", not _pleak and len(_pp.get("serious", [])) >= 4 and len(_pp.get("silly", [])) >= 4, str(_pleak))
+ok("desktop shell embeds the prank pages", all('"prank"' in pages[f"{l}/index.html"] for l in ("zh", "en")))
 ok("school names never in Chinese", all(not _CJK.search(e["school"]) for e in _res["education"]))
 ok("Formosa Studio title is the 2026-09-08 one", any(c["title"]["zh"] in ("臺灣區域聯絡人 | 製作人助理", "臺灣區域聯絡人 / 製作人助理") for c in _res["current"]) and not any("端口" in json.dumps(c, ensure_ascii=False) for c in _res["current"]))
 

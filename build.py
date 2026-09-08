@@ -144,6 +144,13 @@ def bilingual(obj, path):
 def load_site():
     site = read_json(CONTENT / "site.json")
     site["resume"] = load_resume()
+    pp = site.get("prank_pages") or {"serious": [], "silly": []}
+    for pool in ("serious", "silly"):
+        for i, pg in enumerate(pp.get(pool) or []):
+            if not isinstance(pg.get("code"), int):
+                raise BuildError(f"site.json: prank_pages.{pool}[{i}].code must be an int")
+            bilingual(pg.get("name"), f"site.json:prank_pages.{pool}[{i}].name")
+            bilingual(pg.get("msg"), f"site.json:prank_pages.{pool}[{i}].msg")
     for key in ("author", "tagline", "hero_intro", "about_body"):
         bilingual(site.get(key), f"site.json:{key}")
     for k, v in site["nav"].items():
@@ -518,7 +525,7 @@ def build_pages(site, works, demos, articles):
         def home_data(lang):
           return {
             "lang": lang, "site_name": site["site_name"], "author": site["author"][lang], "tagline": site["tagline"][lang], "hero_intro": site["hero_intro"][lang],
-            "about": site["about_body"][lang], "contact": site["contact"], "resume": loc_deep(site["resume"], lang), "host": re.sub(r"^https?://", "", site["base_url"]).strip("/"),
+            "about": site["about_body"][lang], "contact": site["contact"], "resume": loc_deep(site["resume"], lang), "prank": loc_deep(site.get("prank_pages") or {"serious": [], "silly": []}, lang), "host": re.sub(r"^https?://", "", site["base_url"]).strip("/"),
             "ui": {k: v[lang] for k, v in site["ui"].items()},
             "fx": {name: {k: (local_versioned(v) if k in ("video", "sound") and v else v) for k, v in f.items() if not k.startswith("_")} for name, f in (site.get("fx") or {}).items()},
             "works": [loc(w) for w in works],

@@ -469,5 +469,177 @@
       "sound": "assets/fx/open.ogg",
       "_note": "plays when the boot screen appears IF the browser allows sound without a gesture (returning visitors / engaged origins); otherwise it plays on the boot click instead"
     }
+  },
+  "prank_pages": {
+    "_note": "LOG-160追記⑦: the About prank's fake error pages. Each run draws 4 serious + 4 silly, shuffled. zh shows Chinese, en English.",
+    "serious": [
+      {
+        "code": 404,
+        "name": {
+          "zh": "找不到頁面",
+          "en": "Not Found"
+        },
+        "msg": {
+          "zh": "伺服器上找不到 /about/。",
+          "en": "The requested URL /about/ was not found on this server."
+        }
+      },
+      {
+        "code": 502,
+        "name": {
+          "zh": "閘道錯誤",
+          "en": "Bad Gateway"
+        },
+        "msg": {
+          "zh": "上游伺服器回應了無效的內容。",
+          "en": "The server received an invalid response from the upstream server."
+        }
+      },
+      {
+        "code": 503,
+        "name": {
+          "zh": "服務暫時無法使用",
+          "en": "Service Unavailable"
+        },
+        "msg": {
+          "zh": "伺服器暫時無法處理這個請求，請稍後再試。",
+          "en": "The server is temporarily unable to handle the request. Please try again later."
+        }
+      },
+      {
+        "code": 500,
+        "name": {
+          "zh": "內部伺服器錯誤",
+          "en": "Internal Server Error"
+        },
+        "msg": {
+          "zh": "伺服器遇到了未預期的狀況，無法完成請求。",
+          "en": "The server encountered an unexpected condition that prevented it from completing the request."
+        }
+      },
+      {
+        "code": 504,
+        "name": {
+          "zh": "閘道逾時",
+          "en": "Gateway Timeout"
+        },
+        "msg": {
+          "zh": "上游伺服器沒有及時回應。",
+          "en": "The upstream server failed to respond in time."
+        }
+      },
+      {
+        "code": 403,
+        "name": {
+          "zh": "禁止存取",
+          "en": "Forbidden"
+        },
+        "msg": {
+          "zh": "你沒有權限存取這台伺服器上的 /about/。",
+          "en": "You don't have permission to access /about/ on this server."
+        }
+      }
+    ],
+    "silly": [
+      {
+        "code": 429,
+        "name": {
+          "zh": "塞太多貓咪了",
+          "en": "Too Many Cats"
+        },
+        "msg": {
+          "zh": "貓咪數量超過伺服器可承受上限。請稍後再貓。",
+          "en": "The number of cats exceeds what this server can hold. Please cat again later."
+        }
+      },
+      {
+        "code": 402,
+        "name": {
+          "zh": "Claude Token 用完了",
+          "en": "Claude Ran Out of Tokens"
+        },
+        "msg": {
+          "zh": "這一頁本來要請 AI 幫忙寫，但今天的額度已經用完。",
+          "en": "This page was going to be written with an AI's help, but today's budget is gone."
+        }
+      },
+      {
+        "code": 418,
+        "name": {
+          "zh": "我是一個茶壺",
+          "en": "I'm a teapot"
+        },
+        "msg": {
+          "zh": "伺服器拒絕煮咖啡，因為它永遠是一個茶壺。",
+          "en": "The server refuses to brew coffee because it is, permanently, a teapot."
+        }
+      },
+      {
+        "code": 507,
+        "name": {
+          "zh": "硬碟被 MIDI 塞滿了",
+          "en": "Disk Full of MIDI"
+        },
+        "msg": {
+          "zh": "有人把 .mid 檔當成備份格式。",
+          "en": "Someone has been using .mid files as a backup format."
+        }
+      },
+      {
+        "code": 503,
+        "name": {
+          "zh": "網站主人正在刷 FGO",
+          "en": "The Site Owner Is Grinding FGO"
+        },
+        "msg": {
+          "zh": "請等他把 AP 用完再試一次。",
+          "en": "Please try again once the AP is spent."
+        }
+      },
+      {
+        "code": 404,
+        "name": {
+          "zh": "找不到節拍",
+          "en": "Beat Not Found"
+        },
+        "msg": {
+          "zh": "拍子在第 17 小節之後遺失了，正在沿著小節線找回來。",
+          "en": "The beat went missing after bar 17. Search parties are walking the barlines."
+        }
+      },
+      {
+        "code": 500,
+        "name": {
+          "zh": "四台鋼琴同時爆音",
+          "en": "All Four Pianos Popped"
+        },
+        "msg": {
+          "zh": "已回報給 iOS。它說這是功能。",
+          "en": "Reported to iOS. It says this is a feature."
+        }
+      },
+      {
+        "code": 508,
+        "name": {
+          "zh": "進度線繞圈中",
+          "en": "The Play Line Is Looping"
+        },
+        "msg": {
+          "zh": "I loop 接不到 I End，請先回到 F、G 或 H。",
+          "en": "I loop cannot reach I End. Go back to F, G or H first."
+        }
+      },
+      {
+        "code": 451,
+        "name": {
+          "zh": "本頁因劇透彩蛋被封鎖",
+          "en": "Blocked for Spoiling an Easter Egg"
+        },
+        "msg": {
+          "zh": "公告不劇透。這一頁劇透了，所以沒有這一頁，但是 EE_midi restart。",
+          "en": "Announcements keep the surprises to themselves. This page didn't, so there is no page. But EE_midi restart."
+        }
+      }
+    ]
   }
 }

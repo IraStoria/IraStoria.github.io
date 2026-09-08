@@ -1690,7 +1690,12 @@
     updateDock();
   }
   var ABOUT_PRANK_CHANCE = 0.40, ABOUT_STEP_MS = 120, ABOUT_STEP_K = 1, ABOUT_STEP_MIN = 70, ABOUT_LEFT = 160, ABOUT_CASCADE = [34, 26],   /* STEP_MS: the gap between windows; STEP_K 1 = constant pace (追記④, the user: 連續開啟速度等速) - < 1 would make the stumble speed up, down to STEP_MIN. LEFT: the cascade starts this much left of centre */ ABOUT_W = { about: 500, resume: 580 }, ABOUT_H = 560, PRANK_SIZE = [460, 340], aboutRun = false;
-  var PRANK_PAGES = [[404, 'Not Found', 'The requested URL /about/ was not found on this server.'], [502, 'Bad Gateway', 'The server received an invalid response from the upstream server.'], [503, 'Service Unavailable', 'The server is temporarily unable to handle the request. Please try again later.'], [500, 'Internal Server Error', 'The server encountered an unexpected condition that prevented it from completing the request.'], [504, 'Gateway Timeout', 'The upstream server failed to respond in time.'], [403, 'Forbidden', 'You don\'t have permission to access /about/ on this server.'], [429, 'Too Many Requests', 'Slow down. This page is being opened far too often.'], [418, 'I\'m a teapot', 'The server refuses to brew coffee because it is, permanently, a teapot.']];
+  function prankDraw(n) {   /* 追記⑦ (the user: 錯誤連結中文的話顯示中文；除了正經的幾個以外塞一些無厘頭的): 4 serious + 4 silly from content/site.json (already in this language), shuffled */
+    var P = D.prank || {}, pick = function (pool, k) { var a = (pool || []).slice(), o = []; while (a.length && o.length < k) o.push(a.splice(Math.floor(Math.random() * a.length), 1)[0]); return o; };
+    var out = pick(P.serious, Math.ceil(n / 2)).concat(pick(P.silly, Math.floor(n / 2)));
+    while (out.length < n) out.push({ code: 500, name: 'Internal Server Error', msg: '' });
+    return pick(out, n);
+  }
   /* LOG-160 (the user: 打開頁面時讓他跟網頁打開時的設計依序打開不要同時，會逐漸往右下排列；40% 機率觸發惡搞彩蛋：10 個相似的視窗寫 404 / bad gateway 連續開啟，兩個真視窗夾在中間 4-6，第 10 個時顯示小錯誤欄＋貓咪彩蛋同音效同時間點，確定後只留兩個):
      the pair opens one window at a time, each a step down and to the right of the last. Four times in ten the About "page" misbehaves: ten Safari windows
      stumble open in a row - eight server error pages with the real bio and experience hidden among positions 4-6 - and the tenth brings a small error
@@ -1707,10 +1712,10 @@
     }
     var prank = Math.random() < ABOUT_PRANK_CHANCE, seq = [], i;
     if (prank) {
-      var slots = [[3, 4], [3, 5], [4, 5]][Math.floor(Math.random() * 3)], pages = PRANK_PAGES.slice(), off = Math.floor(Math.random() * pages.length), pi = 0;   /* the real two sit at two of positions 4-6 (1-based) */
+      var slots = [[3, 4], [3, 5], [4, 5]][Math.floor(Math.random() * 3)], pages = prankDraw(8), pi = 0;   /* the real two sit at two of positions 4-6 (1-based) */
       for (i = 0; i < 10; i++) {
         if (i === slots[0]) seq.push({ k: 'about' }); else if (i === slots[1]) seq.push({ k: 'resume' });
-        else { seq.push({ k: 'prank-' + i, page: pages[(off + pi) % pages.length], n: i + 1 }); pi++; }
+        else { seq.push({ k: 'prank-' + i, page: pages[pi % pages.length], n: i + 1 }); pi++; }
       }
     } else seq = [{ k: 'about' }, { k: 'resume' }];
     var x0 = Math.max(120, Math.round(vw / 2 - 250 - (seq.length - 1) * ABOUT_CASCADE[0] / 2) - ABOUT_LEFT), y0 = 44, at = 0, gap = ABOUT_STEP_MS;
@@ -1723,7 +1728,7 @@
         var pos = { x: x0 + idx * ABOUT_CASCADE[0], y: y0 + idx * ABOUT_CASCADE[1] };
         if (st.page) {
           pos.w = PRANK_SIZE[0]; pos.h = PRANK_SIZE[1];
-          wins[st.k] = createWindow(st.k, { safari: true, title: st.page[0] + ' ' + st.page[1], size: PRANK_SIZE, pos: pos, render: function (body, w) { body.innerHTML = prankPage(st.page, st.n); setAddr(w, 'about/?attempt=' + st.n); } });
+          wins[st.k] = createWindow(st.k, { safari: true, title: st.page.code + ' ' + st.page.name, size: PRANK_SIZE, pos: pos, render: function (body, w) { body.innerHTML = prankPage(st.page, st.n); setAddr(w, 'about/?attempt=' + st.n); } });
         } else {
           pos.w = ABOUT_W[st.k]; pos.h = H;
           wins[st.k] = createWindow(st.k, { safari: true, pos: pos });
@@ -1733,7 +1738,7 @@
       }, when);
     });
   }
-  function prankPage(pg, n) { return '<div class="errpg"><div class="code">' + pg[0] + '</div><div class="name">' + esc(pg[1]) + '</div><p>' + esc(pg[2]) + '</p><p class="srv">' + esc(D.host || '') + ' \u00b7 attempt ' + n + '/10</p></div>'; }
+  function prankPage(pg, n) { return '<div class="errpg"><div class="code">' + pg.code + '</div><div class="name">' + esc(pg.name) + '</div><p>' + esc(pg.msg) + '</p><p class="srv">' + esc(D.host || '') + ' \u00b7 attempt ' + n + '/10</p></div>'; }
   function prankDialog() {
     var vw = window.innerWidth, vh = window.innerHeight - 30, k = 'prank-dlg';
     var w = wins[k] = createWindow(k, { title: U.prank_title, glyph: '\u26a0', size: [420, 470], pos: { x: Math.round(vw / 2 - 210), y: Math.max(8, Math.round(vh / 2 - 235)), w: 420, h: 470 }, render: function (body) {
