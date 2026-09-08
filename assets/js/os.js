@@ -1694,7 +1694,8 @@
   try { lastPrank = sessionStorage.getItem('about_prank') === '1'; } catch (e) {}   /* 追記⑪ (the user: 這個彩蛋不會連續觸發): the prank never fires twice in a row - remembered across a reload */
   function prankDraw(n) {   /* 追記⑦/⑩/⑪: n fake pages, HALF serious and HALF silly (content/site.json, already in this language); every silly page marked always:true (the riddle) is in each draw.
      Order (the user: 第10個attempts必為正經，第9個必為惡搞): the last fake is serious, the one before it silly, the rest shuffled */
-    var P = D.prank || {}, pick = function (pool, k) { var a = (pool || []).slice(), o = []; while (a.length && o.length < k) o.push(a.splice(Math.floor(Math.random() * a.length), 1)[0]); return o; };
+    var P = D.prank || {}; ['serious', 'silly'].forEach(function (pool) { (P[pool] || []).forEach(function (p, i) { p.id = pool + ':' + i; }); });   /* 追記⑮: pool+index is the page's identity across languages - codes repeat across the pools (503/404/500 sit in both), so a look-up by code would turn a silly page into the serious one after a language switch and show one page twice */
+    var pick = function (pool, k) { var a = (pool || []).slice(), o = []; while (a.length && o.length < k) o.push(a.splice(Math.floor(Math.random() * a.length), 1)[0]); return o; };
     var half = Math.floor(n / 2), must = (P.silly || []).filter(function (p) { return p.always; }), rest = (P.silly || []).filter(function (p) { return !p.always; });
     var ser = pick(P.serious, n - half), sil = must.slice(0, half).concat(pick(rest, Math.max(0, half - must.length)));
     while (ser.length < n - half) ser.push({ code: 500, name: 'Internal Server Error', msg: '' });
@@ -1735,7 +1736,7 @@
         var pos = { x: x0 + idx * ABOUT_CASCADE[0], y: y0 + idx * ABOUT_CASCADE[1] };
         if (st.page) {
           pos.w = PRANK_SIZE[0]; pos.h = PRANK_SIZE[1];
-          wins[st.k] = createWindow(st.k, { safari: true, title: st.page.code + ' ' + st.page.name, size: PRANK_SIZE, pos: pos, render: function (body, w) { w.dataset.prankCode = String(st.page.code); w.dataset.prankN = String(st.n); body.innerHTML = prankPage(st.page, st.n); setAddr(w, 'about/?attempt=' + st.n); } });
+          wins[st.k] = createWindow(st.k, { safari: true, title: st.page.code + ' ' + st.page.name, size: PRANK_SIZE, pos: pos, render: function (body, w) { w.dataset.prankId = st.page.id || ''; w.dataset.prankN = String(st.n); body.innerHTML = prankPage(st.page, st.n); setAddr(w, 'about/?attempt=' + st.n); } });
         } else {
           pos.w = ABOUT_W[st.k]; pos.h = H;
           wins[st.k] = createWindow(st.k, { safari: true, pos: pos });
@@ -1746,12 +1747,12 @@
     });
   }
   function prankPage(pg, n) { return '<div class="errpg"><div class="code">' + pg.code + '</div><div class="name">' + esc(pg.name) + '</div><p>' + esc(pg.msg) + '</p><p class="srv">' + esc(D.host || '') + ' \u00b7 attempt ' + n + '/10</p></div>'; }
-  function prankFind(code) { var P = D.prank || {}, all = (P.serious || []).concat(P.silly || []); for (var i = 0; i < all.length; i++) if (String(all[i].code) === String(code)) return all[i]; return null; }
-  function relabelPranks() {   /* 追記⑭ (the user: 切換中英文時錯誤的解釋都還是維持中文): the fake error pages and the error dialog follow an in-place language switch - applyLang only re-renders the windows that have a TITLES entry, which these never had. Each fake page is looked up again by its code in the new language's pool; the dialog keeps its cat (only the words change) */
+  function prankFind(id) { var m = /^(serious|silly):(\d+)$/.exec(id || ''); return m ? (((D.prank || {})[m[1]] || [])[+m[2]] || null) : null; }   /* the padding pages (no id) keep their words */
+  function relabelPranks() {   /* 追記⑭ (the user: 切換中英文時錯誤的解釋都還是維持中文): the fake error pages and the error dialog follow an in-place language switch - applyLang only re-renders the windows that have a TITLES entry, which these never had. Each fake page is looked up again by pool+index (追記⑮: not by code - codes repeat across the pools) in the new language's data; the dialog keeps its cat (only the words change) */
     Object.keys(wins).forEach(function (k) {
       var w = wins[k];
       if (/^prank-\d/.test(k)) {
-        var pg = prankFind(w.dataset.prankCode), n = w.dataset.prankN; if (!pg) return;
+        var pg = prankFind(w.dataset.prankId), n = w.dataset.prankN; if (!pg) return;
         w.setAttribute('aria-label', pg.code + ' ' + pg.name); var a = $('.addr', w); if (a) a.title = pg.code + ' ' + pg.name;
         $('.win-body', w).innerHTML = prankPage(pg, n); setAddr(w, 'about/?attempt=' + n);
       } else if (k === 'prank-dlg') {
