@@ -840,6 +840,22 @@
     "contact_reveal": {
       "zh": "顯示 Email",
       "en": "Show email"
+    },
+    "owner_chip": {
+      "zh": "站主",
+      "en": "Owner"
+    },
+    "owner_tip": {
+      "zh": "已登入 {login} · 通行證到 {time} · 點擊開管理面板",
+      "en": "Signed in as {login} · pass valid until {time} · click for the panel"
+    },
+    "wish_admin_who": {
+      "zh": "已登入：{login} · 通行證到 {time}",
+      "en": "Signed in: {login} · pass valid until {time}"
+    },
+    "wish_owner_login": {
+      "zh": "站主登入",
+      "en": "Owner sign-in"
     }
   },
   "about_body": {

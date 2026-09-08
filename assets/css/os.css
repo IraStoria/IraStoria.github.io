@@ -867,3 +867,9 @@ body.to-en .ls-track{background:rgba(16,19,28,.30)}   /* the track changes colou
 .clinks{display:flex;gap:.4rem;flex-wrap:wrap;margin:0}
 .clinks a{display:inline-block;border:1px solid var(--border);border-radius:999px;padding:.2rem .7rem;font-size:12px;color:var(--fg);text-decoration:none}
 .clinks a:hover{border-color:var(--accent)}
+/* LOG-161追記②: the owner's chip - only while a pass is valid; the one glance that answers "am I signed in?" */
+#owner-chip{display:inline-flex;align-items:center;gap:.3rem;background:rgba(224,176,74,.16);border:1px solid rgba(224,176,74,.55);color:var(--accent);border-radius:999px;padding:.1rem .55rem;font:600 11px/1.4 var(--font);cursor:pointer;letter-spacing:.02em}
+#owner-chip:hover{background:rgba(224,176,74,.28)}
+#owner-chip[hidden]{display:none}
+.wadmin .who{font-size:.78rem;color:var(--dim);margin:-.3rem 0 .6rem}
+.wish .wlogin{text-align:right;margin:.6rem 0 0}.wish .wlogin a{color:var(--dim);font-size:.78rem;text-decoration:none;border-bottom:1px dotted var(--border)}.wish .wlogin a:hover{color:var(--accent)}

@@ -204,6 +204,7 @@
     caption.reset();
     Object.keys(wins).forEach(function (a) { var w = wins[a]; if (!TITLES[a]) return; w.setAttribute('aria-label', TITLES[a]); var tt = w.querySelector('.win-title'); if (tt) tt.innerHTML = '<span class="wg">' + (ICON[a] || GLYPH[a]) + '</span> ' + esc(TITLES[a]); var ft = w.querySelector('.win-foot a'); if (ft) ft.textContent = U.open_page; if (RENDER[a]) RENDER[a](w.querySelector('.win-body'), w); });
     relabelPranks();
+    pool.paintOwner();
   }
 
   // ============================================================ boot sequence
@@ -960,21 +961,31 @@
      local test. Empty = not wired: the apps show their offline copy and never fetch. The owner's pass arrives as #wp=<token> from the Worker's
      GitHub OAuth callback; it is moved into sessionStorage on load and the fragment becomes #desktop (straight to the desktop, no second boot). */
   var pool = (function () {
-    var qm = /[?&]pool=([^&#]+)/.exec(location.search), url = qm ? decodeURIComponent(qm[1]).replace(/\/$/, '') : (D.backend || ''), arrived = false, denied = false;
+    var qm = /[?&]pool=([^&#]+)/.exec(location.search), url = qm ? (qm[1] === 'off' ? '' : decodeURIComponent(qm[1]).replace(/\/$/, '')) : (D.backend || ''), arrived = false, denied = false;   /* ?pool=off = rehearse the not-wired state */
     var hm = /[#&]wp=([^&]+)/.exec(location.hash);
     if (hm) {
-      try { if (hm[1] === 'denied') denied = true; else { sessionStorage.setItem('wp_token', hm[1]); arrived = true; } } catch (e) {}
+      try { if (hm[1] === 'denied') denied = true; else { localStorage.setItem('wp_token', hm[1]); arrived = true; } } catch (e) {}   /* 追記②: localStorage - the pass (12 h) outlives the tab, so a new tab is still signed in */
       try { history.replaceState(null, '', location.pathname + location.search + '#desktop'); } catch (e) {}
     }
-    function token() { try { return sessionStorage.getItem('wp_token') || ''; } catch (e) { return ''; } }
-    function logout() { try { sessionStorage.removeItem('wp_token'); } catch (e) {} denied = false; }
+    function token() { try { return localStorage.getItem('wp_token') || sessionStorage.getItem('wp_token') || ''; } catch (e) { return ''; } }
+    function logout() { try { localStorage.removeItem('wp_token'); sessionStorage.removeItem('wp_token'); } catch (e) {} denied = false; paintOwner(); }
+    function info() {   /* the pass's payload (sub = login, exp = unix seconds); null when absent, malformed or expired - the Worker is still the judge, this only paints */
+      var t = token(), p = t.split('.')[0]; if (!p) return null;
+      try { var j = JSON.parse(atob(p.replace(/-/g, '+').replace(/_/g, '/'))); if (!j || typeof j.exp !== 'number' || j.exp * 1000 <= Date.now()) return null; return { login: String(j.sub || ''), exp: j.exp * 1000 }; } catch (e) { return null; }
+    }
+    function fmtExp(ms) { var d = new Date(ms), sameDay = new Date().toDateString() === d.toDateString(); return (sameDay ? '' : ('0' + (d.getMonth() + 1)).slice(-2) + '/' + ('0' + d.getDate()).slice(-2) + ' ') + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+    function who(tpl) { var i = info(); return i ? String(tpl || '').replace('{login}', i.login).replace('{time}', fmtExp(i.exp)) : ''; }
+    function paintOwner() {   /* the menubar chip: shown only while the pass is valid */
+      var chip = document.getElementById('owner-chip'); if (!chip) return;
+      var i = info(); chip.hidden = !i; if (i) { chip.textContent = '\ud83d\udd11 ' + U.owner_chip; chip.title = who(U.owner_tip); chip.setAttribute('aria-label', chip.title); }
+    }
     function req(method, path, body, auth) {
       var h = { 'Content-Type': 'application/json' }; if (auth) h.Authorization = 'Bearer ' + token();
       return fetch(url + path, { method: method, headers: h, body: body ? JSON.stringify(body) : undefined, mode: 'cors' })
         .then(function (r) { return r.json().then(function (j) { j = j || {}; j.http = r.status; return j; }, function () { return { ok: false, error: 'bad_json', http: r.status }; }); });
     }
     return { on: function () { return !!url; }, url: function () { return url; }, get: function (p, auth) { return req('GET', p, null, auth); }, post: function (p, b, auth) { return req('POST', p, b, auth); },
-             token: token, logout: logout, arrived: function () { return arrived; }, denied: function () { return denied; }, admin: function () { return !!token() || denied || eeOn('pool'); } };
+             token: token, logout: logout, info: info, who: who, paintOwner: paintOwner, arrived: function () { return arrived; }, denied: function () { return denied; }, admin: function () { return !!info() || denied || eeOn('pool'); } };
   })();
 
   var wins = {}, z = 20, dock = $('#dock'), windowsEl = $('#windows');
@@ -1041,6 +1052,7 @@
     var m = /[?&]app=([a-z]+)/.exec(location.search);
     if (m && APPS.indexOf(m[1]) >= 0) openApp(m[1]);
     if (pool.arrived() || pool.denied()) openApp('wishpool');   /* LOG-161: back from the Worker's GitHub OAuth callback */
+    var oc = document.getElementById('owner-chip'); if (oc) oc.addEventListener('click', function () { openApp('wishpool'); }); pool.paintOwner(); setInterval(pool.paintOwner, 60000);   /* 追記②: the chip follows the pass (and drops the moment it expires) */
     var sm = /[?&]stage=([a-z0-9-]+)/.exec(location.search);   // deep link from the static demo page: straight onto the stage
     if (sm) setTimeout(function () { openDemo('demos/' + sm[1]); }, 1200);
     updateDock();
@@ -5392,7 +5404,7 @@
     var top = '<div class="wtop"><h2 style="margin:0">' + esc(U.app_wishpool) + ' \u00b7 ' + esc(U.wish_admin) + '</h2><span class="sp"></span>' + (tok ? '<div class="filter"><button type="button" class="on" data-t="wish">' + esc(U.wish_admin_wishes) + '</button><button type="button" data-t="bug">' + esc(U.wish_admin_bugs) + '</button></div><button type="button" class="btn sec logout">' + esc(U.wish_admin_logout) + '</button>' : '') + '</div>';
     if (!pool.on()) return top + '<p class="note">' + esc(U.wish_offline) + '</p>';
     if (!tok) return top + (pool.denied() ? '<p class="note">' + esc(U.wish_admin_denied) + '</p>' : '') + '<p><a class="btn" href="' + esc(pool.url() + '/auth/start') + '">' + esc(U.wish_admin_login) + '</a></p>';
-    return top + '<div class="alist"><p class="note">' + esc(U.wish_loading) + '</p></div>';
+    return top + '<p class="who">' + esc(pool.who(U.wish_admin_who)) + '</p><div class="alist"><p class="note">' + esc(U.wish_loading) + '</p></div>';
   }
   function adminRow(it) {
     if (it.type === 'bug') {
@@ -5424,7 +5436,7 @@
       var say = function (t) { if (msg) { msg.textContent = t; setTimeout(function () { msg.textContent = ''; }, 1500); } };
       var update = function (patch) { patch.id = id; return pool.post('/admin/update', patch, true).then(function (r) { if (!r.ok) throw r; try { sessionStorage.removeItem('wishes'); } catch (e) {} return r; }); };
       if (b.classList.contains('ttoggle')) { var pre = $('pre.trail', row); if (pre) pre.hidden = !pre.hidden; return; }
-      if (b.classList.contains('del')) { b.disabled = true; pool.post('/admin/delete', { id: id }, true).then(function (r) { if (!r.ok) throw r; row.remove(); }).catch(function () { b.disabled = false; say(U.wish_error); }); return; }
+      if (b.classList.contains('del')) { b.disabled = true; pool.post('/admin/delete', { id: id }, true).then(function (r) { if (!r.ok) throw r; row.remove(); list._items = (list._items || []).filter(function (x) { return x.id !== id; }); if (!list.querySelector('.wrow')) list.innerHTML = '<p class="note">' + esc(U.wish_admin_empty) + '</p>'; }).catch(function () { b.disabled = false; say(U.wish_error); }); return; }
       if (b.classList.contains('read')) { update({ read: !it.read }).then(load).catch(function () { say(U.wish_error); }); return; }
       if (b.classList.contains('appr')) { update({ approved: !it.approved }).then(load).catch(function () { say(U.wish_error); }); return; }
       if (b.classList.contains('save')) { b.disabled = true; update({ status: $('.status', row).value, reply: $('.reply', row).value.trim(), replyLang: lang, link: $('.link', row).value.trim() }).then(function () { say(U.wish_admin_saved); load(); }).catch(function () { say(U.wish_error); }).then(function () { b.disabled = false; }); }
@@ -5433,7 +5445,7 @@
   }
   function wishpoolHTML() {
     if (pool.admin()) return '<div class="wish wadmin">' + adminHTML() + '</div>';
-    return '<div class="wish"><p class="intro">' + esc(U.wish_intro) + '</p><h2>' + esc(U.wish_make) + '</h2>' + wishFormHTML() + '<h2>' + esc(U.wish_wall) + '</h2><div class="wall"><p class="note">' + esc(pool.on() ? U.wish_loading : U.wish_offline) + '</p></div></div>';
+    return '<div class="wish"><p class="intro">' + esc(U.wish_intro) + '</p><h2>' + esc(U.wish_make) + '</h2>' + wishFormHTML() + '<h2>' + esc(U.wish_wall) + '</h2><div class="wall"><p class="note">' + esc(pool.on() ? U.wish_loading : U.wish_offline) + '</p></div>' + (pool.on() ? '<p class="wlogin"><a href="' + esc(pool.url() + '/auth/start') + '">' + esc(U.wish_owner_login) + '</a></p>' : '') + '</div>';
   }
 
   /* --- 合作聯絡: a card - the address (revealed on click, copied on request), what I do with a "write" button per line (mailto with a subject), the other places */
