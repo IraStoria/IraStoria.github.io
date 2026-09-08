@@ -1,0 +1,85 @@
+{
+  "_note": "LOG-161 feat.pillar: the Pillar of Shame's roster (content/bugs.json, hand-edited). status: fixed = 已伏法, open = 在逃, watch = 保釋觀察中 (fixed, awaiting real-device confirmation). where: desktop | phone | both. Humour is the point; never mention easter eggs here.",
+  "bugs": [
+    {
+      "id": "comment-ate-site", "date": "2026-08-28", "log": "LOG-036", "where": "both", "status": "fixed",
+      "title": { "zh": "一行註解吞掉整個網站", "en": "One comment ate the whole site" },
+      "desc": { "zh": "一個行內註解把後面的程式碼全數吃掉，壞掉的版本曾短暫上線。判決：部署前檢查沒串起來，連坐。", "en": "An inline comment swallowed the code after it and a broken build went live for a while. Verdict: the pre-deploy checks were not chained, so they hang together." }
+    },
+    {
+      "id": "boot-silent", "date": "2026-08-29", "log": "LOG-040", "where": "both", "status": "fixed",
+      "title": { "zh": "開機後音樂裝死", "en": "Music playing dead after boot" },
+      "desc": { "zh": "同一種註解、同一行、同一種吃法，這次吃掉的是變數宣告。累犯。", "en": "Same comment, same line, same appetite; this time it ate a variable declaration. Repeat offender." }
+    },
+    {
+      "id": "phone-loading-stuck", "date": "2026-08-29", "log": "LOG-048", "where": "phone", "status": "fixed",
+      "title": { "zh": "載入條卡在半路不動", "en": "The loading bar froze halfway" },
+      "desc": { "zh": "手機開段落播放器時二十個音檔同時解碼，解碼器直接躺平。改成排隊進場。", "en": "Opening the section player decoded twenty audio files at once and the decoder lay down on the job. They queue up now." }
+    },
+    {
+      "id": "seek-desync", "date": "2026-08-29", "log": "LOG-059", "where": "desktop", "status": "fixed",
+      "title": { "zh": "拖進度條，瀑布跟音樂各走各的", "en": "Drag the seek bar and the waterfall goes its own way" },
+      "desc": { "zh": "mp3 缺了標頭，瀏覽器只能用位元率猜位置，猜得很有創意。素材補標頭結案。", "en": "The mp3s had no header, so the browser guessed positions from the bitrate, creatively. Headers added, case closed." }
+    },
+    {
+      "id": "phone-baseline-drift", "date": "2026-08-30", "log": "LOG-104", "where": "phone", "status": "fixed",
+      "title": { "zh": "頻譜基準線越飄越高，然後不見了", "en": "The spectrum baseline drifted up and out of frame" },
+      "desc": { "zh": "手機比例算出負數，每一幀都往上疊一點，疊到離家出走。", "en": "A phone ratio came out negative and every frame nudged it upward until it left home." }
+    },
+    {
+      "id": "shell-in-shell", "date": "2026-08-30", "log": "LOG-104", "where": "phone", "status": "fixed",
+      "title": { "zh": "手機裡開出另一支手機", "en": "A phone opened inside the phone" },
+      "desc": { "zh": "展示頁裡的連結沒有指定跳出去，於是在殼裡再套一層殼。俄羅斯娃娃罪。", "en": "A link inside a demo did not say where to open, so it opened the shell inside the shell. Matryoshka offence." }
+    },
+    {
+      "id": "stage-next-double-audio", "date": "2026-09-02", "log": "LOG-117", "where": "desktop", "status": "fixed",
+      "title": { "zh": "舞台上按下一首，背景音樂也來湊熱鬧", "en": "Press next on stage and the background music joins in" },
+      "desc": { "zh": "上一首／下一首鍵沒問「現在是誰在放音樂」，兩路一起出聲。已教它先問。", "en": "Prev/next never asked who was holding the audio, so both played at once. It asks now." }
+    },
+    {
+      "id": "desktop-on-phone", "date": "2026-09-05", "log": "LOG-119", "where": "phone", "status": "open",
+      "title": { "zh": "手機開電腦版，版面自由發揮", "en": "Desktop mode on a phone: the layout freestyles" },
+      "desc": { "zh": "桌面殼在手機寬度沒有適配。入口先收進「尋找」裡（打「電腦版」），本體仍在逃。", "en": "The desktop shell has no phone-width layout. The entrance is tucked into Search (type 'desktop'); the culprit itself is still at large." }
+    },
+    {
+      "id": "safari-white-reflection", "date": "2026-09-05", "log": "LOG-121", "where": "desktop", "status": "open",
+      "title": { "zh": "Safari 的音量倒影偶爾整片變白", "en": "Safari's volume reflection sometimes goes solid white" },
+      "desc": { "zh": "Mac Safari 開段落播放器，右側倒影偶爾變成一塊不透明白色。疑似 canvas 疊遮罩的合成問題，尚未抓到現行犯。", "en": "On Mac Safari the right-hand reflection in the section player occasionally turns opaque white. Suspected canvas-plus-mask compositing; not caught in the act yet." }
+    },
+    {
+      "id": "letter-stutter", "date": "2026-09-05", "log": "LOG-121", "where": "desktop", "status": "fixed",
+      "title": { "zh": "字母換段時畫面頓一下", "en": "The frame hitches when the letters change section" },
+      "desc": { "zh": "預先烘焙的圖像排在畫面幀裡做，改到閒置時段去做。", "en": "Pre-baked images were built inside the frame; they are built in idle time now." }
+    },
+    {
+      "id": "queue-loops-forever", "date": "2026-09-05", "log": "LOG-127", "where": "phone", "status": "fixed",
+      "title": { "zh": "排好下一段，卻永遠重複這一段", "en": "Queued the next section, got this one forever" },
+      "desc": { "zh": "漏了一個 null 檢查，後面的音檔全部解碼失敗，只剩第一段陪你。只在慢連線發作，潛伏多日。", "en": "A missing null check made every later file fail to decode, leaving the first section to keep you company. Only on slow connections; it hid for days." }
+    },
+    {
+      "id": "ghost-vanishes", "date": "2026-09-06", "log": "LOG-129", "where": "phone", "status": "fixed",
+      "title": { "zh": "殘影該慢慢淡出，卻突然人間蒸發", "en": "The afterglow should fade, instead it vanished" },
+      "desc": { "zh": "手機瀏覽器的光暈模糊不理會透明度，改成先畫成一張圖再淡出。", "en": "The phone browser's glow blur ignored opacity; it is drawn to an offscreen image first and faded as a whole now." }
+    },
+    {
+      "id": "iphone-no-autoplay", "date": "2026-09-06", "log": "LOG-130", "where": "phone", "status": "fixed",
+      "title": { "zh": "iPhone 載入完，開場音樂不肯開口", "en": "iPhone loaded, the opening music would not speak" },
+      "desc": { "zh": "AudioContext 建立時機錯過手勢允許的一秒窗口。改成手勢當下就建。", "en": "The AudioContext was created after the one-second gesture window closed. It is created on the gesture now." }
+    },
+    {
+      "id": "landscape-dock-cut", "date": "2026-09-07", "log": "LOG-134", "where": "phone", "status": "fixed",
+      "title": { "zh": "橫向拿手機，dock 被切掉還滑不到", "en": "Landscape phone: the dock was cut off and unreachable" },
+      "desc": { "zh": "首頁內容比橫向螢幕高，又不准捲動。橫向版面另外壓縮。", "en": "The home screen was taller than a landscape viewport and refused to scroll. Landscape gets its own compact layout." }
+    },
+    {
+      "id": "title-behind-bars", "date": "2026-09-07", "log": "LOG-137", "where": "phone", "status": "fixed",
+      "title": { "zh": "曲名被同色頻譜條蓋住", "en": "The track title hid behind same-coloured bars" },
+      "desc": { "zh": "漸層染色的文字，陰影加在字上面而不是字後面，改了三輪。最後判決：字後面壓一層襯底，字不加陰影。", "en": "Gradient-filled text puts its shadow on top of the letters, not behind; three rounds later the verdict was a backing plate and no shadow at all." }
+    },
+    {
+      "id": "boot-pop", "date": "2026-09-08", "log": "LOG-157", "where": "phone", "status": "watch",
+      "title": { "zh": "開機偶爾一聲爆音", "en": "An occasional pop at boot" },
+      "desc": { "zh": "音訊元件在音訊環境就緒前搶先出聲。已修，等真機複驗後才准出獄。", "en": "An audio element spoke before the audio context was ready. Fixed, released on bail pending real-device confirmation." }
+    }
+  ]
+}

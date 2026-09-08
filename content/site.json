@@ -26,6 +26,52 @@
         "label": "GitHub",
         "url": "https://github.com/IraStoria"
       }
+    ],
+    "services": [
+      {
+        "key": "composition",
+        "label": {
+          "zh": "作曲／配樂",
+          "en": "Composition / scoring"
+        },
+        "desc": {
+          "zh": "遊戲、影像、互動作品的原創音樂",
+          "en": "Original music for games, film and interactive work"
+        }
+      },
+      {
+        "key": "game_audio",
+        "label": {
+          "zh": "遊戲音訊設計",
+          "en": "Game audio design"
+        },
+        "desc": {
+          "zh": "音效、互動音樂系統、Wwise 整合",
+          "en": "Sound design, interactive music systems, Wwise integration"
+        }
+      },
+      {
+        "key": "transcription",
+        "label": {
+          "zh": "採譜／編曲",
+          "en": "Transcription / arranging"
+        },
+        "desc": {
+          "zh": "聽寫成譜、改編、製譜",
+          "en": "Transcribing by ear, arranging, engraving"
+        }
+      },
+      {
+        "key": "tools",
+        "label": {
+          "zh": "音訊工具／插件",
+          "en": "Audio tools / plugins"
+        },
+        "desc": {
+          "zh": "DAW 周邊、製譜與音訊處理小工具",
+          "en": "DAW helpers, notation and audio-processing tools"
+        }
+      }
     ]
   },
   "nav": {
@@ -438,6 +484,362 @@
     "prank_ok": {
       "zh": "關閉彩蛋",
       "en": "Close the easter egg"
+    },
+    "app_pillar": {
+      "zh": "恥辱柱",
+      "en": "Pillar of Shame"
+    },
+    "app_wishpool": {
+      "zh": "許願池",
+      "en": "Wishing Well"
+    },
+    "app_contact": {
+      "zh": "合作聯絡",
+      "en": "Work With Me"
+    },
+    "pillar_intro": {
+      "zh": "被抓到過的 bug 都釘在這裡。修好的標「已伏法」，還沒抓到的標「在逃」。",
+      "en": "Every bug that has been caught is nailed up here. Fixed ones are marked executed; the rest are still at large."
+    },
+    "pillar_roster": {
+      "zh": "已知問題名冊",
+      "en": "Known offenders"
+    },
+    "pillar_report": {
+      "zh": "回報新的 bug",
+      "en": "Report a new bug"
+    },
+    "pillar_status_fixed": {
+      "zh": "已伏法",
+      "en": "Executed"
+    },
+    "pillar_status_open": {
+      "zh": "在逃",
+      "en": "At large"
+    },
+    "pillar_status_watch": {
+      "zh": "保釋觀察中",
+      "en": "Out on bail"
+    },
+    "pillar_where_desktop": {
+      "zh": "桌面",
+      "en": "Desktop"
+    },
+    "pillar_where_phone": {
+      "zh": "手機",
+      "en": "Phone"
+    },
+    "pillar_where_both": {
+      "zh": "兩殼",
+      "en": "Both shells"
+    },
+    "pillar_form_text": {
+      "zh": "發生了什麼？（做了什麼、看到什麼、原本預期什麼）",
+      "en": "What happened? (what you did, what you saw, what you expected)"
+    },
+    "pillar_form_nick": {
+      "zh": "暱稱（可留空）",
+      "en": "Nickname (optional)"
+    },
+    "pillar_trail_label": {
+      "zh": "附上這次瀏覽的操作軌跡",
+      "en": "Attach this visit's activity trail"
+    },
+    "pillar_trail_note": {
+      "zh": "只記這個分頁裡的操作：開了哪些 app、播放器動作、視窗大小、JS 錯誤。關掉分頁就消失，只有你按送出時才會附上。",
+      "en": "Only what happened in this tab: apps opened, player actions, window size, JS errors. It vanishes when the tab closes and is sent only when you press Send."
+    },
+    "pillar_trail_view": {
+      "zh": "查看內容",
+      "en": "View"
+    },
+    "pillar_trail_hide": {
+      "zh": "收起",
+      "en": "Hide"
+    },
+    "pillar_trail_empty": {
+      "zh": "（目前沒有記錄）",
+      "en": "(nothing recorded yet)"
+    },
+    "pillar_send": {
+      "zh": "送出",
+      "en": "Send"
+    },
+    "pillar_sending": {
+      "zh": "送出中…",
+      "en": "Sending…"
+    },
+    "pillar_sent": {
+      "zh": "收到了，已釘上柱子等候審判。",
+      "en": "Received. It has been nailed up to await trial."
+    },
+    "pillar_fail": {
+      "zh": "送不出去，稍後再試一次。",
+      "en": "Could not send. Please try again later."
+    },
+    "pillar_need": {
+      "zh": "至少寫一句發生了什麼。",
+      "en": "Write at least a sentence about what happened."
+    },
+    "pillar_offline": {
+      "zh": "回報通道還在挖。先用 Email 也行。",
+      "en": "The reporting channel is still being dug. Email works for now."
+    },
+    "pillar_email_btn": {
+      "zh": "用 Email 回報",
+      "en": "Report by email"
+    },
+    "pillar_email_subject": {
+      "zh": "[Bug] 恥辱柱回報",
+      "en": "[Bug] Pillar of Shame report"
+    },
+    "pillar_empty": {
+      "zh": "柱子上目前是空的。",
+      "en": "The pillar is empty for now."
+    },
+    "wish_intro": {
+      "zh": "想在這裡看到什麼？寫下來投進池裡；站主放行後會浮上牆。",
+      "en": "What would you like to see here? Drop it in; once approved it surfaces on the wall."
+    },
+    "wish_wall": {
+      "zh": "願望牆",
+      "en": "The wall"
+    },
+    "wish_make": {
+      "zh": "許個願",
+      "en": "Make a wish"
+    },
+    "wish_form_nick": {
+      "zh": "暱稱（必填）",
+      "en": "Nickname (required)"
+    },
+    "wish_form_cat": {
+      "zh": "類別",
+      "en": "Category"
+    },
+    "wish_form_text": {
+      "zh": "願望內容",
+      "en": "Your wish"
+    },
+    "wish_cat_transcription": {
+      "zh": "採譜",
+      "en": "Transcription"
+    },
+    "wish_cat_design": {
+      "zh": "設計",
+      "en": "Design"
+    },
+    "wish_cat_code": {
+      "zh": "程式（插件）",
+      "en": "Code (plugins)"
+    },
+    "wish_cat_feature": {
+      "zh": "功能",
+      "en": "Feature"
+    },
+    "wish_cat_interactive": {
+      "zh": "互動展示",
+      "en": "Interactive demo"
+    },
+    "wish_cat_other": {
+      "zh": "其他",
+      "en": "Other"
+    },
+    "wish_st_wishing": {
+      "zh": "許願中",
+      "en": "Wished"
+    },
+    "wish_st_considering": {
+      "zh": "考慮中",
+      "en": "Considering"
+    },
+    "wish_st_building": {
+      "zh": "施工中",
+      "en": "In progress"
+    },
+    "wish_st_done": {
+      "zh": "已實現",
+      "en": "Granted"
+    },
+    "wish_st_declined": {
+      "zh": "婉謝",
+      "en": "Declined"
+    },
+    "wish_send": {
+      "zh": "投進池裡",
+      "en": "Drop it in"
+    },
+    "wish_sending": {
+      "zh": "投遞中…",
+      "en": "Dropping…"
+    },
+    "wish_sent": {
+      "zh": "已投進池裡，站主放行後會出現在牆上。",
+      "en": "Dropped in. It shows up on the wall once approved."
+    },
+    "wish_mine": {
+      "zh": "審核中（只有你看得到）",
+      "en": "Pending review (only you can see this)"
+    },
+    "wish_vote": {
+      "zh": "+1 附議",
+      "en": "+1"
+    },
+    "wish_voted": {
+      "zh": "已附議",
+      "en": "Voted"
+    },
+    "wish_reply": {
+      "zh": "站主：",
+      "en": "Owner:"
+    },
+    "wish_link": {
+      "zh": "看成果 ↗",
+      "en": "See it ↗"
+    },
+    "wish_empty": {
+      "zh": "池子還是空的，第一個許願的人會是你。",
+      "en": "The well is empty. You would be the first."
+    },
+    "wish_offline": {
+      "zh": "池子還在挖，許願功能稍後開放。",
+      "en": "The well is still being dug; wishing opens soon."
+    },
+    "wish_loading": {
+      "zh": "撈願望中…",
+      "en": "Fetching wishes…"
+    },
+    "wish_error": {
+      "zh": "撈不到願望，稍後再試。",
+      "en": "Could not fetch wishes. Try again later."
+    },
+    "wish_fail": {
+      "zh": "投不進去，稍後再試。",
+      "en": "Could not submit. Try again later."
+    },
+    "wish_need": {
+      "zh": "暱稱和願望都要填。",
+      "en": "Nickname and wish are both required."
+    },
+    "wish_show_done": {
+      "zh": "顯示已實現與婉謝",
+      "en": "Show granted and declined"
+    },
+    "wish_hide_done": {
+      "zh": "收起已實現與婉謝",
+      "en": "Hide granted and declined"
+    },
+    "wish_admin": {
+      "zh": "管理",
+      "en": "Manage"
+    },
+    "wish_admin_login": {
+      "zh": "以 GitHub 登入",
+      "en": "Sign in with GitHub"
+    },
+    "wish_admin_denied": {
+      "zh": "不是本人，拒絕。",
+      "en": "Not the owner. Denied."
+    },
+    "wish_admin_expired": {
+      "zh": "通行證已過期，請重新登入。",
+      "en": "The pass has expired; sign in again."
+    },
+    "wish_admin_pending": {
+      "zh": "待審",
+      "en": "Pending"
+    },
+    "wish_admin_live": {
+      "zh": "已上牆",
+      "en": "Live"
+    },
+    "wish_admin_approve": {
+      "zh": "放行",
+      "en": "Approve"
+    },
+    "wish_admin_unapprove": {
+      "zh": "撤下",
+      "en": "Unpublish"
+    },
+    "wish_admin_delete": {
+      "zh": "刪除",
+      "en": "Delete"
+    },
+    "wish_admin_reply": {
+      "zh": "回覆一句",
+      "en": "Reply"
+    },
+    "wish_admin_link": {
+      "zh": "連結（work:id／app:key／demo:path）",
+      "en": "Link (work:id / app:key / demo:path)"
+    },
+    "wish_admin_save": {
+      "zh": "儲存",
+      "en": "Save"
+    },
+    "wish_admin_saved": {
+      "zh": "已儲存",
+      "en": "Saved"
+    },
+    "wish_admin_bugs": {
+      "zh": "恥辱柱收件匣",
+      "en": "Bug inbox"
+    },
+    "wish_admin_wishes": {
+      "zh": "願望",
+      "en": "Wishes"
+    },
+    "wish_admin_logout": {
+      "zh": "登出",
+      "en": "Sign out"
+    },
+    "wish_admin_empty": {
+      "zh": "沒有東西。",
+      "en": "Nothing here."
+    },
+    "wish_admin_trail": {
+      "zh": "軌跡",
+      "en": "Trail"
+    },
+    "wish_admin_read": {
+      "zh": "已讀",
+      "en": "Read"
+    },
+    "contact_intro": {
+      "zh": "找我合作的話，入口都在這裡。",
+      "en": "Everything you need to reach me for a project."
+    },
+    "contact_services": {
+      "zh": "可以找我做",
+      "en": "What I do"
+    },
+    "contact_write": {
+      "zh": "寫信",
+      "en": "Write"
+    },
+    "contact_bring": {
+      "zh": "邀約時請一併說明：專案類型、時程、預算範圍、參考作品。",
+      "en": "When you write, include the project type, timeline, budget range and references."
+    },
+    "contact_subject_prefix": {
+      "zh": "[合作]",
+      "en": "[Collab]"
+    },
+    "contact_links": {
+      "zh": "其他地方",
+      "en": "Elsewhere"
+    },
+    "contact_copy": {
+      "zh": "複製 Email",
+      "en": "Copy email"
+    },
+    "contact_copied": {
+      "zh": "已複製",
+      "en": "Copied"
+    },
+    "contact_reveal": {
+      "zh": "顯示 Email",
+      "en": "Show email"
     }
   },
   "about_body": {
@@ -636,8 +1038,8 @@
           "en": "Blocked for Spoiling an Easter Egg"
         },
         "msg": {
-          "zh": "公告不劇透。這一頁劇透了，所以沒有這一頁，但是 EE_midi restart。",
-          "en": "Announcements keep the surprises to themselves. This page didn't, so there is no page. But EE_midi restart."
+          "zh": "公告不劇透。這一頁劇透了，所以沒有這一頁，但是 --EE_midi restart。",
+          "en": "Announcements keep the surprises to themselves. This page didn't, so there is no page. But --EE_midi restart."
         },
         "always": true
       },
@@ -653,5 +1055,9 @@
         }
       }
     ]
+  },
+  "backend": {
+    "_note": "LOG-161 / ADR-008: the submissions Worker (worker/API.md). url = the workers.dev address WITHOUT a trailing slash; empty = not wired yet, the apps show their offline copy. ?pool=<url> overrides it at runtime for local testing.",
+    "url": ""
   }
 }

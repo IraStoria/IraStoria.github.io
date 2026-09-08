@@ -66,7 +66,7 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .lang-switch:focus-visible{outline:1px solid var(--accent);outline-offset:3px;border-radius:999px}
 
 .icons{position:absolute;top:48px;left:16px;display:grid;grid-template-columns:repeat(2,76px);gap:6px 4px;z-index:5}
-@media(min-width:700px) and (min-height:720px){.icons{grid-template-columns:76px}}   /* LOG-147 (the user: find 直接超出畫面，且近期更新與應用程式重疊): the single
+@media(min-width:700px) and (min-height:1050px){.icons{grid-template-columns:76px}}   /* LOG-161: nine icons now (恥辱柱／許願池／合作聯絡) - one column needs 48 + 9×~96 + the 136 px updates panel ≈ 1050 px; below that the two-column grid */   /* LOG-147 (the user: find 直接超出畫面，且近期更新與應用程式重疊): the single
    column is the desktop's look, but it was chosen on WIDTH alone while what it costs is HEIGHT - six icons need 574 px, and the updates panel sits
    136 px up from the bottom, so one column only works from about 720 px of viewport height. Below that the two-column grid (the base rule) is
    correct and everything clears. This also fixes a latent bug on real desktops: a browser window under ~700 px tall had the same collision. */
@@ -777,3 +777,93 @@ body.to-en .ls-track{background:rgba(16,19,28,.30)}   /* the track changes colou
 .prank-dlg{width:100%;text-align:center}.prank-dlg p{margin:.2rem 0 .8rem;font-size:.9rem}.prank-dlg .btns{display:flex;justify-content:center}.prank-dlg .ok{min-width:96px;padding:.35rem 1.1rem;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,.08);cursor:pointer}.prank-dlg .ok:hover{background:rgba(255,255,255,.16)}
 .prank-dlg .cat{display:flex;justify-content:center;margin:0 0 .7rem;min-height:40px}
 .fx-clip.fx-inline{position:relative;left:auto;top:auto;transform:none;display:block;border-radius:10px;max-width:100%}   /* 追記⑥: the cat lives inside the error dialog, not over it */
+
+/* ===== LOG-161: 恥辱柱 (feat.pillar) / 許願池 (feat.wishpool) / 合作聯絡 (feat.contact) — one family of forms and cards, both shells ===== */
+.win-body .intro{color:var(--dim);margin:0 0 .8rem}
+.win-body .note{color:var(--dim);font-size:.9rem}
+.win-body h3{margin:1rem 0 .4rem;font-size:.95rem;color:var(--accent);letter-spacing:.02em}
+.pform{display:flex;flex-direction:column;gap:.5rem;margin:.2rem 0 .6rem}
+.pform input,.pform textarea,.pform select{width:100%;box-sizing:border-box;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:10px;color:var(--fg);font:14px/1.45 var(--font);padding:.5rem .65rem;outline:none}
+.pform input:focus,.pform textarea:focus,.pform select:focus{border-color:var(--accent)}
+.pform textarea{min-height:88px;resize:vertical}
+.pform select{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--dim) 50%),linear-gradient(135deg,var(--dim) 50%,transparent 50%);background-position:calc(100% - 18px) 55%,calc(100% - 13px) 55%;background-size:5px 5px;background-repeat:no-repeat;padding-right:2rem}
+.pform select option{background:var(--win);color:var(--fg)}
+.pform .row{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+.pform .row>input,.pform .row>select{flex:1;min-width:140px}
+.pform label.chk{display:flex;gap:.5rem;align-items:flex-start;font-size:.85rem;color:var(--fg);cursor:pointer}
+.pform label.chk input{width:auto;margin:.2rem 0 0;accent-color:var(--accent)}
+.pform .small{font-size:.78rem;color:var(--dim);margin:0}
+.pform .small button{background:none;border:0;color:var(--accent2);cursor:pointer;font:inherit;padding:0 .2rem}
+.pform pre.trail{margin:0;max-height:160px;overflow:auto;font:11px/1.5 var(--mono);color:var(--dim);background:rgba(0,0,0,.25);border:1px solid var(--border);border-radius:8px;padding:.5rem .6rem;white-space:pre-wrap;word-break:break-word}
+.pform .actions{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
+.pform .msg{font-size:.85rem;color:var(--dim);margin:0}.pform .msg.ok{color:#8fd694}.pform .msg.err{color:#e07a7a}
+.btn.sec{background:rgba(255,255,255,.08);color:var(--fg);border:1px solid var(--border)}.btn.sec:hover{background:rgba(255,255,255,.14)}
+.btn:disabled{opacity:.5;cursor:default}
+.phone .pform input,.phone .pform textarea,.phone .pform select{font-size:16px}   /* iOS zooms into anything smaller */
+
+/* pillar: the roster */
+.pillar-list li{align-items:flex-start}
+.pb{flex:0 0 auto;min-width:5.4em;text-align:center;font:600 11px/1 var(--mono);letter-spacing:.04em;padding:.3rem .5rem;border-radius:6px;margin-top:.15rem;border:1px solid transparent;white-space:nowrap}
+.pb-fixed{color:#8fd694;border-color:rgba(143,214,148,.35);background:rgba(143,214,148,.08)}
+.pb-open{color:#e07a7a;border-color:rgba(224,122,122,.4);background:rgba(224,122,122,.1)}
+.pb-watch{color:var(--accent);border-color:rgba(224,176,74,.4);background:rgba(224,176,74,.1)}
+.pillar-list .d{margin-top:.15rem}.pillar-list .meta{margin-top:.25rem}
+
+/* wishpool: the wall */
+.wish .wgrp{margin:.2rem 0 .9rem}
+.wish .wgrp h3{display:flex;align-items:center;gap:.5rem;margin:.6rem 0 .4rem}
+.wish .wgrp h3 .cnt{font:11px var(--mono);color:var(--dim)}
+.wcard{background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:12px;padding:.55rem .7rem;margin:0 0 .45rem;font-size:.9rem}
+.wcard.mine{border-style:dashed;opacity:.85}
+.wcard .wh{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.25rem}
+.wcard .nick{font-weight:600}
+.wcard .cat{font:11px var(--mono);color:var(--dim);border:1px solid var(--border);border-radius:999px;padding:.1rem .5rem}
+.wcard .when{font:11px var(--mono);color:#777;margin-left:auto}
+.wcard .txt{margin:0;white-space:pre-wrap;word-break:break-word}
+.wcard .wf{display:flex;align-items:center;gap:.6rem;margin-top:.4rem;flex-wrap:wrap}
+.wcard .vote{background:transparent;border:1px solid var(--border);color:var(--fg);border-radius:999px;padding:.15rem .6rem;font-size:12px;cursor:pointer}
+.wcard .vote.on{border-color:var(--accent);color:var(--accent)}.wcard .vote:disabled{cursor:default}
+.wcard .wl{background:none;border:0;color:var(--accent2);cursor:pointer;font:inherit;font-size:12px;padding:0}
+.wcard .reply{margin:.4rem 0 0;padding:.35rem .55rem;border-left:2px solid var(--accent);background:rgba(224,176,74,.06);border-radius:0 8px 8px 0;font-size:.85rem}
+.wcard .reply b{color:var(--accent);font-weight:600;margin-right:.3rem}
+.wst{font:600 11px/1 var(--mono);letter-spacing:.04em;padding:.25rem .5rem;border-radius:6px;border:1px solid transparent;white-space:nowrap}
+.wst-wishing{color:var(--dim);border-color:var(--border)}
+.wst-considering{color:var(--accent2);border-color:rgba(95,179,201,.4);background:rgba(95,179,201,.08)}
+.wst-building{color:var(--accent);border-color:rgba(224,176,74,.4);background:rgba(224,176,74,.1)}
+.wst-done{color:#8fd694;border-color:rgba(143,214,148,.35);background:rgba(143,214,148,.08)}
+.wst-declined{color:#999;border-color:var(--border);text-decoration:line-through}
+.wish .fold{background:none;border:1px solid var(--border);color:var(--dim);border-radius:999px;padding:.2rem .8rem;font-size:12px;cursor:pointer;margin:.2rem 0 .6rem}
+.wish .fold:hover{color:var(--fg)}
+/* wishpool: the owner's panel */
+.wadmin .wtop{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.6rem}
+.wadmin .wtop .sp{flex:1}
+.wrow{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:.55rem .7rem;margin:0 0 .5rem;font-size:.88rem}
+.wrow.pending{border-color:rgba(224,176,74,.45)}
+.wrow .wh{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.3rem}
+.wrow .wh .when{font:11px var(--mono);color:#777}
+.wrow .txt{margin:0 0 .4rem;white-space:pre-wrap;word-break:break-word}
+.wrow .ctl{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center}
+.wrow .ctl input,.wrow .ctl select{background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--fg);font:13px var(--font);padding:.3rem .5rem;outline:none}
+.wrow .ctl input.reply{flex:1;min-width:160px}.wrow .ctl input.link{width:200px}
+.wrow .ctl select option{background:var(--win)}
+.wrow .ctl .btn{padding:.25rem .7rem;font-size:.8rem}
+.wrow .ctl .danger{color:#e07a7a;border-color:rgba(224,122,122,.4)}
+.wrow pre.trail{margin:.3rem 0 0;max-height:220px;overflow:auto;font:11px/1.5 var(--mono);color:var(--dim);background:rgba(0,0,0,.25);border:1px solid var(--border);border-radius:8px;padding:.5rem .6rem;white-space:pre-wrap;word-break:break-word}
+.wrow .meta{font:11px var(--mono);color:#777;margin:.2rem 0 0}
+
+/* contact: the card */
+.ccard{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:16px;padding:1rem 1.1rem}
+.ccard h2{margin:0 0 .1rem}.ccard .tag{margin:0 0 .7rem;color:var(--dim)}
+.ccard .crow{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;padding:.5rem 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.ccard .crow .lbl{color:var(--dim);font-size:.85rem}
+.ccard .crow a{color:var(--accent2)}
+.ccard .crow .btn{margin-left:auto}
+.svc{list-style:none;margin:0;padding:0}
+.svc li{display:flex;align-items:center;gap:.8rem;padding:.55rem 0;border-bottom:1px solid var(--border)}
+.svc li:last-child{border-bottom:0}
+.svc li>div{flex:1}.svc .t{font-weight:600}.svc .d{color:var(--dim);font-size:.85rem}
+.svc .btn{flex:0 0 auto;padding:.25rem .7rem;font-size:.8rem}
+.ccard .bring{color:var(--dim);font-size:.82rem;margin:.6rem 0 0}
+.clinks{display:flex;gap:.4rem;flex-wrap:wrap;margin:0}
+.clinks a{display:inline-block;border:1px solid var(--border);border-radius:999px;padding:.2rem .7rem;font-size:12px;color:var(--fg);text-decoration:none}
+.clinks a:hover{border-color:var(--accent)}

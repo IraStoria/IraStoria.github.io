@@ -212,6 +212,29 @@ ok("desktop shell embeds the prank pages", all('"prank"' in pages[f"{l}/index.ht
 ok("school names never in Chinese", all(not _CJK.search(e["school"]) for e in _res["education"]))
 ok("Formosa Studio title is the 2026-09-08 one", any(c["title"]["zh"] in ("臺灣區域聯絡人 | 製作人助理", "臺灣區域聯絡人 / 製作人助理") for c in _res["current"]) and not any("端口" in json.dumps(c, ensure_ascii=False) for c in _res["current"]))
 
+# ---- LOG-161: 恥辱柱 / 許願池 / 合作聯絡
+_bugs = B.load_bugs()
+ok("bugs.json loads, newest first, >= 10 entries", len(_bugs) >= 10 and all(_bugs[i]["date"] >= _bugs[i + 1]["date"] for i in range(len(_bugs) - 1)), str(len(_bugs)))
+_bleak = [b["id"] for b in B.loc_deep(_bugs, "en") if _CJK.search(b["title"] + b["desc"])]
+ok("bugs: English side has no Chinese", not _bleak, str(_bleak))
+_spoil = [b["id"] for b in _bugs if re.search(r"彩蛋|EE_|easter|secret|隱藏曲", json.dumps(b, ensure_ascii=False), re.I)]
+ok("bugs: the roster never mentions easter eggs (不劇透)", not _spoil, str(_spoil))
+_b1 = copy.deepcopy(_bugs)
+expect_refused("bugs: unknown status refused", lambda: B.load_bugs({"bugs": [dict(_b1[0], status="zombie")]}), "status")
+expect_refused("bugs: unknown where refused", lambda: B.load_bugs({"bugs": [dict(_b1[0], where="tablet")]}), "where")
+expect_refused("bugs: missing English title refused", lambda: B.load_bugs({"bugs": [dict(_b1[0], title={"zh": _b1[0]["title"]["zh"]})]}), "missing or empty 'en'")
+expect_refused("bugs: duplicate id refused", lambda: B.load_bugs({"bugs": [_b1[0], dict(_b1[1], id=_b1[0]["id"])]}), "duplicate")
+ok("ui has the three app names", all(k in site["ui"] for k in ("app_pillar", "app_wishpool", "app_contact")))
+ok("desktop shell embeds bugs + backend + contact services", all('"bugs"' in pages[f"{l}/index.html"] and '"backend"' in pages[f"{l}/index.html"] and '"services"' in pages[f"{l}/index.html"] for l in ("zh", "en")))
+ok("desktop template carries the three icons", all(f'data-app="{a}"' in pages["zh/index.html"] for a in ("pillar", "wishpool", "contact")))
+ok("contact services: four, bilingual", len(site["contact"]["services"]) == 4 and all(not _CJK.search(s["label"]["en"] + s["desc"]["en"]) for s in site["contact"]["services"]))
+expect_refused("backend.url with a trailing slash refused", lambda: B.backend_url({"backend": {"url": "https://pool.example.workers.dev/"}}), "trailing")
+expect_refused("backend.url without a scheme refused", lambda: B.backend_url({"backend": {"url": "pool.example.workers.dev"}}), "http(s)")
+ok("backend.url empty is fine (not wired)", B.backend_url({"backend": {"url": ""}}) == "")
+ok("worker contract + script + deploy guide present", all((ROOT / "worker" / f).exists() for f in ("API.md", "worker.js", "DEPLOY.md", "test_worker.mjs")))
+ok("worker.js carries no secret", not re.search(r"(ghp_|gho_)[A-Za-z0-9]{20,}|client_secret\s*[:=]\s*['\"][^'\"]{8,}", (ROOT / "worker" / "worker.js").read_text(encoding="utf-8")))
+
+
 # ---- report
 fails = [r for r in results if not r[0]]
 for okk, name, msg in results:

@@ -111,6 +111,42 @@ def loc_deep(v, lang):
     return v
 
 
+BUG_STATUS = ("fixed", "open", "watch")
+BUG_WHERE = ("desktop", "phone", "both")
+
+
+def load_bugs(data=None):
+    """content/bugs.json (LOG-161, feat.pillar): {bugs:[{id, date, log, where, status, title{zh,en}, desc{zh,en}}]} → validated, newest first."""
+    fp = CONTENT / "bugs.json"
+    if data is None:
+        data = read_json(fp) if fp.exists() else {"bugs": []}
+    bugs = data.get("bugs") if isinstance(data, dict) else None
+    if not isinstance(bugs, list):
+        raise BuildError("bugs.json: 'bugs' must be a list")
+    seen = set()
+    for i, bg in enumerate(bugs):
+        if not isinstance(bg, dict) or not bg.get("id") or not bg.get("date"):
+            raise BuildError(f"bugs.json[{i}]: 'id' and 'date' required")
+        if bg["id"] in seen:
+            raise BuildError(f"bugs.json[{i}]: duplicate id '{bg['id']}'")
+        seen.add(bg["id"])
+        if bg.get("status") not in BUG_STATUS:
+            raise BuildError(f"bugs.json[{i}]: status must be one of {BUG_STATUS}")
+        if bg.get("where") not in BUG_WHERE:
+            raise BuildError(f"bugs.json[{i}]: where must be one of {BUG_WHERE}")
+        bilingual(bg.get("title"), f"bugs.json[{i}].title")
+        bilingual(bg.get("desc"), f"bugs.json[{i}].desc")
+    return sorted(bugs, key=lambda x: x["date"], reverse=True)
+
+
+def backend_url(site):
+    """site.json backend.url (LOG-161 / ADR-008): '' = not wired; otherwise an http(s) origin without a trailing slash."""
+    url = (site.get("backend") or {}).get("url") or ""
+    if url and (not re.match(r"^https?://", url) or url.endswith("/")):
+        raise BuildError("site.json: backend.url must start with http(s):// and have no trailing slash")
+    return url
+
+
 def load_updates():
     """content/updates.json (optional): [{date, zh, en}] → validated, newest first."""
     fp = CONTENT / "updates.json"
@@ -144,6 +180,13 @@ def bilingual(obj, path):
 def load_site():
     site = read_json(CONTENT / "site.json")
     site["resume"] = load_resume()
+    site["bugs"] = load_bugs()
+    for i, sv in enumerate((site.get("contact") or {}).get("services") or []):
+        if not sv.get("key"):
+            raise BuildError(f"site.json: contact.services[{i}].key required")
+        bilingual(sv.get("label"), f"site.json:contact.services[{i}].label")
+        bilingual(sv.get("desc"), f"site.json:contact.services[{i}].desc")
+    backend_url(site)
     pp = site.get("prank_pages") or {"serious": [], "silly": []}
     for pool in ("serious", "silly"):
         for i, pg in enumerate(pp.get(pool) or []):
@@ -525,7 +568,7 @@ def build_pages(site, works, demos, articles):
         def home_data(lang):
           return {
             "lang": lang, "site_name": site["site_name"], "author": site["author"][lang], "tagline": site["tagline"][lang], "hero_intro": site["hero_intro"][lang],
-            "about": site["about_body"][lang], "contact": site["contact"], "resume": loc_deep(site["resume"], lang), "prank": loc_deep(site.get("prank_pages") or {"serious": [], "silly": []}, lang), "host": re.sub(r"^https?://", "", site["base_url"]).strip("/"),
+            "about": site["about_body"][lang], "contact": loc_deep(site["contact"], lang), "resume": loc_deep(site["resume"], lang), "bugs": loc_deep(site["bugs"], lang), "backend": backend_url(site), "prank": loc_deep(site.get("prank_pages") or {"serious": [], "silly": []}, lang), "host": re.sub(r"^https?://", "", site["base_url"]).strip("/"),
             "ui": {k: v[lang] for k, v in site["ui"].items()},
             "fx": {name: {k: (local_versioned(v) if k in ("video", "sound") and v else v) for k, v in f.items() if not k.startswith("_")} for name, f in (site.get("fx") or {}).items()},
             "works": [loc(w) for w in works],
@@ -544,7 +587,7 @@ def build_pages(site, works, demos, articles):
                     "meta_desc": esc(site["hero_intro"][lang]), "author": esc(site["author"][lang]), "hero_intro": esc(site["hero_intro"][lang]),
                     "lang_switch": L("lang_switch"), "sticky": L("sticky"), "site_data": site_json}
         home_ctx.update(asset_versions())
-        for k in ("boot_power", "boot_continue", "os_name", "app_works", "app_demos", "app_articles", "app_about", "app_player", "app_terminal", "desk_hint", "ph_unlock", "ph_lock_line", "player_now", "app_updates", "updates_hide"):
+        for k in ("boot_power", "boot_continue", "os_name", "app_works", "app_demos", "app_articles", "app_about", "app_player", "app_terminal", "app_pillar", "app_wishpool", "app_contact", "desk_hint", "ph_unlock", "ph_lock_line", "player_now", "app_updates", "updates_hide"):
             home_ctx["ui_" + k] = L(k)
         out[f"{lang}/index.html"] = render(tpl("desktop"), home_ctx)
 

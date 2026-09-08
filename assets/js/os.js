@@ -91,6 +91,7 @@
     hb:   { grp: 1 },
     st:   { grp: 1, once: 1 },
     '404': { grp: 1, once: 1 },   /* LOG-160追記⑬: the About prank (the ten broken pages) - forced on the next About opening */
+    pool: {},   /* LOG-161 (ADR-009): opens the Wishing Well as the owner's panel for this visit; the panel only SHOWS - every write is checked by the Worker */
     v6:   { mode: 'basic', rank: 1 },
     v6_p: { mode: 'basic', rank: 1 },
     v6_m: { grp: 1, mode: 'midi', rank: 2 },
@@ -178,6 +179,7 @@
   }
   function applyLang(nd) {
     var od = D; D = nd; ALT = od; U = D.ui; lang = D.lang;
+    trail.log('lang', lang);
     try { localStorage.setItem('lang', lang); } catch (e) {}
     var other = lang === 'zh' ? 'en' : 'zh';
     document.documentElement.lang = lang === 'zh' ? 'zh-Hant' : 'en'; document.body.setAttribute('data-lang', lang);
@@ -188,7 +190,7 @@
     var mid = $('.menubar-mid'); if (mid) mid.textContent = D.tagline;
     if (bootContinue) bootContinue.textContent = U.boot_continue;
     if (sw) { sw.setAttribute('data-lang-switch', other); sw.setAttribute('href', '../' + other + '/'); sw.title = U.lang_switch; sw.setAttribute('aria-label', U.lang_switch); sw.setAttribute('aria-checked', lang === 'zh' ? 'true' : 'false'); }   // the knob itself follows body[data-lang] via CSS
-    TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, resume: U.app_resume, terminal: U.app_terminal, updates: U.app_updates };
+    TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, resume: U.app_resume, terminal: U.app_terminal, updates: U.app_updates, pillar: U.app_pillar, wishpool: U.app_wishpool, contact: U.app_contact };
     if (PHONE && phone) phone.relabel();
     document.querySelectorAll('.icon[data-app]').forEach(function (b) { var t = b.querySelector('span:last-child'); if (t) t.textContent = TITLES[b.getAttribute('data-app')]; var g = b.querySelector('.glyph'); if (g && ICON[b.getAttribute('data-app')]) g.innerHTML = ICON[b.getAttribute('data-app')]; });
     document.querySelectorAll('#dock button[data-app]').forEach(function (b) { var a = b.getAttribute('data-app'); b.innerHTML = '<span>' + (ICON[a] || GLYPH[a]) + '</span>' + esc(TITLES[a]); });
@@ -932,11 +934,54 @@
   })();
 
   // ============================================================ desktop
+  /* ===== LOG-161 (ADR-007): the visit's activity trail for the Pillar of Shame. A ring in memory + sessionStorage (gone with the tab); it is
+     attached to a bug report ONLY when the visitor presses Send with the box ticked - nothing is ever uploaded on its own. Easter-egg traffic
+     (prank windows, secret tracks) is never written: the trail may travel a public channel one day (ADR-007 衍生鐵則). */
+  var trail = (function () {
+    var MAX = 120, buf = [], t0 = performance.now(), KEY = 'trail';
+    try { buf = JSON.parse(sessionStorage.getItem(KEY) || '[]'); if (!Array.isArray(buf)) buf = []; } catch (e) { buf = []; }
+    function hidden(d) { d = String(d || ''); return /^prank-/.test(d) || SECRET_IDS.indexOf(d) >= 0; }
+    function log(k, d) {
+      if (hidden(d)) return;
+      buf.push({ t: Math.round((performance.now() - t0) / 100) / 10, k: k, d: d == null ? '' : String(d).slice(0, 120) });
+      if (buf.length > MAX) buf.splice(0, buf.length - MAX);
+      try { sessionStorage.setItem(KEY, JSON.stringify(buf)); } catch (e) {}
+    }
+    window.addEventListener('error', function (e) { log('error', (e.message || '') + ' @' + ((e.filename || '').split('/').pop()) + ':' + e.lineno); });
+    window.addEventListener('unhandledrejection', function (e) { var r = e.reason; log('reject', (r && (r.message || String(r))) || ''); });
+    var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { log('size', window.innerWidth + 'x' + window.innerHeight); }, 400); });
+    function ver() { var sc = document.querySelector('script[src*="os.js"]'), m = sc && /[?&]v=([0-9a-f]+)/.exec(sc.getAttribute('src') || ''); return m ? m[1] : ''; }
+    function meta() { return { shell: PHONE ? 'phone' : 'desktop', ua: navigator.userAgent.slice(0, 400), vw: window.innerWidth, vh: window.innerHeight, ver: ver(), page: (location.pathname + location.search).slice(0, 300) }; }
+    function lines() { return buf.map(function (e) { return e.t.toFixed(1) + 's ' + e.k + (e.d ? ' ' + e.d : ''); }); }
+    log('visit', (PHONE ? 'phone' : 'desktop') + ' ' + lang + ' ' + window.innerWidth + 'x' + window.innerHeight);
+    return { log: log, lines: lines, meta: meta };
+  })();
+  /* ===== LOG-161 (ADR-008/009): the submissions Worker client (worker/API.md). The address is site.json backend.url; ?pool=<url> overrides it for a
+     local test. Empty = not wired: the apps show their offline copy and never fetch. The owner's pass arrives as #wp=<token> from the Worker's
+     GitHub OAuth callback; it is moved into sessionStorage on load and the fragment becomes #desktop (straight to the desktop, no second boot). */
+  var pool = (function () {
+    var qm = /[?&]pool=([^&#]+)/.exec(location.search), url = qm ? decodeURIComponent(qm[1]).replace(/\/$/, '') : (D.backend || ''), arrived = false, denied = false;
+    var hm = /[#&]wp=([^&]+)/.exec(location.hash);
+    if (hm) {
+      try { if (hm[1] === 'denied') denied = true; else { sessionStorage.setItem('wp_token', hm[1]); arrived = true; } } catch (e) {}
+      try { history.replaceState(null, '', location.pathname + location.search + '#desktop'); } catch (e) {}
+    }
+    function token() { try { return sessionStorage.getItem('wp_token') || ''; } catch (e) { return ''; } }
+    function logout() { try { sessionStorage.removeItem('wp_token'); } catch (e) {} denied = false; }
+    function req(method, path, body, auth) {
+      var h = { 'Content-Type': 'application/json' }; if (auth) h.Authorization = 'Bearer ' + token();
+      return fetch(url + path, { method: method, headers: h, body: body ? JSON.stringify(body) : undefined, mode: 'cors' })
+        .then(function (r) { return r.json().then(function (j) { j = j || {}; j.http = r.status; return j; }, function () { return { ok: false, error: 'bad_json', http: r.status }; }); });
+    }
+    return { on: function () { return !!url; }, url: function () { return url; }, get: function (p, auth) { return req('GET', p, null, auth); }, post: function (p, b, auth) { return req('POST', p, b, auth); },
+             token: token, logout: logout, arrived: function () { return arrived; }, denied: function () { return denied; }, admin: function () { return !!token() || denied || eeOn('pool'); } };
+  })();
+
   var wins = {}, z = 20, dock = $('#dock'), windowsEl = $('#windows');
-  var APPS = ['works', 'demos', 'player', 'articles', 'about', 'terminal'];
-  var TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, resume: U.app_resume, terminal: U.app_terminal, updates: U.app_updates };
+  var APPS = ['works', 'demos', 'player', 'articles', 'about', 'terminal', 'pillar', 'wishpool', 'contact'];   /* LOG-161: 恥辱柱 / 許願池 / 合作聯絡 */
+  var TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, resume: U.app_resume, terminal: U.app_terminal, updates: U.app_updates, pillar: U.app_pillar, wishpool: U.app_wishpool, contact: U.app_contact };
   var PAGES = { works: 'works/', demos: 'demos/', articles: 'articles/', about: 'about/' };
-  var GLYPH = { works: '🎼', demos: '🎛️', player: '▶️', articles: '📝', about: '👤', terminal: '🔍', updates: '💬' };   /* desktop shell + window titles */
+  var GLYPH = { works: '🎼', demos: '🎛️', player: '▶️', articles: '📝', about: '👤', terminal: '🔍', updates: '💬', pillar: '🏛️', wishpool: '🪙', contact: '✉️' };   /* desktop shell + window titles */
   /* both shells: monochrome line icons instead of emoji (desktop icons / dock / window titles / search, phone tiles / dock) */
   var ICON = {
     works: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18M3 12h18M3 17h18"/><circle cx="14" cy="15.5" r="2.3" fill="#0b0d12"/><path d="M16.3 15.5V5.5"/></svg>',
@@ -946,6 +991,9 @@
     updates: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" stroke-linejoin="round"/></svg>',
     about: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>',
     terminal: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>',
+    pillar: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v13M15 6v13"/><path d="M5 19h14M6 6h12l-1-2.5H7z" stroke-linejoin="round"/><path d="M4 21h16"/></svg>',   /* LOG-161: a column with cap and plinth - the pillar */
+    wishpool: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="17" rx="8" ry="3"/><path d="M4 17v-4c0-1.7 3.6-3 8-3s8 1.3 8 3v4"/><circle cx="12" cy="5" r="1.6"/><path d="M12 6.6V10"/></svg>',   /* a well with a coin on its way down */
+    contact: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>',   /* an envelope */
     lang: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c3 3 3 14 0 17M12 3.5c-3 3-3 14 0 17"/></svg>',
     music: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>',
     pc: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12.5" rx="1.5"/><path d="M9 21h6M12 17v4"/></svg>',   /* the phone's「電腦版」switch tile */
@@ -992,6 +1040,7 @@
     // deep link ?app=works
     var m = /[?&]app=([a-z]+)/.exec(location.search);
     if (m && APPS.indexOf(m[1]) >= 0) openApp(m[1]);
+    if (pool.arrived() || pool.denied()) openApp('wishpool');   /* LOG-161: back from the Worker's GitHub OAuth callback */
     var sm = /[?&]stage=([a-z0-9-]+)/.exec(location.search);   // deep link from the static demo page: straight onto the stage
     if (sm) setTimeout(function () { openDemo('demos/' + sm[1]); }, 1200);
     updateDock();
@@ -1683,6 +1732,7 @@
   })();
 
   function openApp(app) {
+    if (!PHONE) trail.log('open', app);
     if (PHONE) return phone.open(app);
     if (app === 'terminal') return spot.open();   /* Spotlight-style search bar instead of a window */
     if (app === 'about') return openAbout();
@@ -1780,8 +1830,8 @@
     if (wins.about) { wins.about.classList.remove('minimized'); focus(wins.about); }
     updateDock();
   }
-  function minimize(app) { var w = wins[app]; if (w) { w.classList.add('minimized'); w.classList.remove('focus'); } updateDock(); }
-  function closeApp(app) { var w = wins[app]; if (!w) return; w.remove(); delete wins[app]; if (w.dataset.duck || /^demo-/.test(app)) player.unduck(); updateDock(); }   /* unduck is a no-op unless the music was ducked (by a hook or by an iOS interruption) */   // closing the player window never stops the music
+  function minimize(app) { var w = wins[app]; if (w) { trail.log('min', app); w.classList.add('minimized'); w.classList.remove('focus'); } updateDock(); }
+  function closeApp(app) { var w = wins[app]; if (!w) return; trail.log('close', app); w.remove(); delete wins[app]; if (w.dataset.duck || /^demo-/.test(app)) player.unduck(); updateDock(); }   /* unduck is a no-op unless the music was ducked (by a hook or by an iOS interruption) */   // closing the player window never stops the music
   function focus(w) {
     Object.keys(wins).forEach(function (k) { wins[k].classList.remove('focus'); });
     w.classList.add('focus'); w.style.zIndex = ++z;
@@ -5061,6 +5111,7 @@
   })();
   // a demo opens as a desktop window hosting its page in an iframe (same origin); ⛶ in the title bar goes real fullscreen
   function openDemo(id) {
+    trail.log('demo', id);
     if (PHONE) return phone.openDemo(id);
     var d = D.demos.filter(function (x) { return x.path === id; })[0]; if (!d) return;
     if (d.native === 'stage') { minimize('demos'); if (secStage.active()) secStage.stop(); return stage.start(d); }   /* shell-native: the desktop itself is the stage, no iframe */
@@ -5089,7 +5140,7 @@
     opts = opts || {};
     var title = opts.title || TITLES[app], glyph = opts.glyph || ICON[app] || GLYPH[app];
     var w = document.createElement('section'); w.className = 'win'; w.setAttribute('data-app', app); w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', title);
-    var size = opts.size || { works: [560, 520], demos: [520, 420], player: [480, 620], articles: [480, 380], about: [520, 460], resume: [580, 560], terminal: [560, 380] }[app];
+    var size = opts.size || { works: [560, 520], demos: [520, 420], player: [480, 620], articles: [480, 380], about: [520, 460], resume: [580, 560], terminal: [560, 380], pillar: [540, 600], wishpool: [560, 620], contact: [500, 560] }[app];
     var vw = window.innerWidth, vh = window.innerHeight - 30;
     var W = Math.min(size[0], vw - 24), H = Math.min(size[1], vh - 100);
     var x = Math.max(110, Math.min(vw - W - 20, 140 + (spawn % 5) * 40)), y = Math.max(8, Math.min(vh - H - 90, 30 + (spawn % 5) * 32)); spawn++;
@@ -5229,6 +5280,180 @@
       D.contact.links.map(function (l) { return ' \u00b7 <a href="' + esc(l.url) + '" rel="me noopener">' + esc(l.label) + '</a>'; }).join('') + '</p>';
   }
   function wireEmail(body) { var a = $('[data-email]', body); if (a) a.addEventListener('click', function (ev) { ev.preventDefault(); var el = ev.currentTarget, addr = el.dataset.u + '@' + el.dataset.d; el.textContent = addr; el.href = 'mailto:' + addr; el.removeAttribute('data-email'); }); }
+  /* ===== LOG-161: 恥辱柱 (feat.pillar) / 許願池 (feat.wishpool) / 合作聯絡 (feat.contact). One RENDER entry each, both shells (the phone panel
+     calls the same functions). Every string is site.json ui; the roster is content/bugs.json; the Worker contract is worker/API.md. */
+  var WISH_CATS = ['transcription', 'design', 'code', 'feature', 'interactive', 'other'], WISH_ST = ['building', 'considering', 'wishing', 'done', 'declined'];   /* wall order = LOG-120 裁定 9 */
+  function catLabel(c) { return U['wish_cat_' + c] || c; }
+  function stLabel(st) { return U['wish_st_' + st] || st; }
+  function when(ts) { var d = new Date(ts || 0); return isNaN(d) ? '' : d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function emailAddr() { return (D.contact.email_user || '') + '@' + (D.contact.email_domain || ''); }
+  function mailto(subject, body) { return 'mailto:' + emailAddr() + '?subject=' + encodeURIComponent(subject) + (body ? '&body=' + encodeURIComponent(body) : ''); }
+  function anyDemo(id) { return PHONE ? phone.openDemo(id) : openDemo(id); }
+
+  /* --- 恥辱柱: the roster + the report form. Offline (no Worker yet): the same text box, sent by mail instead (no trail travels by mail). */
+  function pillarHTML() {
+    var ST = { fixed: U.pillar_status_fixed, open: U.pillar_status_open, watch: U.pillar_status_watch }, WH = { desktop: U.pillar_where_desktop, phone: U.pillar_where_phone, both: U.pillar_where_both }, bugs = D.bugs || [];
+    var roster = bugs.length ? '<ul class="list pillar-list">' + bugs.map(function (b) {
+      return '<li><span class="pb pb-' + esc(b.status) + '">' + esc(ST[b.status] || b.status) + '</span><div><div class="t">' + esc(b.title) + '</div><div class="d">' + esc(b.desc) + '</div><div class="meta">' + esc(b.date) + ' \u00b7 ' + esc(WH[b.where] || b.where) + (b.log ? ' \u00b7 ' + esc(b.log) : '') + '</div></div></li>';
+    }).join('') + '</ul>' : '<p class="note">' + esc(U.pillar_empty) + '</p>';
+    var form = '<form class="pform" novalidate><textarea name="text" rows="4" placeholder="' + esc(U.pillar_form_text) + '" maxlength="2000"></textarea><div class="row"><input name="nick" placeholder="' + esc(U.pillar_form_nick) + '" maxlength="24"></div>' +
+      (pool.on()
+        ? '<label class="chk"><input type="checkbox" name="trail" checked><span>' + esc(U.pillar_trail_label) + '</span></label><p class="small">' + esc(U.pillar_trail_note) + ' <button type="button" class="tview">' + esc(U.pillar_trail_view) + '</button></p><pre class="trail" hidden></pre><div class="actions"><button class="btn send" type="submit">' + esc(U.pillar_send) + '</button><p class="msg"></p></div>'
+        : '<p class="small">' + esc(U.pillar_offline) + '</p><div class="actions"><button class="btn sec mail" type="button">' + esc(U.pillar_email_btn) + '</button><p class="msg"></p></div>') + '</form>';
+    return '<div class="pillar"><p class="intro">' + esc(U.pillar_intro) + '</p><h2>' + esc(U.pillar_roster) + '</h2>' + roster + '<h2>' + esc(U.pillar_report) + '</h2>' + form + '</div>';
+  }
+  function wirePillar(body) {
+    var f = $('.pform', body); if (!f) return;
+    var E = f.elements, tv = $('.tview', f), pre = $('pre.trail', f), msg = $('.msg', f), send = $('.send', f), mail = $('.mail', f);
+    if (tv) tv.addEventListener('click', function () { pre.hidden = !pre.hidden; if (!pre.hidden) { var L = trail.lines(); pre.textContent = L.length ? L.join('\n') : U.pillar_trail_empty; } tv.textContent = pre.hidden ? U.pillar_trail_view : U.pillar_trail_hide; });
+    if (mail) mail.addEventListener('click', function () { var text = E.text.value.trim(); if (!text) { msg.className = 'msg err'; msg.textContent = U.pillar_need; return; } location.href = mailto(U.pillar_email_subject, text); });
+    f.addEventListener('submit', function (ev) {
+      ev.preventDefault(); if (!send) return;
+      var text = E.text.value.trim(); if (!text) { msg.className = 'msg err'; msg.textContent = U.pillar_need; return; }
+      var payload = { type: 'bug', lang: lang, nick: E.nick.value.trim().slice(0, 24), text: text.slice(0, 2000), meta: trail.meta() };
+      if (E.trail && E.trail.checked) payload.trail = trail.lines().slice(-200);   /* ADR-007: only now, only if ticked */
+      send.disabled = true; msg.className = 'msg'; msg.textContent = U.pillar_sending;
+      pool.post('/submit', payload).then(function (r) { if (!r.ok) throw r; msg.className = 'msg ok'; msg.textContent = U.pillar_sent; E.text.value = ''; trail.log('report', 'sent'); })
+        .catch(function () { msg.className = 'msg err'; msg.textContent = U.pillar_fail; }).then(function () { send.disabled = false; });
+    });
+  }
+
+  /* --- 許願池: the form, the wall (public GET, grouped by status), +1, the sender's own pending wish (V7), the last good wall on a dead Worker (V9) */
+  function mineLoad() { try { var a = JSON.parse(localStorage.getItem('wish_mine') || '[]'), cut = Date.now() - 7 * 864e5; return Array.isArray(a) ? a.filter(function (m) { return m.ts > cut; }) : []; } catch (e) { return []; } }
+  function mineSave(a) { try { localStorage.setItem('wish_mine', JSON.stringify(a.slice(-10))); } catch (e) {} }
+  function votedLoad() { try { return JSON.parse(localStorage.getItem('wish_voted') || '{}') || {}; } catch (e) { return {}; } }
+  function wishLink(link) {   /* V13: a stable id (work:<id> / app:<key> / demo:<path>) resolved at render time; unknown = no link, badge only */
+    var m = /^(work|app|demo):(.+)$/.exec(link || ''); if (!m) return null;
+    if (m[1] === 'app') return APPS.indexOf(m[2]) >= 0 ? function () { openApp(m[2]); } : null;
+    if (m[1] === 'demo') return (D.demos || []).some(function (d) { return d.path === m[2]; }) ? function () { anyDemo(m[2]); } : null;
+    var w = (D.works || []).filter(function (x) { return x.id === m[2] && !x.secret; })[0]; if (!w) return null;
+    return function () { if (w.media && w.media.demo) anyDemo(w.media.demo); else openApp(w.type === 'music' ? 'player' : 'works'); };
+  }
+  function wishCard(w, opts) {
+    opts = opts || {}; var voted = opts.voted || {}, act = wishLink(w.link), on = !!voted[w.id];
+    return '<div class="wcard' + (opts.mine ? ' mine' : '') + '" data-id="' + esc(w.id || '') + '"><div class="wh"><span class="wst wst-' + esc(w.status) + '">' + esc(opts.mine ? U.wish_mine : stLabel(w.status)) + '</span><span class="nick">' + esc(w.nick) + '</span><span class="cat">' + esc(catLabel(w.cat)) + '</span><span class="when">' + esc(when(w.ts)) + '</span></div><p class="txt">' + esc(w.text) + '</p>' +
+      (opts.mine ? '' : '<div class="wf"><button type="button" class="vote' + (on ? ' on' : '') + '"' + (on ? ' disabled' : '') + '>' + esc(on ? U.wish_voted : U.wish_vote) + ' \u00b7 ' + (w.votes || 0) + '</button>' + (act ? '<button type="button" class="wl">' + esc(U.wish_link) + '</button>' : '') + '</div>') +
+      (w.reply ? '<p class="reply"><b>' + esc(U.wish_reply) + '</b>' + esc(w.reply) + '</p>' : '') + '</div>';
+  }
+  function wallHTML(items, mine, showDone) {
+    var voted = votedLoad(), groups = {}; WISH_ST.forEach(function (st) { groups[st] = []; });
+    items.forEach(function (w) { (groups[w.status] || groups.wishing).push(w); });
+    WISH_ST.forEach(function (st) { groups[st].sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); }); });
+    if (!items.length && !mine.length) return '<p class="note">' + esc(U.wish_empty) + '</p>';
+    var grp = function (st, extra) { var g = groups[st]; if (!g.length && !extra) return ''; return '<div class="wgrp"><h3><span class="wst wst-' + st + '">' + esc(stLabel(st)) + '</span><span class="cnt">' + g.length + '</span></h3>' + (extra || '') + g.map(function (w) { return wishCard(w, { voted: voted }); }).join('') + '</div>'; };
+    var out = grp('building') + grp('considering') + grp('wishing', mine.map(function (m) { return wishCard(m, { mine: true }); }).join(''));
+    var tail = groups.done.length + groups.declined.length;
+    if (tail) { out += '<button type="button" class="fold">' + esc(showDone ? U.wish_hide_done : U.wish_show_done) + ' (' + tail + ')</button>'; if (showDone) out += grp('done') + grp('declined'); }
+    return out;
+  }
+  function paintWall(wall, items) { if (items) wall._items = items; wall.innerHTML = wallHTML(wall._items || [], mineLoad(), wall.dataset.show === '1'); }
+  function loadWall(wall) {
+    var cached = null; try { cached = JSON.parse(sessionStorage.getItem('wishes') || 'null'); } catch (e) {}
+    if (cached && cached.items) paintWall(wall, cached.items);
+    pool.get('/wishes').then(function (r) { if (!r.ok || !Array.isArray(r.items)) throw r; try { sessionStorage.setItem('wishes', JSON.stringify({ ts: Date.now(), items: r.items })); } catch (e) {} paintWall(wall, r.items); })
+      .catch(function () { if (!(cached && cached.items)) wall.innerHTML = '<p class="note">' + esc(U.wish_error) + '</p>'; });
+  }
+  function wireWall(wall) {
+    wall.addEventListener('click', function (ev) {
+      var b = ev.target.closest('button'); if (!b) return;
+      if (b.classList.contains('fold')) { wall.dataset.show = wall.dataset.show === '1' ? '0' : '1'; paintWall(wall); return; }
+      var card = b.closest('.wcard'), id = card && card.dataset.id; if (!id) return;
+      var w = (wall._items || []).filter(function (x) { return x.id === id; })[0];
+      if (b.classList.contains('wl')) { var act = w && wishLink(w.link); if (act) act(); return; }
+      if (b.classList.contains('vote')) {
+        b.disabled = true;
+        pool.post('/vote', { id: id }).then(function (r) { if (!r.ok) throw r; var v = votedLoad(); v[id] = 1; try { localStorage.setItem('wish_voted', JSON.stringify(v)); } catch (e) {} if (w) w.votes = r.votes; b.classList.add('on'); b.textContent = U.wish_voted + ' \u00b7 ' + (r.votes || 0); })
+          .catch(function () { b.disabled = false; });
+      }
+    });
+  }
+  function wishFormHTML() {
+    if (!pool.on()) return '<p class="note">' + esc(U.wish_offline) + '</p>';
+    return '<form class="pform wform" novalidate><div class="row"><input name="nick" placeholder="' + esc(U.wish_form_nick) + '" maxlength="24"><select name="cat" aria-label="' + esc(U.wish_form_cat) + '">' + WISH_CATS.map(function (c) { return '<option value="' + c + '">' + esc(catLabel(c)) + '</option>'; }).join('') + '</select></div><textarea name="text" rows="3" placeholder="' + esc(U.wish_form_text) + '" maxlength="600"></textarea><div class="actions"><button class="btn send" type="submit">' + esc(U.wish_send) + '</button><p class="msg"></p></div></form>';
+  }
+  function wireWishForm(body) {
+    var f = $('.wform', body); if (!f) return; var E = f.elements, msg = $('.msg', f), send = $('.send', f);
+    f.addEventListener('submit', function (ev) {
+      ev.preventDefault(); var nick = E.nick.value.trim().slice(0, 24), text = E.text.value.trim().slice(0, 600), cat = E.cat.value;
+      if (!nick || !text) { msg.className = 'msg err'; msg.textContent = U.wish_need; return; }
+      send.disabled = true; msg.className = 'msg'; msg.textContent = U.wish_sending;
+      pool.post('/submit', { type: 'wish', lang: lang, nick: nick, cat: cat, text: text }).then(function (r) {
+        if (!r.ok) throw r;
+        var mine = mineLoad(); mine.push({ id: r.id || '', ts: Date.now(), lang: lang, nick: nick, cat: cat, text: text, status: 'wishing' }); mineSave(mine);   /* V7: the sender sees their own wish at once, marked pending */
+        msg.className = 'msg ok'; msg.textContent = U.wish_sent; E.text.value = ''; trail.log('wish', 'sent');
+        var wall = $('.wall', body); if (wall) paintWall(wall);
+      }).catch(function () { msg.className = 'msg err'; msg.textContent = U.wish_fail; }).then(function () { send.disabled = false; });
+    });
+  }
+  /* --- the owner's panel (ADR-009): shown when a pass is in sessionStorage (or the EE flag opened it); GitHub login goes through the Worker,
+     which is the only place that decides who the owner is - the panel merely renders what a 401 lets it */
+  function adminHTML() {
+    var tok = pool.token();
+    var top = '<div class="wtop"><h2 style="margin:0">' + esc(U.app_wishpool) + ' \u00b7 ' + esc(U.wish_admin) + '</h2><span class="sp"></span>' + (tok ? '<div class="filter"><button type="button" class="on" data-t="wish">' + esc(U.wish_admin_wishes) + '</button><button type="button" data-t="bug">' + esc(U.wish_admin_bugs) + '</button></div><button type="button" class="btn sec logout">' + esc(U.wish_admin_logout) + '</button>' : '') + '</div>';
+    if (!pool.on()) return top + '<p class="note">' + esc(U.wish_offline) + '</p>';
+    if (!tok) return top + (pool.denied() ? '<p class="note">' + esc(U.wish_admin_denied) + '</p>' : '') + '<p><a class="btn" href="' + esc(pool.url() + '/auth/start') + '">' + esc(U.wish_admin_login) + '</a></p>';
+    return top + '<div class="alist"><p class="note">' + esc(U.wish_loading) + '</p></div>';
+  }
+  function adminRow(it) {
+    if (it.type === 'bug') {
+      var m = it.meta || {}, tr = it.trail && it.trail.length ? it.trail : null;
+      return '<div class="wrow' + (it.read ? '' : ' pending') + '" data-id="' + esc(it.id) + '"><div class="wh"><span class="wst ' + (it.read ? 'wst-done' : 'wst-building') + '">' + esc(it.read ? U.wish_admin_read : U.wish_admin_pending) + '</span><span class="nick">' + esc(it.nick || '\u2014') + '</span><span class="when">' + esc(when(it.ts)) + ' \u00b7 ' + esc(it.lang || '') + '</span></div><p class="txt">' + esc(it.text) + '</p><p class="meta">' + esc([m.shell, m.vw ? m.vw + 'x' + m.vh : '', m.ver ? 'v=' + m.ver : '', m.page, m.ua].filter(Boolean).join(' \u00b7 ')) + '</p>' +
+        '<div class="ctl">' + (tr ? '<button type="button" class="btn sec ttoggle">' + esc(U.wish_admin_trail) + ' (' + tr.length + ')</button>' : '') + '<button type="button" class="btn sec read">' + esc(it.read ? U.wish_admin_pending : U.wish_admin_read) + '</button><button type="button" class="btn sec danger del">' + esc(U.wish_admin_delete) + '</button><span class="msg"></span></div>' +
+        (tr ? '<pre class="trail" hidden>' + esc(tr.map(function (x) { return typeof x === 'string' ? x : JSON.stringify(x); }).join('\n')) + '</pre>' : '') + '</div>';
+    }
+    return '<div class="wrow' + (it.approved ? '' : ' pending') + '" data-id="' + esc(it.id) + '"><div class="wh"><span class="wst wst-' + esc(it.status) + '">' + esc(stLabel(it.status)) + '</span><span class="nick">' + esc(it.nick) + '</span><span class="cat">' + esc(catLabel(it.cat)) + '</span><span class="when">' + esc(when(it.ts)) + ' \u00b7 ' + esc(it.lang || '') + ' \u00b7 +' + (it.votes || 0) + '</span><span class="wst ' + (it.approved ? 'wst-done' : 'wst-building') + '">' + esc(it.approved ? U.wish_admin_live : U.wish_admin_pending) + '</span></div><p class="txt">' + esc(it.text) + '</p>' +
+      '<div class="ctl"><select class="status">' + WISH_ST.map(function (st) { return '<option value="' + st + '"' + (st === it.status ? ' selected' : '') + '>' + esc(stLabel(st)) + '</option>'; }).join('') + '</select><input class="reply" placeholder="' + esc(U.wish_admin_reply) + '" value="' + esc(it.reply || '') + '" maxlength="2000"><input class="link" placeholder="' + esc(U.wish_admin_link) + '" value="' + esc(it.link || '') + '" maxlength="200"><button type="button" class="btn save">' + esc(U.wish_admin_save) + '</button><button type="button" class="btn sec appr">' + esc(it.approved ? U.wish_admin_unapprove : U.wish_admin_approve) + '</button><button type="button" class="btn sec danger del">' + esc(U.wish_admin_delete) + '</button><span class="msg"></span></div></div>';
+  }
+  function wireAdmin(body) {
+    var root = $('.wadmin', body), list = $('.alist', root), type = 'wish';
+    var lo = $('.logout', root); if (lo) lo.addEventListener('click', function () { pool.logout(); RENDER.wishpool(body); });
+    if (!list) return;
+    function load() {
+      list.innerHTML = '<p class="note">' + esc(U.wish_loading) + '</p>';
+      pool.get('/admin/list?type=' + type, true).then(function (r) {
+        if (r.http === 401) { pool.logout(); RENDER.wishpool(body); var w2 = $('.wadmin', body); if (w2) w2.insertAdjacentHTML('beforeend', '<p class="note">' + esc(U.wish_admin_expired) + '</p>'); return; }
+        if (!r.ok || !Array.isArray(r.items)) throw r;
+        var items = r.items.slice().sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
+        list._items = items; list.innerHTML = items.length ? items.map(adminRow).join('') : '<p class="note">' + esc(U.wish_admin_empty) + '</p>';
+      }).catch(function () { list.innerHTML = '<p class="note">' + esc(U.wish_error) + '</p>'; });
+    }
+    root.querySelectorAll('.filter button').forEach(function (b) { b.addEventListener('click', function () { root.querySelectorAll('.filter button').forEach(function (x) { x.classList.toggle('on', x === b); }); type = b.getAttribute('data-t'); load(); }); });
+    list.addEventListener('click', function (ev) {
+      var b = ev.target.closest('button'); if (!b) return; var row = b.closest('.wrow'), id = row && row.dataset.id; if (!id) return;
+      var it = (list._items || []).filter(function (x) { return x.id === id; })[0] || {}, msg = $('.msg', row);
+      var say = function (t) { if (msg) { msg.textContent = t; setTimeout(function () { msg.textContent = ''; }, 1500); } };
+      var update = function (patch) { patch.id = id; return pool.post('/admin/update', patch, true).then(function (r) { if (!r.ok) throw r; try { sessionStorage.removeItem('wishes'); } catch (e) {} return r; }); };
+      if (b.classList.contains('ttoggle')) { var pre = $('pre.trail', row); if (pre) pre.hidden = !pre.hidden; return; }
+      if (b.classList.contains('del')) { b.disabled = true; pool.post('/admin/delete', { id: id }, true).then(function (r) { if (!r.ok) throw r; row.remove(); }).catch(function () { b.disabled = false; say(U.wish_error); }); return; }
+      if (b.classList.contains('read')) { update({ read: !it.read }).then(load).catch(function () { say(U.wish_error); }); return; }
+      if (b.classList.contains('appr')) { update({ approved: !it.approved }).then(load).catch(function () { say(U.wish_error); }); return; }
+      if (b.classList.contains('save')) { b.disabled = true; update({ status: $('.status', row).value, reply: $('.reply', row).value.trim(), replyLang: lang, link: $('.link', row).value.trim() }).then(function () { say(U.wish_admin_saved); load(); }).catch(function () { say(U.wish_error); }).then(function () { b.disabled = false; }); }
+    });
+    load();
+  }
+  function wishpoolHTML() {
+    if (pool.admin()) return '<div class="wish wadmin">' + adminHTML() + '</div>';
+    return '<div class="wish"><p class="intro">' + esc(U.wish_intro) + '</p><h2>' + esc(U.wish_make) + '</h2>' + wishFormHTML() + '<h2>' + esc(U.wish_wall) + '</h2><div class="wall"><p class="note">' + esc(pool.on() ? U.wish_loading : U.wish_offline) + '</p></div></div>';
+  }
+
+  /* --- 合作聯絡: a card - the address (revealed on click, copied on request), what I do with a "write" button per line (mailto with a subject), the other places */
+  function contactHTML() {
+    var C = D.contact || {}, S = C.services || [], L = C.links || [];
+    return '<div class="contact"><div class="ccard"><h2>' + esc(D.author) + '</h2><p class="tag">' + esc(D.tagline) + '</p><p class="intro">' + esc(U.contact_intro) + '</p>' +
+      '<div class="crow"><span class="lbl">' + esc(U.email_label) + '</span><a href="#" data-email data-u="' + esc(C.email_user || '') + '" data-d="' + esc(C.email_domain || '') + '">' + esc(U.email_hint) + '</a><button type="button" class="btn sec ccopy">' + esc(U.contact_copy) + '</button></div>' +
+      '<h3>' + esc(U.contact_services) + '</h3><ul class="svc">' + S.map(function (sv) { return '<li><div><div class="t">' + esc(sv.label) + '</div><div class="d">' + esc(sv.desc) + '</div></div><button type="button" class="btn sec cwrite" data-l="' + esc(sv.label) + '">' + esc(U.contact_write) + '</button></li>'; }).join('') + '</ul>' +
+      '<p class="bring">' + esc(U.contact_bring) + '</p>' + (L.length ? '<h3>' + esc(U.contact_links) + '</h3><p class="clinks">' + L.map(function (l) { return '<a href="' + esc(l.url) + '" target="_blank" rel="me noopener">' + esc(l.label) + ' \u2197</a>'; }).join('') + '</p>' : '') + '</div></div>';
+  }
+  function wireContact(body) {
+    wireEmail(body);
+    var cp = $('.ccopy', body); if (cp) cp.addEventListener('click', function () {
+      var em = $('[data-email]', body); if (em) em.click();   /* revealing is part of copying */
+      var done = function () { cp.textContent = U.contact_copied; setTimeout(function () { cp.textContent = U.contact_copy; }, 1500); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(emailAddr()).then(done, done); else done();
+    });
+    body.querySelectorAll('.cwrite').forEach(function (b) { b.addEventListener('click', function () { location.href = mailto(U.contact_subject_prefix + ' ' + b.getAttribute('data-l'), ''); }); });
+  }
+
   function resumeHTML() {
     var R = D.resume || { education: [], current: [], past: [] }, h = '<div class="resume">';
     var ext = function (l) { return l ? ' \u00b7 <a href="' + esc(l.url) + '" target="_blank" rel="noopener">' + esc(l.label) + ' \u2197</a>' : ''; };   /* LOG-160追記②: an entry (or an employer) may carry one outbound link */
@@ -5279,6 +5504,9 @@
       body.innerHTML = bioHTML(); wireEmail(body); setAddr(w, 'about/');
     },
     resume: function (body, w) { body.innerHTML = resumeHTML(); setAddr(w, 'about/#experience'); },
+    pillar: function (body) { body.innerHTML = pillarHTML(); wirePillar(body); },   /* LOG-161 */
+    wishpool: function (body) { body.innerHTML = wishpoolHTML(); if (pool.admin()) wireAdmin(body); else { wireWishForm(body); var wall = $('.wall', body); if (wall && pool.on()) { wireWall(wall); loadWall(wall); } } },
+    contact: function (body) { body.innerHTML = contactHTML(); wireContact(body); },
     player: function (body) { player.mount(body); },
     terminal: function (body) { terminal.mount(body); },
     updates: function (body) { var list = D.updates || []; body.innerHTML = '<div class="upd-log">' + (list.length ? list.map(function (u) { return '<div class="msg"><time>' + esc(u.date) + '</time><p>' + esc(u.text) + '</p></div>'; }).join('') : '<p class="note">' + esc(U.updates_empty) + '</p>') + '</div>'; }
@@ -5474,6 +5702,7 @@
              debug: function () { return { stage: stage.debug(), ctx: actx ? actx.state : '-', playing: playing, started: started, ducked: ducked, muted: muted, vol: vol, cur: cur, unlocked: !!(audio && audio._unlocked), wired: !!(audio && audio._wired),
                paused: audio ? audio.paused : '-', rs: audio ? audio.readyState : '-', ns: audio ? audio.networkState : '-', t: audio ? audio.currentTime.toFixed(1) : '-', err: audio && audio.error ? audio.error.code : 0, gain: master ? master.gain.value.toFixed(3) : '-', out: out ? out.gain.value.toFixed(2) : '-' }; } };
   })();
+  ['toggle', 'next', 'prev', 'play', 'pause'].forEach(function (k) { var f = player[k]; if (typeof f === 'function') player[k] = function () { trail.log('player', k); return f.apply(player, arguments); }; });   /* LOG-161 trail: transport verbs */
   if (/[?&]debug/.test(location.search)) window.__player = player;   /* ?debug: console access for testing (seek / state) */
   (function () {   /* liquid-glass lens: the displacement maps must cover each pane's box in real px (percent feImage sizing is unreliable inside backdrop-filter), so the filter regions follow the layout */
     if (PHONE) return;
@@ -5552,7 +5781,7 @@
   // Typing filters apps and works; Enter opens the top hit. Commands: help, works, demos, about, play, lang, clear, restart.
   // Undocumented forcing flags: stored, the page reloads, and that boot fires them. Any malformed attempt reads as an unknown command.
   var terminal = (function () {
-    var APP_KEYS = ['works', 'demos', 'player', 'articles', 'updates', 'about', 'lang'];
+    var APP_KEYS = ['works', 'demos', 'player', 'articles', 'updates', 'about', 'pillar', 'wishpool', 'contact', 'lang'];
     var hooks = {};   /* LOG-154: hooks.desktop - the phone registers its「電腦版」switch here; it is reachable only by typing (the home's chip is gone) */
     function label(k) { return k === 'lang' ? (U.lang_switch || 'Language') : (TITLES[k] || k); }
     function glyph(k) { return ICON[k] || GLYPH[k] || ''; }
@@ -5641,7 +5870,7 @@
   var phone = (function () {
     var root = $('#phone'), lock = $('#ph-lock'), home = $('#ph-home'), grid = $('#ph-grid'), dockEl = $('#ph-dock'), appsEl = $('#ph-apps'), notes = $('#ph-notes'), power = $('#ph-power'), powerScr = $('#ph-power-scr'), langPick = $('#ph-lang'), ls = $('#ph-ls');
     var stack = [], unlocked = false, powered = false, swappingPh = false;
-    var HOME_APPS = ['works', 'demos', 'player', 'articles'];   /* home grid = only what the dock does not already carry; language switching is the EN/中 slider, no tile */
+    var HOME_APPS = ['works', 'demos', 'player', 'articles', 'pillar', 'wishpool', 'contact'];   /* LOG-161: the three new apps ride the home grid */   /* home grid = only what the dock does not already carry; language switching is the EN/中 slider, no tile */
     /* LOG-141: the「電腦版」switch is back, but as the corner CHIP (#ph-pc, wired in init) rather than a tile - as a tile it read as one of the apps.
        The note below is why it left the grid; askDesktop()'s two-step warning on a small screen is unchanged.
        (original) the「電腦版」tile ('pc') is withdrawn for now: the desktop shell does not lay out correctly at phone widths, so offering the
@@ -5744,6 +5973,7 @@
     }
     function open(app) {
       if (!unlocked) unlock(true);
+      trail.log('open', app);
       if (app === 'terminal') return spot.open();   /* search is the Spotlight overlay here too (opened in the tap / pull gesture so the keyboard comes up) */
       var top = stack[stack.length - 1];
       if (top && top.dataset.app === app) return;
@@ -5757,6 +5987,7 @@
     // background music ducks (position kept) and comes back when the panel is closed; a section player inside it drives the line + caption
     function openDemo(id) {
       var d = demoOf(id); if (!d) return;
+      trail.log('demo', id);
       if (d.native === 'stage') {   /* LOG-148: no longer desktop-only - the four-piano stage runs on the phone too, on the same terms as the section stage below */
         close(true);
         try { history.replaceState({ stage: 1 }, '', location.pathname + location.search + '#stage'); } catch (e) {}
@@ -5788,6 +6019,7 @@
       push(pnl, 'demo');
     }
     function close(fromHistory) {
+      var topPnl = stack[stack.length - 1]; if (topPnl) trail.log('close', topPnl.dataset.app || topPnl.dataset.demo || '');
       var pnl = stack.pop(); if (!pnl) return;
       pnl.classList.add('out'); setTimeout(function () { pnl.remove(); if (pnl.dataset.demo) caption.reset(); }, reduced ? 0 : 220);
       if (pnl.dataset.duck || pnl.dataset.demo) player.unduck();   /* the demo that silenced the music is gone -> resume where it stopped (no-op unless ducked) */
