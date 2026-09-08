@@ -1,0 +1,148 @@
+{
+  "_note": "About app, second window (LOG-159). zh: Chinese first, English after; en: no Chinese. School names are never shown in Chinese. Edit here, never in os.js.",
+  "education": [
+    {
+      "school": "Berklee College of Music",
+      "note": null,
+      "place": {
+        "zh": "波士頓, 美國",
+        "en": "Boston, USA"
+      },
+      "span": {
+        "zh": "2020 年 1 月 – 2024 年 5 月",
+        "en": "Jan 2020 – May 2024"
+      },
+      "items": [
+        {
+          "zh": "雙主修：遊戲與互動媒體配樂 | 電影配樂",
+          "en": "Dual major: Game & Interactive Media Scoring | Film Scoring"
+        },
+        {
+          "zh": "「遊戲與互動媒體配樂傑出成就獎」Outstanding Achievement in Game and Interactive Media Scoring",
+          "en": "Outstanding Achievement in Game and Interactive Media Scoring"
+        },
+        {
+          "zh": "院長名單, 平均 GPA：3.809（2020 春季至 2024 春季）",
+          "en": "Dean's List, GPA 3.809 (Spring 2020 – Spring 2024)"
+        }
+      ]
+    },
+    {
+      "school": "Ashbury College",
+      "note": {
+        "zh": "高中",
+        "en": "high school"
+      },
+      "place": {
+        "zh": "渥太華, 加拿大",
+        "en": "Ottawa, Canada"
+      },
+      "span": {
+        "zh": "2017 年 9 月 – 2019 年 6 月",
+        "en": "Sep 2017 – Jun 2019"
+      },
+      "items": [
+        {
+          "zh": "高級國際文憑（IB）音樂課程",
+          "en": "IB Higher Level Music"
+        },
+        {
+          "zh": "第 47 屆加拿大國家音樂節「榮譽獎」",
+          "en": "Honourable Mention, 47th Canadian National Music Festival"
+        },
+        {
+          "zh": "2019 年 Ashbury「Van den Heuvel 音樂獎」",
+          "en": "2019 Ashbury Van den Heuvel Music Award"
+        }
+      ]
+    }
+  ],
+  "current": [
+    {
+      "org": {
+        "zh": "Formosa Studio, US | 好萊創藝有限公司, 臺灣",
+        "en": "Formosa Studio, US | Formosa Studio, Taiwan"
+      },
+      "span": {
+        "zh": "2024 – 至今",
+        "en": "2024 – present"
+      },
+      "title": {
+        "zh": "臺灣區域聯絡人 | 製作人助理",
+        "en": "Taiwan Regional Liaison | Producer's Assistant"
+      },
+      "items": [
+        {
+          "text": {
+            "zh": "《F Valentines Day》（2026）, 愛情喜劇片, 英文 ── 配樂配器, 作曲助理",
+            "en": "F Valentines Day (2026), romantic comedy feature, English — orchestration, composition assistant"
+          },
+          "link": {
+            "label": "IMDb",
+            "url": "https://www.imdb.com/title/tt34622232/"
+          }
+        },
+        {
+          "text": {
+            "zh": "《Pretty Babies》(2026), 劇情片, 英文 ── 後期總監助理",
+            "en": "Pretty Babies (2026), drama feature, English — assistant to the post-production supervisor"
+          },
+          "link": {
+            "label": "IMDb",
+            "url": "https://www.imdb.com/title/tt36242940/"
+          }
+        }
+      ],
+      "url": "https://formosa.la/#/home"
+    }
+  ],
+  "past": [
+    {
+      "text": {
+        "zh": "音樂劇「空白の響き」 “Blanked Sound”（2026）, 東京藝術劇場 | 神奈川藝術劇場 ── 作曲助理及編曲",
+        "en": "“Blanked Sound” (2026), musical, Tokyo Metropolitan Theatre | KAAT Kanagawa Arts Theatre — composition assistant & arrangement"
+      },
+      "link": {
+        "label": {
+          "zh": "官網",
+          "en": "Official site"
+        },
+        "url": "https://shunkinproject.com/"
+      }
+    },
+    {
+      "text": {
+        "zh": "《囍宴》音樂劇 “The Wedding Banquet”（2024 – 2026）, 臺灣, 臺北表演藝術中心 | 國家戲劇院 ── 作曲助理, 樂譜製作",
+        "en": "“The Wedding Banquet” (2024 – 2026), musical, Taiwan, Taipei Performing Arts Center | National Theater — composition assistant, score preparation"
+      },
+      "link": {
+        "label": "OPENTIX",
+        "url": "https://www.opentix.life/event/2053677047754907649"
+      }
+    },
+    {
+      "text": {
+        "zh": "《鳥語森林》 “Feather Land”（已發行）, 遊戲 ── 作曲",
+        "en": "“Feather Land” (released), game — composer"
+      },
+      "link": {
+        "label": "Steam",
+        "url": "https://store.steampowered.com/app/3661430/Feather_Land/"
+      }
+    },
+    {
+      "text": {
+        "zh": "“Plum Box - Strange - Ideal & More Than…”（2024）, 戲劇藝術, 美國, 麻省理工 Theater Arts ── 樂譜製作及鍵盤手",
+        "en": "“Plum Box - Strange - Ideal & More Than…” (2024), theatre, USA, MIT Theater Arts — score preparation & keyboardist"
+      },
+      "link": {
+        "label": "MIT",
+        "url": "https://mta.mit.edu/events/plum-box%E2%80%94strange%E2%80%94ideal-more-%E2%80%A6"
+      }
+    },
+    {
+      "zh": "“The Sound of Bosnia and Herzegovina”（2023）, 美國, Berklee Performance Center ── 樂譜製作",
+      "en": "“The Sound of Bosnia and Herzegovina” (2023), USA, Berklee Performance Center — score preparation"
+    }
+  ]
+}

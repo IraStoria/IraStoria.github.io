@@ -402,6 +402,42 @@
     "stage_hint_touch": {
       "zh": "用手指拖曳，改變你在四台鋼琴之間的位置",
       "en": "Drag a finger to move yourself between the four pianos"
+    },
+    "app_resume": {
+      "zh": "經歷",
+      "en": "Experience"
+    },
+    "about_tab_bio": {
+      "zh": "自傳",
+      "en": "Bio"
+    },
+    "resume_edu": {
+      "zh": "學歷",
+      "en": "Education"
+    },
+    "resume_work": {
+      "zh": "工作經歷",
+      "en": "Work"
+    },
+    "resume_current": {
+      "zh": "現職",
+      "en": "Current"
+    },
+    "resume_past": {
+      "zh": "經歷",
+      "en": "Experience"
+    },
+    "prank_title": {
+      "zh": "錯誤",
+      "en": "Error"
+    },
+    "prank_msg": {
+      "zh": "開啟了太多分頁，其中大部分看起來壞掉了。要關閉多餘的視窗嗎？",
+      "en": "Too many tabs are open and most of them look broken. Close the extra windows?"
+    },
+    "prank_ok": {
+      "zh": "關閉彩蛋",
+      "en": "Close the easter egg"
     }
   },
   "about_body": {

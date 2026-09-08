@@ -187,7 +187,7 @@
     var mid = $('.menubar-mid'); if (mid) mid.textContent = D.tagline;
     if (bootContinue) bootContinue.textContent = U.boot_continue;
     if (sw) { sw.setAttribute('data-lang-switch', other); sw.setAttribute('href', '../' + other + '/'); sw.title = U.lang_switch; sw.setAttribute('aria-label', U.lang_switch); sw.setAttribute('aria-checked', lang === 'zh' ? 'true' : 'false'); }   // the knob itself follows body[data-lang] via CSS
-    TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, terminal: U.app_terminal, updates: U.app_updates };
+    TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, resume: U.app_resume, terminal: U.app_terminal, updates: U.app_updates };
     if (PHONE && phone) phone.relabel();
     document.querySelectorAll('.icon[data-app]').forEach(function (b) { var t = b.querySelector('span:last-child'); if (t) t.textContent = TITLES[b.getAttribute('data-app')]; var g = b.querySelector('.glyph'); if (g && ICON[b.getAttribute('data-app')]) g.innerHTML = ICON[b.getAttribute('data-app')]; });
     document.querySelectorAll('#dock button[data-app]').forEach(function (b) { var a = b.getAttribute('data-app'); b.innerHTML = '<span>' + (ICON[a] || GLYPH[a]) + '</span>' + esc(TITLES[a]); });
@@ -219,7 +219,7 @@
   var fx = (function () {
     var OGG_OK = (function () { try { return !!document.createElement('audio').canPlayType('audio/ogg; codecs="vorbis"'); } catch (e) { return false; } })();
     function sndUrl(u) { return OGG_OK ? u : u.replace(/\.ogg(\?|$)/, '.m4a$1'); }   /* Safari has never decoded Ogg Vorbis: the same clips ride alongside as AAC (.m4a), picked at runtime */
-    var cfg = (D.fx && D.fx.click) || null, vid = null, snd = null, bootCfg = (D.fx && D.fx.boot) || null, bootSnd = null, bootPending = false;
+    var cfg = (D.fx && D.fx.click) || null, vid = null, snd = null, held = null, bootCfg = (D.fx && D.fx.boot) || null, bootSnd = null, bootPending = false;
     if (cfg && cfg.video && !reduced) { vid = document.createElement('video'); vid.src = '../' + cfg.video; vid.muted = true; vid.playsInline = true; vid.preload = 'auto'; vid.className = 'fx-clip'; vid.setAttribute('aria-hidden', 'true'); vid.load(); }
     if (cfg && cfg.sound) { snd = new Audio('../' + sndUrl(cfg.sound)); snd.preload = 'auto'; snd.load(); }
     if (bootCfg && bootCfg.sound) { bootSnd = new Audio('../' + sndUrl(bootCfg.sound)); bootSnd.preload = 'auto'; bootSnd.load(); }
@@ -232,23 +232,29 @@
     function bootOnGesture() { if (bootPending && bootSnd && !muted()) { bootPending = false; try { bootSnd.volume = volume(); bootSnd.currentTime = 0; bootSnd.play().catch(function () {}); } catch (e) {} } }
     function muted() { try { return localStorage.getItem('muted') === '1'; } catch (e) { return false; } }
     function volume() { try { var v = parseFloat(localStorage.getItem('vol')); return (v >= 0 && v <= 1) ? v : 1; } catch (e) { return 1; } }
-    function prime() { if (snd && !snd._primed) { snd._primed = true; try { snd.muted = true; var p = snd.play(); if (p && p.then) p.then(function () { snd.pause(); snd.currentTime = 0; snd.muted = false; }).catch(function () { snd.muted = false; }); } catch (e) { snd.muted = false; } } }
-    function playSnd() { if (snd && !muted()) { try { snd.volume = volume(); snd.currentTime = 0; snd.play().catch(function () {}); } catch (e) {} } }
-    function click(cb) {
-      cb = cb || function () {};
+    function prime() { if (snd && !snd._primed) { snd._primed = true; try { snd.muted = true; var p = snd.play(); if (p && p.then) p.then(function () { snd.pause(); snd.currentTime = 0; }).catch(function () {}); } catch (e) {} } }   /* LOG-158: the element STAYS muted after the prime. Unmuting right after pause() let iOS (media in its own process, pause lands late) leak the first tens of ms of the cat's click at power-on - the "pop" the user heard, at the egg's own odds of being noticed. playSnd() unmutes at the moment it really plays */
+    function playSnd() { if (snd && !muted()) { try { snd.muted = false; snd.volume = volume(); snd.currentTime = 0; snd.play().catch(function () {}); } catch (e) {} } }
+    function click(cb, opt) {
+      cb = cb || function () {}; opt = opt || {};   /* opt.force: skip the dice (LOG-160: the About prank's dialog always shows the cat); opt.anchorEl: centre the clip on this element */
       bootOnGesture();
-      if (cfg && cfg.chance != null && !eeOn('cat') && Math.random() >= cfg.chance) { cb(); return; }   // fires with probability `chance` (can be forced)
+      if (!opt.force && cfg && cfg.chance != null && !eeOn('cat') && Math.random() >= cfg.chance) { cb(); return; }   // fires with probability `chance` (can be forced)
       if (!cfg || !vid) { playSnd(); cb(); return; }
       var doneCb = false, sndDone = false, raf = null;
       var sndAt = Math.max(0, (cfg.sound_at || 0) - (cfg.sound_onset || 0));
       function finish() { if (doneCb) return; doneCb = true; if (raf) cancelAnimationFrame(raf); if (!sndDone) { sndDone = true; playSnd(); } cb(); }
-      var w = cfg.width || 240; vid.style.width = w + 'px'; vid.style.opacity = cfg.opacity == null ? 0.55 : cfg.opacity;
+      var w = opt.width || cfg.width || 240; vid.style.width = w + 'px'; vid.style.opacity = opt.opacity != null ? opt.opacity : (cfg.opacity == null ? 0.55 : cfg.opacity);   /* 追記④: the prank asks for a smaller, more solid cat so it fits whole above its dialog */
       var scr = cfg.anchor === 'screen-right' ? document.querySelector('#boot .screen, #ph-lock') : null;
-      if (scr) {   // inside the boot laptop's terminal screen, flush to its right edge
+      if (opt.anchorEl) {
+        var ar = opt.anchorEl.getBoundingClientRect(), ratio = vid.videoWidth ? vid.videoHeight / vid.videoWidth : 16 / 9;   /* the clip is portrait; the ratio is real once warm() has loaded metadata */
+        if (opt.above) { var avail = ar.top - 44, wFit = Math.floor(avail / ratio); if (wFit < w) { w = Math.max(120, wFit); vid.style.width = w + 'px'; } }   /* shrink until the whole cat fits between the menubar and the dialog */
+        var vh_ = ratio * w; vid.style.left = Math.round(ar.left + ar.width / 2) + 'px'; vid.style.top = Math.round(opt.above ? ar.top - vh_ / 2 - 4 : ar.top + ar.height / 2) + 'px';
+      }   /* above: the clip's bottom edge sits on the anchor's top edge (追記④: the cat and the error dialog are shown TOGETHER, the cat not covering the words) */
+      else if (scr) {   // inside the boot laptop's terminal screen, flush to its right edge
         var r = scr.getBoundingClientRect(), ins = cfg.inset == null ? 16 : cfg.inset;
         vid.style.left = Math.round(r.right - ins - w / 2) + 'px'; vid.style.top = Math.round(r.top + r.height * (cfg.anchor_y == null ? 0.5 : cfg.anchor_y)) + 'px';
       } else { vid.style.left = cfg.x || '50%'; vid.style.top = cfg.y || '50%'; }
-      document.body.appendChild(vid); vid.currentTime = 0;
+      vid.className = 'fx-clip' + (opt.container ? ' fx-inline' : '');   /* 追記⑥ (the user: 請讓貓咪彩蛋在錯誤視窗中): inside a container the clip flows with the content - no fixed position */
+      if (opt.container) { vid.style.left = ''; vid.style.top = ''; opt.container.appendChild(vid); } else document.body.appendChild(vid); vid.currentTime = 0;
       // drive everything off the clip's own clock (immune to timer drift / throttling): sound at t = sound_at − onset, hand-over at the end
       (function tick() {
         raf = requestAnimationFrame(tick);
@@ -260,12 +266,17 @@
       var p = vid.play(); if (p && p.catch) p.catch(function () { vid.remove(); finish(); });
       var safety = ((vid.duration || 1.5) + 1.5) * 1000; setTimeout(finish, safety);   // never leave the visitor stuck on the boot screen
       var origCb = cb; cb = function () {   // clip → gone (instant cut, or a short fade) → hold after_ms → only then hand over to the desktop / home screen
+        if (opt.hold) { try { vid.pause(); } catch (e) {} held = vid; origCb(); return; }   /* 追記④: the caller keeps the cat on screen (last frame) and takes it down with dismiss() */
         var hold = cfg.after_ms == null ? 600 : cfg.after_ms;
         if (cfg.vanish === 'fade') { vid.classList.add('fade'); setTimeout(function () { vid.remove(); vid.classList.remove('fade'); setTimeout(origCb, hold); }, 320); }
         else { vid.remove(); setTimeout(origCb, hold); }
       };
     }
-    return { click: click, boot: boot, prime: prime };
+    function warm() {   /* LOG-160追記③ (the user: 確定觸發彩蛋時請在假頁面跳動時就開始讀取貓咪，不要出來就 lag): while the fake pages are still stumbling open, pull the clip and its sound into the cache and run the decoder once (muted, detached, paused at once) so the dialog's cat starts on its first frame */
+      try { if (snd) snd.load(); if (!vid || vid._warm) return; vid._warm = true; vid.preload = 'auto'; vid.load(); var p = vid.play(); if (p && p.then) p.then(function () { vid.pause(); vid.currentTime = 0; }).catch(function () {}); } catch (e) {}
+    }
+    function dismiss() { if (!held) return; var v = held; held = null; v.classList.add('fade'); setTimeout(function () { v.remove(); v.classList.remove('fade'); }, 320); }
+    return { click: click, boot: boot, prime: prime, warm: warm, dismiss: dismiss };
   })();
 
   var done = false, powered = false, ready = false;
@@ -920,7 +931,7 @@
   // ============================================================ desktop
   var wins = {}, z = 20, dock = $('#dock'), windowsEl = $('#windows');
   var APPS = ['works', 'demos', 'player', 'articles', 'about', 'terminal'];
-  var TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, terminal: U.app_terminal, updates: U.app_updates };
+  var TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, resume: U.app_resume, terminal: U.app_terminal, updates: U.app_updates };
   var PAGES = { works: 'works/', demos: 'demos/', articles: 'articles/', about: 'about/' };
   var GLYPH = { works: '🎼', demos: '🎛️', player: '▶️', articles: '📝', about: '👤', terminal: '🔍', updates: '💬' };   /* desktop shell + window titles */
   /* both shells: monochrome line icons instead of emoji (desktop icons / dock / window titles / search, phone tiles / dock) */
@@ -935,6 +946,10 @@
     lang: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c3 3 3 14 0 17M12 3.5c-3 3-3 14 0 17"/></svg>',
     music: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>',
     pc: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12.5" rx="1.5"/><path d="M9 21h6M12 17v4"/></svg>',   /* the phone's「電腦版」switch tile */
+    resume: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke-linejoin="round"/><path d="M9 11h6M9 15h6M9 7h2"/></svg>',
+    lock: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
+    share: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 11v9h14v-9"/></svg>',
+    tabs: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="14" height="14" rx="2"/><path d="M7 7V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2"/></svg>'
   };
   /* first paint: the template ships empty glyph slots (no emoji anywhere); the language swap re-fills them */
   document.querySelectorAll('.icon[data-app] .glyph').forEach(function (g) { var a = g.parentNode.getAttribute('data-app'); if (ICON[a]) g.innerHTML = ICON[a]; });
@@ -1667,10 +1682,72 @@
   function openApp(app) {
     if (PHONE) return phone.open(app);
     if (app === 'terminal') return spot.open();   /* Spotlight-style search bar instead of a window */
+    if (app === 'about') return openAbout();
     var w = wins[app];
     if (!w) { w = createWindow(app); wins[app] = w; }
     w.classList.remove('minimized');
     focus(w);
+    updateDock();
+  }
+  var ABOUT_PRANK_CHANCE = 0.40, ABOUT_STEP_MS = 120, ABOUT_STEP_K = 1, ABOUT_STEP_MIN = 70, ABOUT_LEFT = 160, ABOUT_CASCADE = [34, 26],   /* STEP_MS: the gap between windows; STEP_K 1 = constant pace (追記④, the user: 連續開啟速度等速) - < 1 would make the stumble speed up, down to STEP_MIN. LEFT: the cascade starts this much left of centre */ ABOUT_W = { about: 500, resume: 580 }, ABOUT_H = 560, PRANK_SIZE = [460, 340], aboutRun = false;
+  var PRANK_PAGES = [[404, 'Not Found', 'The requested URL /about/ was not found on this server.'], [502, 'Bad Gateway', 'The server received an invalid response from the upstream server.'], [503, 'Service Unavailable', 'The server is temporarily unable to handle the request. Please try again later.'], [500, 'Internal Server Error', 'The server encountered an unexpected condition that prevented it from completing the request.'], [504, 'Gateway Timeout', 'The upstream server failed to respond in time.'], [403, 'Forbidden', 'You don\'t have permission to access /about/ on this server.'], [429, 'Too Many Requests', 'Slow down. This page is being opened far too often.'], [418, 'I\'m a teapot', 'The server refuses to brew coffee because it is, permanently, a teapot.']];
+  /* LOG-160 (the user: 打開頁面時讓他跟網頁打開時的設計依序打開不要同時，會逐漸往右下排列；40% 機率觸發惡搞彩蛋：10 個相似的視窗寫 404 / bad gateway 連續開啟，兩個真視窗夾在中間 4-6，第 10 個時顯示小錯誤欄＋貓咪彩蛋同音效同時間點，確定後只留兩個):
+     the pair opens one window at a time, each a step down and to the right of the last. Four times in ten the About "page" misbehaves: ten Safari windows
+     stumble open in a row - eight server error pages with the real bio and experience hidden among positions 4-6 - and the tenth brings a small error
+     dialog carrying the cat (forced, same clip, same sound cue). OK closes every fake and leaves the two that matter. Reopening with one window already up
+     just brings the other back beside it - no show. Never on the phone (one panel there). */
+  function openAbout() {
+    if (aboutRun) return;
+    var haveA = !!wins.about, haveR = !!wins.resume, vw = window.innerWidth, vh = window.innerHeight - 30, H = Math.min(ABOUT_H, vh - 100);
+    if (haveA && haveR) { wins.resume.classList.remove('minimized'); wins.about.classList.remove('minimized'); focus(wins.about); updateDock(); return; }
+    if (haveA || haveR) {
+      var have = wins.about || wins.resume, hr = have.getBoundingClientRect(), k = haveA ? 'resume' : 'about';
+      wins[k] = createWindow(k, { safari: true, pos: { x: Math.round(hr.left) + ABOUT_CASCADE[0], y: Math.round(hr.top - 30) + ABOUT_CASCADE[1], w: ABOUT_W[k], h: Math.round(hr.height) } });
+      wins.about.classList.remove('minimized'); wins.resume.classList.remove('minimized'); focus(wins.about); updateDock(); return;
+    }
+    var prank = Math.random() < ABOUT_PRANK_CHANCE, seq = [], i;
+    if (prank) {
+      var slots = [[3, 4], [3, 5], [4, 5]][Math.floor(Math.random() * 3)], pages = PRANK_PAGES.slice(), off = Math.floor(Math.random() * pages.length), pi = 0;   /* the real two sit at two of positions 4-6 (1-based) */
+      for (i = 0; i < 10; i++) {
+        if (i === slots[0]) seq.push({ k: 'about' }); else if (i === slots[1]) seq.push({ k: 'resume' });
+        else { seq.push({ k: 'prank-' + i, page: pages[(off + pi) % pages.length], n: i + 1 }); pi++; }
+      }
+    } else seq = [{ k: 'about' }, { k: 'resume' }];
+    var x0 = Math.max(120, Math.round(vw / 2 - 250 - (seq.length - 1) * ABOUT_CASCADE[0] / 2) - ABOUT_LEFT), y0 = 44, at = 0, gap = ABOUT_STEP_MS;
+    aboutRun = true;
+    if (prank) fx.warm();
+    seq.forEach(function (st, idx) {
+      var when = at; at += gap; gap = Math.max(ABOUT_STEP_MIN, gap * ABOUT_STEP_K);
+      setTimeout(function () {
+        if (!desktop || desktop.hidden) return;
+        var pos = { x: x0 + idx * ABOUT_CASCADE[0], y: y0 + idx * ABOUT_CASCADE[1] };
+        if (st.page) {
+          pos.w = PRANK_SIZE[0]; pos.h = PRANK_SIZE[1];
+          wins[st.k] = createWindow(st.k, { safari: true, title: st.page[0] + ' ' + st.page[1], size: PRANK_SIZE, pos: pos, render: function (body, w) { body.innerHTML = prankPage(st.page, st.n); setAddr(w, 'about/?attempt=' + st.n); } });
+        } else {
+          pos.w = ABOUT_W[st.k]; pos.h = H;
+          wins[st.k] = createWindow(st.k, { safari: true, pos: pos });
+        }
+        focus(wins[st.k]); updateDock();
+        if (idx === seq.length - 1) { aboutRun = false; if (prank) prankDialog(); }
+      }, when);
+    });
+  }
+  function prankPage(pg, n) { return '<div class="errpg"><div class="code">' + pg[0] + '</div><div class="name">' + esc(pg[1]) + '</div><p>' + esc(pg[2]) + '</p><p class="srv">' + esc(D.host || '') + ' \u00b7 attempt ' + n + '/10</p></div>'; }
+  function prankDialog() {
+    var vw = window.innerWidth, vh = window.innerHeight - 30, k = 'prank-dlg';
+    var w = wins[k] = createWindow(k, { title: U.prank_title, glyph: '\u26a0', size: [420, 470], pos: { x: Math.round(vw / 2 - 210), y: Math.max(8, Math.round(vh / 2 - 235)), w: 420, h: 470 }, render: function (body) {
+      body.innerHTML = '<div class="prank-dlg"><div class="cat"></div><p>' + esc(U.prank_msg) + '</p><div class="btns"><button class="btn ok" type="button">' + esc(U.prank_ok) + '</button></div></div>';
+      $('.ok', body).addEventListener('click', closePranks);
+    } });
+    w.classList.add('prank-dlg-win'); focus(w); updateDock();
+    $('.close', w).addEventListener('click', closePranks);
+    fx.click(function () {}, { force: true, container: $('.prank-dlg .cat', w), hold: true, width: 260, opacity: 1 });   /* the cat, inside the dialog above the words, with its sound at the clip's own cue - the same egg the boot has; it stays there with the dialog until 關閉彩蛋 */
+  }
+  function closePranks() {
+    fx.dismiss();
+    Object.keys(wins).forEach(function (k) { if (/^prank-/.test(k)) closeApp(k); });
+    if (wins.about) { wins.about.classList.remove('minimized'); focus(wins.about); }
     updateDock();
   }
   function minimize(app) { var w = wins[app]; if (w) { w.classList.add('minimized'); w.classList.remove('focus'); } updateDock(); }
@@ -1682,7 +1759,7 @@
   }
   function updateDock() {
     dock.querySelectorAll('button').forEach(function (b) {
-      var a = b.getAttribute('data-app'), w = wins[a];
+      var a = b.getAttribute('data-app'), w = wins[a] || (a === 'about' ? wins.resume : null);   /* LOG-159: the About light stays on while either of its two windows is up */
       b.classList.toggle('open', !!w);
       b.classList.toggle('on', !!w && !w.classList.contains('minimized') && w.classList.contains('focus'));
     });
@@ -4982,13 +5059,20 @@
     opts = opts || {};
     var title = opts.title || TITLES[app], glyph = opts.glyph || ICON[app] || GLYPH[app];
     var w = document.createElement('section'); w.className = 'win'; w.setAttribute('data-app', app); w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', title);
-    var size = opts.size || { works: [560, 520], demos: [520, 420], player: [480, 620], articles: [480, 380], about: [520, 460], terminal: [560, 380] }[app];
+    var size = opts.size || { works: [560, 520], demos: [520, 420], player: [480, 620], articles: [480, 380], about: [520, 460], resume: [580, 560], terminal: [560, 380] }[app];
     var vw = window.innerWidth, vh = window.innerHeight - 30;
     var W = Math.min(size[0], vw - 24), H = Math.min(size[1], vh - 100);
     var x = Math.max(110, Math.min(vw - W - 20, 140 + (spawn % 5) * 40)), y = Math.max(8, Math.min(vh - H - 90, 30 + (spawn % 5) * 32)); spawn++;
+    if (opts.pos) { x = opts.pos.x; y = opts.pos.y; if (opts.pos.w) W = Math.min(opts.pos.w, vw - 24); if (opts.pos.h) H = Math.min(opts.pos.h, vh - 100); }   /* LOG-159: a caller that lays windows out side by side names the place */
     w.style.cssText = 'left:' + x + 'px;top:' + y + 'px;width:' + W + 'px;height:' + H + 'px;z-index:' + (++z);
-    w.innerHTML = '<div class="win-bar"><span class="dots"><button class="close" title="' + esc(U.win_close) + '"></button><button class="min" title="' + esc(U.win_min) + '"></button><button class="max"></button></span>' +
-      '<span class="win-title">' + '<span class="wg">' + glyph + '</span> ' + esc(title) + '</span></div><div class="win-body"></div>';   /* LOG-116追記⑨: the "open as page" footer is gone (the user: 移除視窗「以整頁開啟」的選項) - the window IS the app; the static pages stay reachable by URL and for crawlers */
+    var dots = '<span class="dots"><button class="close" title="' + esc(U.win_close) + '"></button><button class="min" title="' + esc(U.win_min) + '"></button><button class="max"></button></span>';
+    if (opts.safari) {   /* LOG-159: the About pair looks like Safari - traffic lights, back/forward, the address field in the middle, share + tabs on the right. The address is written by the renderer (it carries the language) */
+      w.classList.add('safari');
+      w.innerHTML = '<div class="win-bar">' + dots + '<span class="sf-nav" aria-hidden="true"><b>\u2039</b><b>\u203a</b></span><span class="addr" title="' + esc(title) + '"><span class="wg">' + ICON.lock + '</span><span class="addr-url"></span></span><span class="sf-tools" aria-hidden="true">' + ICON.share + ICON.tabs + '</span></div><div class="win-body"></div>';
+    } else {
+      w.innerHTML = '<div class="win-bar">' + dots +
+        '<span class="win-title">' + '<span class="wg">' + glyph + '</span> ' + esc(title) + '</span></div><div class="win-body"></div>';
+    }   /* LOG-116追記⑨: the "open as page" footer is gone (the user: 移除視窗「以整頁開啟」的選項) - the window IS the app; the static pages stay reachable by URL and for crawlers */
     $('.close', w).addEventListener('click', function () { closeApp(app); });
     $('.min', w).addEventListener('click', function () { minimize(app); });
     $('.max', w).addEventListener('click', function () { w.classList.toggle('maxed'); if (w.classList.contains('maxed')) { w.dataset.prev = w.style.cssText; w.style.cssText = 'left:8px;top:8px;width:' + (vw - 16) + 'px;height:' + (vh - 90) + 'px;z-index:' + (++z); } else { w.style.cssText = w.dataset.prev; } updDodge(); });
@@ -5105,6 +5189,27 @@
       (acts.length ? '<div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.4rem">' + acts.join('') + '</div>' : '') + '</div></li>';
   }
 
+  /* LOG-159: the About pair's content. bioHTML = what the About window always showed (the bio text is the user's to replace, "自傳等等給");
+     resumeHTML = content/resume.json, already in one language (build.py picks zh or en per leaf: Chinese first + English after in zh, no Chinese in en) */
+  function addrHTML(path) { return '<span class="host">' + esc(D.host || '') + '</span>/' + esc(lang + '/' + path); }
+  function setAddr(w, path) { var u = w && w.querySelector ? w.querySelector('.addr-url') : null; if (u) u.innerHTML = addrHTML(path); }
+  function bioHTML() {
+    return '<h2>' + esc(D.author) + '</h2>' + D.about.map(function (p) { return '<p>' + esc(p) + '</p>'; }).join('') +
+      '<h2>' + esc(U.contact_title) + '</h2><p>' + esc(U.email_label) + ': <a href="#" data-email data-u="' + esc(D.contact.email_user) + '" data-d="' + esc(D.contact.email_domain) + '">' + esc(U.email_hint) + '</a>' +
+      D.contact.links.map(function (l) { return ' \u00b7 <a href="' + esc(l.url) + '" rel="me noopener">' + esc(l.label) + '</a>'; }).join('') + '</p>';
+  }
+  function wireEmail(body) { var a = $('[data-email]', body); if (a) a.addEventListener('click', function (ev) { ev.preventDefault(); var el = ev.currentTarget, addr = el.dataset.u + '@' + el.dataset.d; el.textContent = addr; el.href = 'mailto:' + addr; el.removeAttribute('data-email'); }); }
+  function resumeHTML() {
+    var R = D.resume || { education: [], current: [], past: [] }, h = '<div class="resume">';
+    var ext = function (l) { return l ? ' \u00b7 <a href="' + esc(l.url) + '" target="_blank" rel="noopener">' + esc(l.label) + ' \u2197</a>' : ''; };   /* LOG-160追記②: an entry (or an employer) may carry one outbound link */
+    var li = function (e) { return typeof e === 'string' ? '<li>' + esc(e) + '</li>' : '<li>' + esc(e.text) + ext(e.link) + '</li>'; };
+    var edu = '<h3>' + esc(U.resume_edu) + '</h3>';   /* LOG-160追記③ (the user: 工作經歷排在上面): built first, appended last */
+    R.education.forEach(function (e) { edu += '<div class="ent"><b>' + esc(e.school) + (e.note ? ' <span class="nt">(' + esc(e.note) + ')</span>' : '') + '</b><div class="meta">' + esc(e.place) + ' \u00b7 ' + esc(e.span) + '</div><ul>' + e.items.map(li).join('') + '</ul></div>'; });
+    h += '<h3>' + esc(U.resume_work) + '</h3><h4>' + esc(U.resume_current) + '</h4>';
+    R.current.forEach(function (c) { h += '<div class="ent"><b>' + (c.url ? '<a href="' + esc(c.url) + '" target="_blank" rel="noopener">' + esc(c.org) + ' \u2197</a>' : esc(c.org)) + '</b><div class="meta">' + esc(c.span) + '</div><div class="role">' + esc(c.title) + ' <span class="cur">' + esc(U.resume_current) + '</span></div><ul>' + c.items.map(li).join('') + '</ul></div>'; });
+    h += '<h4>' + esc(U.resume_past) + '</h4><ul class="past">' + R.past.map(li).join('') + '</ul>' + edu + '</div>';
+    return h;
+  }
   var RENDER = {
     works: function (body) {
       /* the transcriptions app: music lives in the player, demos in the design app — only the remaining work types are listed here */
@@ -5131,12 +5236,19 @@
       body.innerHTML = D.articles.length ? '<ul class="list">' + D.articles.map(function (a) { return '<li><div><div class="t"><a href="articles/' + esc(a.slug) + '/">' + esc(a.title) + '</a></div><div class="meta">' + esc(a.date) + '</div></div></li>'; }).join('') + '</ul>'
         : '<p class="d">' + esc(U.articles_empty) + '</p>';
     },
-    about: function (body) {
-      body.innerHTML = '<h2>' + esc(D.author) + '</h2>' + D.about.map(function (p) { return '<p>' + esc(p) + '</p>'; }).join('') +
-        '<h2>' + esc(U.contact_title) + '</h2><p>' + esc(U.email_label) + ': <a href="#" data-email data-u="' + esc(D.contact.email_user) + '" data-d="' + esc(D.contact.email_domain) + '">' + esc(U.email_hint) + '</a>' +
-        D.contact.links.map(function (l) { return ' · <a href="' + esc(l.url) + '" rel="me noopener">' + esc(l.label) + '</a>'; }).join('') + '</p>';
-      $('[data-email]', body).addEventListener('click', function (ev) { ev.preventDefault(); var a = ev.currentTarget, addr = a.dataset.u + '@' + a.dataset.d; a.textContent = addr; a.href = 'mailto:' + addr; a.removeAttribute('data-email'); });
+    about: function (body, w) {   /* LOG-159: desktop = the bio window of the Safari pair; phone = one Safari-like page with two tabs (bio / experience) */
+      if (PHONE) {
+        var was = body.dataset.tab || 'bio';
+        body.innerHTML = '<div class="sf-ph"><div class="sf-addr"><span class="wg">' + ICON.lock + '</span><span class="addr-url">' + addrHTML(was === 'bio' ? 'about/' : 'about/#experience') + '</span></div>' +
+          '<div class="sf-tabs" role="tablist"><button data-t="bio" role="tab">' + esc(U.about_tab_bio) + '</button><button data-t="res" role="tab">' + esc(U.app_resume) + '</button></div>' +
+          '<div class="sf-page" data-p="bio">' + bioHTML() + '</div><div class="sf-page" data-p="res">' + resumeHTML() + '</div></div>';
+        var show = function (t) { body.dataset.tab = t; body.querySelectorAll('.sf-tabs button').forEach(function (b) { b.classList.toggle('on', b.dataset.t === t); b.setAttribute('aria-selected', b.dataset.t === t ? 'true' : 'false'); }); body.querySelectorAll('.sf-page').forEach(function (p) { p.hidden = p.dataset.p !== t; }); $('.addr-url', body).innerHTML = addrHTML(t === 'bio' ? 'about/' : 'about/#experience'); };
+        body.querySelectorAll('.sf-tabs button').forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.t); }); });
+        show(was); wireEmail(body); return;
+      }
+      body.innerHTML = bioHTML(); wireEmail(body); setAddr(w, 'about/');
     },
+    resume: function (body, w) { body.innerHTML = resumeHTML(); setAddr(w, 'about/#experience'); },
     player: function (body) { player.mount(body); },
     terminal: function (body) { terminal.mount(body); },
     updates: function (body) { var list = D.updates || []; body.innerHTML = '<div class="upd-log">' + (list.length ? list.map(function (u) { return '<div class="msg"><time>' + esc(u.date) + '</time><p>' + esc(u.text) + '</p></div>'; }).join('') : '<p class="note">' + esc(U.updates_empty) + '</p>') + '</div>'; }
@@ -5301,7 +5413,7 @@
         if (!audio._wired) { var s = actx.createMediaElementSource(audio); s.connect(master); audio._wired = true; }
         master.gain.cancelScheduledValues(0); master.gain.setValueAtTime(0.0001, actx.currentTime);
         audio._silent = true; audio.muted = true;   /* LOG-157: the gain alone was not enough - on iOS a media element wired to a context that is not yet running (the context was created a moment ago in this very gesture) plays a few ms straight to the speaker before the graph takes over: the power-on pop. The element itself is muted for the silent unlock (the click sound's prime() does the same) and unmuted at the real start */
-        var p = audio.play(); if (p && p.then) p.then(function () { if (!playing) { audio.pause(); try { audio.currentTime = 0; } catch (e) {} audio._silent = false; audio.muted = false; } }).catch(function () { audio._silent = false; audio.muted = false; });
+        var p = audio.play(); if (p && p.then) p.then(function () { if (!playing) { audio.pause(); try { audio.currentTime = 0; } catch (e) {} audio._silent = false; } }).catch(function () { audio._silent = false; });   /* LOG-158: stays muted after the pause (same iOS leak as the click's prime); the real start unmutes */
       } catch (e) {}
     }
     // continue the same track after a language switch (page reload): seek to the saved position, try to keep playing

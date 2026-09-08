@@ -182,6 +182,32 @@ _raw = [i + 1 for i, ln in enumerate(_os_js.splitlines())
         if re.search(r"\bEE\s*(\.\w|\[)", ln) and "function ee" not in ln and "var EE = {}" not in ln]
 ok("no raw forced-flag reads outside the registry", not _raw, f"lines {_raw}")
 
+
+# ---- LOG-159: the About app's second window (resume.json)
+_res = B.load_resume()
+ok("resume.json loads with the three sections", all(isinstance(_res.get(k), list) and _res[k] for k in ("education", "current", "past")))
+ok("desktop shell embeds the resume", all('"resume"' in pages[f"{l}/index.html"] and '"host"' in pages[f"{l}/index.html"] for l in ("zh", "en")))
+_CJK = re.compile(r"[\u4e00-\u9fff]")
+_KANA = re.compile(r"[\u3040-\u30ff]")
+
+
+def _leaves(v):
+    if isinstance(v, dict):
+        for x in v.values():
+            yield from _leaves(x)
+    elif isinstance(v, list):
+        for x in v:
+            yield from _leaves(x)
+    elif isinstance(v, str):
+        yield v
+
+
+_en = list(_leaves(B.loc_deep({k: v for k, v in _res.items() if not k.startswith("_")}, "en")))
+_leak = [s for s in _en if _CJK.search(s) and not _KANA.search(s)]   # a Japanese title keeps its kanji; anything else with CJK is Chinese leaking into English
+ok("English resume shows no Chinese (Japanese titles exempt)", not _leak, str(_leak))
+ok("school names never in Chinese", all(not _CJK.search(e["school"]) for e in _res["education"]))
+ok("Formosa Studio title is the 2026-09-08 one", any(c["title"]["zh"] in ("臺灣區域聯絡人 | 製作人助理", "臺灣區域聯絡人 / 製作人助理") for c in _res["current"]) and not any("端口" in json.dumps(c, ensure_ascii=False) for c in _res["current"]))
+
 # ---- report
 fails = [r for r in results if not r[0]]
 for okk, name, msg in results:

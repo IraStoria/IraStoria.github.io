@@ -78,6 +78,39 @@ def render(template, ctx):
     return out
 
 
+def load_resume():
+    """content/resume.json (LOG-159): the About app's second window. Every {zh, en} leaf is validated; None means "absent"."""
+    fp = CONTENT / "resume.json"
+    r = read_json(fp) if fp.exists() else {"education": [], "current": [], "past": []}
+    for sec in ("education", "current", "past"):
+        if not isinstance(r.get(sec), list):
+            raise BuildError(f"resume.json: '{sec}' must be a list")
+
+    def walk(v, path):
+        if isinstance(v, dict):
+            if set(v.keys()) == {"zh", "en"}:
+                bilingual(v, path)
+            else:
+                for k, x in v.items():
+                    walk(x, f"{path}.{k}")
+        elif isinstance(v, list):
+            for i, x in enumerate(v):
+                walk(x, f"{path}[{i}]")
+    walk({k: v for k, v in r.items() if not k.startswith("_")}, "resume.json")
+    return r
+
+
+def loc_deep(v, lang):
+    """Pick one language out of every {zh, en} leaf, recursively (dicts with exactly those keys)."""
+    if isinstance(v, dict):
+        if set(v.keys()) == {"zh", "en"}:
+            return v[lang]
+        return {k: loc_deep(x, lang) for k, x in v.items() if not k.startswith("_")}
+    if isinstance(v, list):
+        return [loc_deep(x, lang) for x in v]
+    return v
+
+
 def load_updates():
     """content/updates.json (optional): [{date, zh, en}] → validated, newest first."""
     fp = CONTENT / "updates.json"
@@ -110,6 +143,7 @@ def bilingual(obj, path):
 # ---------------------------------------------------------------- loading + validation
 def load_site():
     site = read_json(CONTENT / "site.json")
+    site["resume"] = load_resume()
     for key in ("author", "tagline", "hero_intro", "about_body"):
         bilingual(site.get(key), f"site.json:{key}")
     for k, v in site["nav"].items():
@@ -484,7 +518,7 @@ def build_pages(site, works, demos, articles):
         def home_data(lang):
           return {
             "lang": lang, "site_name": site["site_name"], "author": site["author"][lang], "tagline": site["tagline"][lang], "hero_intro": site["hero_intro"][lang],
-            "about": site["about_body"][lang], "contact": site["contact"],
+            "about": site["about_body"][lang], "contact": site["contact"], "resume": loc_deep(site["resume"], lang), "host": re.sub(r"^https?://", "", site["base_url"]).strip("/"),
             "ui": {k: v[lang] for k, v in site["ui"].items()},
             "fx": {name: {k: (local_versioned(v) if k in ("video", "sound") and v else v) for k, v in f.items() if not k.startswith("_")} for name, f in (site.get("fx") or {}).items()},
             "works": [loc(w) for w in works],
