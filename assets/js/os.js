@@ -1689,13 +1689,17 @@
     focus(w);
     updateDock();
   }
-  var ABOUT_PRANK_CHANCE = 0.50, ABOUT_STEP_MS = 120, ABOUT_STEP_K = 1, ABOUT_STEP_MIN = 70, ABOUT_LEFT = 160, ABOUT_CASCADE = [34, 26],   /* STEP_MS: the gap between windows; STEP_K 1 = constant pace (追記④, the user: 連續開啟速度等速) - < 1 would make the stumble speed up, down to STEP_MIN. LEFT: the cascade starts this much left of centre */ ABOUT_W = { about: 500, resume: 580 }, ABOUT_H = 560, PRANK_SIZE = [460, 340], aboutRun = false;
-  function prankDraw(n) {   /* 追記⑦ (the user: 錯誤連結中文的話顯示中文；除了正經的幾個以外塞一些無厘頭的): 4 serious + 4 silly from content/site.json (already in this language), shuffled */
+  var ABOUT_PRANK_CHANCE = 0.50, ABOUT_STEP_MS = 120, ABOUT_STEP_K = 1, ABOUT_STEP_MIN = 70, ABOUT_LEFT = 160, ABOUT_CASCADE = [34, 26],   /* STEP_MS: the gap between windows; STEP_K 1 = constant pace (追記④, the user: 連續開啟速度等速) - < 1 would make the stumble speed up, down to STEP_MIN. LEFT: the cascade starts this much left of centre */ ABOUT_W = { about: 500, resume: 580 }, ABOUT_H = 560, PRANK_SIZE = [460, 340], aboutRun = false, lastPrank = false;
+  try { lastPrank = sessionStorage.getItem('about_prank') === '1'; } catch (e) {}   /* 追記⑪ (the user: 這個彩蛋不會連續觸發): the prank never fires twice in a row - remembered across a reload */
+  function prankDraw(n) {   /* 追記⑦/⑩/⑪: n fake pages, HALF serious and HALF silly (content/site.json, already in this language); every silly page marked always:true (the riddle) is in each draw.
+     Order (the user: 第10個attempts必為正經，第9個必為惡搞): the last fake is serious, the one before it silly, the rest shuffled */
     var P = D.prank || {}, pick = function (pool, k) { var a = (pool || []).slice(), o = []; while (a.length && o.length < k) o.push(a.splice(Math.floor(Math.random() * a.length), 1)[0]); return o; };
-    var must = (P.silly || []).filter(function (p) { return p.always; }), rest = (P.silly || []).filter(function (p) { return !p.always; });   /* 追記⑩ (the user: 彩蛋謎語必定包含在錯誤頁面之中): always:true pages are in every draw */
-    var out = must.slice(0, n).concat(pick(P.serious, Math.ceil(n / 2))).concat(pick(rest, Math.max(0, Math.floor(n / 2) - must.length)));
-    while (out.length < n) out.push({ code: 500, name: 'Internal Server Error', msg: '' });
-    return pick(out, n);
+    var half = Math.floor(n / 2), must = (P.silly || []).filter(function (p) { return p.always; }), rest = (P.silly || []).filter(function (p) { return !p.always; });
+    var ser = pick(P.serious, n - half), sil = must.slice(0, half).concat(pick(rest, Math.max(0, half - must.length)));
+    while (ser.length < n - half) ser.push({ code: 500, name: 'Internal Server Error', msg: '' });
+    while (sil.length < half) sil.push({ code: 418, name: "I'm a teapot", msg: '' });
+    var last = ser.pop(), ninth = sil.pop();
+    return pick(ser.concat(sil), n - 2).concat([ninth, last]);
   }
   /* LOG-160 (the user: 打開頁面時讓他跟網頁打開時的設計依序打開不要同時，會逐漸往右下排列；40% 機率觸發惡搞彩蛋：10 個相似的視窗寫 404 / bad gateway 連續開啟，兩個真視窗夾在中間 4-6，第 10 個時顯示小錯誤欄＋貓咪彩蛋同音效同時間點，確定後只留兩個):
      the pair opens one window at a time, each a step down and to the right of the last. Four times in ten the About "page" misbehaves: ten Safari windows
@@ -1711,7 +1715,8 @@
       wins[k] = createWindow(k, { safari: true, pos: { x: Math.round(hr.left) + ABOUT_CASCADE[0], y: Math.round(hr.top - 30) + ABOUT_CASCADE[1], w: ABOUT_W[k], h: Math.round(hr.height) } });
       wins.about.classList.remove('minimized'); wins.resume.classList.remove('minimized'); focus(wins.about); updateDock(); return;
     }
-    var prank = Math.random() < ABOUT_PRANK_CHANCE, seq = [], i;
+    var prank = !lastPrank && Math.random() < ABOUT_PRANK_CHANCE, seq = [], i;
+    lastPrank = prank; try { sessionStorage.setItem('about_prank', prank ? '1' : '0'); } catch (e) {}
     if (prank) {
       var slots = [[3, 4], [3, 5], [4, 5]][Math.floor(Math.random() * 3)], pages = prankDraw(8), pi = 0;   /* the real two sit at two of positions 4-6 (1-based) */
       for (i = 0; i < 10; i++) {
