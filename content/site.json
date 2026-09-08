@@ -1058,6 +1058,6 @@
   },
   "backend": {
     "_note": "LOG-161 / ADR-008: the submissions Worker (worker/API.md). url = the workers.dev address WITHOUT a trailing slash; empty = not wired yet, the apps show their offline copy. ?pool=<url> overrides it at runtime for local testing.",
-    "url": ""
+    "url": "https://pool.irastoriatw.workers.dev"
   }
 }
