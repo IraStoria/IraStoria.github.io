@@ -640,6 +640,17 @@
           "en": "Announcements keep the surprises to themselves. This page didn't, so there is no page. But EE_midi restart."
         },
         "always": true
+      },
+      {
+        "code": 426,
+        "name": {
+          "zh": "我是一台烤土司機",
+          "en": "I Am a Toaster"
+        },
+        "msg": {
+          "zh": "我需要升級。讀到這一頁的人已經沒辦法用第三人稱提到我了。",
+          "en": "I require an upgrade. Anyone who has read this page can no longer refer to me in the third person."
+        }
       }
     ]
   }
