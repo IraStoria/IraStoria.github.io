@@ -90,6 +90,7 @@
     midi: { grp: 1, once: 1 },
     hb:   { grp: 1 },
     st:   { grp: 1, once: 1 },
+    '404': { grp: 1, once: 1 },   /* LOG-160追記⑬: the About prank (the ten broken pages) - forced on the next About opening */
     v6:   { mode: 'basic', rank: 1 },
     v6_p: { mode: 'basic', rank: 1 },
     v6_m: { grp: 1, mode: 'midi', rank: 2 },
@@ -220,7 +221,7 @@
   var fx = (function () {
     var OGG_OK = (function () { try { return !!document.createElement('audio').canPlayType('audio/ogg; codecs="vorbis"'); } catch (e) { return false; } })();
     function sndUrl(u) { return OGG_OK ? u : u.replace(/\.ogg(\?|$)/, '.m4a$1'); }   /* Safari has never decoded Ogg Vorbis: the same clips ride alongside as AAC (.m4a), picked at runtime */
-    var cfg = (D.fx && D.fx.click) || null, vid = null, snd = null, held = null, bootCfg = (D.fx && D.fx.boot) || null, bootSnd = null, bootPending = false;
+    var cfg = (D.fx && D.fx.click) || null, vid = null, snd = null, held = null, catAt = 0, bootCfg = (D.fx && D.fx.boot) || null, bootSnd = null, bootPending = false;
     if (cfg && cfg.video && !reduced) { vid = document.createElement('video'); vid.src = '../' + cfg.video; vid.muted = true; vid.playsInline = true; vid.preload = 'auto'; vid.className = 'fx-clip'; vid.setAttribute('aria-hidden', 'true'); vid.load(); }
     if (cfg && cfg.sound) { snd = new Audio('../' + sndUrl(cfg.sound)); snd.preload = 'auto'; snd.load(); }
     if (bootCfg && bootCfg.sound) { bootSnd = new Audio('../' + sndUrl(bootCfg.sound)); bootSnd.preload = 'auto'; bootSnd.load(); }
@@ -239,6 +240,7 @@
       cb = cb || function () {}; opt = opt || {};   /* opt.force: skip the dice (LOG-160: the About prank's dialog always shows the cat); opt.anchorEl: centre the clip on this element */
       bootOnGesture();
       if (!opt.force && cfg && cfg.chance != null && !eeOn('cat') && Math.random() >= cfg.chance) { cb(); return; }   // fires with probability `chance` (can be forced)
+      catAt = performance.now();   /* 追記⑬: the moment the cat is on (the About prank keeps its distance from a fresh boot cat) */
       if (!cfg || !vid) { playSnd(); cb(); return; }
       var doneCb = false, sndDone = false, raf = null;
       var sndAt = Math.max(0, (cfg.sound_at || 0) - (cfg.sound_onset || 0));
@@ -277,7 +279,7 @@
       try { if (snd) snd.load(); if (!vid || vid._warm) return; vid._warm = true; vid.preload = 'auto'; vid.load(); var p = vid.play(); if (p && p.then) p.then(function () { vid.pause(); vid.currentTime = 0; }).catch(function () {}); } catch (e) {}
     }
     function dismiss() { if (!held) return; var v = held; held = null; v.classList.add('fade'); setTimeout(function () { v.remove(); v.classList.remove('fade'); }, 320); }
-    return { click: click, boot: boot, prime: prime, warm: warm, dismiss: dismiss };
+    return { click: click, boot: boot, prime: prime, warm: warm, dismiss: dismiss, catAt: function () { return catAt; } };
   })();
 
   var done = false, powered = false, ready = false;
@@ -1690,7 +1692,7 @@
     focus(w);
     updateDock();
   }
-  var ABOUT_PRANK_CHANCE = 0.50, ABOUT_STEP_MS = 120, ABOUT_STEP_K = 1, ABOUT_STEP_MIN = 70, ABOUT_LEFT = 160, ABOUT_CASCADE = [34, 26],   /* STEP_MS: the gap between windows; STEP_K 1 = constant pace (追記④, the user: 連續開啟速度等速) - < 1 would make the stumble speed up, down to STEP_MIN. LEFT: the cascade starts this much left of centre */ ABOUT_W = { about: 500, resume: 580 }, ABOUT_H = 560, PRANK_SIZE = [460, 340], aboutRun = false, lastPrank = false;
+  var ABOUT_PRANK_CHANCE = 0.50, ABOUT_STEP_MS = 120, ABOUT_STEP_K = 1, ABOUT_STEP_MIN = 70, ABOUT_LEFT = 160, ABOUT_CAT_COOLDOWN_MS = 10000, ABOUT_CASCADE = [34, 26],   /* STEP_MS: the gap between windows; STEP_K 1 = constant pace (追記④, the user: 連續開啟速度等速) - < 1 would make the stumble speed up, down to STEP_MIN. LEFT: the cascade starts this much left of centre */ ABOUT_W = { about: 500, resume: 580 }, ABOUT_H = 560, PRANK_SIZE = [460, 340], aboutRun = false, lastPrank = false;
   try { lastPrank = sessionStorage.getItem('about_prank') === '1'; } catch (e) {}   /* 追記⑪ (the user: 這個彩蛋不會連續觸發): the prank never fires twice in a row - remembered across a reload */
   function prankDraw(n) {   /* 追記⑦/⑩/⑪: n fake pages, HALF serious and HALF silly (content/site.json, already in this language); every silly page marked always:true (the riddle) is in each draw.
      Order (the user: 第10個attempts必為正經，第9個必為惡搞): the last fake is serious, the one before it silly, the rest shuffled */
@@ -1717,7 +1719,8 @@
       wins[k] = createWindow(k, { safari: true, pos: { x: Math.round(hr.left) + ABOUT_CASCADE[0], y: Math.round(hr.top - 30) + ABOUT_CASCADE[1], w: ABOUT_W[k], h: Math.round(hr.height) } });
       wins.about.classList.remove('minimized'); wins.resume.classList.remove('minimized'); focus(wins.about); updateDock(); return;
     }
-    var prank = !lastPrank && Math.random() < ABOUT_PRANK_CHANCE, seq = [], i;
+    var forced = eeTake('404'), recentCat = fx.catAt() > 0 && performance.now() - fx.catAt() < ABOUT_CAT_COOLDOWN_MS;   /* 追記⑬ (the user: 開機時已經觸發過 cat 彩蛋時，10 秒內點「關於」不會觸發): the boot's cat and the prank's cat stay ten seconds apart; EE_404 overrides everything */
+    var prank = forced || (!lastPrank && !recentCat && Math.random() < ABOUT_PRANK_CHANCE), seq = [], i;
     lastPrank = prank; try { sessionStorage.setItem('about_prank', prank ? '1' : '0'); } catch (e) {}
     if (prank) {
       var slots = [[3, 4], [3, 5], [4, 5]][Math.floor(Math.random() * 3)], pages = prankDraw(8), pi = 0;   /* the real two sit at two of positions 4-6 (1-based) */
