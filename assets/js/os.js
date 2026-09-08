@@ -200,6 +200,7 @@
     if (typeof secStage !== 'undefined' && secStage && secStage.active()) secStage.relabel();   /* the native section stage follows an in-place language switch (zone labels, mode buttons, exit) */
     caption.reset();
     Object.keys(wins).forEach(function (a) { var w = wins[a]; if (!TITLES[a]) return; w.setAttribute('aria-label', TITLES[a]); var tt = w.querySelector('.win-title'); if (tt) tt.innerHTML = '<span class="wg">' + (ICON[a] || GLYPH[a]) + '</span> ' + esc(TITLES[a]); var ft = w.querySelector('.win-foot a'); if (ft) ft.textContent = U.open_page; if (RENDER[a]) RENDER[a](w.querySelector('.win-body'), w); });
+    relabelPranks();
   }
 
   // ============================================================ boot sequence
@@ -1734,7 +1735,7 @@
         var pos = { x: x0 + idx * ABOUT_CASCADE[0], y: y0 + idx * ABOUT_CASCADE[1] };
         if (st.page) {
           pos.w = PRANK_SIZE[0]; pos.h = PRANK_SIZE[1];
-          wins[st.k] = createWindow(st.k, { safari: true, title: st.page.code + ' ' + st.page.name, size: PRANK_SIZE, pos: pos, render: function (body, w) { body.innerHTML = prankPage(st.page, st.n); setAddr(w, 'about/?attempt=' + st.n); } });
+          wins[st.k] = createWindow(st.k, { safari: true, title: st.page.code + ' ' + st.page.name, size: PRANK_SIZE, pos: pos, render: function (body, w) { w.dataset.prankCode = String(st.page.code); w.dataset.prankN = String(st.n); body.innerHTML = prankPage(st.page, st.n); setAddr(w, 'about/?attempt=' + st.n); } });
         } else {
           pos.w = ABOUT_W[st.k]; pos.h = H;
           wins[st.k] = createWindow(st.k, { safari: true, pos: pos });
@@ -1745,6 +1746,20 @@
     });
   }
   function prankPage(pg, n) { return '<div class="errpg"><div class="code">' + pg.code + '</div><div class="name">' + esc(pg.name) + '</div><p>' + esc(pg.msg) + '</p><p class="srv">' + esc(D.host || '') + ' \u00b7 attempt ' + n + '/10</p></div>'; }
+  function prankFind(code) { var P = D.prank || {}, all = (P.serious || []).concat(P.silly || []); for (var i = 0; i < all.length; i++) if (String(all[i].code) === String(code)) return all[i]; return null; }
+  function relabelPranks() {   /* 追記⑭ (the user: 切換中英文時錯誤的解釋都還是維持中文): the fake error pages and the error dialog follow an in-place language switch - applyLang only re-renders the windows that have a TITLES entry, which these never had. Each fake page is looked up again by its code in the new language's pool; the dialog keeps its cat (only the words change) */
+    Object.keys(wins).forEach(function (k) {
+      var w = wins[k];
+      if (/^prank-\d/.test(k)) {
+        var pg = prankFind(w.dataset.prankCode), n = w.dataset.prankN; if (!pg) return;
+        w.setAttribute('aria-label', pg.code + ' ' + pg.name); var a = $('.addr', w); if (a) a.title = pg.code + ' ' + pg.name;
+        $('.win-body', w).innerHTML = prankPage(pg, n); setAddr(w, 'about/?attempt=' + n);
+      } else if (k === 'prank-dlg') {
+        w.setAttribute('aria-label', U.prank_title); var tt = $('.win-title', w); if (tt) tt.innerHTML = '<span class="wg">\u26a0</span> ' + esc(U.prank_title);
+        var p = $('.prank-dlg > p', w); if (p) p.textContent = U.prank_msg; var b = $('.prank-dlg .ok', w); if (b) b.textContent = U.prank_ok;
+      }
+    });
+  }
   function prankDialog() {
     var vw = window.innerWidth, vh = window.innerHeight - 30, k = 'prank-dlg';
     var w = wins[k] = createWindow(k, { title: U.prank_title, glyph: '\u26a0', size: [420, 470], pos: { x: Math.round(vw / 2 - 210), y: Math.max(8, Math.round(vh / 2 - 235)), w: 420, h: 470 }, render: function (body) {
