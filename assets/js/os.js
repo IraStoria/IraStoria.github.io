@@ -1176,6 +1176,7 @@
       for (var si = 0; si < sN; si++) { sd = (sd * 16807) % 2147483647; var sx = sd / 2147483647; sd = (sd * 16807) % 2147483647; var sy = sd / 2147483647; sd = (sd * 16807) % 2147483647; var sz = sd / 2147483647; stars.push({ x0: (sx * 2 - 1) * sR, y0: (sy * 2 - 1) * sR, rad: Math.hypot((sx * 2 - 1) * sR, (sy * 2 - 1) * sR), ang: Math.atan2((sy * 2 - 1) * sR, (sx * 2 - 1) * sR), x: 0, y: 0, r: sz < 0.08 ? 1.6 : sz < 0.3 ? 1.1 : 0.7, a: 0.25 + 0.6 * sz, ph: sz * 6.28, sp: 0.3 + sz * 0.9 }); }
     }
     function start(d, keepEntry) {   /* keepEntry: the phone's demos panel has already rewritten its own history entry to point here */
+      if (/[?&]debug/.test(location.search)) window.__ade = { veil: function () { return mwfVeil; }, anim: function () { return mwfAnim ? mwfAnim.mode : null; }, midi: function () { return midiForm && !!(ch && ch.mwf); }, active: function () { return active; }, state: function () { return { playing: !!(ch && ch.playing), paused: !!(ch && ch.paused), ctx: ctx ? ctx.state : null, mwf: !!(ch && ch.mwf), midiForm: midiForm, anim: mwfAnim ? mwfAnim.mode : null, old: !!mwfOld }; } };   /* ?debug: the MIDI form's veil, for the probe (LOG-171) */
       if (active) stop(true); active = true; moved = false; lx = ly = -1; demo = d; vis = {}; ann = {}; lastT = 0; redHold = null; flS = 0; trails = false; trailT0 = 0; midiForm = false; midiT0 = 0; sparks = []; mwfOld = null; mwfAnim = null; smuted = false;   /* the third form is rolled per piece in load() (the MIDI egg's flag forces the first roll); a fresh stage always starts audible */
       var carry = false; if (exitPending) { exitPending.timers.forEach(clearTimeout); if (exitPending.e0) exitPending.e0.remove(); carry = exitPending.wasDucked; exitPending = null; WV.reflowCancel(); }   /* re-entered mid-exit: drop the pending restore; the music stays ducked and is released by this run's exit */
       pieces = d.pieces || []; idx = -1; WV.sweep(true, player.state().frac || 0); WV.squash(true); WV.centre(true); build(d);
@@ -1207,7 +1208,7 @@
       }
       if (ctx.state === 'suspended') ctx.resume();
       if (ttl) ttl.textContent = p.title || ''; langSeen = D.lang;
-      if (!midiForm && !trails && (eeTake('midi') || Math.random() < STAGE_MIDI_CHANCE)) { midiForm = true; midiT0 = performance.now(); }   /* the MIDI form: rolled at each piece start until it fires (the flag forces it); it stays for the stage run — fired mid-run, the square scales out of the centre at this piece's start */
+      if (!midiForm && !trails && (eeTake('midi') || Math.random() < STAGE_MIDI_CHANCE)) { midiForm = true; midiT0 = performance.now(); if (typeof room !== 'undefined' && room.dim()) mwfVeil = true; }   /* LOG-171: fired under an open well / pillar stage - stays in the square until it closes */   /* the MIDI form: rolled at each piece start until it fires (the flag forces it); it stays for the stage run — fired mid-run, the square scales out of the centre at this piece's start */
       if (!trails && !midiForm && (eeTake('st') || Math.random() < STAGE_TRAIL_CHANCE)) { trails = true; trailT0 = performance.now(); }   /* star-trail egg: rolled at each piece start until it fires; then it stays until the stage is left — never together with the MIDI form */   /* eeTake: spending the flag here is the registry's `once`, not a rule this line keeps for itself */
       var prev = ch, veil = p.veil || [], mine = ch = { playing: false, paused: false, t0: 0, dur: 0, piece: p };
       KEYS.forEach(function (k) {
@@ -1793,7 +1794,7 @@
     }
     return { start: start, stop: function () { stop(false); }, active: function () { return active; }, src: function () { return src; }, toggle: toggle, prev: prev, next: function () { if (active) next(); }, veilMidi: veilMidi,
              toggleMute: function () { smuted = !smuted; if (mgain && ctx) mgain.gain.setTargetAtTime(smuted ? 0.0001 : 1, ctx.currentTime, 0.03); },
-             debug: function () { var o = { active: active, ctx: ctx ? ctx.state : '-', idx: idx, playing: !!(ch && ch.playing), pos: ch && ch.playing && ctx ? +(ctx.currentTime - ch.t0).toFixed(2) : 0, dur: ch ? +ch.dur.toFixed(1) : 0, grow: +grow.toFixed(2), lx: Math.round(lx), ly: Math.round(ly), geo: geo, mwf: midiForm ? { data: !!(ch && ch.mwf), run: mwfRun, sparks: sparks.length } : false }; if (ch) KEYS.forEach(function (k) { var c = ch[k]; o[k] = { buf: !!c.buf, g: +c.g.gain.value.toFixed(3), pan: c.pan ? +c.pan.pan.value.toFixed(2) : null, lp: Math.round(c.lp.frequency.value) }; }); return o; } };
+             debug: function () { var o = { active: active, ctx: ctx ? ctx.state : '-', idx: idx, playing: !!(ch && ch.playing), pos: ch && ch.playing && ctx ? +(ctx.currentTime - ch.t0).toFixed(2) : 0, dur: ch ? +ch.dur.toFixed(1) : 0, grow: +grow.toFixed(2), lx: Math.round(lx), ly: Math.round(ly), geo: geo, mwf: midiForm ? { data: !!(ch && ch.mwf), run: mwfRun, sparks: sparks.length } : false, veil: mwfVeil }; if (ch) KEYS.forEach(function (k) { var c = ch[k]; o[k] = { buf: !!c.buf, g: +c.g.gain.value.toFixed(3), pan: c.pan ? +c.pan.pan.value.toFixed(2) : null, lp: Math.round(c.lp.frequency.value) }; }); return o; } };
   })();
 
   function openApp(app) {
@@ -2774,6 +2775,8 @@
     var curStyle = 'board', nextStyle = null, nextStyleFor = null, styleKey = null, holeTube = true, smokeBeam = true, smokeCirc = false, runRoll = true, wipeExit = false, banSmoke = false;   /* smokeCirc (追記㊷): this group's fog enters as a disc expanding from the vanishing point instead of the plain fade */   /* the per-group draw (which way the letter appears, and that way's own coin flips) and the per-run 30% gate */
     /* elF = .ds-sky, the layer IN FRONT of the spectrum bars (LOG-111). passSide: which verge THIS SET of boards stands on */
     var beads = [], sign = null, oldSign = null, lastPos = null, keep = null, byeT0 = 0, now = 0, hiT0 = 0, hiOn = false, tempoT0 = 0;
+    var veilOn = false, veilPn = 0, veilK = 0;   /* LOG-171 (the user: 觸發 EE_midi 時進恥辱柱／許願池 midi 會淡出): while a desktop stage is up the road folds back into the vanishing point - the farewell's own move - and no note is spawned; it unfolds again when the stage closes */
+    function veilMidi(v) { v = !!v; if (v === veilOn) return; var cur = veilK; veilOn = v; veilPn = performance.now() - (v ? cur : 1 - cur) * 550; }   /* picks up from wherever the fold is */
     var exitFired = false, stageKey = null, stageEls = null;   /* LOG-112: the outro's exit has handed back (once only); and the cut currently written onto the stage's own layers */   /* hiT0/hiOn: the road's own entrance clock (it cannot ride `now` alone - the audio clock sits at 0 until the first sound) */
     var wasRamp = false, lockT0 = 0, groundT0 = 0, doorNow = null, smT = null, smP = 0, dcollT0 = 0, dcoll = 0;   /* dcollT0/dcoll: the tube door's line-collection after the pass-by (追記㉝) */   /* doorNow: this frame's exit door (exitAt), so no other bar-cut is pushed while it stands (mask XOR - 追記⑮); smT/smP: the audio-clock smoothing anchors */
     var IGNITE = [0.85, 0.06, 1, 0.1, 1], SHUT = [1, 0.1, 0.85, 0.04, 0.3, 0];   /* striking the tube / cutting the power: fixed blip patterns, ~60 ms a step — a discrete event, not a running flicker */
@@ -4596,7 +4599,7 @@
       var lg = g.createLinearGradient(geo.cx - half, 0, geo.cx + half, 0);
       lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.12, 'rgba(255,255,255,.26)'); lg.addColorStop(0.88, 'rgba(255,255,255,.26)'); lg.addColorStop(1, 'rgba(255,255,255,0)');
       g.strokeStyle = lg; g.lineWidth = 1.5; g.beginPath(); g.moveTo(geo.cx - half, yL); g.lineTo(geo.cx + half, yL); g.stroke();
-      if (ck && !byeT0) {   /* spawn: every note that will sound within one travel time, once */
+      if (ck && !byeT0 && veilK < 0.5) {   /* spawn: every note that will sound within one travel time, once (not while veiled - LOG-171) */
         var bn = beatNow(ck), eng0 = getEng();
         var want = null; try { want = eng0.notesIn ? eng0.notesIn(bn, bn + R.travel) : null; } catch (e3) { want = null; }
         if (want === null) { try { want = eng0.beatsIn(bn, bn + R.travel); } catch (e2) { want = []; } }   /* a section with no display track keeps the old bare beat grid */
@@ -4649,6 +4652,7 @@
         else { smT = ck.t; smP = pn0; now = Math.max(now, ck.t); }
       }
       var bye = byeT0 ? Math.max(0, 1 - (now - byeT0) / 0.95) : 1;   /* the farewell folds the road back into the horizon, in step with wave.farewell() */
+      var vk = Math.min(1, (performance.now() - veilPn) / 550); vk = vk * vk * (3 - 2 * vk); veilK = veilOn ? vk : 1 - vk;   /* LOG-171: the veil, on the wall clock (a paused player still folds) */
       g.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0); g.clearRect(0, 0, geo.W, geo.H);
       var col = ck ? hexRgb(ck.color) : '224,176,74', M = MD(), prev = SEC_CITY.letter.preview;
       var ex = (ck && !prev) ? exitAt(ck) : null;   /* LOG-112: the outro's letter, once it has set off up the road */
@@ -4662,7 +4666,7 @@
       if (!hiOn && (M.road || prev || exRoad)) { hiOn = true; hiT0 = now; }   /* the outro's road unfolds out of the vanishing point as the letter sets off up it (the entrance IS the farewell run backwards - LOG-110) */
       var gw = prev ? 1 : (hiOn ? Math.min(1, (now - hiT0) / Math.max(0.05, SEC_CITY.road.growS)) : 0);
       gw = gw * gw * (3 - 2 * gw);
-      var half = geo.half * bye * gw, yL = geo.yH + (geo.yL - geo.yH) * bye * gw;
+      var vf = 1 - veilK, half = geo.half * bye * gw * vf, yL = geo.yH + (geo.yL - geo.yH) * bye * gw * vf;   /* LOG-171: the veil folds the same two numbers the farewell folds */
       if (ck) {   /* a new GROUP: draw the way this letter will appear, and that way's own coin flips, once */
         var gk = ck.letter + '|' + ck.group;
         if (gk !== styleKey) {
@@ -4867,6 +4871,7 @@
       elF = document.createElement('canvas'); elF.className = 'ds-sky'; elF.setAttribute('aria-hidden', 'true');
       gf = elF.getContext('2d');
       if (wv && wv.nextSibling) desktop.insertBefore(elF, wv.nextSibling); else desktop.appendChild(elF);   /* LOG-111: AFTER the spectrum canvas - the only layer a bar cannot cover, still under icons/windows/menubar/dock */
+      veilOn = typeof room !== 'undefined' && room.dim(); veilPn = 0;   /* LOG-171: a road that starts while the well / pillar stage is up starts folded */
       beads = []; passes = []; lastPassBeat = -1e9; lastPassSeg = null; seamDone = false; seamOut = false; styleKey = null; showStyle = null; styleA = 0; styleGoal = 0; seqCut = false; fastOut = false; prevId = null; rollRun(); rollGroup(); sign = oldSign = null; lastPos = null; keep = null; byeT0 = 0; now = 0; smT = null; smP = 0; doorNow = null; hiT0 = 0; hiOn = false; letPrev = null; lampCut = false; wasRamp = false; lockT0 = 0; groundT0 = 0; tempoT0 = 0; gRgb = null; gGhostT0 = 0; readV = null; readId = null; exitFired = false; clearStageHole();
       layout(); window.addEventListener('resize', layout);
       var e1 = el, e1f = elF;
@@ -4935,6 +4940,7 @@
       return out;
     }
     return { start: start, stop: stop, bye: bye, tune: tune, knobs: knobs, cfg: SEC_CITY, geo: function () { return geo; }, sign: function () { return sign; }, active: function () { return !!el; },
+             veilMidi: veilMidi, veil: function () { return { on: veilOn, k: +veilK.toFixed(3) }; },   /* LOG-171 */
              door: function () { var c = null; try { c = getEng().clock(); } catch (e) { c = null; } return c ? exitAt(c) : null; },   /* ?debug: the outro door exactly as this frame drew it (box/k/s) - measure against the verge line, not against a re-derivation */
              preview: function (on) { SEC_CITY.letter.preview = on !== false; return SEC_CITY.letter.preview; },   /* ?debug: window.__road.preview(true) - every letter style at once */
              zones: function () { return geo ? zonesPx() : null; },
@@ -5174,6 +5180,7 @@
       }
     }
     return { start: start, stop: stop, active: function () { return active; }, src: function () { return eng; },
+             veilMidi: function (v) { if (road) road.veilMidi(v); }, veil: function () { return road ? road.veil() : null; },   /* LOG-171: the well / pillar stage folds the road away */
              toggle: function () { if (eng) eng.toggle(); }, toggleMute: function () { if (eng) eng.toggleMute(); },   /* the transport routes here while the stage is up — the mute lands even before the engine's context exists */
              relabel: function () { if (eng) eng.relabel(); if (head) { var x = $('.st-exit', head); if (x) x.textContent = U.stage_exit; if (hint && !hint.classList.contains('gone')) hint.textContent = U.stage_loading_sec; } } };
   })();
@@ -5887,12 +5894,13 @@
       on = true; trail.log('open', 'well'); room.set(true); fxc.hidden = false; msgs.hidden = false; step = 0; geoUp(); box.show(step);
       nextSpawn = performance.now() + 500; nextRain = performance.now() + 900; lastT = 0;
       if (typeof stage !== 'undefined' && stage.active()) stage.veilMidi(true);   /* LOG-163: the MIDI form's notes are collected into the square while this stage is up */
+      if (typeof secStage !== 'undefined' && secStage.active()) secStage.veilMidi(true);   /* LOG-171: the night city's road (EE_midi's traffic) folds away too */
       load(); if (!raf) raf = requestAnimationFrame(tick);
       updateDock();
     }
     function close(handover) {   /* handover: the other stage opens right after - the lights and the MIDI veil stay as they are */
       if (!on) return; on = false; box.hide();
-      if (!handover) { room.set(false); if (typeof stage !== 'undefined') stage.veilMidi(false); }
+      if (!handover) { room.set(false); if (typeof stage !== 'undefined') stage.veilMidi(false); if (typeof secStage !== 'undefined') secStage.veilMidi(false); }
       if (!raf) raf = requestAnimationFrame(tick);   /* no new lines; the ones on screen finish, hold and fade on their own (the user: 退出時不出新的，舊的時間到消失) */
       updateDock();
     }
@@ -5919,11 +5927,22 @@
       if (host) return; host = desktop;
       layer = document.createElement('div'); layer.className = 'pillar-dm'; layer.hidden = true; host.appendChild(layer);
       box = glassBox({ cls: 'for-pillar', html: html, wire: wire, close: close });
-      layer.addEventListener('pointerover', function (ev) { var m = ev.target.closest('.dm'); if (!m) return; var L = byEl(m); if (L && !L.hold) { L.hold = true; var inner = m.querySelector('.dmi'); if (inner) inner.style.transformOrigin = Math.max(0, ev.clientX - m.getBoundingClientRect().left) + 'px 50%'; m.classList.add('hold'); } });   /* LOG-166 (the user: 滑鼠放上去會停下那則彈幕，稍微放大可以觀看；移開後繼續滑動) 追記①: the growth is anchored under the pointer, so the glyphs there stay put (anchored at the left end they slid right - the user: 不要抖一下) */
-      layer.addEventListener('pointerout', function (ev) { var m = ev.target.closest('.dm'); if (!m || (ev.relatedTarget && m.contains(ev.relatedTarget))) return; var L = byEl(m); if (L && L.hold) { L.hold = false; m.classList.remove('hold'); } });
+      host.addEventListener('pointermove', track); host.addEventListener('pointerleave', function () { hold(null, 0); });   /* LOG-170 (the user: 應用程式互動範圍內不會跟彈幕互動，剛剛要點程式結果彈幕滑過去直接不給點): the lines take no pointer events at all - the hover is a geometry test on the pointer, and never over an interactive piece of the desktop */
       window.addEventListener('resize', function () { if (on) geoUp(); });
     }
-    function byEl(el) { return live.filter(function (x) { return x.el === el; })[0]; }
+    var held = null, KEEP = '.icons,#dock,.well-bub,.win,#np-desktop,.updates,.sticky,.menubar';   /* where the pointer is busy with something else */
+    function hold(L, px) {   /* LOG-166/170: one line at a time stands still and grows a little under the pointer */
+      if (held === L) return;
+      if (held) { held.hold = false; held.el.classList.remove('hold'); held = null; }
+      if (L) { L.hold = true; held = L; var inner = L.el.querySelector('.dmi'); if (inner) inner.style.transformOrigin = Math.max(0, px - L.x) + 'px 50%'; L.el.classList.add('hold'); }
+    }
+    function track(ev) {   /* pointer -> which line, if any. Over an icon / the dock / a window / the box: none (their clicks and bubbles come first) */
+      if (!layer || layer.hidden || !live.length) { if (held) hold(null, 0); return; }
+      var under = document.elementFromPoint(ev.clientX, ev.clientY); if (under && under.closest(KEEP)) { hold(null, 0); return; }
+      var hr = host.getBoundingClientRect(), px = ev.clientX - hr.left, py = ev.clientY - hr.top, hit = null;
+      for (var i = live.length - 1; i >= 0; i--) { var L = live[i]; if (px >= L.x && px <= L.x + L.w && py >= L.top && py <= L.top + L.h) { hit = L; break; } }
+      hold(hit, px);
+    }
     function geoUp() { W = host.clientWidth; box.place(); }
     function layTop(n) { var y = 0; while (n && n !== host) { y += n.offsetTop; n = n.offsetParent; } return y; }   /* transform-free (the box enters on a transform) */
     function band() {   /* the lanes run from under the menubar to above the glass box (or the dock) */
@@ -6000,7 +6019,7 @@
       if (e.w.id) m.dataset.id = e.w.id;
       var inner = document.createElement('span'); inner.className = 'dmi'; m.appendChild(inner);   /* LOG-166: the hover scale lives on this wrapper, so the rAF transform on .dm stays a plain translate */
       strings(e).forEach(function (p) { var s = document.createElement('span'); s.className = p[0]; s.textContent = p[1]; inner.appendChild(s); });
-      return { el: m, e: e, depth: depth, v: d.v * rnd(0.9, 1.1), x: 0, w: 0, lane: -1, gone: false, hold: false };
+      return { el: m, e: e, depth: depth, v: d.v * rnd(0.9, 1.1), x: 0, w: 0, top: 0, h: 0, lane: -1, gone: false, hold: false };
     }
     function laneFor(L, B, force) {   /* a lane whose last line is fully in (its tail clear of the left edge) and cannot be caught before it is out on the right; none: not now (forced: the emptiest) */
       var pick = [], i; for (i = 0; i < B.n; i++) pick.push(i); shuffle(pick);
@@ -6028,7 +6047,7 @@
       if (depth === undefined) depth = Math.min(3, Math.floor(Math.pow(Math.random(), 0.8) * 4));   /* a little more of the near ones */
       var L = build(e, depth); L.el.style.visibility = 'hidden'; layer.appendChild(L.el); L.w = L.el.offsetWidth;
       var B = band(), lane = laneFor(L, B, !!e.mine); if (lane < 0) { L.el.remove(); return; }   /* the sender's own (just sent) always goes */
-      L.lane = lane; L.x = -L.w; lanes[lane] = L; L.el.style.top = (B.top + lane * PILLAR_LANE) + 'px'; L.el.style.transform = 'translateX(' + L.x + 'px)'; L.el.style.visibility = '';
+      L.lane = lane; L.x = -L.w; lanes[lane] = L; L.top = B.top + lane * PILLAR_LANE; L.h = L.el.offsetHeight || PILLAR_LANE; L.el.style.top = L.top + 'px'; L.el.style.transform = 'translateX(' + L.x + 'px)'; L.el.style.visibility = '';
       L.el.classList.add('new'); requestAnimationFrame(function () { L.el.classList.remove('new'); }); live.push(L);
     }
     function tick(t) {
@@ -6041,7 +6060,7 @@
           for (var j = 0; j < live.length; j++) { var o = live[j]; if (o !== L && o.lane === L.lane && o.x > L.x && L.x + L.w + 24 > o.x) L.x = o.x - L.w - 24; }
           L.el.style.transform = 'translateX(' + L.x.toFixed(1) + 'px)';
         }
-        if (L.x > W + 4) { L.gone = true; L.el.remove(); live.splice(i, 1); if (lanes[L.lane] === L) lanes[L.lane] = null; }
+        if (L.x > W + 4) { L.gone = true; if (held === L) hold(null, 0); L.el.remove(); live.splice(i, 1); if (lanes[L.lane] === L) lanes[L.lane] = null; }
       }
       if (on || live.length) raf = requestAnimationFrame(tick); else layer.hidden = true;
     }
@@ -6053,12 +6072,13 @@
       on = true; trail.log('open', 'pillar-stage'); room.set(true); layer.hidden = false; step = 0; geoUp(); box.show(step);
       nextSpawn = performance.now() + 400; lastT = 0; reorder(); loadReports();
       if (typeof stage !== 'undefined' && stage.active()) stage.veilMidi(true);   /* LOG-163: the MIDI form's notes are collected into the square while this stage is up */
+      if (typeof secStage !== 'undefined' && secStage.active()) secStage.veilMidi(true);   /* LOG-171: the night city's road (EE_midi's traffic) folds away too */
       if (!raf) raf = requestAnimationFrame(tick);
       updateDock();
     }
     function close(handover) {   /* handover: the well opens right after - the lights and the MIDI veil stay as they are */
       if (!on) return; on = false; box.hide();
-      if (!handover) { room.set(false); if (typeof stage !== 'undefined') stage.veilMidi(false); }
+      if (!handover) { room.set(false); if (typeof stage !== 'undefined') stage.veilMidi(false); if (typeof secStage !== 'undefined') secStage.veilMidi(false); }
       if (!raf) raf = requestAnimationFrame(tick);   /* no new lines; the ones on their way finish crossing */
       updateDock();
     }
