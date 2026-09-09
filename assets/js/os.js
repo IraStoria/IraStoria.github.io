@@ -6626,6 +6626,12 @@
     function ensureCtx() { if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); analyser = actx.createAnalyser(); analyser.fftSize = 2048; analyser.minDecibels = -96; analyser.maxDecibels = 6; analyser.smoothingTimeConstant = 0.8; /* +6 dB headroom: mastered bass no longer clips to a flat top */ out = actx.createGain(); out.gain.value = muted ? 0 : vol; analyser.connect(out); out.connect(actx.destination); master = actx.createGain(); master.connect(analyser);
         actx.addEventListener('statechange', function () { if (actx && actx.state !== 'running' && playing && audio && !audio.paused && !ducked) { ducked = true; stopAll(true); } });   /* iOS interruption (a demo's own AudioContext, a call): a media element on a non-running context stutter-loops a few ms — silence it now; a demo close (or play) brings it back */
       } /* analyser sits before the volume stage so the bars keep moving while muted */ if (actx.state === 'suspended') actx.resume(); }
+    var blocked = false, repairArmed = false;   /* LOG-174: autoplay refused (Safari, a #desktop entry without a gesture) - remembered, and repaired inside the FIRST gesture that follows, anywhere on the page */
+    function armRepair() {
+      if (repairArmed) return; repairArmed = true;
+      var h = function () { document.removeEventListener('pointerdown', h, true); document.removeEventListener('keydown', h, true); repairArmed = false; if (!blocked || playing) return; blocked = false; try { ensureCtx(); play(); } catch (e) {} };   /* capture phase: before whatever the click was for, still inside the gesture */
+      document.addEventListener('pointerdown', h, true); document.addEventListener('keydown', h, true);
+    }
     var fadeTimer = null, pausedAt = null, playSeq = 0;   /* playSeq: a play() promise that loses (track changed underneath it) must not flip the new track back to ▶ */   // position at the moment pause was pressed (the fade tail must not count as progress)
     function rampDown(g) { g.gain.cancelScheduledValues(0); g.gain.setValueAtTime(Math.max(g.gain.value, 0.0001), actx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + FADE_SEC); }
     function stopAll(immediate) {
@@ -6666,7 +6672,7 @@
         else if (audio._silent) { try { audio.currentTime = 0; } catch (e) {} }   /* the gesture-time unlock may still be running silently (lock screen can sit for minutes): the real start is always from 0 */
         audio._silent = false; audio.muted = false;   /* LOG-157: the silent unlock may still be running muted */
         var t0 = actx.currentTime; master.gain.cancelScheduledValues(0); master.gain.setValueAtTime(0.0001, t0); master.gain.exponentialRampToValueAtTime(1, t0 + RESUME_RAMP_S);   /* rise over ~80 ms instead of snapping to 1: the snap (plus the seek back to pausedAt) was an audible click on resume, worst on the phone */
-        var tok = ++playSeq, pr = audio.play(); if (pr && pr.catch) pr.catch(function () { if (tok !== playSeq) return; playing = false; refresh(); caption.refresh(); });   // autoplay blocked → show ▶ again (only if this is still the current play request)
+        var tok = ++playSeq, pr = audio.play(); if (pr && pr.catch) pr.catch(function (err) { if (tok !== playSeq) return; playing = false; blocked = true; armRepair(); try { trail.log('autoplay-blocked', String(err && err.name || err).slice(0, 40)); } catch (e) {} refresh(); caption.refresh(); });   // autoplay blocked → show ▶ again, remember it, and let the next gesture anywhere start the music (LOG-174: Safari on a #desktop entry)
       } else return;
       playing = true; started = true; ducked = false; refresh();
     }
@@ -6778,7 +6784,7 @@
     function next() { var i = pickRandom(); remember(i); load(i, true); }
     return { seek: function (sec) { if (audio && !list[cur].synth) { audio.currentTime = sec; if (pausedAt !== null) pausedAt = sec; } }, onTrack: function (fn) { trackListeners.push(fn); }, duck: duck, unduck: unduck, unlock: unlock, mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state, autoplay: autoplay, prepare: prepare, restore: restore, prev: prev, next: next, toggleMute: toggleMute, setVolume: setVolume,
              analyser: function () { return analyser; }, isPlaying: function () { return playing; },
-             debug: function () { return { stage: stage.debug(), ctx: actx ? actx.state : '-', playing: playing, started: started, ducked: ducked, muted: muted, vol: vol, cur: cur, unlocked: !!(audio && audio._unlocked), wired: !!(audio && audio._wired),
+             debug: function () { return { stage: stage.debug(), ctx: actx ? actx.state : '-', playing: playing, started: started, blocked: blocked, ducked: ducked, muted: muted, vol: vol, cur: cur, unlocked: !!(audio && audio._unlocked), wired: !!(audio && audio._wired),
                paused: audio ? audio.paused : '-', rs: audio ? audio.readyState : '-', ns: audio ? audio.networkState : '-', t: audio ? audio.currentTime.toFixed(1) : '-', err: audio && audio.error ? audio.error.code : 0, gain: master ? master.gain.value.toFixed(3) : '-', out: out ? out.gain.value.toFixed(2) : '-' }; } };
   })();
   ['toggle', 'next', 'prev', 'play', 'pause'].forEach(function (k) { var f = player[k]; if (typeof f === 'function') player[k] = function () { trail.log('player', k); return f.apply(player, arguments); }; });   /* LOG-161 trail: transport verbs */
@@ -7154,7 +7160,8 @@
     if (langSwap) desktop.classList.add('swap', 'swap-in');   // start off-screen right / flipped, then settle
     desktop.hidden = false; initDesktop(); wave.start('live');
     var saved = null; try { saved = JSON.parse(sessionStorage.getItem('track') || 'null'); sessionStorage.removeItem('track'); } catch (e) {}
-    if (saved && saved.id) player.restore(saved); caption.arm();
+    if (saved && saved.id) player.restore(saved); else { try { player.autoplay(); } catch (e) {} }   /* LOG-174: a direct #desktop entry (a bookmark, the static page's language link, phone -> desktop) never started the music at all - only a carried track did. Now it starts like the boot does; where the browser refuses (Safari, no gesture yet) the first gesture repairs it */
+    caption.arm();
     if (langSwap) { var settle = function () { if (!desktop.classList.contains('swap-in')) return; desktop.classList.remove('swap-in'); setTimeout(function () { desktop.classList.remove('swap'); }, 900); }; requestAnimationFrame(function () { requestAnimationFrame(settle); }); setTimeout(settle, 80); }   // settle on the next frame (timer fallback for throttled tabs)
   }
   else {
