@@ -1875,19 +1875,20 @@
   var TR_YT_API = 'https://www.youtube.com/iframe_api', TR_YT_READY_MS = 9000, TR_YT_PLAY_MS = 7000, TR_SYNC_S = 0.08, TR_END_PAD_S = 1.2, TR_EXIT_MS = 600, TR_YT_LAG_S = 0, TR_LAG_STEP = 0.01, TR_SNAP = 25, TR_LEAD_S = 4, TR_HOLD_S = 0.2, TR_RESUME_HOLD_MS = 300;   /* TR_RESUME_HOLD_MS (追記⑳): after a resume or a seek YouTube fires PLAYING ~0.23 s before its sound is back (measured 0.88 s vs our 0.65 s); the rendition waits this long so it does not play alone */   /* 追記⑯: the pre-roll - from the moment the stage opens the MIDI clock runs from -TR_LEAD_S on the wall clock (the notes fall in at once) and holds at -TR_HOLD_S until the sound is ready; the sound then joins the clock where it stands, no jump, no count-in wait */   /* TR_WARM_MS (追記⑭): after the embed has proven it can play, the stage waits this long (its own transition) before the real start */   /* 0 (追記㉒): a machine's own playout latency is not a default - the visitor nudges with 對齊 and the value stays on their machine */   /* TR_YT_LAG_S (the user: youtube 的播放啟動延遲 0.2-0.5 s): getCurrentTime() runs ahead of what the video actually sounds; the MIDI clock trails it by this much in yt mode. The bar's 對齊 −/+ nudges it per machine (localStorage tr_ytlag) */
   var trStage = (function () {
     var HOST = desktop, WV = wave;
+    var exitPend = null;   /* 追記㉔: the exit's pending unduck - a re-entry before it fires must cancel it and keep the music ducked (the four-piano stage's exitPending; the user saw the OS music come back under a re-entered stage on another machine) */
     var active = false, wid = null, ui = null, veil = null, veil2 = null, ctx = null, master = null, mgain = null, muted = false, ducked = false, hint = null, langSeen = null;
     var orig = null, tr = null;                                 /* channels: { off, url, buf, src, g, pan, done, total } — off: seconds into the file where the MIDI's 0 sits */
     var mode = 'yt', split = false, mix = 0.5, pref = null, canYT = false, hasFallback = false, cached = false, tipShown = false, tipTimer = 0;   /* cached (追記㉑): the hosted copy sounds while the video runs on, muted, as the clock - switching back is a volume swap, no seek, no reload; mode 'local' is only the real fallback (the video is dead) */   /* pref: the visitor's own source choice; canYT: the work embeds a YouTube original */
     var T0 = 0, pausedAt = 0, playing = false, started = false, dur = 0, pendingT = null, endAt = 0, preT0 = 0;   /* preT0: performance.now() when the stage opened (the pre-roll clock's zero) */   /* local clock: T = ctx.currentTime - T0 while playing, pausedAt otherwise; pendingT: a play(T) waiting for a buffer */
     var yt = null, ytEl = null, ytReady = false, ytFailed = false, ytBuf = false, ytT = 0, ytAt = 0, ytReadyTimer = 0, ytPlayTimer = 0, ytPend = false, ytWarm = 0, resumeTimer = 0;   /* ytWarm: 0 cold, 1 warming (muted pre-roll), 2 warmed and parked at the start */   /* ytT/ytAt: last polled MIDI time and when; ytPend: a play() sent, waiting for PLAYING */
-    var raf = 0, secs = [], toastTimer = 0, dbg = null, ytLag = TR_YT_LAG_S, loLag = 0, origBase = 0, volT = 1, volO = 1, origGain = 1;   /* volT/volO (LOG-173): per-side volume trims on top of the lean (localStorage tr_volt / tr_volo) */
+    var raf = 0, secs = [], toastTimer = 0, dbg = null, ytLag = TR_YT_LAG_S, loLag = 0, origBase = 0, volT = 1, volO = 1, origGain = 1, autoLag = 0;   /* autoLag (追記㉓): -AudioContext.outputLatency, read once the context runs - this machine's own WebAudio output delay, compensated automatically; the 對齊 nudge is the residual on top (the user's ear said -0.09 where the machine reported 0.072) */   /* volT/volO (LOG-173): per-side volume trims on top of the lean (localStorage tr_volt / tr_volo) */
     try { var vt_ = parseFloat(localStorage.getItem('tr_volt')); if (!isNaN(vt_)) volT = Math.max(0, Math.min(1, vt_)); var vo_ = parseFloat(localStorage.getItem('tr_volo')); if (!isNaN(vo_)) volO = Math.max(0, Math.min(1, vo_)); } catch (e) {}   /* loLag (追記⑦): the same 對齊 nudge in local mode, moving the hosted original against the transcription (per machine, tr_lolag) */
     try { var lg = parseFloat(localStorage.getItem('tr_ytlag')); if (!isNaN(lg)) ytLag = Math.max(-1, Math.min(1, lg)); var ll = parseFloat(localStorage.getItem('tr_lolag')); if (!isNaN(ll)) loLag = Math.max(-1, Math.min(1, ll)); } catch (e) {}
     function work() { return D.works.filter(function (x) { return x.id === wid; })[0] || null; }   /* re-read each time: D is swapped on a language switch */
     function preT() { return Math.min(-TR_HOLD_S, -TR_LEAD_S + (performance.now() - preT0) / 1000); }   /* the pre-roll clock */
     function T() {
       if (!started) return preT();
-      if (mode === 'yt') return Math.max(-TR_LEAD_S, ytT - ytLag + ((playing && !ytBuf) ? (performance.now() - ytAt) / 1000 : 0));   /* may sit below 0 for the video's own lead-in */
+      if (mode === 'yt') return Math.max(-TR_LEAD_S, ytT - (ytLag + autoLag) + ((playing && !ytBuf) ? (performance.now() - ytAt) / 1000 : 0));   /* may sit below 0 for the video's own lead-in */
       return playing && ctx ? Math.max(-TR_LEAD_S - 1, ctx.currentTime - T0) : pausedAt;
     }
     /* ---- audio graph: one context, one limiter, one analyser (the desktop spectrum reads it); per channel gain -> panner */
@@ -2053,7 +2054,7 @@
           '<div class="tr-row tr-row1"><span class="tr-vol tr-vol-l"><input type="range" class="tr-volt" min="0" max="1000" value="' + Math.round(volT * 1000) + '"></span><span class="tr-lbl tr-lo"></span><span class="tr-mixwrap"><b class="tr-pct"></b><input class="tr-mix" type="range" min="0" max="1000" value="' + Math.round((1 - mix) * 1000) + '" aria-label="mix" list="tr-mix-ticks"><datalist id="tr-mix-ticks"><option value="500"></option></datalist></span><span class="tr-lbl tr-hi"></span><span class="tr-vol tr-vol-r"><input type="range" class="tr-volo" min="0" max="1000" value="' + Math.round(volO * 1000) + '"></span></div>' +   /* 追記⑱: row 1 = the pan, symmetric: volume · transcription · [pan] · original · volume */
           '<div class="tr-row tr-row2"><div class="tr-modes"><button type="button" data-mode="xf"></button><button type="button" data-mode="lr"></button></div>' +
             '<div class="tr-src"><i class="dot"></i><span class="tr-src-t"></span><button type="button" class="tr-src-sw"></button><div class="tr-tip" hidden role="status"></div></div>' +
-            '<span class="tr-align"><span class="tr-align-l"></span><button type="button" data-nudge="-1" aria-label="earlier">\u2212</button><b class="tr-lag"></b><button type="button" data-nudge="1" aria-label="later">+</button></span></div>' +   /* row 2 = modes · source · align (the i button is gone: the notice shows itself) */
+            '<span class="tr-align"><span class="tr-align-l"></span><button type="button" data-nudge="-1" aria-label="earlier">\u2212</button><b class="tr-lag"></b><button type="button" data-nudge="1" aria-label="later">+</button><small class="tr-lag-auto"></small></span></div>' +   /* row 2 = modes · source · align (+ the automatic output-latency compensation, read from the machine) */
           '<div class="tr-secs"><div class="tr-cues"></div><div class="tr-seek" role="slider" aria-label="seek"><i></i></div></div>' +   /* 追記⑲: the cues live ON the seek bar - a tick through the bar at each cue, the button beside it (rows alternate) */
           '<div class="tr-toast"></div>' +
         '</div>' +
@@ -2086,12 +2087,12 @@
       else { loLag = v; try { localStorage.setItem('tr_lolag', String(loLag)); } catch (e) {} if (orig) { orig.off = origBase + loLag; if (playing) playCh(orig, T()); } }   /* local: the hosted original moves, the transcription (and the waterfall) stay */
       paintLag();
     }
-    function paintLag() { if (!ui) return; var a = ui.querySelector('.tr-align'); if (!a) return; var v = mode === 'yt' ? ytLag : loLag; a.querySelector('.tr-align-l').textContent = U.tr_align; a.querySelector('.tr-lag').textContent = (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' s'; }
+    function paintLag() { if (!ui) return; var a = ui.querySelector('.tr-align'); if (!a) return; var v = mode === 'yt' ? ytLag : loLag; a.querySelector('.tr-align-l').textContent = U.tr_align; a.querySelector('.tr-lag').textContent = (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' s'; var au = a.querySelector('.tr-lag-auto'); if (au) { au.hidden = mode !== 'yt'; au.textContent = U.tr_auto + ' ' + (autoLag >= 0 ? '+' : '−') + Math.abs(autoLag).toFixed(2) + ' s'; au.title = U.tr_auto_title; } }
     function setCached(v) { cached = !!v && hasFallback; hideTip(); paintSrc(); applyMix(); }
     function hideTip() { if (!ui) return; var t = ui.querySelector('.tr-tip'); clearTimeout(tipTimer); if (!t || t.hidden) return; t.classList.add('bye'); tipTimer = setTimeout(function () { t.hidden = true; t.classList.remove('bye'); }, 500); }   /* 追記㉒: fades out (click, a nudge, the switch, or 10 s) */
-    function showTip() {   /* 追記㉑(2): five seconds in, a small bubble over the cached-copy switch: out of sync? use Align; if nothing helps, the cached copy */
+    function showTip() {   /* 追記㉑(2): five seconds in, a small bubble over the cached-copy switch: out of sync? use Align; if nothing helps, the cached copy. It stays until clicked (追記㉔) */
       if (!ui || tipShown || mode !== 'yt' || cached || !hasFallback) return; tipShown = true;
-      var t = ui.querySelector('.tr-tip'); if (!t) return; t.hidden = false; t.classList.remove('bye'); clearTimeout(tipTimer); tipTimer = setTimeout(hideTip, 10000);
+      var t = ui.querySelector('.tr-tip'); if (!t) return; t.hidden = false; t.classList.remove('bye'); clearTimeout(tipTimer);   /* 追記㉔: no auto-hide - it stays until clicked (the bubble, a nudge, or the switch) */
     }
     function paintModes() { if (!ui) return; ui.querySelectorAll('[data-mode]').forEach(function (b) { b.classList.toggle('on', (b.dataset.mode === 'lr') === split); }); var lr = ui.querySelector('[data-mode="lr"]'); if (lr) lr.disabled = !hasFallback; }
     function paintSrc() {
@@ -2136,6 +2137,7 @@
     function toast(msg) { if (!ui) return; var t = ui.querySelector('.tr-toast'); t.textContent = msg; clearTimeout(toastTimer); toastTimer = setTimeout(function () { if (ui) t.textContent = ''; }, 8000); }
     function tick() {
       raf = 0; if (!active) return;
+      if (ctx && ctx.state === 'running') { var ol = -(ctx.outputLatency || 0); if (Math.abs(ol - autoLag) > 0.001) { autoLag = Math.round(ol * 1000) / 1000; paintLag(); } }   /* the output latency is only known once the context runs, and can change with the device */
       if (mode === 'yt' && playing) {
         pollYT();
         if (tr && tr.src && !ytBuf) { var tt = ctx.currentTime - tr.t0, drift = tt - T(); if (Math.abs(drift) > TR_SYNC_S) { playCh(tr, T()); playCh(orig, T()); } }   /* the rendition (and the muted hosted copy behind the bars) chase the video */
@@ -2149,6 +2151,7 @@
         if (D.lang !== langSeen) relabel();
       }
       if (started && playing && t >= 5 && !tipShown) showTip();   /* 追記㉑(2) */
+      if (player.isPlaying()) { ducked = true; player.duck(true); }   /* 追記㉔ belt and braces: the OS music must never sound under the stage, whatever brought it back */
       if (mode === 'local' && playing && dur && t >= dur + TR_END_PAD_S) { end(); return; }
       raf = requestAnimationFrame(tick);
     }
@@ -2176,7 +2179,8 @@
       if (orig) fetchInto(orig, function () { if (pendingT != null && mode === 'local' && tr.buf) { var t = pendingT; pendingT = null; play(t); } else maybeStart(); });
       if (canYT) loadYT();
       WV.sweep(true, player.state().frac || 0);
-      if (player.isPlaying()) { ducked = true; player.duck(true); }
+      var carry = false; if (exitPend) { clearTimeout(exitPend); exitPend = null; carry = true; }   /* re-entered before the last exit released the music: keep it ducked, this run's exit releases it */
+      if (player.isPlaying()) { ducked = true; player.duck(true); } else if (carry) ducked = true;
       document.addEventListener('keydown', onKey);
       if (/[?&]debug/.test(location.search)) window.__trLine = function () { return WV.splitInfo(); };   /* survives stop(): the probe checks the line was handed back */
       if (/[?&]debug/.test(location.search)) window.__tr = { state: function () { return src.state(); }, mode: function () { return mode; }, setMode: function (m) { setMode(m, false); }, mix: function (v) { if (v != null) { mix = v; if (ui) ui.querySelector('.tr-mix').value = Math.round((1 - v) * 1000); applyMix(); } return mix; }, split: function (v) { if (v != null && mode === 'local') { split = !!v; paintModes(); applyMix(); } return split; }, seek: seek, toggle: toggle, ytFail: function () { ytFail('probe'); }, lag: function (v) { if (v != null) setLag(v); return mode === 'yt' ? ytLag : loLag; }, cached: function (v) { if (v != null) setCached(v); return cached; }, vol: function (side, v) { if (v != null) { if (side === 't') volT = v; else volO = v; if (ui) { ui.querySelector(side === 't' ? '.tr-volt' : '.tr-volo').value = Math.round(v * 1000); } applyMix(); } return side === 't' ? volT : volO; }, debug: debug };
@@ -2194,10 +2198,10 @@
       if (u) { u.classList.remove('in'); setTimeout(function () { u.remove(); }, immediate ? 0 : TR_EXIT_MS); }
       [v_, v2_].forEach(function (vv) { if (vv) { vv.classList.remove('in'); setTimeout(function () { vv.remove(); }, immediate ? 0 : TR_EXIT_MS + 300); } });
       var wasDucked = ducked; ducked = false;
-      if (wasDucked) setTimeout(function () { player.unduck(); }, immediate ? 0 : 300);
+      if (wasDucked) exitPend = setTimeout(function () { exitPend = null; player.unduck(); }, immediate ? 0 : 300);
       if (window.__tr) try { delete window.__tr; } catch (e) {}
     }
-    function debug() { return { active: active, mode: mode, cached: cached, split: split, mix: +mix.toFixed(3), lag: ytLag, loLag: loLag, volT: volT, volO: volO, origGain: origGain, warm: ytWarm, line: WV.splitInfo(), playing: playing, started: started, pos: +T().toFixed(2), dur: +dur.toFixed(1), yt: { ready: ytReady, failed: ytFailed, buf: ytBuf, pend: ytPend }, ctx: ctx ? ctx.state : '-',
+    function debug() { return { active: active, mode: mode, cached: cached, split: split, mix: +mix.toFixed(3), lag: ytLag, autoLag: autoLag, loLag: loLag, volT: volT, volO: volO, origGain: origGain, warm: ytWarm, line: WV.splitInfo(), playing: playing, started: started, pos: +T().toFixed(2), dur: +dur.toFixed(1), yt: { ready: ytReady, failed: ytFailed, buf: ytBuf, pend: ytPend }, ctx: ctx ? ctx.state : '-',
       orig: orig ? { buf: !!orig.buf, src: !!orig.src, g: +orig.g.gain.value.toFixed(3), pan: orig.pan ? +orig.pan.pan.value.toFixed(2) : null, off: orig.off } : null,
       tr: tr ? { buf: !!tr.buf, src: !!tr.src, g: +tr.g.gain.value.toFixed(3), pan: tr.pan ? +tr.pan.pan.value.toFixed(2) : null, off: tr.off } : null }; }
     /* now-playing source while the stage runs: caption + progress line + spectrum analyser + the waterfall's notes and clock */

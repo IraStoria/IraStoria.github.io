@@ -520,6 +520,7 @@ body.hb .phone *:not(.np-title,.np-title *,canvas){text-shadow:0 0 8px rgba(61,2
 .tr-ui .tr-src .dot{width:8px;height:8px;border-radius:50%;background:#b58cff;box-shadow:0 0 8px #b58cff;display:inline-block}
 .tr-ui .tr-src.local .dot{background:#e6d8ff;box-shadow:0 0 8px #e6d8ff}
 .tr-ui .tr-align{display:inline-flex;align-items:center;gap:.25rem;opacity:.85}.tr-ui .tr-align b{font-weight:normal;min-width:4.4em;text-align:center;font-variant-numeric:tabular-nums}.tr-ui .tr-align button{padding:.1rem .5rem}
+.tr-ui .tr-lag-auto{margin-left:.4rem;font:11px var(--mono);color:var(--dim);white-space:nowrap}
 .tr-ui .tr-secs{position:relative;height:66px;margin:.2rem .6rem 0}
 .tr-ui .tr-cues{position:absolute;inset:0}
 .tr-ui .tr-secs .tick{position:absolute;top:27px;width:1px;height:13px;margin-left:-.5px;background:rgba(230,216,255,.75);z-index:1}   /* 追記⑲: the tick runs through the seek bar */
