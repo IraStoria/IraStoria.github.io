@@ -5532,15 +5532,16 @@
       var b = ev.target.closest('button'); if (!b) return; var row = b.closest('.wrow'), id = row && row.dataset.id; if (!id) return;
       var it = (list._items || []).filter(function (x) { return x.id === id; })[0] || {}, msg = $('.msg', row);
       var say = function (t) { if (msg) { msg.textContent = t; setTimeout(function () { msg.textContent = ''; }, 1500); } };
+      var oops = function (r) { say(U.wish_admin_fail.replace('{code}', r && r.http ? r.http : (r && r.error) || '?')); };   /* LOG-169 追記① (the user: 他寫撈不到願望): name the HTTP code - a 400/404 here means the Worker on Cloudflare is behind the site */
       var touched = function () { try { sessionStorage.removeItem('wishes'); sessionStorage.setItem('wishes_fresh', '1'); } catch (e) {} };   /* 追記⑥: the next public wall in this browser skips the 60 s cache */
       var update = function (patch) { patch.id = id; return pool.post('/admin/update', patch, true).then(function (r) { if (!r.ok) throw r; touched(); return r; }); };
       if (b.classList.contains('ttoggle')) { var pre = $('pre.trail', row); if (pre) pre.hidden = !pre.hidden; return; }
-      if (b.classList.contains('del')) { b.disabled = true; pool.post('/admin/delete', { id: id }, true).then(function (r) { if (!r.ok) throw r; touched(); row.remove(); list._items = (list._items || []).filter(function (x) { return x.id !== id; }); if (!list.querySelector('.wrow')) list.innerHTML = '<p class="note">' + esc(U.wish_admin_empty) + '</p>'; }).catch(function () { b.disabled = false; say(U.wish_error); }); return; }
-      if (b.classList.contains('show')) { update({ approved: !it.approved }).then(load).catch(function () { say(U.wish_error); }); return; }   /* LOG-169 (the user: 原本待審的按鈕改成是否顯示（開啟／關閉）): on = the report joins the public pillar */
-      if (b.classList.contains('read')) { update({ read: !it.read }).then(load).catch(function () { say(U.wish_error); }); return; }
-      if (b.classList.contains('appr')) { update({ approved: !it.approved }).then(load).catch(function () { say(U.wish_error); }); return; }
-      if (b.classList.contains('save') && it.type === 'bug') { b.disabled = true; update({ status: $('.bstatus', row).value }).then(function () { say(U.wish_admin_saved); load(); }).catch(function () { say(U.wish_error); }).then(function () { b.disabled = false; }); return; }   /* LOG-168 (the user: 沒有像是許願池的選項按鈕): the report's verdict */
-      if (b.classList.contains('save')) { b.disabled = true; update({ status: $('.status', row).value, reply: $('.reply', row).value.trim(), replyLang: lang, link: $('.link', row).value.trim() }).then(function () { say(U.wish_admin_saved); load(); }).catch(function () { say(U.wish_error); }).then(function () { b.disabled = false; }); }
+      if (b.classList.contains('del')) { b.disabled = true; pool.post('/admin/delete', { id: id }, true).then(function (r) { if (!r.ok) throw r; touched(); row.remove(); list._items = (list._items || []).filter(function (x) { return x.id !== id; }); if (!list.querySelector('.wrow')) list.innerHTML = '<p class="note">' + esc(U.wish_admin_empty) + '</p>'; }).catch(function (r) { b.disabled = false; oops(r); }); return; }
+      if (b.classList.contains('show')) { update({ approved: !it.approved }).then(load).catch(oops); return; }   /* LOG-169 (the user: 原本待審的按鈕改成是否顯示（開啟／關閉）): on = the report joins the public pillar */
+      if (b.classList.contains('read')) { update({ read: !it.read }).then(load).catch(oops); return; }
+      if (b.classList.contains('appr')) { update({ approved: !it.approved }).then(load).catch(oops); return; }
+      if (b.classList.contains('save') && it.type === 'bug') { b.disabled = true; update({ status: $('.bstatus', row).value }).then(function () { say(U.wish_admin_saved); load(); }).catch(oops).then(function () { b.disabled = false; }); return; }   /* LOG-168 (the user: 沒有像是許願池的選項按鈕): the report's verdict */
+      if (b.classList.contains('save')) { b.disabled = true; update({ status: $('.status', row).value, reply: $('.reply', row).value.trim(), replyLang: lang, link: $('.link', row).value.trim() }).then(function () { say(U.wish_admin_saved); load(); }).catch(oops).then(function () { b.disabled = false; }); }
     });
     load();
   }

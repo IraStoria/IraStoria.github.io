@@ -818,6 +818,10 @@
       "zh": "已儲存",
       "en": "Saved"
     },
+    "wish_admin_fail": {
+      "zh": "儲存失敗（Worker 回 {code}；若是 400／404，多半是 Cloudflare 上的 worker.js 還沒重貼）",
+      "en": "Save failed (the Worker said {code}; a 400/404 usually means worker.js has not been re-pasted on Cloudflare)"
+    },
     "wish_admin_bugs": {
       "zh": "恥辱柱收件匣",
       "en": "Bug inbox"
