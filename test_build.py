@@ -227,7 +227,7 @@ expect_refused("bugs: duplicate id refused", lambda: B.load_bugs({"bugs": [_b1[0
 ok("ui has the three app names", all(k in site["ui"] for k in ("app_pillar", "app_wishpool", "app_contact")))
 ok("desktop shell embeds bugs + backend + contact services", all('"bugs"' in pages[f"{l}/index.html"] and '"backend"' in pages[f"{l}/index.html"] and '"services"' in pages[f"{l}/index.html"] for l in ("zh", "en")))
 ok("desktop template carries the three icons", all(f'data-app="{a}"' in pages["zh/index.html"] for a in ("pillar", "wishpool", "contact")))
-ok("contact services: four, bilingual", len(site["contact"]["services"]) == 4 and all(not _CJK.search(s["label"]["en"] + s["desc"]["en"]) for s in site["contact"]["services"]))
+ok("contact services: three, bilingual (LOG-167: tools dropped)", len(site["contact"]["services"]) == 3 and all(not _CJK.search(s["label"]["en"] + s["desc"]["en"]) for s in site["contact"]["services"]))
 expect_refused("backend.url with a trailing slash refused", lambda: B.backend_url({"backend": {"url": "https://pool.example.workers.dev/"}}), "trailing")
 expect_refused("backend.url without a scheme refused", lambda: B.backend_url({"backend": {"url": "pool.example.workers.dev"}}), "http(s)")
 ok("backend.url empty is fine (not wired)", B.backend_url({"backend": {"url": ""}}) == "")

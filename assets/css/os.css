@@ -65,8 +65,10 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .lang-switch:hover .ls-track{background:rgba(255,255,255,.2)}body[data-lang="zh"] .lang-switch:hover .ls-track{background:rgba(224,176,74,.5)}
 .lang-switch:focus-visible{outline:1px solid var(--accent);outline-offset:3px;border-radius:999px}
 
-.icons{position:absolute;top:48px;left:16px;display:grid;grid-template-columns:repeat(2,76px);gap:6px 4px;z-index:5}
-@media(min-width:700px) and (min-height:1050px){.icons{grid-template-columns:76px}}   /* LOG-161: nine icons now (恥辱柱／許願池／合作聯絡) - one column needs 48 + 9×~96 + the 136 px updates panel ≈ 1050 px; below that the two-column grid */   /* LOG-147 (the user: find 直接超出畫面，且近期更新與應用程式重疊): the single
+.icons{position:absolute;top:48px;left:16px;display:grid;grid-template-columns:repeat(4,76px);gap:6px 4px;z-index:5}   /* LOG-167 (the user: 做成上引號形狀，不要重疊在側面): a 「 - four across the top (採譜 設計 播放器 尋找), five down the stem (關於 合作 許願池 恥辱柱 文章) */
+.icons .icon[data-app=about],.icons .icon[data-app=contact],.icons .icon[data-app=wishpool],.icons .icon[data-app=pillar],.icons .icon[data-app=articles]{grid-column:1}   /* the stem, named app by app (an nth-child count is off by one: the droplet .hovbub is inserted into .icons at runtime); pinned to column 1, auto-placement drops each a row lower */
+@media(max-height:779px){.icons .icon[data-app=contact],.icons .icon[data-app=pillar]{grid-column:2}}   /* a short window: the stem two wide (three rows) so the 「 still clears the updates panel 136 px from the bottom (LOG-147's lesson: the cost is height) */
+@media(min-width:700px) and (min-height:1050px){.icons{grid-template-columns:repeat(4,76px)}}   /* LOG-161's single-column rule is gone; this keeps the tall-window branch explicit (same shape) */   /* LOG-161: nine icons now (恥辱柱／許願池／合作聯絡) - one column needs 48 + 9×~96 + the 136 px updates panel ≈ 1050 px; below that the two-column grid */   /* LOG-147 (the user: find 直接超出畫面，且近期更新與應用程式重疊): the single
    column is the desktop's look, but it was chosen on WIDTH alone while what it costs is HEIGHT - six icons need 574 px, and the updates panel sits
    136 px up from the bottom, so one column only works from about 720 px of viewport height. Below that the two-column grid (the base rule) is
    correct and everything clears. This also fixes a latent bug on real desktops: a browser window under ~700 px tall had the same collision. */

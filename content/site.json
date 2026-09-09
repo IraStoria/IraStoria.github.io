@@ -60,17 +60,6 @@
           "zh": "聽寫成譜、改編、製譜",
           "en": "Transcribing by ear, arranging, engraving"
         }
-      },
-      {
-        "key": "tools",
-        "label": {
-          "zh": "音訊工具／插件",
-          "en": "Audio tools / plugins"
-        },
-        "desc": {
-          "zh": "DAW 周邊、製譜與音訊處理小工具",
-          "en": "DAW helpers, notation and audio-processing tools"
-        }
       }
     ]
   },
