@@ -5533,7 +5533,7 @@
       var it = (list._items || []).filter(function (x) { return x.id === id; })[0] || {}, msg = $('.msg', row);
       var say = function (t) { if (msg) { msg.textContent = t; setTimeout(function () { msg.textContent = ''; }, 1500); } };
       var oops = function (r) { say(U.wish_admin_fail.replace('{code}', r && r.http ? r.http : (r && r.error) || '?')); };   /* LOG-169 追記① (the user: 他寫撈不到願望): name the HTTP code - a 400/404 here means the Worker on Cloudflare is behind the site */
-      var touched = function () { try { sessionStorage.removeItem('wishes'); sessionStorage.setItem('wishes_fresh', '1'); } catch (e) {} };   /* 追記⑥: the next public wall in this browser skips the 60 s cache */
+      var touched = function () { try { sessionStorage.removeItem('wishes'); sessionStorage.setItem('wishes_fresh', '1'); sessionStorage.setItem('bugs_fresh', '1'); } catch (e) {} if (typeof pillar !== 'undefined') pillar.refresh(); };   /* LOG-169 追記② (the user: 改成保釋觀察中，彈幕卻還是待審): the pillar stage refetches past the 60 s cache and relabels the lines on their way */   /* 追記⑥: the next public wall in this browser skips the 60 s cache */
       var update = function (patch) { patch.id = id; return pool.post('/admin/update', patch, true).then(function (r) { if (!r.ok) throw r; touched(); return r; }); };
       if (b.classList.contains('ttoggle')) { var pre = $('pre.trail', row); if (pre) pre.hidden = !pre.hidden; return; }
       if (b.classList.contains('del')) { b.disabled = true; pool.post('/admin/delete', { id: id }, true).then(function (r) { if (!r.ok) throw r; touched(); row.remove(); list._items = (list._items || []).filter(function (x) { return x.id !== id; }); if (!list.querySelector('.wrow')) list.innerHTML = '<p class="note">' + esc(U.wish_admin_empty) + '</p>'; }).catch(function (r) { b.disabled = false; oops(r); }); return; }
@@ -5972,7 +5972,18 @@
     function key(e) { return e.w.id || ((e.w.nick || '') + ' ' + (e.w.text || e.w.title || '')); }
     function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
     function reorder() { order = shuffle((D.bugs || []).map(function (b) { return { w: b, mine: false }; }).concat(reports.map(function (b) { return { w: b, mine: false, report: true }; }))); cursor = 0; }
-    function loadReports() { if (!pool.on()) return; pool.get('/bugs').then(function (r) { if (r && r.ok && Array.isArray(r.items)) { reports = r.items; if (on) reorder(); } }).catch(function () {}); }
+    function loadReports() {   /* GET /bugs is cached a minute by the browser; after the owner's own action (bugs_fresh) the request carries ?f= to get past it */
+      if (!pool.on()) return; var fresh = false; try { fresh = sessionStorage.getItem('bugs_fresh') === '1'; sessionStorage.removeItem('bugs_fresh'); } catch (e) {}
+      pool.get('/bugs' + (fresh ? '?f=' + Date.now() : '')).then(function (r) {
+        if (!r || !r.ok || !Array.isArray(r.items)) return; reports = r.items; if (on) reorder();
+        live.forEach(function (L) {   /* a report already on its way takes the owner's new verdict at once (追記②) */
+          if (!L.e.report) return; var now = reports.filter(function (b) { return b.id === L.e.w.id; })[0]; if (!now) return; L.e.w = now;
+          var st = BUG_ST.indexOf(now.status) >= 0 ? now.status : 'new'; L.el.className = L.el.className.replace(/\bst-\w+/, 'st-' + st);
+          var parts = strings(L.e); [].forEach.call(L.el.querySelectorAll('.dmi > span'), function (s, i) { if (parts[i]) s.textContent = parts[i][1]; }); L.w = L.el.offsetWidth;
+        });
+      }).catch(function () {});
+    }
+    function refresh() { if (on) loadReports(); }
     function bugOf(e) { var b = e.w.id ? (D.bugs || []).filter(function (x) { return x.id === e.w.id; })[0] : null; return b || e.w; }   /* the roster entry in the CURRENT language */
     function strings(e) {   /* one line: 「title」 status · date · where (· LOG) — desc. Mine: nick 「text」 已回報 · date */
       var w = e.w;
@@ -6053,7 +6064,7 @@
     }
     function relabel() { if (!on) return; box.paint(box.hasFocus(), step); box.place(); live.forEach(function (L) { var parts = strings(L.e); [].forEach.call(L.el.querySelectorAll('.dmi > span'), function (s, i) { if (parts[i]) s.textContent = parts[i][1]; }); L.w = L.el.offsetWidth; }); }
     document.addEventListener('keydown', function (e) { if (on && e.key === 'Escape') close(); });
-    return { open: open, close: close, toggle: function () { on ? close() : open(); }, isOpen: function () { return on; }, relabel: relabel,
+    return { open: open, close: close, toggle: function () { on ? close() : open(); }, isOpen: function () { return on; }, relabel: relabel, refresh: refresh,
              stats: function () { return { live: live.length, lanes: lanes.filter(Boolean).length, band: layer ? band() : null }; } };
   })();
 
