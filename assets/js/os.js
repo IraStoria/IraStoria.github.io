@@ -1877,7 +1877,7 @@
     var HOST = desktop, WV = wave;
     var active = false, wid = null, ui = null, veil = null, veil2 = null, ctx = null, master = null, mgain = null, muted = false, ducked = false, hint = null, langSeen = null;
     var orig = null, tr = null;                                 /* channels: { off, url, buf, src, g, pan, done, total } — off: seconds into the file where the MIDI's 0 sits */
-    var mode = 'yt', split = false, mix = 0.5, pref = null, canYT = false, hasFallback = false;   /* pref: the visitor's own source choice; canYT: the work embeds a YouTube original */
+    var mode = 'yt', split = false, mix = 0.5, pref = null, canYT = false, hasFallback = false, cached = false, tipShown = false, tipTimer = 0;   /* cached (追記㉑): the hosted copy sounds while the video runs on, muted, as the clock - switching back is a volume swap, no seek, no reload; mode 'local' is only the real fallback (the video is dead) */   /* pref: the visitor's own source choice; canYT: the work embeds a YouTube original */
     var T0 = 0, pausedAt = 0, playing = false, started = false, dur = 0, pendingT = null, endAt = 0, preT0 = 0;   /* preT0: performance.now() when the stage opened (the pre-roll clock's zero) */   /* local clock: T = ctx.currentTime - T0 while playing, pausedAt otherwise; pendingT: a play(T) waiting for a buffer */
     var yt = null, ytEl = null, ytReady = false, ytFailed = false, ytBuf = false, ytT = 0, ytAt = 0, ytReadyTimer = 0, ytPlayTimer = 0, ytPend = false, ytWarm = 0, resumeTimer = 0;   /* ytWarm: 0 cold, 1 warming (muted pre-roll), 2 warmed and parked at the start */   /* ytT/ytAt: last polled MIDI time and when; ytPend: a play() sent, waiting for PLAYING */
     var raf = 0, secs = [], toastTimer = 0, dbg = null, ytLag = TR_YT_LAG_S, loLag = 0, origBase = 0, volT = 1, volO = 1, origGain = 1;   /* volT/volO (LOG-173): per-side volume trims on top of the lean (localStorage tr_volt / tr_volo) */
@@ -1946,9 +1946,9 @@
       if (ui) { var pctEl = ui.querySelector('.tr-pct'); if (pctEl) pctEl.textContent = Math.round(mix * 100) + '% / ' + Math.round((1 - mix) * 100) + '%'; }   /* 追記⑩(5): transcription % / original % above the slider */
       var oGyt = oG; oG *= origGain;   /* 追記⑩(1): YouTube is not trimmed - the ceiling is the hosted copy's alone */   /* 追記⑨(3): the original is inherently louder (measured -11.8 vs -20.7 dBFS RMS); media.original.gain (0.36 = -8.9 dB) is its ceiling, so the two sides balance at equal slider positions. The LINE was fed above, before this trim: equal loudness = equal brightness */
       if (tr) { tr.g.gain.setTargetAtTime(Math.max(0.0001, tG), now, 0.02); tr.gM.gain.setTargetAtTime(Math.max(0.0001, tG), now, 0.02); if (tr.pan) tr.pan.pan.setTargetAtTime(split ? -1 : 0, now, 0.02); }   /* 追記⑨(2): split = transcription in the LEFT ear, the original in the RIGHT - the same sides as the slider and the line */
-      var cachedAudible = mode === 'local' || (split && hasFallback);   /* 追記⑱(1): in yt mode the split hands the original's ear to the cached copy (the video is muted, its picture stays) */
+      var cachedAudible = mode === 'local' || cached || (split && hasFallback);   /* 追記⑱(1)/㉑: the cached copy sounds in the fallback, when chosen by hand, or for the split's original ear - the video keeps the picture (and the clock) */
       if (orig) { orig.g.gain.setTargetAtTime(cachedAudible ? Math.max(0.0001, oG) : 0.0001, now, 0.02); orig.gM.gain.setTargetAtTime(Math.max(0.0001, oGyt), now, 0.02); if (orig.pan) orig.pan.pan.setTargetAtTime(split ? 1 : 0, now, 0.02); }   /* 追記⑭(2): the meter follows the video's level (lean x trim, no ceiling) - the bars show the original even in yt mode */
-      if (yt && ytReady) { try { yt.setVolume(mode === 'yt' && !split ? Math.round(100 * oGyt) : 0); } catch (e) {} }
+      if (yt && ytReady) { try { yt.setVolume(mode === 'yt' && !split && !cached ? Math.round(100 * oGyt) : 0); } catch (e) {} }
     }
     /* ---- transport on the MIDI clock */
     function play(t) {
@@ -2052,7 +2052,7 @@
         '<div class="tr-bar">' +
           '<div class="tr-row tr-row1"><span class="tr-vol tr-vol-l"><input type="range" class="tr-volt" min="0" max="1000" value="' + Math.round(volT * 1000) + '"></span><span class="tr-lbl tr-lo"></span><span class="tr-mixwrap"><b class="tr-pct"></b><input class="tr-mix" type="range" min="0" max="1000" value="' + Math.round((1 - mix) * 1000) + '" aria-label="mix" list="tr-mix-ticks"><datalist id="tr-mix-ticks"><option value="500"></option></datalist></span><span class="tr-lbl tr-hi"></span><span class="tr-vol tr-vol-r"><input type="range" class="tr-volo" min="0" max="1000" value="' + Math.round(volO * 1000) + '"></span></div>' +   /* 追記⑱: row 1 = the pan, symmetric: volume · transcription · [pan] · original · volume */
           '<div class="tr-row tr-row2"><div class="tr-modes"><button type="button" data-mode="xf"></button><button type="button" data-mode="lr"></button></div>' +
-            '<div class="tr-src"><i class="dot"></i><span class="tr-src-t"></span><button type="button" class="tr-src-sw"></button></div>' +
+            '<div class="tr-src"><i class="dot"></i><span class="tr-src-t"></span><button type="button" class="tr-src-sw"></button><div class="tr-tip" hidden role="status"></div></div>' +
             '<span class="tr-align"><span class="tr-align-l"></span><button type="button" data-nudge="-1" aria-label="earlier">\u2212</button><b class="tr-lag"></b><button type="button" data-nudge="1" aria-label="later">+</button></span></div>' +   /* row 2 = modes · source · align (the i button is gone: the notice shows itself) */
           '<div class="tr-secs"><div class="tr-cues"></div><div class="tr-seek" role="slider" aria-label="seek"><i></i></div></div>' +   /* 追記⑲: the cues live ON the seek bar - a tick through the bar at each cue, the button beside it (rows alternate) */
           '<div class="tr-toast"></div>' +
@@ -2068,8 +2068,8 @@
       vo.addEventListener('input', function () { volO = vo.value / 1000; try { localStorage.setItem('tr_volo', String(volO)); } catch (e) {} applyMix(); });
       ui.addEventListener('click', function (e) {
         var b = e.target.closest('[data-mode]'); if (b) { if (b.dataset.mode === 'lr' && !hasFallback) return; split = b.dataset.mode === 'lr'; paintModes(); paintSrc(); applyMix(); return; }   /* 追記⑱(1): the split works in yt mode too - the cached copy carries the original's ear while the video keeps the picture */
-        var sw = e.target.closest('.tr-src-sw'); if (sw) { setMode(mode === 'yt' ? 'local' : 'yt', false); return; }
-        var nd = e.target.closest('[data-nudge]'); if (nd) { setLag((mode === 'yt' ? ytLag : loLag) + TR_LAG_STEP * parseInt(nd.dataset.nudge, 10)); return; }
+        var sw = e.target.closest('.tr-src-sw'); if (sw) { if (mode === 'yt') setCached(!cached); else setMode('yt', false); return; }   /* 追記㉑: with the video alive the switch is a volume swap (no reload either way) */
+        var nd = e.target.closest('[data-nudge]'); if (nd) { hideTip(); setLag((mode === 'yt' ? ytLag : loLag) + TR_LAG_STEP * parseInt(nd.dataset.nudge, 10)); return; }
         var sc = e.target.closest('.tr-secs [data-t]'); if (sc) { seek(parseFloat(sc.dataset.t)); return; }
         var ca = e.target.closest('.tr-notice [data-app]'); if (ca) { e.preventDefault(); openApp(ca.dataset.app); return; }
       });
@@ -2086,14 +2086,20 @@
       paintLag();
     }
     function paintLag() { if (!ui) return; var a = ui.querySelector('.tr-align'); if (!a) return; var v = mode === 'yt' ? ytLag : loLag; a.querySelector('.tr-align-l').textContent = U.tr_align; a.querySelector('.tr-lag').textContent = (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' s'; }
+    function setCached(v) { cached = !!v && hasFallback; hideTip(); paintSrc(); applyMix(); }
+    function hideTip() { if (!ui) return; var t = ui.querySelector('.tr-tip'); if (t) t.hidden = true; clearTimeout(tipTimer); }
+    function showTip() {   /* 追記㉑(2): five seconds in, a small bubble over the cached-copy switch: out of sync? use Align; if nothing helps, the cached copy */
+      if (!ui || tipShown || mode !== 'yt' || cached || !hasFallback) return; tipShown = true;
+      var t = ui.querySelector('.tr-tip'); if (!t) return; t.hidden = false; clearTimeout(tipTimer); tipTimer = setTimeout(hideTip, 14000);
+    }
     function paintModes() { if (!ui) return; ui.querySelectorAll('[data-mode]').forEach(function (b) { b.classList.toggle('on', (b.dataset.mode === 'lr') === split); }); var lr = ui.querySelector('[data-mode="lr"]'); if (lr) lr.disabled = !hasFallback; }
     function paintSrc() {
       if (!ui) return; var s = ui.querySelector('.tr-src'), t = ui.querySelector('.tr-src-t'), sw = ui.querySelector('.tr-src-sw');
-      var cachedSounds = hasFallback && (mode === 'local' || split);   /* the cached copy is what you hear: the switch, the fallback, or the split's right ear */
-      s.classList.toggle('local', cachedSounds); t.textContent = mode === 'local' ? U.tr_src_local : (split ? U.tr_src_split : U.tr_src_yt);
-      sw.textContent = mode === 'yt' ? U.tr_switch_local : U.tr_switch_yt;
+      var cachedSounds = hasFallback && (mode === 'local' || cached || split);   /* the cached copy is what you hear: the switch, the fallback, or the split's right ear */
+      s.classList.toggle('local', cachedSounds); t.textContent = (mode === 'local' || cached) ? U.tr_src_local : (split ? U.tr_src_split : U.tr_src_yt);
+      sw.textContent = (mode === 'yt' && !cached) ? U.tr_switch_local : U.tr_switch_yt;
       sw.hidden = !(canYT && hasFallback) || (mode === 'local' && ytFailed);   /* no way back to a YouTube that already failed this run */
-      var yb = ui.querySelector('.tr-yt'); if (yb) { yb.classList.toggle('off', mode !== 'yt'); yb.hidden = !canYT; }
+      var yb = ui.querySelector('.tr-yt'); if (yb) { yb.classList.toggle('off', mode !== 'yt' || cached); yb.hidden = !canYT; }
       paintLag();
       var n = ui.querySelector('.tr-notice'); if (n) n.hidden = !cachedSounds;   /* forced up, over the video, for as long as the cached copy is the one sounding */
       paintModes();
@@ -2102,6 +2108,7 @@
       if (!ui) return; var w = work(); if (!w) return; langSeen = D.lang;
       ui.querySelector('.st-exit').textContent = U.stage_exit;
       ui.querySelector('.tr-lo').textContent = U.tr_trans; ui.querySelector('.tr-hi').textContent = U.tr_orig;
+      var tip = ui.querySelector('.tr-tip'); if (tip) tip.textContent = U.tr_tip;
       ui.querySelector('.tr-volt').title = U.tr_vol + ' · ' + U.tr_trans; ui.querySelector('.tr-volo').title = U.tr_vol + ' · ' + U.tr_orig; ui.querySelector('.tr-volt').setAttribute('aria-label', U.tr_vol + ' ' + U.tr_trans); ui.querySelector('.tr-volo').setAttribute('aria-label', U.tr_vol + ' ' + U.tr_orig);
       ui.querySelector('[data-mode="xf"]').textContent = U.tr_mode_xf; ui.querySelector('[data-mode="lr"]').textContent = U.tr_mode_lr;
       secs = w.sections || [];
@@ -2140,6 +2147,7 @@
         var bar = ui.querySelector('.tr-seek i'); if (bar) bar.style.width = (dur ? Math.min(100, t / dur * 100) : 0) + '%';
         if (D.lang !== langSeen) relabel();
       }
+      if (started && playing && t >= 5 && !tipShown) showTip();   /* 追記㉑(2) */
       if (mode === 'local' && playing && dur && t >= dur + TR_END_PAD_S) { end(); return; }
       raf = requestAnimationFrame(tick);
     }
@@ -2151,7 +2159,7 @@
       if (typeof secStage !== 'undefined' && secStage.active()) secStage.stop();
       trail.log('tr', id);
       active = true; runSeq++; wid = id; started = false; preT0 = performance.now(); playing = false; pausedAt = 0; pendingT = null; dur = 0; muted = false; split = false; mix = 0.5;
-      yt = null; ytReady = false; ytFailed = false; ytBuf = false; ytPend = false; ytWarm = 0; ytT = 0; ytAt = performance.now();
+      yt = null; ytReady = false; ytFailed = false; ytBuf = false; ytPend = false; ytWarm = 0; ytT = 0; ytAt = performance.now(); cached = false; tipShown = false;
       var m = w.media, o = m.original || {}, r = m.rendition || {};
       canYT = o.kind === 'youtube'; hasFallback = canYT ? !!o.fallback : !!o.src; origGain = (o.gain != null) ? o.gain : 1;
       if (/[?&]debug/.test(location.search) && /[?&]trlocal/.test(location.search)) pref = 'local';   /* the probe: skip YouTube, local from the first note */
@@ -2170,12 +2178,12 @@
       if (player.isPlaying()) { ducked = true; player.duck(true); }
       document.addEventListener('keydown', onKey);
       if (/[?&]debug/.test(location.search)) window.__trLine = function () { return WV.splitInfo(); };   /* survives stop(): the probe checks the line was handed back */
-      if (/[?&]debug/.test(location.search)) window.__tr = { state: function () { return src.state(); }, mode: function () { return mode; }, setMode: function (m) { setMode(m, false); }, mix: function (v) { if (v != null) { mix = v; if (ui) ui.querySelector('.tr-mix').value = Math.round((1 - v) * 1000); applyMix(); } return mix; }, split: function (v) { if (v != null && mode === 'local') { split = !!v; paintModes(); applyMix(); } return split; }, seek: seek, toggle: toggle, ytFail: function () { ytFail('probe'); }, lag: function (v) { if (v != null) setLag(v); return mode === 'yt' ? ytLag : loLag; }, vol: function (side, v) { if (v != null) { if (side === 't') volT = v; else volO = v; if (ui) { ui.querySelector(side === 't' ? '.tr-volt' : '.tr-volo').value = Math.round(v * 1000); } applyMix(); } return side === 't' ? volT : volO; }, debug: debug };
+      if (/[?&]debug/.test(location.search)) window.__tr = { state: function () { return src.state(); }, mode: function () { return mode; }, setMode: function (m) { setMode(m, false); }, mix: function (v) { if (v != null) { mix = v; if (ui) ui.querySelector('.tr-mix').value = Math.round((1 - v) * 1000); applyMix(); } return mix; }, split: function (v) { if (v != null && mode === 'local') { split = !!v; paintModes(); applyMix(); } return split; }, seek: seek, toggle: toggle, ytFail: function () { ytFail('probe'); }, lag: function (v) { if (v != null) setLag(v); return mode === 'yt' ? ytLag : loLag; }, cached: function (v) { if (v != null) setCached(v); return cached; }, vol: function (side, v) { if (v != null) { if (side === 't') volT = v; else volO = v; if (ui) { ui.querySelector(side === 't' ? '.tr-volt' : '.tr-volo').value = Math.round(v * 1000); } applyMix(); } return side === 't' ? volT : volO; }, debug: debug };
     }
     function onKey(e) { if (e.key === 'Escape') stop(false); }
     function stop(immediate) {
       if (!active) return; active = false;
-      clearTimeout(ytReadyTimer); clearTimeout(ytPlayTimer); clearTimeout(toastTimer); clearTimeout(resumeTimer); document.removeEventListener('keydown', onKey);
+      clearTimeout(ytReadyTimer); clearTimeout(ytPlayTimer); clearTimeout(toastTimer); clearTimeout(resumeTimer); clearTimeout(tipTimer); document.removeEventListener('keydown', onKey);
       playing = false; stopCh(orig); stopCh(tr);
       if (yt) { try { yt.destroy(); } catch (e) {} yt = null; } ytReady = false;
       if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; master = null; mgain = null; }
@@ -2188,7 +2196,7 @@
       if (wasDucked) setTimeout(function () { player.unduck(); }, immediate ? 0 : 300);
       if (window.__tr) try { delete window.__tr; } catch (e) {}
     }
-    function debug() { return { active: active, mode: mode, split: split, mix: +mix.toFixed(3), lag: ytLag, loLag: loLag, volT: volT, volO: volO, origGain: origGain, warm: ytWarm, line: WV.splitInfo(), playing: playing, started: started, pos: +T().toFixed(2), dur: +dur.toFixed(1), yt: { ready: ytReady, failed: ytFailed, buf: ytBuf, pend: ytPend }, ctx: ctx ? ctx.state : '-',
+    function debug() { return { active: active, mode: mode, cached: cached, split: split, mix: +mix.toFixed(3), lag: ytLag, loLag: loLag, volT: volT, volO: volO, origGain: origGain, warm: ytWarm, line: WV.splitInfo(), playing: playing, started: started, pos: +T().toFixed(2), dur: +dur.toFixed(1), yt: { ready: ytReady, failed: ytFailed, buf: ytBuf, pend: ytPend }, ctx: ctx ? ctx.state : '-',
       orig: orig ? { buf: !!orig.buf, src: !!orig.src, g: +orig.g.gain.value.toFixed(3), pan: orig.pan ? +orig.pan.pan.value.toFixed(2) : null, off: orig.off } : null,
       tr: tr ? { buf: !!tr.buf, src: !!tr.src, g: +tr.g.gain.value.toFixed(3), pan: tr.pan ? +tr.pan.pan.value.toFixed(2) : null, off: tr.off } : null }; }
     /* now-playing source while the stage runs: caption + progress line + spectrum analyser + the waterfall's notes and clock */
