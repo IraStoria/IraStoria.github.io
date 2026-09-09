@@ -21,6 +21,7 @@ const LIMIT = {
   trailItem: 200,
   reply: 2000,
   link: 200,
+  email: 120,       // LOG-165: the wisher's optional address
 };
 // Rate limits: [max hits, window seconds]
 const RATE = {
@@ -29,6 +30,7 @@ const RATE = {
   wishes: [60, 60],
   mine: [30, 60],
   totp: [5, 600],
+  unsub: [10, 600],
 };
 const MINE_MAX = 10;             // ids per POST /mine (the site keeps at most 10 of the sender's own)
 const TOKEN_TTL_S = 12 * 3600;   // admin pass validity
@@ -42,6 +44,14 @@ const TOTP_WINDOW = 1;
 // Bark push notifications
 const BARK_DEFAULT_SERVER = 'https://api.day.app';
 const BARK_GROUP = 'irastoria-pool';
+// Wish-update mail (LOG-165): an HTTP mail API shaped like Resend's - POST {from,to,subject,text} with a Bearer key.
+// Silent unless MAIL_API_KEY and MAIL_FROM are set. The address is optional, never public, dropped by the unsubscribe link.
+const MAIL_DEFAULT_API = 'https://api.resend.com/emails';
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ST_LABEL = {
+  zh: { wishing: '許願中', considering: '考慮中', building: '施工中', done: '已實現', declined: '婉謝' },
+  en: { wishing: 'Wished', considering: 'Considering', building: 'In progress', done: 'Granted', declined: 'Declined' },
+};
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -149,6 +159,54 @@ function bark(env, ctx, title, body, level) {
   } catch {
     // never let a notification break a response
   }
+}
+// One mail through the HTTP mail API, in the background; never lets a failure touch the response.
+function mail(env, ctx, to, subject, text) {
+  try {
+    if (!env || !env.MAIL_API_KEY || !env.MAIL_FROM || !to) return;
+    const p = fetch(String(env.MAIL_API || MAIL_DEFAULT_API), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: `Bearer ${env.MAIL_API_KEY}` },
+      body: JSON.stringify({ from: env.MAIL_FROM, to: [to], subject, text }),
+    })
+      .then((r) => { try { if (r && r.body && r.body.cancel) r.body.cancel(); } catch {} })
+      .catch(() => {});
+    if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p);
+  } catch {
+    // never let a notification break a response
+  }
+}
+// What changed for the wisher: approval, a status, a (new) reply. A link edit, an unapproval or a re-save is not news.
+function wishChange(before, it) {
+  const c = [];
+  if (before.approved !== true && it.approved === true) c.push('approved');
+  if (before.status !== it.status) c.push('status');
+  if ((it.reply || '') && before.reply !== it.reply) c.push('reply');
+  return c;
+}
+// The mail, in the wish's language, with a one-click unsubscribe link signed with TOKEN_SECRET (no KV, no session).
+async function wishMail(env, self, it, change) {
+  const zh = it.lang !== 'en', L = ST_LABEL[zh ? 'zh' : 'en'];
+  const t = await hmacB64url(env.TOKEN_SECRET, `unsub:${it.id}`);
+  const unsub = `${self}/unsub?id=${encodeURIComponent(it.id)}&t=${t}`;
+  const site = String(env.SITE_URL || '').replace(/\/(zh|en)\/?$/, '/') + (zh ? 'zh/' : 'en/');
+  const chars = Array.from(it.text), quote = chars.length > 80 ? chars.slice(0, 80).join('') + '…' : it.text;
+  const granted = change.includes('status') && it.status === 'done';
+  const lines = [];
+  if (zh) {
+    lines.push(`${it.nick} 你好，`, '', `你在 IraStoria 許願池許的願望「${quote}」有新進展：`);
+    if (change.includes('approved')) lines.push('・已放上牆（站主放行了）');
+    if (change.includes('status')) lines.push(`・狀態：${L[it.status] || it.status}`);
+    if (change.includes('reply')) lines.push(`・站主回覆：「${it.reply}」`);
+    lines.push('', `去看看：${site}`, '', `這封信只因為你許願時留了 email 才寄出；email 不會公開。不想再收到：${unsub}`);
+    return { subject: `許願池：你的願望有新進展${granted ? '（已實現）' : ''}`, text: lines.join('\n') };
+  }
+  lines.push(`Hi ${it.nick},`, '', `Your wish at the IraStoria wishing well - "${quote}" - has news:`);
+  if (change.includes('approved')) lines.push('- it is on the wall now');
+  if (change.includes('status')) lines.push(`- status: ${L[it.status] || it.status}`);
+  if (change.includes('reply')) lines.push(`- reply: "${it.reply}"`);
+  lines.push('', `See it: ${site}`, '', `You get this only because you left an email with the wish; it is never shown. To stop: ${unsub}`);
+  return { subject: `Wishing well: news on your wish${granted ? ' (granted)' : ''}`, text: lines.join('\n') };
 }
 // "<country>/<city>" from Cloudflare's request.cf, '?' when unknown.
 function geo(request) {
@@ -367,9 +425,11 @@ async function handleSubmit(request, env, ctx, iph) {
     if (!nick) return fail(400, 'invalid');
     if (!CATS.includes(data.cat)) return fail(400, 'invalid');
     if (clen(text) > LIMIT.wishText) return fail(400, 'invalid');
+    const email = isStr(data.email) ? data.email.trim().toLowerCase() : '';   // LOG-165: optional; never public
+    if (email && (clen(email) > LIMIT.email || !EMAIL_RE.test(email))) return fail(400, 'invalid');
     const item = {
       id, type: 'wish', ts, lang: data.lang, nick, cat: data.cat, text,
-      approved: false, status: 'wishing', votes: 0, reply: '', replyLang: '', link: '', iph,
+      approved: false, status: 'wishing', votes: 0, reply: '', replyLang: '', link: '', email, iph,
     };
     await env.POOL.put(`wish:${id}`, JSON.stringify(item));
     notifySubmit(env, ctx, '許願池 · 新願望', nick, text);
@@ -534,8 +594,8 @@ async function handleAdminList(url, env) {
   return json(200, { ok: true, items: await loadAll(env, `${type}:`) });
 }
 
-// POST /admin/update — patch only the given fields; rebuild pub if wish.
-async function handleAdminUpdate(request, env) {
+// POST /admin/update — patch only the given fields; rebuild pub if wish; mail the wisher when the change is news for them (LOG-165).
+async function handleAdminUpdate(request, env, ctx) {
   const r = await readJson(request, LIMIT.wishBody);
   if (r.err) return r.err;
   const d = r.data;
@@ -543,6 +603,7 @@ async function handleAdminUpdate(request, env) {
   const found = await findById(env, d.id, ['wish', 'bug']);
   if (!found) return fail(404, 'notfound');
   const it = found.item;
+  const before = { approved: it.approved, status: it.status, reply: it.reply || '' };
   if (d.approved !== undefined) { if (typeof d.approved !== 'boolean') return fail(400, 'invalid'); it.approved = d.approved; }
   if (d.status !== undefined) { if (!STATUSES.includes(d.status)) return fail(400, 'invalid'); it.status = d.status; }
   if (d.reply !== undefined) { if (!isStr(d.reply) || clen(d.reply) > LIMIT.reply) return fail(400, 'invalid'); it.reply = d.reply; }
@@ -550,8 +611,32 @@ async function handleAdminUpdate(request, env) {
   if (d.link !== undefined) { if (!isStr(d.link) || clen(d.link) > LIMIT.link) return fail(400, 'invalid'); it.link = d.link.trim(); }
   if (d.read !== undefined) { if (typeof d.read !== 'boolean') return fail(400, 'invalid'); it.read = d.read; }
   await env.POOL.put(found.key, JSON.stringify(it));
-  if (it.type === 'wish') await rebuildPub(env);
+  if (it.type === 'wish') {
+    await rebuildPub(env);
+    const change = wishChange(before, it);
+    if (it.email && change.length && env.MAIL_API_KEY && env.MAIL_FROM && env.TOKEN_SECRET) {
+      const m = await wishMail(env, new URL(request.url).origin, it, change);
+      mail(env, ctx, it.email, m.subject, m.text);
+    }
+  }
   return json(200, { ok: true, item: it });
+}
+
+// GET /unsub?id&t — the wisher's one-click opt-out (the link in every mail): drops the email, keeps the wish. No session, no KV lookup beyond the wish.
+async function handleUnsub(url, env, iph) {
+  if (await rateLimited(env, 'unsub', iph)) return fail(429, 'rate');
+  const id = url.searchParams.get('id') || '', t = url.searchParams.get('t') || '';
+  const page = (zh, good) => new Response(
+    `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${zh ? '許願池' : 'Wishing well'}</title>` +
+    `<body style="font:16px/1.7 system-ui,sans-serif;padding:2rem;max-width:36rem;color:#222">${good
+      ? (zh ? '好，這則願望之後不再寄信給你。願望本身還在池裡。' : 'Done. No more mail about this wish; the wish itself stays in the well.')
+      : (zh ? '這條連結不對或已失效。' : 'This link is not valid.')}</body>`,
+    { status: good ? 200 : 400, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
+  if (!/^[0-9]+-[0-9a-f]+$/.test(id) || !env.TOKEN_SECRET || !(await hmacVerify(env.TOKEN_SECRET, `unsub:${id}`, t))) return page(true, false);
+  const found = await findById(env, id, ['wish']);
+  if (!found) return page(true, false);
+  if (found.item.email) { found.item.email = ''; await env.POOL.put(found.key, JSON.stringify(found.item)); }
+  return page(found.item.lang !== 'en', true);
 }
 
 // POST /admin/delete — remove an item; rebuild pub if wish.
@@ -603,6 +688,7 @@ export default {
       if (path === '/wishes') return withCors(method === 'GET' ? await handleWishes(env, iph) : fail(405, 'method'));
       if (path === '/vote') return withCors(method === 'POST' ? await handleVote(request, env, iph) : fail(405, 'method'));
       if (path === '/mine') return withCors(method === 'POST' ? await handleMine(request, env, iph) : fail(405, 'method'));
+      if (path === '/unsub') return method === 'GET' ? handleUnsub(url, env, iph) : withCors(fail(405, 'method'));   // a browser navigation from the mail; no CORS needed
 
       // OAuth (browser navigations; no CORS needed)
       if (path === '/auth/start') return method === 'GET' ? handleAuthStart(env) : fail(405, 'method');
@@ -614,7 +700,7 @@ export default {
       if (path.startsWith('/admin/')) {
         if (!(await requireAdmin(request, env))) return withCors(fail(401, 'auth'));
         if (path === '/admin/list') return withCors(method === 'GET' ? await handleAdminList(url, env) : fail(405, 'method'));
-        if (path === '/admin/update') return withCors(method === 'POST' ? await handleAdminUpdate(request, env) : fail(405, 'method'));
+        if (path === '/admin/update') return withCors(method === 'POST' ? await handleAdminUpdate(request, env, ctx) : fail(405, 'method'));
         if (path === '/admin/delete') return withCors(method === 'POST' ? await handleAdminDelete(request, env) : fail(405, 'method'));
       }
 

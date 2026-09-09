@@ -672,5 +672,78 @@ await test('POST /mine: shape, size and origin guards; GET is 405; rate limited 
   eq(last.status, 429); eq(last.data.error, 'rate');
 });
 
+// ---------------------------------------------------------------------------
+// LOG-165: optional email on a wish, mail on the owner's updates, unsubscribe
+// ---------------------------------------------------------------------------
+const MAIL_API = 'https://api.resend.com/emails';
+const mailsOf = (m) => m.calls.filter((c) => c.url === MAIL_API);
+
+await test('email (LOG-165): optional on a wish, validated, lowercased, stored, never public', async () => {
+  const env = makeEnv();
+  const a = await call(env, '/submit', { body: { ...WISH, email: ' Wisher@Example.COM ' } });
+  eq(a.status, 200);
+  eq((await env.POOL.get(`wish:${a.data.id}`, 'json')).email, 'wisher@example.com', 'stored, trimmed, lowercased');
+  const b = await call(env, '/submit', { body: { ...WISH, email: 'not-an-email' }, ip: '203.0.113.8' }); eq(b.status, 400); eq(b.data.error, 'invalid');
+  const c = await call(env, '/submit', { body: { ...WISH, email: '' }, ip: '203.0.113.9' }); eq(c.status, 200); eq((await env.POOL.get(`wish:${c.data.id}`, 'json')).email, '');
+  const d = await call(env, '/submit', { body: { ...WISH, email: 'x'.repeat(120) + '@example.com' }, ip: '203.0.113.10' }); eq(d.status, 400, 'over 120 chars');
+  await call(env, '/admin/update', { body: { id: a.data.id, approved: true }, headers: bearer(env) });
+  const w = await call(env, '/wishes'); ok(!JSON.stringify(w.data).includes('example.com'), 'email never in /wishes'); ok(!('email' in w.data.items[0]), 'no email key publicly');
+  const m = await call(env, '/mine', { body: { ids: [a.data.id] } }); ok(!JSON.stringify(m.data).includes('example.com'), 'nor in /mine');
+  const l = await call(env, '/admin/list?type=wish', { headers: bearer(env) }); ok(l.data.items.some((x) => x.email === 'wisher@example.com'), 'the owner sees it');
+});
+
+await test('mail (LOG-165): approval / status / reply mail the wisher once each, quoting the wish, with an unsubscribe link; re-saves and link edits send nothing; silent without MAIL_API_KEY', async () => {
+  const env = { ...makeEnv(), MAIL_API_KEY: 'k-test', MAIL_FROM: 'IraStoria <pool@example.net>' };
+  const m = mockFetch();
+  try {
+    const a = await call(env, '/submit', { body: { ...WISH, email: 'wisher@example.com' } });
+    await call(env, '/admin/update', { body: { id: a.data.id, approved: true }, headers: bearer(env) });
+    eq(mailsOf(m).length, 1, 'approval -> one mail');
+    const b1 = mailsOf(m)[0]; eq(b1.method, 'POST'); eq(b1.body.to, ['wisher@example.com']); eq(b1.body.from, env.MAIL_FROM);
+    ok(/許願池/.test(b1.body.subject), 'zh subject'); ok(b1.body.text.includes('希望有夜間模式'), 'quotes the wish'); ok(b1.body.text.includes('已放上牆'), 'says it is on the wall');
+    ok(b1.body.text.includes(`${BASE}/unsub?id=${a.data.id}&t=`), 'unsubscribe link back to this worker'); ok(b1.body.text.includes('https://irastoria.github.io/zh/'), 'site link in the wish language');
+    await call(env, '/admin/update', { body: { id: a.data.id, status: 'wishing', reply: '', link: 'app:demos' }, headers: bearer(env) });
+    eq(mailsOf(m).length, 1, 'nothing changed for the wisher -> no mail');
+    await call(env, '/admin/update', { body: { id: a.data.id, status: 'done', reply: '做好了' }, headers: bearer(env) });
+    eq(mailsOf(m).length, 2, 'status + reply -> one mail');
+    const b2 = mailsOf(m)[1].body; ok(b2.text.includes('已實現') && b2.text.includes('「做好了」'), 'both in the one mail'); ok(/已實現/.test(b2.subject), 'granted in the subject');
+    await call(env, '/admin/update', { body: { id: a.data.id, status: 'done', reply: '做好了' }, headers: bearer(env) });
+    eq(mailsOf(m).length, 2, 'a re-save of the same values sends nothing');
+    await call(env, '/admin/update', { body: { id: a.data.id, approved: false }, headers: bearer(env) });
+    eq(mailsOf(m).length, 2, 'unapproving is not news');
+    const e = await call(env, '/submit', { body: { ...WISH, lang: 'en', text: 'night mode please', email: 'en@example.com' }, ip: '203.0.113.8' });
+    await call(env, '/admin/update', { body: { id: e.data.id, status: 'building' }, headers: bearer(env) });
+    const b3 = mailsOf(m)[2].body; ok(/Wishing well/.test(b3.subject) && b3.text.includes('In progress') && b3.text.includes('night mode please') && b3.text.includes('/en/'), 'english wish -> english mail');
+    const quiet = makeEnv();
+    const c = await call(quiet, '/submit', { body: { ...WISH, email: 'quiet@example.com' }, ip: '203.0.113.9' });
+    await call(quiet, '/admin/update', { body: { id: c.data.id, status: 'done' }, headers: bearer(quiet) });
+    eq(mailsOf(m).length, 3, 'no MAIL_API_KEY -> no mail');
+    const env3 = { ...env, MAIL_API: 'https://mail.example.org/send' };
+    const d = await call(env3, '/submit', { body: { ...WISH, email: 'x@example.com' }, ip: '203.0.113.10' });
+    await call(env3, '/admin/update', { body: { id: d.data.id, approved: true }, headers: bearer(env3) });
+    ok(m.calls.some((x) => x.url === 'https://mail.example.org/send' && x.body.to[0] === 'x@example.com'), 'MAIL_API override');
+    const bugs = await call(env, '/submit', { body: BUG, ip: '203.0.113.11' });
+    await call(env, '/admin/update', { body: { id: bugs.data.id, read: true }, headers: bearer(env) });
+    eq(mailsOf(m).length, 3, 'a bug update never mails (the override mail above went to its own URL)');
+  } finally { m.restore(); }
+});
+
+await test('unsub (LOG-165): a forged link 400s and changes nothing; the signed link drops the email (the wish stays) and later updates send nothing', async () => {
+  const env = { ...makeEnv(), MAIL_API_KEY: 'k-test', MAIL_FROM: 'IraStoria <pool@example.net>' };
+  const m = mockFetch();
+  try {
+    const a = await call(env, '/submit', { body: { ...WISH, email: 'wisher@example.com' } });
+    const bad = await call(env, `/unsub?id=${a.data.id}&t=forged`, { origin: null }); eq(bad.status, 400); ok(/連結不對/.test(bad.data), 'zh refusal page');
+    eq((await env.POOL.get(`wish:${a.data.id}`, 'json')).email, 'wisher@example.com', 'forged link changes nothing');
+    const t = b64u(createHmac('sha256', env.TOKEN_SECRET).update(`unsub:${a.data.id}`).digest());
+    const good = await call(env, `/unsub?id=${a.data.id}&t=${t}`, { origin: null }); eq(good.status, 200); ok(/不再寄信/.test(good.data)); ok(/text\/html/.test(good.headers.get('content-type')));
+    const w = await env.POOL.get(`wish:${a.data.id}`, 'json'); eq(w.email, ''); eq(w.text, WISH.text, 'the wish itself stays');
+    const again = await call(env, `/unsub?id=${a.data.id}&t=${t}`, { origin: null }); eq(again.status, 200, 'idempotent');
+    await call(env, '/admin/update', { body: { id: a.data.id, approved: true, status: 'done' }, headers: bearer(env) });
+    eq(mailsOf(m).length, 0, 'no email left -> no mail');
+    const post = await call(env, `/unsub?id=${a.data.id}&t=${t}`, { method: 'POST', body: {} }); eq(post.status, 405);
+  } finally { m.restore(); }
+});
+
 console.log(`\n${passed}/${passed + failed} passed`);
 process.exit(failed ? 1 : 0);

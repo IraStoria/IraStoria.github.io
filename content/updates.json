@@ -1,6 +1,11 @@
 [
   {
     "date": "2026-09-09",
+    "zh": "桌面版的「許願池」與「恥辱柱」不再開視窗，直接在桌面上演：許願池是 dock 上方一格清玻璃對話框，一次問一句，願望像片尾字幕一樣在畫面各處逐字浮出，地平線下是會起漣漪的水面；許願時可以留 email（選填、不公開），願望有進展會寄信通知你。恥辱柱的名冊改成從左往右飄過的彈幕，已伏法的淺綠、還在逃的紅，滑鼠停上去那一則會停下來讓你看清楚。",
+    "en": "On the desktop the Wishing Well and the Pillar of Shame no longer open windows - they play out on the desktop itself. The well is a clear-glass prompt above the dock, one question at a time; wishes surface across the screen like end credits, typed out letter by letter, over water that ripples below the horizon. You may leave an email with a wish (optional, never shown) and get a note when it moves. The pillar's roster now streams left to right like bullet comments - executed ones in pale green, the ones still at large in red - and a line stops under your pointer so you can read it."
+  },
+  {
+    "date": "2026-09-09",
     "zh": "新增三個應用程式：「恥辱柱」把被抓到過的 bug 全釘上去（修好的標「已伏法」），回報通道開挖中；「許願池」的願望牆先開，投稿稍後開放；「合作聯絡」是一張名片，四種合作項目各有一顆「寫信」。手機主畫面同步上架。",
     "en": "Three new apps: the Pillar of Shame nails up every bug that has been caught (fixed ones are marked executed) while its reporting channel is being dug; the Wishing Well opens its wall first, with wishing to follow; Work With Me is a card with a Write button for each of four kinds of work. All three are on the phone's home screen too."
   },

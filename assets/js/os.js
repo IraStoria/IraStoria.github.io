@@ -192,6 +192,8 @@
     if (sw) { sw.setAttribute('data-lang-switch', other); sw.setAttribute('href', '../' + other + '/'); sw.title = U.lang_switch; sw.setAttribute('aria-label', U.lang_switch); sw.setAttribute('aria-checked', lang === 'zh' ? 'true' : 'false'); }   // the knob itself follows body[data-lang] via CSS
     TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, resume: U.app_resume, terminal: U.app_terminal, updates: U.app_updates, pillar: U.app_pillar, wishpool: U.app_wishpool, contact: U.app_contact };
     if (PHONE && phone) phone.relabel();
+    if (typeof well !== 'undefined' && well) well.relabel();   /* LOG-162: the bubble's labels and the status words of the wishes already on screen */
+    if (typeof pillar !== 'undefined' && pillar) pillar.relabel();   /* LOG-164: the pillar's box and the roster lines on their way */
     document.querySelectorAll('.icon[data-app]').forEach(function (b) { var t = b.querySelector('span:last-child'); if (t) t.textContent = TITLES[b.getAttribute('data-app')]; var g = b.querySelector('.glyph'); if (g && ICON[b.getAttribute('data-app')]) g.innerHTML = ICON[b.getAttribute('data-app')]; });
     document.querySelectorAll('#dock button[data-app]').forEach(function (b) { var a = b.getAttribute('data-app'); b.innerHTML = '<span>' + (ICON[a] || GLYPH[a]) + '</span>' + esc(TITLES[a]); });
     var hp = document.querySelectorAll('.hero-text p'); if (hp[0]) hp[0].textContent = D.hero_intro; if (hp[1]) hp[1].textContent = '// ' + U.desk_hint;
@@ -1138,7 +1140,7 @@
     var exitPending = null, startSeq = 0;   /* {e0, wasDucked, timers} while the exit choreography runs — a quick re-entry must cancel it (or its unduck would bring the music back under the stage) */
     var langSeen = null, redHold = null, flS = 0, trails = false, trailT0 = 0;   /* trails: star-trail egg for this stage run */   /* redHold: {x, t0} while the red fades out in place; flS: smoothed floor */
     var smuted = false, mgain = null;   /* stage mute (the transport's speaker button while the stage runs); reset on each stage start */
-    var midiForm = false, midiT0 = 0, mwfRun = 0, sparks = [], mwfOld = null, mwfAnim = null;   /* third form (the MIDI egg): outward waterfalls + the white square; midiT0: when the form fired (the square scales in from then); mwfRun: playback pass counter so sparks fire once per pass; mwfOld/mwfAnim: the leaving layer (frozen clock) and the swap/exit choreography */
+    var midiForm = false, midiT0 = 0, mwfRun = 0, sparks = [], mwfOld = null, mwfAnim = null, mwfVeil = false;   /* mwfVeil (LOG-163): the desktop stage (well / pillar) is up - the notes are collected into the square and stay there until it closes */   /* third form (the MIDI egg): outward waterfalls + the white square; midiT0: when the form fired (the square scales in from then); mwfRun: playback pass counter so sparks fire once per pass; mwfOld/mwfAnim: the leaving layer (frozen clock) and the swap/exit choreography */
     var fxc = null, fxg = null, fxr = null, fxrg = null, trc = null, trg = null;   /* effects layer + its red copy (see tick) */
     var el = null, head = null, cv = null, g2 = null, ctx = null, ch = null, vis = {}, ann = {}, lastT = 0, stars = [], pieces = [], idx = -1, active = false, ducked = false, lx = -1, ly = -1, raf = 0, moved = false, hint = null, ttl = null, geo = null, growT0 = 0, growDir = 1, grow = 0, demo = null, master = null;
     function build(d) {
@@ -1336,6 +1338,7 @@
       var sqK = midiT0 ? easeOut(Math.min(1, (now - midiT0) / STAGE_SQ_IN_MS)) : 1, sq = STAGE_R0 * geo.ru * grow * sqK; if (sq < 2) return;   /* the square's side = the discs' diameter; fired mid-run it scales out of the centre */
       var mw = ch && ch.mwf, tp = null;
       if (mw && ch.playing && ctx) tp = t - ch.t0 + mw.off;
+      if (mwfVeil && !(mwfAnim && mwfAnim.mode === 'out')) { mw = null; tp = null; }   /* LOG-163: veiled - once the collecting run is over nothing is drawn until the veil lifts */
       var RXc = Math.max(0, Math.min(geo.W, RX));
       /* which layer is on: a leaving piece's notes (frozen clock — on a piece change each corridor is COLLECTED back into the square, the reverse of the exit's outward scatter) or the live piece's, fading in (its notes emerge from the square by themselves) */
       var leadD = ch ? (ch.lead || STAGE_LEAD_S) : STAGE_LEAD_S, layerA = 1, exitK = 0, outK = 0;
@@ -1783,7 +1786,12 @@
       },
       analyser: function () { return master; }
     };
-    return { start: start, stop: function () { stop(false); }, active: function () { return active; }, src: function () { return src; }, toggle: toggle, prev: prev, next: function () { if (active) next(); },
+    function veilMidi(v) {   /* LOG-163 (the user: 遇到 EE_MIDI 時，載入恥辱柱或許願池期間 MIDI 會消失，消失模式跟切其他舞台概念類似): the same collecting run a piece change uses; lifting it lets the notes emerge from the square again */
+      v = !!v; if (v === mwfVeil) return; mwfVeil = v;
+      if (v) { if (midiForm && ch && ch.mwf && ch.playing && ctx && !(mwfAnim && mwfAnim.mode === 'out')) { mwfOld = { mw: ch.mwf, tp: ctx.currentTime - ch.t0 + ch.mwf.off, lead: ch.lead || STAGE_LEAD_S }; mwfAnim = { mode: 'out', t0: performance.now(), ms: STAGE_MWF_OUT_MS }; } }
+      else if (ch) ch.mwfIn = false;   /* next pass: the live piece fades back in from the square */
+    }
+    return { start: start, stop: function () { stop(false); }, active: function () { return active; }, src: function () { return src; }, toggle: toggle, prev: prev, next: function () { if (active) next(); }, veilMidi: veilMidi,
              toggleMute: function () { smuted = !smuted; if (mgain && ctx) mgain.gain.setTargetAtTime(smuted ? 0.0001 : 1, ctx.currentTime, 0.03); },
              debug: function () { var o = { active: active, ctx: ctx ? ctx.state : '-', idx: idx, playing: !!(ch && ch.playing), pos: ch && ch.playing && ctx ? +(ctx.currentTime - ch.t0).toFixed(2) : 0, dur: ch ? +ch.dur.toFixed(1) : 0, grow: +grow.toFixed(2), lx: Math.round(lx), ly: Math.round(ly), geo: geo, mwf: midiForm ? { data: !!(ch && ch.mwf), run: mwfRun, sparks: sparks.length } : false }; if (ch) KEYS.forEach(function (k) { var c = ch[k]; o[k] = { buf: !!c.buf, g: +c.g.gain.value.toFixed(3), pan: c.pan ? +c.pan.pan.value.toFixed(2) : null, lp: Math.round(c.lp.frequency.value) }; }); return o; } };
   })();
@@ -1793,6 +1801,8 @@
     if (PHONE) return phone.open(app);
     if (app === 'terminal') return spot.open();   /* Spotlight-style search bar instead of a window */
     if (app === 'about') return openAbout();
+    if (app === 'wishpool' && !pool.admin() && !(pool.pre() && !pool.info())) return well.toggle();   /* LOG-162: no window - the composer, the well and the wishes on the desktop itself */
+    if (app === 'pillar') return pillar.toggle();   /* LOG-164: its own stage - the roster streams across the desktop (no window) */
     var w = wins[app];
     if (!w) { w = createWindow(app); wins[app] = w; }
     w.classList.remove('minimized');
@@ -1897,8 +1907,9 @@
   function updateDock() {
     dock.querySelectorAll('button').forEach(function (b) {
       var a = b.getAttribute('data-app'), w = wins[a] || (a === 'about' ? wins.resume : null);   /* LOG-159: the About light stays on while either of its two windows is up */
-      b.classList.toggle('open', !!w);
-      b.classList.toggle('on', !!w && !w.classList.contains('minimized') && w.classList.contains('focus'));
+      var wellUp = (a === 'wishpool' && typeof well !== 'undefined' && well.isOpen()) || (a === 'pillar' && typeof pillar !== 'undefined' && pillar.isOpen());   /* LOG-162/164: the stages are no windows, but the light is on for the one that is up */
+      b.classList.toggle('open', !!w || wellUp);
+      b.classList.toggle('on', wellUp || (!!w && !w.classList.contains('minimized') && w.classList.contains('focus')));
     });
     updDodge();
   }
@@ -5340,6 +5351,8 @@
   /* ===== LOG-161: 恥辱柱 (feat.pillar) / 許願池 (feat.wishpool) / 合作聯絡 (feat.contact). One RENDER entry each, both shells (the phone panel
      calls the same functions). Every string is site.json ui; the roster is content/bugs.json; the Worker contract is worker/API.md. */
   var WISH_CATS = ['transcription', 'design', 'code', 'feature', 'interactive', 'other'], WISH_ST = ['building', 'considering', 'wishing', 'done', 'declined'];   /* wall order = LOG-120 裁定 9 */
+  var MAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;   /* LOG-165: the same shape the Worker checks */
+  function maskMail(m) { var i = m.indexOf('@'); return i > 1 ? m.charAt(0) + '\u2026' + m.slice(i) : m; }   /* s…@example.com - for the composer's done-chip only */
   function catLabel(c) { return U['wish_cat_' + c] || c; }
   function stLabel(st) { return U['wish_st_' + st] || st; }
   function when(ts) { var d = new Date(ts || 0); return isNaN(d) ? '' : d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
@@ -5419,23 +5432,23 @@
       return r.items;
     });
   }
-  function reconcileMine(wall, items) {
+  function reconcileMine(items, repaint) {   /* repaint(freshItems | null): null = only the copies changed; a list = adopt it (LOG-162: shared by the wall and the well) */
     var mine = mineLoad(); if (!mine.length) return;
     var have = {}; items.forEach(function (w) { have[w.id] = 1; });
     var keep = mine.filter(function (m) { return !(m.id && have[m.id]); });   /* already on the wall as a real card */
-    if (keep.length !== mine.length) { mineSave(keep); paintWall(wall); }
+    if (keep.length !== mine.length) { mineSave(keep); repaint(null); }
     var ids = keep.filter(function (m) { return !!m.id; }).map(function (m) { return m.id; }); if (!ids.length) return;
     pool.post('/mine', { ids: ids.slice(-10) }).then(function (r) {
       if (!r.ok || !r.states) return;
       var st = r.states, left = keep.filter(function (m) { return !m.id || !(st[m.id] === 'gone' || st[m.id] === 'public'); });
-      if (left.length !== keep.length) { mineSave(left); paintWall(wall); }
-      if (keep.some(function (m) { return st[m.id] === 'public'; })) fetchWall(true).then(function (it) { paintWall(wall, it); }).catch(function () {});   /* approved a moment ago: the cached list has not caught up */
+      if (left.length !== keep.length) { mineSave(left); repaint(null); }
+      if (keep.some(function (m) { return st[m.id] === 'public'; })) fetchWall(true).then(function (it) { repaint(it); }).catch(function () {});   /* approved a moment ago: the cached list has not caught up */
     }).catch(function () {});
   }
   function loadWall(wall) {
     var cached = null, fresh = false; try { cached = JSON.parse(sessionStorage.getItem('wishes') || 'null'); fresh = sessionStorage.getItem('wishes_fresh') === '1'; sessionStorage.removeItem('wishes_fresh'); } catch (e) {}
     if (cached && cached.items) paintWall(wall, cached.items);
-    fetchWall(fresh).then(function (items) { paintWall(wall, items); reconcileMine(wall, items); })
+    fetchWall(fresh).then(function (items) { paintWall(wall, items); reconcileMine(items, function (it) { paintWall(wall, it || undefined); }); })
       .catch(function () { if (!(cached && cached.items)) wall.innerHTML = '<p class="note">' + esc(U.wish_error) + '</p>'; });
   }
   function wireWall(wall) {
@@ -5454,15 +5467,17 @@
   }
   function wishFormHTML() {
     if (!pool.on()) return '<p class="note">' + esc(U.wish_offline) + '</p>';
-    return '<form class="pform wform" novalidate><div class="row"><input name="nick" placeholder="' + esc(U.wish_form_nick) + '" maxlength="24"><select name="cat" aria-label="' + esc(U.wish_form_cat) + '">' + WISH_CATS.map(function (c) { return '<option value="' + c + '">' + esc(catLabel(c)) + '</option>'; }).join('') + '</select></div><textarea name="text" rows="3" placeholder="' + esc(U.wish_form_text) + '" maxlength="600"></textarea><div class="actions"><button class="btn send" type="submit">' + esc(U.wish_send) + '</button><p class="msg"></p></div></form>';
+    return '<form class="pform wform" novalidate><div class="row"><input name="nick" placeholder="' + esc(U.wish_form_nick) + '" maxlength="24"><select name="cat" aria-label="' + esc(U.wish_form_cat) + '">' + WISH_CATS.map(function (c) { return '<option value="' + c + '">' + esc(catLabel(c)) + '</option>'; }).join('') + '</select></div><div class="row"><input name="mail" type="email" placeholder="' + esc(U.wish_form_mail) + '" maxlength="120" autocomplete="email" inputmode="email" spellcheck="false"></div><p class="small">' + esc(U.wish_mail_note) + '</p><textarea name="text" rows="3" placeholder="' + esc(U.wish_form_text) + '" maxlength="600"></textarea><div class="actions"><button class="btn send" type="submit">' + esc(U.wish_send) + '</button><p class="msg"></p></div></form>';
   }
   function wireWishForm(body) {
     var f = $('.wform', body); if (!f) return; var E = f.elements, msg = $('.msg', f), send = $('.send', f);
     f.addEventListener('submit', function (ev) {
       ev.preventDefault(); var nick = E.nick.value.trim().slice(0, 24), text = E.text.value.trim().slice(0, 600), cat = E.cat.value;
       if (!nick || !text) { msg.className = 'msg err'; msg.textContent = U.wish_need; return; }
+      var mail = E.mail ? E.mail.value.trim().toLowerCase().slice(0, 120) : ''; if (mail && !MAIL_RE.test(mail)) { msg.className = 'msg err'; msg.textContent = U.wish_mail_bad; return; }   /* LOG-165 */
       send.disabled = true; msg.className = 'msg'; msg.textContent = U.wish_sending;
-      pool.post('/submit', { type: 'wish', lang: lang, nick: nick, cat: cat, text: text }).then(function (r) {
+      var payload = { type: 'wish', lang: lang, nick: nick, cat: cat, text: text }; if (mail) payload.email = mail;
+      pool.post('/submit', payload).then(function (r) {
         if (!r.ok) throw r;
         var mine = mineLoad(); mine.push({ id: r.id || '', ts: Date.now(), lang: lang, nick: nick, cat: cat, text: text, status: 'wishing' }); mineSave(mine);   /* V7: the sender sees their own wish at once, marked pending */
         msg.className = 'msg ok'; msg.textContent = U.wish_sent; E.text.value = ''; trail.log('wish', 'sent');
@@ -5486,7 +5501,7 @@
         '<div class="ctl">' + (tr ? '<button type="button" class="btn sec ttoggle">' + esc(U.wish_admin_trail) + ' (' + tr.length + ')</button>' : '') + '<button type="button" class="btn sec read">' + esc(it.read ? U.wish_admin_pending : U.wish_admin_read) + '</button><button type="button" class="btn sec danger del">' + esc(U.wish_admin_delete) + '</button><span class="msg"></span></div>' +
         (tr ? '<pre class="trail" hidden>' + esc(tr.map(function (x) { return typeof x === 'string' ? x : JSON.stringify(x); }).join('\n')) + '</pre>' : '') + '</div>';
     }
-    return '<div class="wrow' + (it.approved ? '' : ' pending') + '" data-id="' + esc(it.id) + '"><div class="wh"><span class="wst wst-' + esc(it.status) + '">' + esc(stLabel(it.status)) + '</span><span class="nick">' + esc(it.nick) + '</span><span class="cat">' + esc(catLabel(it.cat)) + '</span><span class="when">' + esc(when(it.ts)) + ' \u00b7 ' + esc(it.lang || '') + ' \u00b7 +' + (it.votes || 0) + '</span><span class="wst ' + (it.approved ? 'wst-done' : 'wst-building') + '">' + esc(it.approved ? U.wish_admin_live : U.wish_admin_pending) + '</span></div><p class="txt">' + esc(it.text) + '</p>' +
+    return '<div class="wrow' + (it.approved ? '' : ' pending') + '" data-id="' + esc(it.id) + '"><div class="wh"><span class="wst wst-' + esc(it.status) + '">' + esc(stLabel(it.status)) + '</span><span class="nick">' + esc(it.nick) + '</span>' + (it.email ? '<span class="mailyes" title="' + esc(it.email) + '">\u2709</span>' : '') + '<span class="cat">' + esc(catLabel(it.cat)) + '</span><span class="when">' + esc(when(it.ts)) + ' \u00b7 ' + esc(it.lang || '') + ' \u00b7 +' + (it.votes || 0) + '</span><span class="wst ' + (it.approved ? 'wst-done' : 'wst-building') + '">' + esc(it.approved ? U.wish_admin_live : U.wish_admin_pending) + '</span></div><p class="txt">' + esc(it.text) + '</p>' +
       '<div class="ctl"><select class="status">' + WISH_ST.map(function (st) { return '<option value="' + st + '"' + (st === it.status ? ' selected' : '') + '>' + esc(stLabel(st)) + '</option>'; }).join('') + '</select><input class="reply" placeholder="' + esc(U.wish_admin_reply) + '" value="' + esc(it.reply || '') + '" maxlength="2000"><input class="link" placeholder="' + esc(U.wish_admin_link) + '" value="' + esc(it.link || '') + '" maxlength="200"><button type="button" class="btn save">' + esc(U.wish_admin_save) + '</button><button type="button" class="btn sec appr">' + esc(it.approved ? U.wish_admin_unapprove : U.wish_admin_approve) + '</button><button type="button" class="btn sec danger del">' + esc(U.wish_admin_delete) + '</button><span class="msg"></span></div></div>';
   }
   function wireAdmin(body) {
@@ -5533,6 +5548,500 @@
     if (pool.admin()) return '<div class="wish wadmin">' + adminHTML() + '</div>';
     return '<div class="wish"><p class="intro">' + esc(U.wish_intro) + '</p><h2>' + esc(U.wish_make) + '</h2>' + wishFormHTML() + '<h2>' + esc(U.wish_wall) + '</h2><div class="wall"><p class="note">' + esc(pool.on() ? U.wish_loading : U.wish_offline) + '</p></div></div>';   /* 追記⑤: no sign-in link on the public wall - the only door is the `login` command */
   }
+
+
+  /* ============================================================ LOG-162 桌面舞台：許願池 (the user: 點開時不要像現在用視窗，而是類似對話框概念——一個對話泡泡從桌面 dock 上方冒出，
+     可以進行輸入；許願池＝桌面地平線（音量條下區域，嘗試增加一些波紋的感覺）；許願的內容如同彈幕一樣顯示在畫面上，前後深淺大小逐漸像打字一樣出現).
+     LOG-164 (the user: 恥辱柱改成彈幕顯示法，切換邏輯不便): the pillar is no longer a second source of this stage. It is its own stage
+     (`pillar`, further down: its own glass box, the roster streaming across the screen), and the two simply take turns - opening one
+     closes the other; whatever is on screen finishes on its own. What they share lives just above them: the room lights (`room`)
+     and the clear-glass box (`glassBox`). Desktop only; the phone keeps its panels and the owner keeps the wishing well's window.
+       (1) THE COMPOSER - a clear-glass prompt box centred above the dock, one question at a time (kind → wish → name), cross-fading
+           between pages (2 → 1 slides).
+       (2) THE WELL - the ground below the horizon is water (drawn rings, 追記③/⑧: a wave packet per drop, lit on the near side, glints
+           where crests meet).
+       (3) THE LINES - each wish surfaces somewhere on the screen at one of four depths, typed out character by character, holds, fades,
+           and the next one comes (the NieR ending-E messages): `nick 「text」 status · date`, the owner's reply as a second line,
+           click = +1. Closing never cuts a line short - it types out, holds and fades on its own clock; no new one comes once the
+           stage is closed. A long line starts its quote on the second line instead of breaking mid-sentence (LOG-163). While the
+           four-piano stage is in its MIDI form, the notes are collected back into the square for as long as a stage is up (LOG-163). */
+  /* ---- shared by the two desktop stages */
+  var room = (function () {   /* the room lights: dimmed to a tenth while a stage is up, rising on a clock as the pointer nears */
+    var SEL = '.icons,.hero-text,.updates,.sticky', NEAR = 120, IN_S = 0.9, OUT_S = 1.4, dim = false, wired = false;
+    function lights(e) {
+      if (!dim) return; var px = e.clientX, py = e.clientY;
+      [].forEach.call(desktop.querySelectorAll(SEL), function (el) {
+        var r = el.getBoundingClientRect(), dx = Math.max(r.left - px, 0, px - r.right), dy = Math.max(r.top - py, 0, py - r.bottom), near = Math.sqrt(dx * dx + dy * dy) < NEAR ? '1' : '0';
+        if (el.dataset.lit === near) return; el.dataset.lit = near;
+        el.style.transition = 'opacity ' + (near === '1' ? IN_S : OUT_S) + 's ease'; el.style.opacity = near === '1' ? '1' : '0.10';   /* inline: the desktop's entrance rule (os.css:47, 3 s) would otherwise set the pace */
+      });
+    }
+    function off() { [].forEach.call(desktop.querySelectorAll(SEL), function (el) { el.style.opacity = ''; el.style.transition = ''; delete el.dataset.lit; }); }
+    return { set: function (v) { v = !!v; if (!wired) { wired = true; desktop.addEventListener('pointermove', lights); } if (v === dim) return; dim = v; document.body.classList.toggle('well-on', v); if (!v) off(); }, dim: function () { return dim; } };
+  })();
+  var GLASS_ICONS = { next: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+                      prev: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+                      go: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 5v6a3 3 0 0 1-3 3H6M9 10l-4 4 4 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>' };
+  function glassField(kind, name, extra) {   /* ta = a textarea; in = a name; mail = an email (LOG-165) */
+    var f = kind === 'ta' ? '<textarea name="' + name + '" rows="1" maxlength="' + (extra.max || 600) + '" aria-label="' + esc(extra.label || '') + '"></textarea>'
+                          : '<input name="' + name + '" maxlength="' + (extra.max || 24) + '" placeholder="' + esc(extra.ph || '') + '"' + (kind === 'mail' ? ' type="email" autocomplete="email" inputmode="email" spellcheck="false"' : ' autocomplete="nickname"') + '>';
+    return '<div class="well-field">' + f + '<div class="well-mirror" aria-hidden="true"></div></div>';
+  }
+  function glassCaret(wrap) {   /* the native caret is hidden; a mirror of the field carries a blinking underline right after the text up to the caret */
+    var f = wrap.querySelector('textarea,input'), mir = wrap.querySelector('.well-mirror'); if (!f || !mir) return;
+    var paint = function () {
+      if (document.activeElement !== f) { mir.innerHTML = ''; return; }
+      var v = f.value, at = typeof f.selectionEnd === 'number' ? f.selectionEnd : v.length;
+      mir.textContent = v.slice(0, at); var i = document.createElement('i'); mir.appendChild(i); mir.scrollTop = f.scrollTop;
+    };
+    ['input', 'keyup', 'click', 'focus', 'blur', 'select', 'scroll'].forEach(function (ev) { f.addEventListener(ev, paint); });
+    var onSel = function () { if (document.activeElement === f) paint(); }; document.addEventListener('selectionchange', onSel);
+    f._caretOff = function () { document.removeEventListener('selectionchange', onSel); };
+    paint();
+  }
+  function glassNav(prev, last, sendLabel) { return '<div class="well-nav">' + (prev ? '<button type="button" class="well-prev" aria-label="' + esc(U.well_prev) + '" title="' + esc(U.well_prev) + '">' + GLASS_ICONS.prev + '</button>' : '') + (last ? '<button type="button" class="send go" aria-label="' + esc(sendLabel) + '" title="' + esc(sendLabel) + '">' + GLASS_ICONS.go + '</button>' : '<button type="button" class="send" aria-label="' + esc(U.well_next) + '" title="' + esc(U.well_next) + '">' + GLASS_ICONS.next + '</button>') + '</div>'; }
+  function glassBox(o) {   /* o.cls: a second class on the box; o.html(): a page's inner HTML; o.wire(box, focusIt): its handlers; o.close(); o.slide(fromToken, toToken): ask for the sideways swap */
+    var el = document.createElement('div'); el.className = 'well-bub ' + (o.cls || ''); el.hidden = true; desktop.appendChild(el);
+    var shown = null, receipt = '', box;
+    function place() {   /* centred over the dock, never anchored to a button. Transform-free (offsetTop): a language swap drops the dock 120 px on a transform (os.css swap-out) and relabel() lands right in it */
+      var W = desktop.clientWidth, w = Math.min(720, W - 32), top = 0, n = dock; while (n && n !== desktop) { top += n.offsetTop; n = n.offsetParent; }
+      el.style.width = w + 'px'; el.style.left = Math.round((W - w) / 2) + 'px'; el.style.bottom = (desktop.clientHeight - top + 16) + 'px';
+    }
+    function paint(focusIt, token) {   /* the old page fades out, the box glides to its new height, the new page fades in */
+      var old = $('.well-in', el), h0 = el.offsetHeight, slide = !!(old && o.slide && o.slide(shown, token)); shown = token;
+      var swap = function () {
+        el.querySelectorAll('textarea,input').forEach(function (f) { if (f._caretOff) f._caretOff(); });
+        el.innerHTML = '<div class="well-in ' + (slide ? 'pre-l' : 'pre') + '"><button type="button" class="well-x" aria-label="close">×</button>' + o.html() + '</div>';
+        $('.well-x', el).addEventListener('click', function () { o.close(); });
+        el.querySelectorAll('.well-field').forEach(glassCaret);
+        var ta = $('textarea', el); if (ta) { var grow = function () { ta.style.height = 'auto'; ta.style.height = Math.min(180, ta.scrollHeight) + 'px'; }; ta.addEventListener('input', grow); ta._grow = grow; }
+        var msg = $('.msg', el);
+        if (msg && receipt) { var r = receipt; msg.className = 'msg ok'; msg.textContent = r; setTimeout(function () { if (msg.textContent === r) { msg.classList.add('fade'); setTimeout(function () { if (msg.classList.contains('fade')) { msg.textContent = ''; msg.className = 'msg'; } }, 900); } }, 3500); receipt = ''; }
+        o.wire(box, focusIt);
+        var h1 = el.offsetHeight; if (old && h0 && h1 !== h0) { el.style.height = h0 + 'px'; void el.offsetHeight; el.style.height = h1 + 'px'; setTimeout(function () { el.style.height = ''; }, 520); }
+        requestAnimationFrame(function () { var w = $('.well-in', el); if (w) w.classList.remove('pre', 'pre-l'); });
+      };
+      if (old && !old.classList.contains('pre') && !old.classList.contains('pre-l')) { old.classList.add(slide ? 'bye-r' : 'bye'); setTimeout(swap, 430); } else swap();
+    }
+    function say(t, cls) { var m = $('.msg', el); if (m) { m.className = 'msg ' + (cls || ''); m.textContent = t; } }
+    function focusFirst() { var q = $('textarea,input,.wchip.on,.wchip', el); if (q) q.focus(); }
+    function show(token) { el.hidden = false; el.innerHTML = ''; shown = null; paint(false, token); place(); el.classList.remove('in'); void el.offsetWidth; el.classList.add('in'); setTimeout(function () { if (!el.hidden && el.classList.contains('in')) focusFirst(); }, 250); }
+    function hide() { el.classList.remove('in'); setTimeout(function () { if (!el.classList.contains('in')) el.hidden = true; }, 400); }
+    box = { el: el, paint: paint, place: place, say: say, show: show, hide: hide, focus: focusFirst, receipt: function (t) { receipt = t; }, hasFocus: function () { return el.contains(document.activeElement); } };
+    return box;
+  }
+  var WELL_DEPTHS = [{ fs: 19, a: 0.96, hold: 15000 }, { fs: 15.5, a: 0.70, hold: 12500 }, { fs: 13, a: 0.48, hold: 10500 }, { fs: 11.5, a: 0.32, hold: 9000 }],   /* near -> far: font size, opacity, how long a fully typed line stays */
+      WELL_MAX_LIVE = 7, WELL_SPAWN_MS = [700, 1700], WELL_TYPE_MS = [26, 44], WELL_FADE_MS = 1500, WELL_RAIN_MS = [420, 1500], WELL_RIPPLE_S = 5.4, WELL_RIPPLE_SEGS = 72, WELL_MARGIN = 18, WELL_HOVER_BONUS_MS = 5000, WELL_HOVER_BONUS_MAX = 15000;   /* LOG-166: leaving a hovered line adds 5 s, never more than 15 s in all */
+  var well = (function () {
+    var host = null, fxc = null, g = null, msgs = null, box = null, on = false, raf = 0, order = [], cursor = 0, live = [], nextSpawn = 0, nextRain = 0, lastT = 0, dpr = 1, W = 0, H = 0, yH = 0, yG = 0, waterK = 0, loaded = false, items = [];
+    var rnd = function (a, b) { return a + Math.random() * (b - a); };
+    function geoUp() {
+      if (!host) return;
+      W = host.clientWidth; H = host.clientHeight; dpr = Math.min(2, window.devicePixelRatio || 1);
+      yH = wave.baseY() || H * 0.58; yG = H;   /* the ground runs from the horizon to the bottom of the screen, under the dock */
+      if (fxc.width !== Math.round(W * dpr) || fxc.height !== Math.round(H * dpr)) { fxc.width = Math.round(W * dpr); fxc.height = Math.round(H * dpr); }
+      box.place();
+    }
+    function ensure() {
+      if (host) return; host = desktop;
+      fxc = document.createElement('canvas'); fxc.className = 'well-fx'; fxc.hidden = true; host.appendChild(fxc); g = fxc.getContext('2d');
+      msgs = document.createElement('div'); msgs.className = 'well-msgs'; msgs.hidden = true; host.appendChild(msgs);
+      box = glassBox({ cls: 'for-well', html: bubbleHTML, wire: wire, close: close, slide: function (from, to) { return from === 1 && to === 0; } });   /* 追記⑨ 2 -> 1 slides */
+      msgs.addEventListener('click', function (ev) { var m = ev.target.closest('.wm'); if (m) vote(m); });
+      msgs.addEventListener('pointerover', function (ev) { var m = ev.target.closest('.wm'); if (!m) return; var L = byEl(m); if (L && !L.hover) hoverIn(L, performance.now()); });
+      msgs.addEventListener('pointerout', function (ev) { var m = ev.target.closest('.wm'); if (!m || (ev.relatedTarget && m.contains(ev.relatedTarget))) return; var L = byEl(m); if (L && L.hover) hoverOut(L, performance.now()); });
+      window.addEventListener('resize', function () { if (on) geoUp(); });
+    }
+    /* ---- LOG-166 (the user: 許願池放上去會暫停淡出倒數，已經在消失階段則重新淡入；放開之後增加 5 秒，預防無限往上疊加) */
+    function byEl(el) { return live.filter(function (x) { return x.el === el; })[0]; }
+    function hoverIn(L, t) { L.hover = true; L.hoverT = t; if (L.out) { L.out = false; L.el.classList.remove('out'); } }   /* a fading line comes back (the .out rule drops, the base .7 s transition brings it up) */
+    function hoverOut(L, t) {
+      if (!L.hover) return; L.hover = false;
+      if (!L.typing) {   /* the hovered stretch does not count against the hold; a line that had run out gets exactly the bonus */
+        var span = WELL_DEPTHS[L.depth].hold * (L.e.mine ? 1.6 : 1);
+        L.holdT += t - Math.max(L.hoverT, L.holdT);
+        if (L.holdT + span + L.extra - t < 0) L.holdT = t - span - L.extra;
+      }
+      L.extra = Math.min(WELL_HOVER_BONUS_MAX, L.extra + WELL_HOVER_BONUS_MS);
+    }
+    /* ---- the composer: a conversation. kind → wish → name. */
+    var step = 0, ans = { cat: '', text: '', nick: '', mail: '' }, chipBub = null;   /* LOG-165: mail = the optional email (step 3) */
+    function bubbleHTML() {
+      var title = U.app_wishpool;
+      if (!pool.on()) return '<div class="well-cap"><b>' + esc(title) + '</b></div><p class="note">' + esc(U.wish_offline) + '</p>';
+      var ctl, cut = function (t) { return '「' + esc(t.length > 22 ? t.slice(0, 22) + '…' : t) + '」'; };
+      var done = (step > 0 ? '<button type="button" class="wdone" data-step="0">' + esc(catLabel(ans.cat)) + '</button>' : '') + (step > 1 ? '<button type="button" class="wdone" data-step="1">' + cut(ans.text) + '</button>' : '') + (step > 2 && ans.mail ? '<button type="button" class="wdone" data-step="2">' + esc(maskMail(ans.mail)) + '</button>' : '');
+      var ask = ['well_ask_cat', 'well_ask_text', 'well_ask_mail', 'well_ask_nick'][step];   /* LOG-165 (the user: 多一個階段 3 階，原有 3 移到 4): kind → wish → email (optional) → name */
+      if (step === 0) ctl = '<div class="well-chips">' + WISH_CATS.map(function (c) { return '<button type="button" class="wchip' + (c === ans.cat ? ' on' : '') + '" data-cat="' + c + '">' + esc(catLabel(c)) + '</button>'; }).join('') + '</div>';
+      else if (step === 1) ctl = glassField('ta', 'text', { max: 600, label: U.wish_form_text });
+      else if (step === 2) ctl = glassField('mail', 'mail', { max: 120, ph: U.wish_form_mail });
+      else ctl = glassField('in', 'nick', { max: 24, ph: U.wish_form_nick });
+      return '<div class="well-cap"><b>' + esc(title) + '</b><div class="well-done">' + done + '</div></div><p class="well-ask">' + esc(U[ask]) + '</p><div class="well-row">' + ctl + '<p class="msg"></p>' + glassNav(step > 0, step === 3, U.wish_send) + '</div>';
+    }
+    function wire(b, focusIt) {
+      chipBub = null; if (!pool.on()) return;
+      var send = $('.send', b.el), focusLater = function (el) { if (focusIt && el) setTimeout(function () { el.focus(); }, 60); };
+      b.el.querySelectorAll('.wdone').forEach(function (x) { x.addEventListener('click', function () { step = +x.getAttribute('data-step'); b.paint(true, step); }); });
+      var pv = $('.well-prev', b.el); if (pv) pv.addEventListener('click', function () { step = Math.max(0, step - 1); b.paint(true, step); });
+      var ta = $('textarea', b.el), inp = $('input[name=nick]', b.el), ml = $('input[name=mail]', b.el);
+      if (step === 0) {
+        var chips = $('.well-chips', b.el), all = [].slice.call(chips.querySelectorAll('.wchip'));
+        if (typeof hovBubAttach === 'function') chipBub = hovBubAttach(chips, '.wchip', true);   /* the site's droplet glides between the chips */
+        var pick = function (c) { ans.cat = c; step = 1; b.paint(true, step); };
+        all.forEach(function (x) { x.addEventListener('click', function () { pick(x.getAttribute('data-cat')); }); });
+        chips.addEventListener('keydown', function (e) { var i = all.indexOf(document.activeElement); if (i < 0) return; if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); all[(i + (e.key === 'ArrowRight' ? 1 : all.length - 1)) % all.length].focus(); } });
+        send.addEventListener('click', function () { var o = all.indexOf(document.activeElement) >= 0 ? document.activeElement : (chips.querySelector('.wchip.on') || all[0]); pick(o.getAttribute('data-cat')); });
+        focusLater(chips.querySelector('.wchip.on') || all[0]);
+      } else if (step === 1) {
+        ta.value = ans.text; ta._grow(); ta.addEventListener('input', function () { ans.text = ta.value; });   /* kept as typed: a language switch mid-sentence must not lose it */
+        var next = function () { var t = ta.value.trim().slice(0, 600); if (!t) { b.say(U.wish_need, 'err'); ta.focus(); return; } ans.text = t; step = 2; b.paint(true, step); };
+        ta.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); next(); } });
+        send.addEventListener('click', next); focusLater(ta);
+      } else if (step === 2) {   /* LOG-165: an email, optional - never shown anywhere, only for news on this wish; Enter on an empty field skips it */
+        ml.value = ans.mail; ml.addEventListener('input', function () { ans.mail = ml.value; });
+        var mnext = function () { var v = ml.value.trim().toLowerCase().slice(0, 120); if (v && !MAIL_RE.test(v)) { b.say(U.wish_mail_bad, 'err'); ml.focus(); return; } ans.mail = v; step = 3; b.paint(true, step); };
+        ml.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); mnext(); } });
+        send.addEventListener('click', mnext); focusLater(ml);
+      } else {
+        inp.value = ans.nick; inp.addEventListener('input', function () { ans.nick = inp.value; });
+        var submit = function () {
+          var nick = inp.value.trim().slice(0, 24); if (!nick) { b.say(U.wish_need, 'err'); inp.focus(); return; }
+          ans.nick = nick; send.disabled = true; inp.disabled = true; b.say(U.wish_sending);
+          var payload = { type: 'wish', lang: lang, nick: nick, cat: ans.cat, text: ans.text }; if (ans.mail) payload.email = ans.mail;   /* LOG-165: only when given; the sender's own copy never carries it */
+          pool.post('/submit', payload).then(function (r) {
+            if (!r.ok) throw r;
+            var m = { id: r.id || '', ts: Date.now(), lang: lang, nick: nick, cat: ans.cat, text: ans.text, status: 'wishing' }, mine = mineLoad(); mine.push(m); mineSave(mine);
+            trail.log('wish', 'sent'); burst(W / 2, H - (parseFloat(b.el.style.bottom) || 0) + 8, 4);   /* the wish drops into the well just under the composer */
+            surface({ w: m, mine: true }, 0);   /* and comes up at once, near, marked 審核中 */
+            ans.text = ''; ans.cat = ''; step = 0; b.receipt(U.wish_sent); b.paint(false, step);   /* back to the first question (the name is kept); the receipt shows on the fresh page */
+          }).catch(function () { b.say(U.wish_fail, 'err'); send.disabled = false; inp.disabled = false; });
+        };
+        inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+        send.addEventListener('click', submit); focusLater(inp);
+      }
+    }
+    /* ---- the lines */
+    function key(e) { return e.w.id || ((e.w.nick || '') + ' ' + (e.w.text || '')); }   /* identity across refetches and the sender's own copies (fresh objects every time) */
+    function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+    function reorder() { order = shuffle(items.map(function (w) { return { w: w, mine: false }; }).concat(mineLoad().map(function (m) { return { w: m, mine: true }; }))); cursor = 0; }
+    function load() {
+      if (!pool.on()) { loaded = true; reorder(); return; }
+      var cached = null; try { cached = JSON.parse(sessionStorage.getItem('wishes') || 'null'); } catch (e) {}
+      if (cached && cached.items) { items = cached.items; loaded = true; reorder(); }
+      fetchWall(false).then(function (it) { items = it; loaded = true; reorder(); reconcileMine(it, function (fresh) { if (fresh) items = fresh; reorder(); }); })
+        .catch(function () { loaded = true; if (!items.length) reorder(); });
+    }
+    function strings(e) {   /* the typed parts, in order; language-bound labels come from U at call time (relabel recomputes them) */
+      var w = e.w, st = e.mine ? U.wish_mine : stLabel(w.status), parts = [['wn', (w.nick || '') + ' '], ['wq', '「' + (w.text || '') + '」'], ['ws', ' ' + st]];
+      if (w.ts) parts.push(['wd', ' · ' + when(w.ts)]);
+      if (!e.mine && w.votes > 0) parts.push(['wv', ' ♡' + w.votes]);
+      if (w.reply) parts.push(['br', ''], ['wr', '「' + w.reply + '」']);
+      return parts;
+    }
+    function build(e, depth) {
+      var d = WELL_DEPTHS[depth], m = document.createElement('div'); m.className = 'wm d' + depth + (e.mine ? ' mine' : ''); m.style.fontSize = d.fs + 'px'; m.style.setProperty('--wa', d.a);
+      if (e.w.id) m.dataset.id = e.w.id; if (!e.mine && votedLoad()[e.w.id]) m.classList.add('voted');
+      var parts = strings(e), spans = [];
+      parts.forEach(function (p) { if (p[0] === 'br') { m.appendChild(document.createElement('br')); return; } var s = document.createElement('span'); s.className = p[0]; s.textContent = p[1]; m.appendChild(s); spans.push({ el: s, full: p[1] }); });
+      return { el: m, e: e, depth: depth, spans: spans, si: 0, ci: 0, typing: true, acc: 0, rate: rnd(WELL_TYPE_MS[0], WELL_TYPE_MS[1]), holdT: 0, out: false, w: 0, h: 0, hover: false, hoverT: 0, extra: 0 };
+    }
+    function blocks() {   /* every visible piece of the desktop is a keep-out (the user: 不要出現在有東西或會被遮住的地方) */
+      var hr = host.getBoundingClientRect(), out = [];
+      [].forEach.call(host.querySelectorAll('.menubar,.icons,.hero-text,.updates,.sticky,#np-desktop,#dock,.well-bub,.win:not(.minimized)'), function (e) {
+        if (e.hidden) return; var cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden') return;
+        var r = e.getBoundingClientRect(); if (!r.width || !r.height) return; out.push({ l: r.left - hr.left - 12, t: r.top - hr.top - 8, r: r.right - hr.left + 12, b: r.bottom - hr.top + 8 });
+      });
+      return out;
+    }
+    function place(L, force) {   /* measure at full text, then find a spot that overlaps nobody. Nothing found: give up (the line comes round again), unless forced */
+      var m = L.el; m.style.visibility = 'hidden'; m.style.left = '0px'; m.style.top = '0px'; msgs.appendChild(m);
+      var lh = parseFloat(getComputedStyle(m).lineHeight) || 24, wq = m.querySelector('.wq');
+      if (wq && m.querySelector('.wn') && wq.getBoundingClientRect().height > lh * 1.5) m.classList.add('long');   /* LOG-163 (the user: 太長就直接從第二行跑): the quote wrapped - start it on its own line instead */
+      var w = m.offsetWidth, h = m.offsetHeight, top = 40, bot = Math.max(top, H - 24 - h), ko = blocks(), x = 0, y = 0, tries = 0, found = false;
+      while (tries++ < 48) {
+        x = Math.round(rnd(WELL_MARGIN, Math.max(WELL_MARGIN, W - w - WELL_MARGIN))); y = Math.round(rnd(top, bot));
+        var X2 = x + w, Y2 = y + h;
+        var clash = live.some(function (o) { return o !== L && !o.out && x < o.x + o.w + 24 && X2 + 24 > o.x && y < o.y + o.h + 10 && Y2 + 10 > o.y; })
+                 || ko.some(function (k) { return x < k.r && X2 > k.l && y < k.b && Y2 > k.t; });
+        if (!clash) { found = true; break; }
+      }
+      if (!found && !force) { m.remove(); return false; }
+      L.x = x; L.y = y; L.w = w; L.h = h; m.style.left = x + 'px'; m.style.top = y + 'px';
+      L.spans.forEach(function (s) { s.el.textContent = ''; }); m.style.visibility = ''; m.classList.add('new'); requestAnimationFrame(function () { m.classList.remove('new'); });
+      return true;
+    }
+    function surface(e, depth) {   /* bring one line up (an explicit one, or the next in the cycle) */
+      if (!msgs) return;
+      if (!e) {
+        if (!order.length) { if (loaded && !live.length) { e = { w: { nick: '', text: pool.on() ? U.wish_empty : U.wish_offline, status: '' }, mine: false, note: true }; } else return; }
+        else {   /* the next in the cycle that is not on screen right now (a short list cycles fast) */
+          var tries = order.length; do { if (cursor >= order.length) reorder(); e = order[cursor++]; } while (--tries > 0 && live.some(function (L) { return !L.out && key(L.e) === key(e); }));
+          if (tries <= 0 && live.some(function (L) { return !L.out && key(L.e) === key(e); })) return;
+        }
+      }
+      if (depth === undefined) depth = Math.min(3, Math.floor(Math.pow(Math.random(), 0.8) * 4));   /* a little more of the near ones */
+      var L = build(e, depth); if (e.note) { L.el.classList.add('note'); L.spans = L.spans.filter(function (s) { return s.el.className === 'wq'; }); L.el.querySelectorAll('.wn,.ws,.wd').forEach(function (x) { x.remove(); }); }
+      if (place(L, !!e.mine)) live.push(L);   /* the sender's own (just sent) is always shown */
+    }
+    function tick(t) {
+      raf = 0; var dt = Math.min(0.1, lastT ? (t - lastT) / 1000 : 0); lastT = t;
+      if (on) {
+        if (t >= nextSpawn && live.filter(function (L) { return !L.out; }).length < WELL_MAX_LIVE) { surface(); nextSpawn = t + rnd(WELL_SPAWN_MS[0], WELL_SPAWN_MS[1]); }
+        if (t >= nextRain) { rain(); nextRain = t + rnd(WELL_RAIN_MS[0], WELL_RAIN_MS[1]); }
+      }
+      for (var i = live.length - 1; i >= 0; i--) {   /* typing + holding + leaving - on each line's own clock, whatever the stage does (the user: 舊的時間到消失) */
+        var L = live[i];
+        if (L.typing) {
+          L.acc += dt * 1000;
+          while (L.acc >= L.rate && L.typing) {
+            L.acc -= L.rate; var s = L.spans[L.si]; if (!s) { L.typing = false; L.holdT = t; break; }
+            L.ci++; s.el.textContent = s.full.slice(0, L.ci); if (L.ci >= s.full.length) { L.si++; L.ci = 0; if (L.si >= L.spans.length) { L.typing = false; L.holdT = t; } }
+          }
+        } else if (!L.out && !L.hover && t - L.holdT > WELL_DEPTHS[L.depth].hold * (L.e.mine ? 1.6 : 1) + L.extra) { L.out = true; L.outT = t; L.el.classList.add('out'); }   /* LOG-166: not while hovered; the bonus counts */
+        else if (L.out && t - L.outT > WELL_FADE_MS + 200) { L.el.remove(); live.splice(i, 1); }
+      }
+      drawWater(t, dt);
+      if (on || live.length || ripples.length || waterK > 0.001) raf = requestAnimationFrame(tick); else { fxc.hidden = true; msgs.hidden = true; }
+    }
+    /* ---- the water: drawn rings (追記③) with glints where crests meet (追記⑧), capped and never cascading (追記⑩). `waterK` fades the whole
+       surface in (2.6 s, on opening) and out (0.9 s, on closing). */
+    var ripples = [], glints = [], glintBy = {}, rid = 0, WELL_MAX_RIPPLES = 40, WELL_MAX_GLINTS = 60;
+    function ripple(x, y, delay, big, child) { if (ripples.length >= WELL_MAX_RIPPLES) return; ripples.push({ id: ++rid, x: x, y: y, t: -(delay || 0), big: big || 1, ph: Math.random() * Math.PI * 2, wob: rnd(0.012, 0.03), child: !!child }); }
+    function rain() { var swell = Math.random() < 0.22; ripple(rnd(W * 0.04, W * 0.96), yH + Math.pow(Math.random(), 0.6) * (yG - yH), 0, swell ? rnd(1.8, 2.4) : rnd(0.75, 1.2)); }   /* a drop; now and then a wide slow swell */
+    function burst(x, y, n) { if (!on) return; for (var i = 0; i < n; i++) ripple(x, Math.min(yG - 4, Math.max(yH + 4, y)), i * 0.22, 1.5 - i * 0.12); }
+    function geom(r, u) {   /* the outer crest's radius, flatness and brightness at life-fraction u */
+      var kd = Math.max(0, Math.min(1, (r.y - yH) / Math.max(1, yG - yH))), R = (70 + 250 * kd) * r.big, e = 1 - Math.pow(1 - u, 1.6);
+      return { kd: kd, rx: R * e, asp: 0.11 + 0.2 * kd, e: e, a: Math.min(1, u / 0.18) * Math.pow(1 - u, 1.3) * (0.4 + 0.5 * kd) / Math.sqrt(r.big) };
+    }
+    function meetings(k) {   /* every pair of live rings whose outer crests cross right now -> two glints per pair, keyed so they persist and fade */
+      var lv = ripples.filter(function (r) { return r.t > 0; });
+      for (var i = 0; i < lv.length; i++) for (var j = i + 1; j < lv.length; j++) {
+        var A = lv[i], B = lv[j], ga = A.g, gb = B.g, asp = (ga.asp + gb.asp) / 2;   /* ground coordinates: y stretched back by the shared flatness */
+        var ax = A.x, ay = A.y / asp, bx = B.x, by = B.y / asp, dx = bx - ax, dy = by - ay, d = Math.sqrt(dx * dx + dy * dy), r1 = ga.rx, r2 = gb.rx;
+        if (d < 1 || d > r1 + r2 || d < Math.abs(r1 - r2)) continue;
+        var l = (r1 * r1 - r2 * r2 + d * d) / (2 * d), h2 = r1 * r1 - l * l; if (h2 <= 0) continue; var h = Math.sqrt(h2), mx = ax + dx * l / d, my = ay + dy * l / d;
+        var sign = [1, -1], kk = A.id + ':' + B.id;
+        for (var s = 0; s < 2; s++) {
+          var px = mx + sign[s] * (-dy) * h / d, py = (my + sign[s] * dx * h / d) * asp, id = kk + ':' + s, glint = glintBy[id];
+          var strength = Math.min(ga.a, gb.a) * (1 - Math.abs(d - Math.max(r1, r2)) / (Math.min(r1, r2) + 1)) * k;   /* strongest when the crests are well inside each other, gone as they part */
+          if (!glint) { if (glints.length >= WELL_MAX_GLINTS) continue; glint = { id: id, x: px, y: py, s: 0, kd: (ga.kd + gb.kd) / 2, shed: A.child || B.child }; glints.push(glint); glintBy[id] = glint; }   /* a child's meetings never shed */
+          glint.x = px; glint.y = py; glint.s = Math.max(0, strength); glint.seen = true;
+          if (!glint.shed && glint.s > 0.28 && ga.e > 0.25 && gb.e > 0.25) { glint.shed = true; ripple(px, py, 0, 0.32, true); }   /* a strong meeting sheds a small ring of its own - a child, which never sheds again */
+        }
+      }
+    }
+    function drawWater(t, dt) {
+      g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+      var target = on ? 1 : 0, rate = target > waterK ? dt / 2.6 : dt / 0.9; waterK = target > waterK ? Math.min(1, waterK + rate) : Math.max(0, waterK - rate);
+      var k = waterK * waterK * (3 - 2 * waterK);
+      if (k <= 0) { ripples.length = 0; glints.length = 0; glintBy = {}; return; }   /* the water has gone dark: nothing left to keep the loop alive */
+      var sh = g.createLinearGradient(0, yH, 0, yG); sh.addColorStop(0, 'rgba(150,165,190,' + (0.055 * k).toFixed(3) + ')'); sh.addColorStop(0.35, 'rgba(120,135,160,' + (0.022 * k).toFixed(3) + ')'); sh.addColorStop(1, 'rgba(120,135,160,0)');
+      g.fillStyle = sh; g.fillRect(0, yH + 1, W, yG - yH);   /* the still surface: a faint band under the horizon */
+      for (var i = ripples.length - 1; i >= 0; i--) {
+        var r = ripples[i]; r.t += dt; if (r.t < 0) continue; var u = r.t / WELL_RIPPLE_S; if (u >= 1) { ripples.splice(i, 1); continue; }
+        var G = r.g = geom(r, u), kd = G.kd, rx = G.rx, asp = G.asp, e = G.e, base = G.a * k;
+        for (var c = 0; c < 3; c++) {
+          var rc = rx - c * (20 + 24 * kd) * r.big; if (rc <= 2) continue; var ac = base * (1 - c * 0.3), wob = r.wob * (1 - 0.6 * e);
+          g.lineWidth = 0.9 + 1.1 * kd; g.beginPath();
+          for (var sgi = 0; sgi <= WELL_RIPPLE_SEGS; sgi++) { var th = sgi / WELL_RIPPLE_SEGS * Math.PI * 2, wv = 1 + wob * Math.sin(th * 3 + r.ph + c) + wob * 0.5 * Math.sin(th * 5 - r.ph), px = r.x + Math.cos(th) * rc * wv, py = r.y + Math.sin(th) * rc * asp * wv; if (sgi) g.lineTo(px, py); else g.moveTo(px, py); }
+          var lit = g.createLinearGradient(0, r.y - rc * asp, 0, r.y + rc * asp); lit.addColorStop(0, 'rgba(215,222,235,' + (ac * 0.22).toFixed(3) + ')'); lit.addColorStop(0.55, 'rgba(215,222,235,' + (ac * 0.55).toFixed(3) + ')'); lit.addColorStop(1, 'rgba(225,230,240,' + ac.toFixed(3) + ')');
+          g.strokeStyle = lit; g.stroke();
+        }
+      }
+      glints.forEach(function (q) { q.seen = false; }); meetings(k);
+      for (var gi = glints.length - 1; gi >= 0; gi--) {
+        var q = glints[gi]; if (!q.seen) q.s *= 0.86; if (q.s < 0.01) { glints.splice(gi, 1); delete glintBy[q.id]; continue; }   /* a glint whose rings have parted fades out on its own */
+        var rad = 5 + 9 * q.kd, spot = g.createRadialGradient(q.x, q.y, 0, q.x, q.y, rad * 2.6);
+        spot.addColorStop(0, 'rgba(240,244,252,' + Math.min(1, q.s * 1.6).toFixed(3) + ')'); spot.addColorStop(0.35, 'rgba(225,232,245,' + (q.s * 0.55).toFixed(3) + ')'); spot.addColorStop(1, 'rgba(210,220,240,0)');
+        g.fillStyle = spot; g.beginPath(); g.ellipse(q.x, q.y, rad * 2.6, rad * 2.6 * (0.25 + 0.35 * q.kd), 0, 0, Math.PI * 2); g.fill();   /* the glint, flattened with the ground */
+      }
+    }
+    /* ---- +1 */
+    function vote(m) {
+      var id = m.dataset.id, L = live.filter(function (x) { return x.el === m; })[0]; if (!id || !L || L.e.mine || m.classList.contains('voted') || m.classList.contains('busy')) return;
+      m.classList.add('busy');
+      pool.post('/vote', { id: id }).then(function (r) {
+        if (!r.ok) throw r; var v = votedLoad(); v[id] = 1; try { localStorage.setItem('wish_voted', JSON.stringify(v)); } catch (e) {}
+        L.e.w.votes = r.votes; items.forEach(function (w) { if (w.id === id) w.votes = r.votes; });
+        var vs = m.querySelector('.wv'); if (!vs) { vs = document.createElement('span'); vs.className = 'wv'; var br = m.querySelector('br'); m.insertBefore(vs, br || null); } vs.textContent = ' ♥' + (r.votes || 0);
+        m.classList.add('voted'); burst(L.x + Math.min(L.w, 120), L.y + L.h > yH ? Math.min(yG - 4, L.y + L.h + 6) : yH + 10, 3);
+      }).catch(function () {}).then(function () { m.classList.remove('busy'); });
+    }
+    /* ---- open / close */
+    function open() {
+      if (PHONE) return; ensure();
+      if (on) { box.focus(); return; }
+      if (typeof pillar !== 'undefined') pillar.close(true);   /* LOG-164: one stage at a time - the pillar's lines finish crossing on their own */
+      on = true; trail.log('open', 'well'); room.set(true); fxc.hidden = false; msgs.hidden = false; step = 0; geoUp(); box.show(step);
+      nextSpawn = performance.now() + 500; nextRain = performance.now() + 900; lastT = 0;
+      if (typeof stage !== 'undefined' && stage.active()) stage.veilMidi(true);   /* LOG-163: the MIDI form's notes are collected into the square while this stage is up */
+      load(); if (!raf) raf = requestAnimationFrame(tick);
+      updateDock();
+    }
+    function close(handover) {   /* handover: the other stage opens right after - the lights and the MIDI veil stay as they are */
+      if (!on) return; on = false; box.hide();
+      if (!handover) { room.set(false); if (typeof stage !== 'undefined') stage.veilMidi(false); }
+      if (!raf) raf = requestAnimationFrame(tick);   /* no new lines; the ones on screen finish, hold and fade on their own (the user: 退出時不出新的，舊的時間到消失) */
+      updateDock();
+    }
+    function relabel() { if (!on) return; box.paint(box.hasFocus(), step); box.place(); live.forEach(function (L) { if (L.typing || L.e.note) return; var parts = strings(L.e).filter(function (p) { return p[0] !== 'br'; }); L.spans.forEach(function (s, i) { if (parts[i]) { s.full = parts[i][1]; s.el.textContent = s.full; } }); }); }
+    document.addEventListener('keydown', function (e) { if (on && e.key === 'Escape') close(); });
+    return { open: open, close: close, toggle: function () { on ? close() : open(); }, isOpen: function () { return on; }, relabel: relabel,
+             stats: function () { return { ripples: ripples.length, glints: glints.length, live: live.length, water: waterK }; } };
+  })();
+
+  /* ============================================================ LOG-164 恥辱柱＝彈幕 (the user: 恥辱柱改成彈幕顯示法，切換邏輯不便). Its own stage - no water, no source
+     switching: the roster streams across the desktop left to right in lanes (追記①: the user: 彈幕從左到右), the nearer lines bigger, brighter and faster (four depths,
+     as the well's). A lane takes a new line only when its last one is fully in and cannot be caught before it leaves, so lines never
+     ride over each other. The glass box asks two things: what went wrong → name + the trail switch (ADR-007); a sent report streams
+     by at once, near, marked 已回報. A line is coloured by its status - fixed light green, open red, watch amber (追記①: 已修正用淺綠色，目前有的 bug 用紅色).
+     Opening the pillar closes the well (and the other way round); the lines already on their way
+     finish crossing. The MIDI form's notes are collected into the square while this stage is up, as with the well (LOG-163). */
+  var PILLAR_DEPTHS = [{ fs: 19, a: 0.95, v: 118 }, { fs: 15.5, a: 0.70, v: 92 }, { fs: 13, a: 0.50, v: 72 }, { fs: 11.5, a: 0.34, v: 56 }],   /* near -> far: font size, opacity, px/s */
+      PILLAR_MAX_LIVE = 12, PILLAR_SPAWN_MS = [600, 1400], PILLAR_LANE = 30, PILLAR_GAP = 56;
+  var pillar = (function () {
+    var host = null, layer = null, box = null, on = false, raf = 0, live = [], order = [], cursor = 0, nextSpawn = 0, lastT = 0, W = 0, lanes = [];
+    var step = 0, ans = { text: '', nick: '', trail: true };
+    var rnd = function (a, b) { return a + Math.random() * (b - a); };
+    function ensure() {
+      if (host) return; host = desktop;
+      layer = document.createElement('div'); layer.className = 'pillar-dm'; layer.hidden = true; host.appendChild(layer);
+      box = glassBox({ cls: 'for-pillar', html: html, wire: wire, close: close });
+      layer.addEventListener('pointerover', function (ev) { var m = ev.target.closest('.dm'); if (!m) return; var L = byEl(m); if (L && !L.hold) { L.hold = true; var inner = m.querySelector('.dmi'); if (inner) inner.style.transformOrigin = Math.max(0, ev.clientX - m.getBoundingClientRect().left) + 'px 50%'; m.classList.add('hold'); } });   /* LOG-166 (the user: 滑鼠放上去會停下那則彈幕，稍微放大可以觀看；移開後繼續滑動) 追記①: the growth is anchored under the pointer, so the glyphs there stay put (anchored at the left end they slid right - the user: 不要抖一下) */
+      layer.addEventListener('pointerout', function (ev) { var m = ev.target.closest('.dm'); if (!m || (ev.relatedTarget && m.contains(ev.relatedTarget))) return; var L = byEl(m); if (L && L.hold) { L.hold = false; m.classList.remove('hold'); } });
+      window.addEventListener('resize', function () { if (on) geoUp(); });
+    }
+    function byEl(el) { return live.filter(function (x) { return x.el === el; })[0]; }
+    function geoUp() { W = host.clientWidth; box.place(); }
+    function layTop(n) { var y = 0; while (n && n !== host) { y += n.offsetTop; n = n.offsetParent; } return y; }   /* transform-free (the box enters on a transform) */
+    function band() {   /* the lanes run from under the menubar to above the glass box (or the dock) */
+      var mb = $('.menubar', host), top = (mb ? layTop(mb) + mb.offsetHeight : 0) + 14, lim = layTop(dock) - 12;
+      if (!box.el.hidden) lim = Math.min(lim, layTop(box.el) - 12);
+      return { top: top, n: Math.max(1, Math.floor((lim - top) / PILLAR_LANE)) };
+    }
+    /* ---- the box: what went wrong → name (+ the trail switch) */
+    function html() {
+      var title = U.app_pillar;
+      if (!pool.on()) return '<div class="well-cap"><b>' + esc(title) + '</b></div><p class="note">' + esc(U.pillar_offline) + '</p>';
+      var cut = function (t) { return '「' + esc(t.length > 22 ? t.slice(0, 22) + '…' : t) + '」'; };
+      var done = step > 0 ? '<button type="button" class="wdone" data-step="0">' + cut(ans.text) + '</button>' : '';
+      var ctl = step === 0 ? glassField('ta', 'text', { max: 2000, label: U.pillar_form_text })
+                           : glassField('in', 'nick', { max: 24, ph: U.pillar_form_nick }) + '<button type="button" class="wchip wtrail' + (ans.trail ? ' on' : '') + '" aria-pressed="' + (ans.trail ? 'true' : 'false') + '">' + esc(U.pillar_trail_label) + '</button>';   /* ADR-007: the trail goes only if this is on */
+      return '<div class="well-cap"><b>' + esc(title) + '</b><div class="well-done">' + done + '</div></div><p class="well-ask">' + esc(U[step === 0 ? 'pillar_ask_text' : 'pillar_ask_nick']) + '</p><div class="well-row">' + ctl + '<p class="msg"></p>' + glassNav(step > 0, step === 1, U.pillar_send) + '</div>';
+    }
+    function wire(b, focusIt) {
+      if (!pool.on()) return;
+      var send = $('.send', b.el), focusLater = function (el) { if (focusIt && el) setTimeout(function () { el.focus(); }, 60); };
+      b.el.querySelectorAll('.wdone').forEach(function (x) { x.addEventListener('click', function () { step = 0; b.paint(true, step); }); });
+      var pv = $('.well-prev', b.el); if (pv) pv.addEventListener('click', function () { step = 0; b.paint(true, step); });
+      if (step === 0) {
+        var ta = $('textarea', b.el); ta.value = ans.text; ta._grow(); ta.addEventListener('input', function () { ans.text = ta.value; });
+        var next = function () { var t = ta.value.trim().slice(0, 2000); if (!t) { b.say(U.pillar_need, 'err'); ta.focus(); return; } ans.text = t; step = 1; b.paint(true, step); };
+        ta.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); next(); } });
+        send.addEventListener('click', next); focusLater(ta);
+      } else {
+        var inp = $('input[name=nick]', b.el), tr = $('.wtrail', b.el); inp.value = ans.nick; inp.addEventListener('input', function () { ans.nick = inp.value; });
+        tr.addEventListener('click', function () { ans.trail = !ans.trail; tr.classList.toggle('on', ans.trail); tr.setAttribute('aria-pressed', ans.trail ? 'true' : 'false'); });
+        var submit = function () {
+          var nick = inp.value.trim().slice(0, 24); ans.nick = nick; send.disabled = true; inp.disabled = true; b.say(U.pillar_sending);
+          var payload = { type: 'bug', lang: lang, nick: nick, text: ans.text, meta: trail.meta() };
+          if (ans.trail) payload.trail = trail.lines().slice(-200);   /* ADR-007: only now, only if the switch is on */
+          pool.post('/submit', payload).then(function (r) {
+            if (!r.ok) throw r; trail.log('report', 'sent');
+            stream({ w: { id: r.id || '', ts: Date.now(), nick: nick, text: ans.text }, mine: true }, 0);   /* the report streams by at once, near, marked 已回報 */
+            ans.text = ''; step = 0; b.receipt(U.pillar_sent); b.paint(false, step);
+          }).catch(function () { b.say(U.pillar_fail, 'err'); send.disabled = false; inp.disabled = false; });
+        };
+        inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+        send.addEventListener('click', submit); focusLater(inp);
+      }
+    }
+    /* ---- the stream */
+    function key(e) { return e.w.id || ((e.w.nick || '') + ' ' + (e.w.text || e.w.title || '')); }
+    function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+    function reorder() { order = shuffle((D.bugs || []).map(function (b) { return { w: b, mine: false }; })); cursor = 0; }
+    function bugOf(e) { var b = e.w.id ? (D.bugs || []).filter(function (x) { return x.id === e.w.id; })[0] : null; return b || e.w; }   /* the roster entry in the CURRENT language */
+    function strings(e) {   /* one line: 「title」 status · date · where (· LOG) — desc. Mine: nick 「text」 已回報 · date */
+      var w = e.w;
+      if (e.note) return [['wq', w.text || '']];
+      if (e.mine) return [['wn', (w.nick || '') + (w.nick ? ' ' : '')], ['wq', '「' + (w.text || '') + '」'], ['ws', ' ' + U.pillar_mine], ['wd', ' · ' + when(w.ts)]];
+      var b = bugOf(e), ST = { fixed: U.pillar_status_fixed, open: U.pillar_status_open, watch: U.pillar_status_watch }, WH = { desktop: U.pillar_where_desktop, phone: U.pillar_where_phone, both: U.pillar_where_both };
+      var parts = [['wq', '「' + (b.title || '') + '」'], ['ws', ' ' + (ST[b.status] || b.status)], ['wd', ' · ' + (b.date || '') + (b.where ? ' · ' + (WH[b.where] || b.where) : '') + (b.log ? ' · ' + b.log : '')]];
+      if (b.desc) parts.push(['wr', ' — ' + b.desc]);
+      return parts;
+    }
+    function build(e, depth) {
+      var d = PILLAR_DEPTHS[depth], m = document.createElement('div'), b = (!e.mine && !e.note) ? bugOf(e) : null; m.className = 'dm d' + depth + (e.mine ? ' mine' : '') + (e.note ? ' note' : '') + (b && b.status ? ' st-' + b.status : ''); m.style.fontSize = d.fs + 'px'; m.style.setProperty('--wa', d.a);
+      if (e.w.id) m.dataset.id = e.w.id;
+      var inner = document.createElement('span'); inner.className = 'dmi'; m.appendChild(inner);   /* LOG-166: the hover scale lives on this wrapper, so the rAF transform on .dm stays a plain translate */
+      strings(e).forEach(function (p) { var s = document.createElement('span'); s.className = p[0]; s.textContent = p[1]; inner.appendChild(s); });
+      return { el: m, e: e, depth: depth, v: d.v * rnd(0.9, 1.1), x: 0, w: 0, lane: -1, gone: false, hold: false };
+    }
+    function laneFor(L, B, force) {   /* a lane whose last line is fully in (its tail clear of the left edge) and cannot be caught before it is out on the right; none: not now (forced: the emptiest) */
+      var pick = [], i; for (i = 0; i < B.n; i++) pick.push(i); shuffle(pick);
+      var best = -1, bestTail = -Infinity;
+      for (var k = 0; k < pick.length; k++) {
+        i = pick[k]; var p = lanes[i];
+        if (!p || p.gone) return i;
+        if (p.hold) continue;   /* LOG-166: nothing enters behind a held line */
+        var tail = p.x; if (tail > bestTail) { bestTail = tail; best = i; }
+        if (tail < PILLAR_GAP) continue;
+        if (L.v > p.v && tail / (L.v - p.v) < (W - tail) / p.v) continue;   /* faster than the one ahead: would catch its tail before it leaves */
+        return i;
+      }
+      return force ? best : -1;
+    }
+    function stream(e, depth) {   /* send one line across (an explicit one, or the next in the cycle) */
+      if (!layer) return;
+      if (!e) {
+        if (!order.length) { if (!live.length) e = { w: { text: U.pillar_empty }, note: true }; else return; }
+        else {   /* the next in the cycle that is not on screen right now (a short roster cycles fast) */
+          var tries = order.length; do { if (cursor >= order.length) reorder(); e = order[cursor++]; } while (--tries > 0 && live.some(function (L) { return key(L.e) === key(e); }));
+          if (tries <= 0 && live.some(function (L) { return key(L.e) === key(e); })) return;
+        }
+      }
+      if (depth === undefined) depth = Math.min(3, Math.floor(Math.pow(Math.random(), 0.8) * 4));   /* a little more of the near ones */
+      var L = build(e, depth); L.el.style.visibility = 'hidden'; layer.appendChild(L.el); L.w = L.el.offsetWidth;
+      var B = band(), lane = laneFor(L, B, !!e.mine); if (lane < 0) { L.el.remove(); return; }   /* the sender's own (just sent) always goes */
+      L.lane = lane; L.x = -L.w; lanes[lane] = L; L.el.style.top = (B.top + lane * PILLAR_LANE) + 'px'; L.el.style.transform = 'translateX(' + L.x + 'px)'; L.el.style.visibility = '';
+      L.el.classList.add('new'); requestAnimationFrame(function () { L.el.classList.remove('new'); }); live.push(L);
+    }
+    function tick(t) {
+      raf = 0; var dt = Math.min(0.1, lastT ? (t - lastT) / 1000 : 0); lastT = t;
+      if (on && t >= nextSpawn && live.length < PILLAR_MAX_LIVE) { stream(); nextSpawn = t + rnd(PILLAR_SPAWN_MS[0], PILLAR_SPAWN_MS[1]); }
+      for (var i = live.length - 1; i >= 0; i--) {   /* every line keeps crossing at its own pace, whatever the stage does */
+        var L = live[i];
+        if (!L.hold) {   /* LOG-166: a held line stands still; whoever is behind it in the lane queues up instead of running into it */
+          L.x += L.v * dt;
+          for (var j = 0; j < live.length; j++) { var o = live[j]; if (o !== L && o.lane === L.lane && o.x > L.x && L.x + L.w + 24 > o.x) L.x = o.x - L.w - 24; }
+          L.el.style.transform = 'translateX(' + L.x.toFixed(1) + 'px)';
+        }
+        if (L.x > W + 4) { L.gone = true; L.el.remove(); live.splice(i, 1); if (lanes[L.lane] === L) lanes[L.lane] = null; }
+      }
+      if (on || live.length) raf = requestAnimationFrame(tick); else layer.hidden = true;
+    }
+    /* ---- open / close */
+    function open() {
+      if (PHONE) return; ensure();
+      if (on) { box.focus(); return; }
+      if (typeof well !== 'undefined') well.close(true);   /* one stage at a time - the wishes on screen finish on their own clock */
+      on = true; trail.log('open', 'pillar-stage'); room.set(true); layer.hidden = false; step = 0; geoUp(); box.show(step);
+      nextSpawn = performance.now() + 400; lastT = 0; reorder();
+      if (typeof stage !== 'undefined' && stage.active()) stage.veilMidi(true);   /* LOG-163: the MIDI form's notes are collected into the square while this stage is up */
+      if (!raf) raf = requestAnimationFrame(tick);
+      updateDock();
+    }
+    function close(handover) {   /* handover: the well opens right after - the lights and the MIDI veil stay as they are */
+      if (!on) return; on = false; box.hide();
+      if (!handover) { room.set(false); if (typeof stage !== 'undefined') stage.veilMidi(false); }
+      if (!raf) raf = requestAnimationFrame(tick);   /* no new lines; the ones on their way finish crossing */
+      updateDock();
+    }
+    function relabel() { if (!on) return; box.paint(box.hasFocus(), step); box.place(); live.forEach(function (L) { var parts = strings(L.e); [].forEach.call(L.el.querySelectorAll('.dmi > span'), function (s, i) { if (parts[i]) s.textContent = parts[i][1]; }); L.w = L.el.offsetWidth; }); }
+    document.addEventListener('keydown', function (e) { if (on && e.key === 'Escape') close(); });
+    return { open: open, close: close, toggle: function () { on ? close() : open(); }, isOpen: function () { return on; }, relabel: relabel,
+             stats: function () { return { live: live.length, lanes: lanes.filter(Boolean).length, band: layer ? band() : null }; } };
+  })();
 
   /* --- 合作聯絡: a card - the address (revealed on click, copied on request), what I do with a "write" button per line (mailto with a subject), the other places */
   function contactHTML() {
@@ -5815,7 +6324,7 @@
     if (window.ResizeObserver) { all.ro = new ResizeObserver(all); if (dk) all.ro.observe(dk); if (mb) all.ro.observe(mb); }   /* the dock's width follows its labels (language switch included); the reference lives on `all` so the observer cannot be collected */
     window.addEventListener('resize', all); all(); [400, 1500, 4000].forEach(function (ms) { setTimeout(all, ms); });   /* the dock is empty until the desktop renders — remeasure after boot regardless */
   })();
-  (function () {   /* liquid-glass hover bubble (app column + dock): a glass droplet wells out under the pointed item and glides to the next one.
+  var hovBubAttach = (function () {   /* liquid-glass hover bubble (app column + dock): a glass droplet wells out under the pointed item and glides to the next one.
      JS SPRING, not CSS transitions: retargeting mid-flight keeps the current velocity, so sweeping across several items never restarts
      the curve (no instant-acceleration step), and the underdamped landing overshoots a little and jiggles — the droplet wobble.
      While moving fast the droplet stretches along its direction of travel and squashes across it (velocity squash).
@@ -5871,7 +6380,8 @@
     }
     attach(document.getElementById('icons'), '.icon');
     attach(document.getElementById('dock'), 'button', true, true);
-    attach(document.querySelector('#np-desktop .np-ctl'), 'button', true, true);   /* LOG-116追記①: the corner transport (⏮ ⏯ ⏭ · mute) gets the same droplet - the ring glides between the glass chips (the user: 播放按鈕的泡泡沒看到). Overlay mode so the ring is never clipped; the mask vars it writes are unused there and harmless. */
+    attach(document.querySelector('#np-desktop .np-ctl'), 'button', true, true);
+    return attach;   /* LOG-162 追記③: the well's composer borrows the droplet for its category chips */   /* LOG-116追記①: the corner transport (⏮ ⏯ ⏭ · mute) gets the same droplet - the ring glides between the glass chips (the user: 播放按鈕的泡泡沒看到). Overlay mode so the ring is never clipped; the mask vars it writes are unused there and harmless. */
   })();
   player.onTrack(function (fromFrac) { wave.sweep(true, fromFrac); phoneWave.sweep(true, fromFrac); });   // new track: sweep the amber off the line and the bars
 

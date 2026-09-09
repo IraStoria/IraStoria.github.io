@@ -674,8 +674,8 @@
       "en": "Dropping…"
     },
     "wish_sent": {
-      "zh": "已投進池裡，站主放行後會出現在牆上。",
-      "en": "Dropped in. It shows up on the wall once approved."
+      "zh": "願望已投入",
+      "en": "Your wish is in"
     },
     "wish_mine": {
       "zh": "審核中（只有你看得到）",
@@ -728,6 +728,54 @@
     "wish_hide_done": {
       "zh": "收起已實現與婉謝",
       "en": "Hide granted and declined"
+    },
+    "well_ask_cat": {
+      "zh": "這是哪一類的願望？",
+      "en": "What kind of wish is it?"
+    },
+    "well_ask_text": {
+      "zh": "想在這裡看到什麼？",
+      "en": "What would you like to see here?"
+    },
+    "well_ask_nick": {
+      "zh": "留個暱稱，然後投進池裡。",
+      "en": "Leave a name, then drop it in."
+    },
+    "well_ask_mail": {
+      "zh": "要不要留個 email？有進展時通知你（不會公開，可留空）。",
+      "en": "Leave an email if you'd like news on it (never shown, optional)."
+    },
+    "wish_form_mail": {
+      "zh": "email（選填，不公開）",
+      "en": "Email (optional, never shown)"
+    },
+    "wish_mail_bad": {
+      "zh": "email 格式不對。",
+      "en": "That email doesn't look right."
+    },
+    "wish_mail_note": {
+      "zh": "留 email 的話，站主放行、改狀態或回覆時會寄信通知你；email 不會公開，信裡有一鍵取消的連結。",
+      "en": "With an email you get a note when it is approved, changes status or gets a reply; the address is never shown and every mail has a one-click stop link."
+    },
+    "pillar_ask_text": {
+      "zh": "哪裡出了問題？描述一下。",
+      "en": "What went wrong? Describe it."
+    },
+    "pillar_ask_nick": {
+      "zh": "留個暱稱（可留空），再決定要不要附上操作軌跡。",
+      "en": "Leave a name (optional) and decide whether to attach your trail."
+    },
+    "pillar_mine": {
+      "zh": "已回報（只有你看得到）",
+      "en": "Reported (only you can see this)"
+    },
+    "well_prev": {
+      "zh": "上一步",
+      "en": "Back"
+    },
+    "well_next": {
+      "zh": "下一步",
+      "en": "Next"
     },
     "wish_admin": {
       "zh": "管理",

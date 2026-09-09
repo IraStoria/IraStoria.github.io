@@ -78,6 +78,23 @@ python worker/totp_setup.py
 驗證：重跑 (e) 第 2 步，授權後回站的網址結尾應是 `#wp2=...`（不再是 `#wp=`），前端會要求輸入六位數碼；輸入正確才拿到通行證。手機端錯太多次會鎖 10 分鐘（5 次／10 分）。
 若手機時間偏差超過 30 秒，驗證會失敗——把手機時間設成自動。
 
+## (e3) 選用：願望進展 email 通知（LOG-165）
+
+許願者在第三階可以留 email（選填、永不公開）。你放行、改狀態或回覆那則願望時，Worker 會寄一封純文字信給他，信尾有一鍵退訂連結。**不設下面兩個變數就完全不寄**，其他一切照舊。
+
+1. 到 <https://resend.com> 註冊免費帳號（每月 3,000 封、每日 100 封）。
+2. **Domains → Add Domain**，加你自己的網域（例 `irastoria.tw`），照頁面指示到 DNS 加 DKIM／SPF 記錄，等它顯示 Verified。（沒有自己的網域時 Resend 只能寄給你自己的信箱，等於不能用；先跳過這節也沒關係。）
+3. **API Keys → Create**，權限 Sending access，複製那串 `re_...`（只顯示一次）。
+4. Cloudflare **Settings → Variables and Secrets → Add**：
+
+| 名稱 | 類型 | 填什麼 |
+|---|---|---|
+| `MAIL_API_KEY` | **Secret** | 步驟 3 的 `re_...` |
+| `MAIL_FROM` | Text | `IraStoria <well@你的網域>`（網域要是步驟 2 驗證過的） |
+| `MAIL_API` | Text（選用） | 不填＝`https://api.resend.com/emails`；只有換別家同形狀 API 才填 |
+
+5. **Deploy**。驗證：自己用一個能收信的 email 許一則願，在站主面板放行它，幾秒內應收到「許願池：你的願望有新進展」；信尾的連結點下去會看到「不再寄信給你」。
+
 ## (f) 回報給 Claude
 
 **只要回報 workers.dev 網址**，例如 `https://pool.xxxx.workers.dev`（結尾不要加斜線）。
@@ -90,8 +107,8 @@ Claude 會把它填進 `site.json` 的 `backend.url`。**不要貼任何 Secret�
 - **KV 免費方案：每日 1,000 次寫入、100,000 次讀取。** 每筆投稿、每次投票、每次速率限制計數都算一次寫入；正常個人站用量綽綽有餘，但若有人灌水會先撞到這個牆（超額只是當天寫入失敗，不會收費）。
 - **Workers 免費方案：每日 100,000 次請求。**
 - **workers.dev 網址是公開的**，任何人都打得到，所以 Worker 內建了速率限制（投稿 5 次／10 分鐘、投票 30 次／10 分鐘、讀清單 60 次／分鐘）；即使有人亂打，最多也只是把自己鎖住。
-- **Secret 永不進 repo。** `GITHUB_CLIENT_SECRET`、`TOKEN_SECRET`、`TOTP_SECRET`、`BARK_KEY` 只存在 Cloudflare；`worker.js` 裡沒有任何金鑰，可以放心放在公開 repo。
-- Worker 不記錄、不儲存原始 IP，只存 SHA-256 前 16 碼；投稿人的暱稱與內容只有站主審核通過（`approved`）後才會公開。
+- **Secret 永不進 repo。** `GITHUB_CLIENT_SECRET`、`TOKEN_SECRET`、`TOTP_SECRET`、`BARK_KEY`、`MAIL_API_KEY` 只存在 Cloudflare；`worker.js` 裡沒有任何金鑰，可以放心放在公開 repo。
+- Worker 不記錄、不儲存原始 IP，只存 SHA-256 前 16 碼；投稿人的暱稱與內容只有站主審核通過（`approved`）後才會公開；許願者留的 email 永遠不公開，只用來寄進展通知，每封信都有退訂連結。
 - 之後若改了 `worker.js`，重做 (a) 的第 4～6 步（Quick edit 貼上→Deploy）即可，變數與 KV 綁定都會保留。
 
 ## 本機測試
@@ -105,4 +122,4 @@ https://irastoria.github.io,http://127.0.0.1:8766
 
 （逗號分隔，不要空格也可以）→ **Deploy**。測試完可以留著，本機位址對外沒有意義。
 
-另外 `worker/test_worker.mjs` 是不需要 Cloudflare 的離線自測：在 repo 根目錄執行 `node worker/test_worker.mjs`，最後一行顯示 `31/31 passed` 即代表 Worker 邏輯正常（含 TOTP 的 RFC 6238 標準向量與 Bark 推播的離線模擬）。
+另外 `worker/test_worker.mjs` 是不需要 Cloudflare 的離線自測：在 repo 根目錄執行 `node worker/test_worker.mjs`，最後一行顯示 `36/36 passed` 即代表 Worker 邏輯正常（含 TOTP 的 RFC 6238 標準向量與 Bark 推播的離線模擬）。

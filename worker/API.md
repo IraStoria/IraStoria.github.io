@@ -16,6 +16,9 @@
 | `BARK_KEY` | **secret**（選用） | Bark app 的 device key。**有設＝登入成功／被拒、新投稿都推手機通知**；沒設＝完全不推 |
 | `BARK_SERVER` | var（選用） | Bark 伺服器，預設 `https://api.day.app`（自架才需要填） |
 | `BARK_ON_SUBMIT` | var（選用） | 預設開；填 `"0"` 關掉「新投稿」通知（登入通知不受影響） |
+| `MAIL_API_KEY` | **secret**（選用） | 寄信 API 的金鑰（Resend）。**有設（且 `MAIL_FROM` 有設）＝站主放行／改狀態／回覆時寄信給留了 email 的許願者**；沒設＝完全不寄（LOG-165） |
+| `MAIL_FROM` | var（選用） | 寄件人，例 `IraStoria <well@example.com>`（Resend 要驗證過的網域） |
+| `MAIL_API` | var（選用） | 寄信端點，預設 `https://api.resend.com/emails`（POST `{from,to,subject,text}`＋Bearer；換同形狀的服務才填） |
 
 ## 共通規則
 - 所有回應 JSON：成功 `{ "ok": true, ... }`；失敗 `{ "ok": false, "error": "<code>" }`，HTTP 4xx/5xx。
@@ -28,7 +31,7 @@
 ```
 wish:<ts>-<rand>  { id, type:"wish", ts, lang:"zh"|"en", nick(≤24), cat, text(≤600),
                     approved:false, status:"wishing"|"considering"|"building"|"done"|"declined",
-                    votes:0, reply:"", replyLang:"", link:"", iph }
+                    votes:0, reply:"", replyLang:"", link:"", email:""(≤120,選填,永不公開), iph }
 bug:<ts>-<rand>   { id, type:"bug", ts, lang, nick(≤24,可空), text(≤2000), trail:[...](≤200筆,可空),
                     meta:{ shell, ua, vw, vh, ver, page }, read:false, iph }
 pub:wishes        { ts, items:[ 公開欄位版 wish ] }   ← 站主每次管理寫入後重建；GET /wishes 直接回這份
@@ -40,8 +43,9 @@ v:<id>:<iph>      "1"（TTL 86400）＝這個 IP 今天對這則已 +1
 
 ## 公開端點
 ### `POST /submit`
-Body：`{ type:"wish", lang, nick, cat, text }` 或 `{ type:"bug", lang, nick?, text, trail?, meta }`
+Body：`{ type:"wish", lang, nick, cat, text, email? }` 或 `{ type:"bug", lang, nick?, text, trail?, meta }`
 - 驗證：`type` 二選一；`lang` ∈ zh/en；wish 的 `nick` 必填、`cat` 必在六類、`text` 非空且 ≤ 上限；bug 的 `text` 非空；`trail` 若有必須是陣列 ≤ 200 筆、每筆 ≤ 200 字。錯 → 400 `invalid`。
+- wish 的 `email`（LOG-165）選填：trim＋轉小寫、≤120 字、須符合 `^[^\s@]+@[^\s@]+\.[^\s@]+$`，錯 → 400 `invalid`；只存在 KV，`GET /wishes`／`POST /mine` 永不回它。
 - 回 `{ ok:true, id }`。wish 一律 `approved:false`、`status:"wishing"`。
 - 存入成功後（且 `BARK_KEY` 有設、`BARK_ON_SUBMIT` 不是 `"0"`）推一則 Bark：標題 `許願池 · 新願望`／`恥辱柱 · 新回報`，內文 `<nick 或 匿名>：<text 前 80 字>`，level `active`。推送在背景進行（`ctx.waitUntil`），不影響回應時間，失敗也不影響回應。
 
@@ -53,6 +57,9 @@ Body `{ ids:[ …最多 10 個 id ] }`（id 為非空字串 ≤ 64 字）。回 
 
 ### `POST /vote`
 Body `{ id }`。該 id 必須存在且 `approved:true`；同 IP 同 id 一天一次（已投 → 200 `{ ok:true, votes, dup:true }` 不加）。回 `{ ok:true, votes }`。投票後重建 `pub:wishes`。
+
+### `GET /unsub?id=<id>&t=<sig>`（LOG-165；信裡的一鍵退訂）
+`t` ＝ base64url(HMAC-SHA256(`TOKEN_SECRET`, `"unsub:" + id`))，由 Worker 在寄信時算好放進信裡；無 session、不多寫 KV。對 → 把該 wish 的 `email` 清成空字串（願望本身留著），回 200 一頁純 HTML（依願望語言）；id 形狀不對／簽名不對／找不到 → 400 一頁 HTML。冪等。速率 10 次／10 分。POST → 405。
 
 ## 管理端點（ADR-009：GitHub OAuth 驗本人）
 ### `GET /auth/start`
@@ -76,7 +83,7 @@ Body `{ pre, code }`。
 
 ### 需 `Authorization: Bearer <token>` 的端點（無效／過期／PRE-token → 401 `auth`）
 - `GET /admin/list?type=wish|bug` → `{ ok:true, items:[ 全欄位含未審 ] }`（bug 含 trail）。
-- `POST /admin/update` Body `{ id, approved?, status?, reply?, replyLang?, link?, read? }` → 只改給的欄位；改完若是 wish 重建 `pub:wishes`。回 `{ ok:true, item }`。
+- `POST /admin/update` Body `{ id, approved?, status?, reply?, replyLang?, link?, read? }` → 只改給的欄位；改完若是 wish 重建 `pub:wishes`。回 `{ ok:true, item }`。**寄信（LOG-165）**：wish 有 `email`、且這次改動對許願者算新聞——放行（false→true）／`status` 變了／`reply` 新增或改變——且 `MAIL_API_KEY`＋`MAIL_FROM` 都有設 → 背景寄**一封**純文字信（依願望 `lang`；主旨 `許願池：你的願望有新進展`／`Wishing well: news on your wish`，`done` 時加「（已實現）」／「(granted)」；內文＝暱稱、願望前 80 字、變了什麼、站址、退訂連結）。只改 `link`、取消放行、原值重存、bug 的更新一律不寄；寄信失敗不影響回應。
 - `POST /admin/delete` Body `{ id }` → 刪除；wish 則重建 `pub:wishes`。回 `{ ok:true }`。
 
 ## 健康檢查
