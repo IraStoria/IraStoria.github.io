@@ -745,5 +745,22 @@ await test('unsub (LOG-165): a forged link 400s and changes nothing; the signed 
   } finally { m.restore(); }
 });
 
+await test('bug status (LOG-168): new on submit; admin sets any of the bug set; a wish status on a bug (or vice versa) is 400; never mails', async () => {
+  const env = { ...makeEnv(), MAIL_API_KEY: 'k-test', MAIL_FROM: 'IraStoria <pool@example.net>' };
+  const m = mockFetch();
+  try {
+    const b = await call(env, '/submit', { body: BUG });
+    eq((await env.POOL.get(`bug:${b.data.id}`, 'json')).status, 'new');
+    for (const st of ['open', 'watch', 'fixed', 'declined', 'new']) {
+      const r = await call(env, '/admin/update', { body: { id: b.data.id, status: st }, headers: bearer(env) });
+      eq(r.status, 200); eq(r.data.item.status, st);
+    }
+    const bad = await call(env, '/admin/update', { body: { id: b.data.id, status: 'done' }, headers: bearer(env) }); eq(bad.status, 400, 'a wish status on a bug');
+    const w = await call(env, '/submit', { body: WISH, ip: '203.0.113.8' });
+    const bad2 = await call(env, '/admin/update', { body: { id: w.data.id, status: 'fixed' }, headers: bearer(env) }); eq(bad2.status, 400, 'a bug status on a wish');
+    eq(mailsOf(m).length, 0, 'bug updates never mail');
+  } finally { m.restore(); }
+});
+
 console.log(`\n${passed}/${passed + failed} passed`);
 process.exit(failed ? 1 : 0);

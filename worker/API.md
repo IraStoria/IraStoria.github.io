@@ -33,7 +33,7 @@ wish:<ts>-<rand>  { id, type:"wish", ts, lang:"zh"|"en", nick(≤24), cat, text(
                     approved:false, status:"wishing"|"considering"|"building"|"done"|"declined",
                     votes:0, reply:"", replyLang:"", link:"", email:""(≤120,選填,永不公開), iph }
 bug:<ts>-<rand>   { id, type:"bug", ts, lang, nick(≤24,可空), text(≤2000), trail:[...](≤200筆,可空),
-                    meta:{ shell, ua, vw, vh, ver, page }, read:false, iph }
+                    meta:{ shell, ua, vw, vh, ver, page }, read:false, status:"new"|"open"|"watch"|"fixed"|"declined", iph }   ← LOG-168 站主判決（待審／在逃／保釋觀察中／已伏法／不受理）；公開名冊仍是 bugs.json 手動編
 pub:wishes        { ts, items:[ 公開欄位版 wish ] }   ← 站主每次管理寫入後重建；GET /wishes 直接回這份
 rl:<route>:<ip>   計數（TTL）
 v:<id>:<iph>      "1"（TTL 86400）＝這個 IP 今天對這則已 +1
@@ -83,7 +83,7 @@ Body `{ pre, code }`。
 
 ### 需 `Authorization: Bearer <token>` 的端點（無效／過期／PRE-token → 401 `auth`）
 - `GET /admin/list?type=wish|bug` → `{ ok:true, items:[ 全欄位含未審 ] }`（bug 含 trail）。
-- `POST /admin/update` Body `{ id, approved?, status?, reply?, replyLang?, link?, read? }` → 只改給的欄位；改完若是 wish 重建 `pub:wishes`。回 `{ ok:true, item }`。**寄信（LOG-165）**：wish 有 `email`、且這次改動對許願者算新聞——放行（false→true）／`status` 變了／`reply` 新增或改變——且 `MAIL_API_KEY`＋`MAIL_FROM` 都有設 → 背景寄**一封**純文字信（依願望 `lang`；主旨 `許願池：你的願望有新進展`／`Wishing well: news on your wish`，`done` 時加「（已實現）」／「(granted)」；內文＝暱稱、願望前 80 字、變了什麼、站址、退訂連結）。只改 `link`、取消放行、原值重存、bug 的更新一律不寄；寄信失敗不影響回應。
+- `POST /admin/update` Body `{ id, approved?, status?, reply?, replyLang?, link?, read? }` → 只改給的欄位（`status` 依 type 驗證：wish 用五個願望狀態，bug 用 `new|open|watch|fixed|declined`，混用 → 400）；改完若是 wish 重建 `pub:wishes`。回 `{ ok:true, item }`。**寄信（LOG-165）**：wish 有 `email`、且這次改動對許願者算新聞——放行（false→true）／`status` 變了／`reply` 新增或改變——且 `MAIL_API_KEY`＋`MAIL_FROM` 都有設 → 背景寄**一封**純文字信（依願望 `lang`；主旨 `許願池：你的願望有新進展`／`Wishing well: news on your wish`，`done` 時加「（已實現）」／「(granted)」；內文＝暱稱、願望前 80 字、變了什麼、站址、退訂連結）。只改 `link`、取消放行、原值重存、bug 的更新一律不寄；寄信失敗不影響回應。
 - `POST /admin/delete` Body `{ id }` → 刪除；wish 則重建 `pub:wishes`。回 `{ ok:true }`。
 
 ## 健康檢查

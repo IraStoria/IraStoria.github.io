@@ -842,6 +842,14 @@
       "zh": "已讀",
       "en": "Read"
     },
+    "bug_st_new": {
+      "zh": "待審",
+      "en": "Pending"
+    },
+    "bug_st_declined": {
+      "zh": "不受理",
+      "en": "Dismissed"
+    },
     "contact_intro": {
       "zh": "找我合作的話，入口都在這裡。",
       "en": "Everything you need to reach me for a project."

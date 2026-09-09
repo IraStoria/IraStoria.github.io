@@ -10,6 +10,7 @@
 // ---------------------------------------------------------------------------
 const CATS = ['transcription', 'design', 'code', 'feature', 'interactive', 'other'];
 const STATUSES = ['wishing', 'considering', 'building', 'done', 'declined'];
+const BUG_STATUSES = ['new', 'open', 'watch', 'fixed', 'declined'];   // LOG-168: a report's verdict - 待審 / 在逃 / 保釋觀察中 / 已伏法 / 不受理
 const LANGS = ['zh', 'en'];
 const LIMIT = {
   bugBody: 32 * 1024,   // bytes, bug (with trail)
@@ -451,7 +452,7 @@ async function handleSubmit(request, env, ctx, iph) {
   const str = (v, n) => (isStr(v) ? Array.from(v).slice(0, n).join('') : '');
   const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : 0);
   const meta = { shell: str(m.shell, 32), ua: str(m.ua, 400), vw: num(m.vw), vh: num(m.vh), ver: str(m.ver, 64), page: str(m.page, 300) };
-  const item = { id, type: 'bug', ts, lang: data.lang, nick, text, trail, meta, read: false, iph };
+  const item = { id, type: 'bug', ts, lang: data.lang, nick, text, trail, meta, read: false, status: 'new', iph };
   await env.POOL.put(`bug:${id}`, JSON.stringify(item));
   notifySubmit(env, ctx, '恥辱柱 · 新回報', nick, text);
   return json(200, { ok: true, id });
@@ -605,7 +606,7 @@ async function handleAdminUpdate(request, env, ctx) {
   const it = found.item;
   const before = { approved: it.approved, status: it.status, reply: it.reply || '' };
   if (d.approved !== undefined) { if (typeof d.approved !== 'boolean') return fail(400, 'invalid'); it.approved = d.approved; }
-  if (d.status !== undefined) { if (!STATUSES.includes(d.status)) return fail(400, 'invalid'); it.status = d.status; }
+  if (d.status !== undefined) { if (!(it.type === 'bug' ? BUG_STATUSES : STATUSES).includes(d.status)) return fail(400, 'invalid'); it.status = d.status; }   // LOG-168: each type has its own set
   if (d.reply !== undefined) { if (!isStr(d.reply) || clen(d.reply) > LIMIT.reply) return fail(400, 'invalid'); it.reply = d.reply; }
   if (d.replyLang !== undefined) { if (!(d.replyLang === '' || LANGS.includes(d.replyLang))) return fail(400, 'invalid'); it.replyLang = d.replyLang; }
   if (d.link !== undefined) { if (!isStr(d.link) || clen(d.link) > LIMIT.link) return fail(400, 'invalid'); it.link = d.link.trim(); }
