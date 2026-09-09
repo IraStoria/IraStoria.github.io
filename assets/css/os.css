@@ -809,6 +809,7 @@ body.to-en .ls-track{background:rgba(16,19,28,.30)}   /* the track changes colou
 .pb-fixed{color:#8fd694;border-color:rgba(143,214,148,.35);background:rgba(143,214,148,.08)}
 .pb-open{color:#e07a7a;border-color:rgba(224,122,122,.4);background:rgba(224,122,122,.1)}
 .pb-watch{color:var(--accent);border-color:rgba(224,176,74,.4);background:rgba(224,176,74,.1)}
+.pb-new{color:var(--dim);border-color:var(--border)}.pb-declined{color:#999;border-color:var(--border);text-decoration:line-through}   /* LOG-169: a visitor's report on the public roster */
 .pillar-list .d{margin-top:.15rem}.pillar-list .meta{margin-top:.25rem}
 
 /* wishpool: the wall */
@@ -966,3 +967,5 @@ body.owner .ph-status{background:linear-gradient(180deg,rgba(224,176,74,.34),rgb
 .wrow .mailyes{color:var(--accent);font-size:12px;margin-left:.3rem;cursor:default}   /* LOG-165: the owner's list marks a wish that left an email (the address on hover; never on the public wall) */
 .dmi{display:inline-block;transform-origin:0 50%;transition:transform .25s ease}   /* the origin is set per hover, under the pointer (LOG-166 追記①) */   /* LOG-166: a hovered line stands still and grows a little (the scale on this wrapper; the rAF transform on .dm stays a plain translate) */
 .dm.hold{opacity:1;z-index:1;text-shadow:0 0 18px rgba(0,0,0,.9),0 0 14px rgba(0,0,0,.75)}.dm.hold .dmi{transform:scale(1.08)}
+.dm.st-new .wq,.dm.st-new .ws{color:rgba(240,237,230,.8)}.dm.st-declined .wq,.dm.st-declined .ws{color:rgba(240,237,230,.45);text-decoration:line-through}   /* LOG-169: shown reports still awaiting a verdict / dismissed */
+.wrow .show.on{color:#8fd694;border-color:rgba(143,214,148,.5)}   /* LOG-169: the 顯示 switch lit when the report is public */

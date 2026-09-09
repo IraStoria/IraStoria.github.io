@@ -5375,6 +5375,13 @@
     return '<div class="pillar"><p class="intro">' + esc(U.pillar_intro) + '</p><h2>' + esc(U.pillar_roster) + '</h2>' + roster + '<h2>' + esc(U.pillar_report) + '</h2>' + form + '</div>';
   }
   function wirePillar(body) {
+    if (pool.on()) pool.get('/bugs').then(function (r) {   /* LOG-169: the reports the owner switched on, under the hand-kept roster */
+      if (!r || !r.ok || !Array.isArray(r.items) || !r.items.length || !body.isConnected) return;
+      var ul = document.createElement('ul'); ul.className = 'list pillar-list reports';
+      r.items.forEach(function (b) { var st = BUG_ST.indexOf(b.status) >= 0 ? b.status : 'new', li = document.createElement('li'); li.innerHTML = '<span class="pb pb-' + st + '">' + esc(bugStLabel(st)) + '</span><div><div class="t">「' + esc(b.text || '') + '」</div><div class="meta">' + esc(b.nick || '') + (b.nick ? ' \u00b7 ' : '') + esc(when(b.ts)) + '</div></div>'; ul.appendChild(li); });
+      var h = document.createElement('h2'); h.textContent = U.pillar_reports; var anchor = body.querySelector('.pillar > h2:nth-of-type(2)');
+      if (anchor) { anchor.parentNode.insertBefore(h, anchor); anchor.parentNode.insertBefore(ul, anchor); } else body.querySelector('.pillar').appendChild(h), body.querySelector('.pillar').appendChild(ul);
+    }).catch(function () {});
     var f = $('.pform', body); if (!f) return;
     var E = f.elements, tv = $('.tview', f), pre = $('pre.trail', f), msg = $('.msg', f), send = $('.send', f), mail = $('.mail', f);
     if (tv) tv.addEventListener('click', function () { pre.hidden = !pre.hidden; if (!pre.hidden) { var L = trail.lines(); pre.textContent = L.length ? L.join('\n') : U.pillar_trail_empty; } tv.textContent = pre.hidden ? U.pillar_trail_view : U.pillar_trail_hide; });
@@ -5499,8 +5506,8 @@
   function adminRow(it) {
     if (it.type === 'bug') {
       var m = it.meta || {}, tr = it.trail && it.trail.length ? it.trail : null, bst = BUG_ST.indexOf(it.status) >= 0 ? it.status : 'new';
-      return '<div class="wrow' + (it.read ? '' : ' pending') + '" data-id="' + esc(it.id) + '"><div class="wh"><span class="wst ' + BUG_ST_CLS[bst] + '">' + esc(bugStLabel(bst)) + '</span><span class="nick">' + esc(it.nick || '\u2014') + '</span><span class="when">' + esc(when(it.ts)) + ' \u00b7 ' + esc(it.lang || '') + '</span></div><p class="txt">' + esc(it.text) + '</p><p class="meta">' + esc([m.shell, m.vw ? m.vw + 'x' + m.vh : '', m.ver ? 'v=' + m.ver : '', m.page, m.ua].filter(Boolean).join(' \u00b7 ')) + '</p>' +
-        '<div class="ctl"><select class="bstatus">' + BUG_ST.map(function (st) { return '<option value="' + st + '"' + (st === bst ? ' selected' : '') + '>' + esc(bugStLabel(st)) + '</option>'; }).join('') + '</select><button type="button" class="btn save">' + esc(U.wish_admin_save) + '</button>' + (tr ? '<button type="button" class="btn sec ttoggle">' + esc(U.wish_admin_trail) + ' (' + tr.length + ')</button>' : '') + '<button type="button" class="btn sec read">' + esc(it.read ? U.wish_admin_pending : U.wish_admin_read) + '</button><button type="button" class="btn sec danger del">' + esc(U.wish_admin_delete) + '</button><span class="msg"></span></div>' +
+      return '<div class="wrow' + (it.approved ? '' : ' pending') + '" data-id="' + esc(it.id) + '"><div class="wh"><span class="wst ' + BUG_ST_CLS[bst] + '">' + esc(bugStLabel(bst)) + '</span><span class="nick">' + esc(it.nick || '\u2014') + '</span><span class="when">' + esc(when(it.ts)) + ' \u00b7 ' + esc(it.lang || '') + '</span></div><p class="txt">' + esc(it.text) + '</p><p class="meta">' + esc([m.shell, m.vw ? m.vw + 'x' + m.vh : '', m.ver ? 'v=' + m.ver : '', m.page, m.ua].filter(Boolean).join(' \u00b7 ')) + '</p>' +
+        '<div class="ctl"><select class="bstatus">' + BUG_ST.map(function (st) { return '<option value="' + st + '"' + (st === bst ? ' selected' : '') + '>' + esc(bugStLabel(st)) + '</option>'; }).join('') + '</select><button type="button" class="btn save">' + esc(U.wish_admin_save) + '</button>' + (tr ? '<button type="button" class="btn sec ttoggle">' + esc(U.wish_admin_trail) + ' (' + tr.length + ')</button>' : '') + '<button type="button" class="btn sec show' + (it.approved ? ' on' : '') + '" aria-pressed="' + (it.approved ? 'true' : 'false') + '">' + esc(it.approved ? U.bug_show_on : U.bug_show_off) + '</button><button type="button" class="btn sec danger del">' + esc(U.wish_admin_delete) + '</button><span class="msg"></span></div>' +
         (tr ? '<pre class="trail" hidden>' + esc(tr.map(function (x) { return typeof x === 'string' ? x : JSON.stringify(x); }).join('\n')) + '</pre>' : '') + '</div>';
     }
     return '<div class="wrow' + (it.approved ? '' : ' pending') + '" data-id="' + esc(it.id) + '"><div class="wh"><span class="wst wst-' + esc(it.status) + '">' + esc(stLabel(it.status)) + '</span><span class="nick">' + esc(it.nick) + '</span>' + (it.email ? '<span class="mailyes" title="' + esc(it.email) + '">\u2709</span>' : '') + '<span class="cat">' + esc(catLabel(it.cat)) + '</span><span class="when">' + esc(when(it.ts)) + ' \u00b7 ' + esc(it.lang || '') + ' \u00b7 +' + (it.votes || 0) + '</span><span class="wst ' + (it.approved ? 'wst-done' : 'wst-building') + '">' + esc(it.approved ? U.wish_admin_live : U.wish_admin_pending) + '</span></div><p class="txt">' + esc(it.text) + '</p>' +
@@ -5529,6 +5536,7 @@
       var update = function (patch) { patch.id = id; return pool.post('/admin/update', patch, true).then(function (r) { if (!r.ok) throw r; touched(); return r; }); };
       if (b.classList.contains('ttoggle')) { var pre = $('pre.trail', row); if (pre) pre.hidden = !pre.hidden; return; }
       if (b.classList.contains('del')) { b.disabled = true; pool.post('/admin/delete', { id: id }, true).then(function (r) { if (!r.ok) throw r; touched(); row.remove(); list._items = (list._items || []).filter(function (x) { return x.id !== id; }); if (!list.querySelector('.wrow')) list.innerHTML = '<p class="note">' + esc(U.wish_admin_empty) + '</p>'; }).catch(function () { b.disabled = false; say(U.wish_error); }); return; }
+      if (b.classList.contains('show')) { update({ approved: !it.approved }).then(load).catch(function () { say(U.wish_error); }); return; }   /* LOG-169 (the user: 原本待審的按鈕改成是否顯示（開啟／關閉）): on = the report joins the public pillar */
       if (b.classList.contains('read')) { update({ read: !it.read }).then(load).catch(function () { say(U.wish_error); }); return; }
       if (b.classList.contains('appr')) { update({ approved: !it.approved }).then(load).catch(function () { say(U.wish_error); }); return; }
       if (b.classList.contains('save') && it.type === 'bug') { b.disabled = true; update({ status: $('.bstatus', row).value }).then(function () { say(U.wish_admin_saved); load(); }).catch(function () { say(U.wish_error); }).then(function () { b.disabled = false; }); return; }   /* LOG-168 (the user: 沒有像是許願池的選項按鈕): the report's verdict */
@@ -5903,7 +5911,7 @@
   var PILLAR_DEPTHS = [{ fs: 19, a: 0.95, v: 118 }, { fs: 15.5, a: 0.70, v: 92 }, { fs: 13, a: 0.50, v: 72 }, { fs: 11.5, a: 0.34, v: 56 }],   /* near -> far: font size, opacity, px/s */
       PILLAR_MAX_LIVE = 12, PILLAR_SPAWN_MS = [600, 1400], PILLAR_LANE = 30, PILLAR_GAP = 56;
   var pillar = (function () {
-    var host = null, layer = null, box = null, on = false, raf = 0, live = [], order = [], cursor = 0, nextSpawn = 0, lastT = 0, W = 0, lanes = [];
+    var host = null, layer = null, box = null, on = false, raf = 0, live = [], order = [], cursor = 0, nextSpawn = 0, lastT = 0, W = 0, lanes = [], reports = [];   /* reports (LOG-169): the visitor reports the owner switched on (GET /bugs) */
     var step = 0, ans = { text: '', nick: '', trail: true };
     var rnd = function (a, b) { return a + Math.random() * (b - a); };
     function ensure() {
@@ -5962,19 +5970,21 @@
     /* ---- the stream */
     function key(e) { return e.w.id || ((e.w.nick || '') + ' ' + (e.w.text || e.w.title || '')); }
     function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
-    function reorder() { order = shuffle((D.bugs || []).map(function (b) { return { w: b, mine: false }; })); cursor = 0; }
+    function reorder() { order = shuffle((D.bugs || []).map(function (b) { return { w: b, mine: false }; }).concat(reports.map(function (b) { return { w: b, mine: false, report: true }; }))); cursor = 0; }
+    function loadReports() { if (!pool.on()) return; pool.get('/bugs').then(function (r) { if (r && r.ok && Array.isArray(r.items)) { reports = r.items; if (on) reorder(); } }).catch(function () {}); }
     function bugOf(e) { var b = e.w.id ? (D.bugs || []).filter(function (x) { return x.id === e.w.id; })[0] : null; return b || e.w; }   /* the roster entry in the CURRENT language */
     function strings(e) {   /* one line: 「title」 status · date · where (· LOG) — desc. Mine: nick 「text」 已回報 · date */
       var w = e.w;
       if (e.note) return [['wq', w.text || '']];
       if (e.mine) return [['wn', (w.nick || '') + (w.nick ? ' ' : '')], ['wq', '「' + (w.text || '') + '」'], ['ws', ' ' + U.pillar_mine], ['wd', ' · ' + when(w.ts)]];
+      if (e.report) return [['wn', (w.nick || '') + (w.nick ? ' ' : '')], ['wq', '「' + (w.text || '') + '」'], ['ws', ' ' + bugStLabel(w.status)], ['wd', ' · ' + when(w.ts)]];   /* LOG-169: a visitor's report, with the owner's verdict */
       var b = bugOf(e), ST = { fixed: U.pillar_status_fixed, open: U.pillar_status_open, watch: U.pillar_status_watch }, WH = { desktop: U.pillar_where_desktop, phone: U.pillar_where_phone, both: U.pillar_where_both };
       var parts = [['wq', '「' + (b.title || '') + '」'], ['ws', ' ' + (ST[b.status] || b.status)], ['wd', ' · ' + (b.date || '') + (b.where ? ' · ' + (WH[b.where] || b.where) : '') + (b.log ? ' · ' + b.log : '')]];
       if (b.desc) parts.push(['wr', ' — ' + b.desc]);
       return parts;
     }
     function build(e, depth) {
-      var d = PILLAR_DEPTHS[depth], m = document.createElement('div'), b = (!e.mine && !e.note) ? bugOf(e) : null; m.className = 'dm d' + depth + (e.mine ? ' mine' : '') + (e.note ? ' note' : '') + (b && b.status ? ' st-' + b.status : ''); m.style.fontSize = d.fs + 'px'; m.style.setProperty('--wa', d.a);
+      var d = PILLAR_DEPTHS[depth], m = document.createElement('div'), b = (!e.mine && !e.note && !e.report) ? bugOf(e) : null; m.className = 'dm d' + depth + (e.mine ? ' mine' : '') + (e.note ? ' note' : '') + (e.report ? ' report st-' + (BUG_ST.indexOf(e.w.status) >= 0 ? e.w.status : 'new') : (b && b.status ? ' st-' + b.status : '')); m.style.fontSize = d.fs + 'px'; m.style.setProperty('--wa', d.a);
       if (e.w.id) m.dataset.id = e.w.id;
       var inner = document.createElement('span'); inner.className = 'dmi'; m.appendChild(inner);   /* LOG-166: the hover scale lives on this wrapper, so the rAF transform on .dm stays a plain translate */
       strings(e).forEach(function (p) { var s = document.createElement('span'); s.className = p[0]; s.textContent = p[1]; inner.appendChild(s); });
@@ -6029,7 +6039,7 @@
       if (on) { box.focus(); return; }
       if (typeof well !== 'undefined') well.close(true);   /* one stage at a time - the wishes on screen finish on their own clock */
       on = true; trail.log('open', 'pillar-stage'); room.set(true); layer.hidden = false; step = 0; geoUp(); box.show(step);
-      nextSpawn = performance.now() + 400; lastT = 0; reorder();
+      nextSpawn = performance.now() + 400; lastT = 0; reorder(); loadReports();
       if (typeof stage !== 'undefined' && stage.active()) stage.veilMidi(true);   /* LOG-163: the MIDI form's notes are collected into the square while this stage is up */
       if (!raf) raf = requestAnimationFrame(tick);
       updateDock();

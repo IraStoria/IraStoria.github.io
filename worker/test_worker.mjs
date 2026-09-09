@@ -762,5 +762,25 @@ await test('bug status (LOG-168): new on submit; admin sets any of the bug set; 
   } finally { m.restore(); }
 });
 
+await test('bug show (LOG-169): a report is hidden until the owner switches it on; GET /bugs carries only nick/text/verdict/date; off again and delete both drop it', async () => {
+  const env = makeEnv();
+  const b = await call(env, '/submit', { body: BUG });
+  eq((await env.POOL.get(`bug:${b.data.id}`, 'json')).approved, false, 'off on submit');
+  let r = await call(env, '/bugs'); eq(r.status, 200); eq(r.data.items.length, 0, 'hidden by default');
+  await call(env, '/admin/update', { body: { id: b.data.id, approved: true, status: 'fixed' }, headers: bearer(env) });
+  r = await call(env, '/bugs'); eq(r.data.items.length, 1); const it = r.data.items[0];
+  eq(Object.keys(it).sort(), ['id', 'lang', 'nick', 'status', 'text', 'ts']); eq(it.status, 'fixed'); eq(it.text, BUG.text);
+  ok(!JSON.stringify(r.data).includes('trail') && !JSON.stringify(r.data).includes('Mozilla') && !JSON.stringify(r.data).includes('iph'), 'no trail, no meta, no iph');
+  ok(/max-age=60/.test(r.headers.get('cache-control')), 'cached a minute');
+  await call(env, '/admin/update', { body: { id: b.data.id, status: 'watch' }, headers: bearer(env) });
+  eq((await call(env, '/bugs')).data.items[0].status, 'watch', 'a verdict change reaches the public copy');
+  await call(env, '/admin/update', { body: { id: b.data.id, approved: false }, headers: bearer(env) });
+  eq((await call(env, '/bugs')).data.items.length, 0, 'switched off again');
+  await call(env, '/admin/update', { body: { id: b.data.id, approved: true }, headers: bearer(env) });
+  await call(env, '/admin/delete', { body: { id: b.data.id }, headers: bearer(env) });
+  eq((await call(env, '/bugs')).data.items.length, 0, 'deleted');
+  eq((await call(env, '/bugs', { method: 'POST', body: {} })).status, 405);
+});
+
 console.log(`\n${passed}/${passed + failed} passed`);
 process.exit(failed ? 1 : 0);

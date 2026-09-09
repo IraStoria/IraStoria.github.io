@@ -33,8 +33,9 @@ wish:<ts>-<rand>  { id, type:"wish", ts, lang:"zh"|"en", nick(≤24), cat, text(
                     approved:false, status:"wishing"|"considering"|"building"|"done"|"declined",
                     votes:0, reply:"", replyLang:"", link:"", email:""(≤120,選填,永不公開), iph }
 bug:<ts>-<rand>   { id, type:"bug", ts, lang, nick(≤24,可空), text(≤2000), trail:[...](≤200筆,可空),
-                    meta:{ shell, ua, vw, vh, ver, page }, read:false, status:"new"|"open"|"watch"|"fixed"|"declined", iph }   ← LOG-168 站主判決（待審／在逃／保釋觀察中／已伏法／不受理）；公開名冊仍是 bugs.json 手動編
+                    meta:{ shell, ua, vw, vh, ver, page }, read:false, status:"new"|"open"|"watch"|"fixed"|"declined", approved:false, iph }   ← LOG-168 站主判決（待審／在逃／保釋觀察中／已伏法／不受理）；公開名冊仍是 bugs.json 手動編
 pub:wishes        { ts, items:[ 公開欄位版 wish ] }   ← 站主每次管理寫入後重建；GET /wishes 直接回這份
+pub:bugs          { ts, items:[ { id, ts, lang, nick, text, status } ] }   ← LOG-169 站主「顯示：開啟」的回報；GET /bugs 直接回這份（永不含 trail／meta／iph）
 rl:<route>:<ip>   計數（TTL）
 v:<id>:<iph>      "1"（TTL 86400）＝這個 IP 今天對這則已 +1
 ```
@@ -51,6 +52,9 @@ Body：`{ type:"wish", lang, nick, cat, text, email? }` 或 `{ type:"bug", lang,
 
 ### `GET /wishes`
 回 `{ ok:true, ts, items:[ { id, ts, lang, nick, cat, text, status, votes, reply, replyLang, link } ] }`——**只含 `approved:true`**，且剔除 `iph`。`Cache-Control: public, max-age=60`。
+
+### `GET /bugs`（LOG-169）
+回 `{ ok:true, ts, items:[ { id, ts, lang, nick, text, status } ] }`——只含站主「顯示：開啟」（`approved:true`）的 bug 回報，只有這六個欄位（軌跡、meta、iph 結構上不會出）。`Cache-Control: public, max-age=60`。速率 60 次／分。前端：桌面恥辱柱彈幕與手機名冊把它們排在手編名冊之後。
 
 ### `POST /mine`
 Body `{ ids:[ …最多 10 個 id ] }`（id 為非空字串 ≤ 64 字）。回 `{ ok:true, states:{ <id>: "pending" | "public" | "gone" } }`——`pending`＝存在但未核准、`public`＝已核准（此刻在 `GET /wishes` 裡）、`gone`＝不存在（被刪除、或本來就沒有；bug 的 id 也算 gone）。除這三個字以外不回任何欄位。用途：投稿者的瀏覽器把自己那份「審核中」副本（`localStorage.wish_mine`）拿來核對，被刪的立刻消失、核准的改由公開卡片接手（LOG-161 追記⑥）。速率 30 次／分；形狀不對 → 400 `invalid`。
@@ -83,7 +87,7 @@ Body `{ pre, code }`。
 
 ### 需 `Authorization: Bearer <token>` 的端點（無效／過期／PRE-token → 401 `auth`）
 - `GET /admin/list?type=wish|bug` → `{ ok:true, items:[ 全欄位含未審 ] }`（bug 含 trail）。
-- `POST /admin/update` Body `{ id, approved?, status?, reply?, replyLang?, link?, read? }` → 只改給的欄位（`status` 依 type 驗證：wish 用五個願望狀態，bug 用 `new|open|watch|fixed|declined`，混用 → 400）；改完若是 wish 重建 `pub:wishes`。回 `{ ok:true, item }`。**寄信（LOG-165）**：wish 有 `email`、且這次改動對許願者算新聞——放行（false→true）／`status` 變了／`reply` 新增或改變——且 `MAIL_API_KEY`＋`MAIL_FROM` 都有設 → 背景寄**一封**純文字信（依願望 `lang`；主旨 `許願池：你的願望有新進展`／`Wishing well: news on your wish`，`done` 時加「（已實現）」／「(granted)」；內文＝暱稱、願望前 80 字、變了什麼、站址、退訂連結）。只改 `link`、取消放行、原值重存、bug 的更新一律不寄；寄信失敗不影響回應。
+- `POST /admin/update` Body `{ id, approved?, status?, reply?, replyLang?, link?, read? }` → 只改給的欄位（`status` 依 type 驗證：wish 用五個願望狀態，bug 用 `new|open|watch|fixed|declined`，混用 → 400；bug 的 `approved` 就是收件匣的「顯示」開關）；改完若是 wish 重建 `pub:wishes`，是 bug 重建 `pub:bugs`。回 `{ ok:true, item }`。**寄信（LOG-165）**：wish 有 `email`、且這次改動對許願者算新聞——放行（false→true）／`status` 變了／`reply` 新增或改變——且 `MAIL_API_KEY`＋`MAIL_FROM` 都有設 → 背景寄**一封**純文字信（依願望 `lang`；主旨 `許願池：你的願望有新進展`／`Wishing well: news on your wish`，`done` 時加「（已實現）」／「(granted)」；內文＝暱稱、願望前 80 字、變了什麼、站址、退訂連結）。只改 `link`、取消放行、原值重存、bug 的更新一律不寄；寄信失敗不影響回應。
 - `POST /admin/delete` Body `{ id }` → 刪除；wish 則重建 `pub:wishes`。回 `{ ok:true }`。
 
 ## 健康檢查

@@ -29,6 +29,7 @@ const RATE = {
   submit: [5, 600],
   vote: [30, 600],
   wishes: [60, 60],
+  bugs: [60, 60],
   mine: [30, 60],
   totp: [5, 600],
   unsub: [10, 600],
@@ -333,6 +334,14 @@ function publicWish(w) {
     status: w.status, votes: w.votes, reply: w.reply, replyLang: w.replyLang, link: w.link,
   };
 }
+// The public face of a report the owner has switched on (LOG-169): nick, text, verdict, date - never the trail, meta or iph.
+function publicBug(b) { return { id: b.id, ts: b.ts, lang: b.lang, nick: b.nick, text: b.text, status: b.status || 'new' }; }
+async function rebuildPubBugs(env) {
+  const all = await loadAll(env, 'bug:');
+  const pub = { ts: Date.now(), items: all.filter((b) => b.approved === true).map(publicBug) };
+  await env.POOL.put('pub:bugs', JSON.stringify(pub));
+  return pub;
+}
 // Rebuild the cached public list (pub:wishes) from every approved wish.
 async function rebuildPub(env) {
   const all = await loadAll(env, 'wish:');
@@ -452,7 +461,7 @@ async function handleSubmit(request, env, ctx, iph) {
   const str = (v, n) => (isStr(v) ? Array.from(v).slice(0, n).join('') : '');
   const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : 0);
   const meta = { shell: str(m.shell, 32), ua: str(m.ua, 400), vw: num(m.vw), vh: num(m.vh), ver: str(m.ver, 64), page: str(m.page, 300) };
-  const item = { id, type: 'bug', ts, lang: data.lang, nick, text, trail, meta, read: false, status: 'new', iph };
+  const item = { id, type: 'bug', ts, lang: data.lang, nick, text, trail, meta, read: false, status: 'new', approved: false, iph };   // approved (LOG-169): the owner's 顯示 switch - off until turned on
   await env.POOL.put(`bug:${id}`, JSON.stringify(item));
   notifySubmit(env, ctx, '恥辱柱 · 新回報', nick, text);
   return json(200, { ok: true, id });
@@ -468,6 +477,14 @@ async function handleWishes(env, iph) {
   if (await rateLimited(env, 'wishes', iph)) return fail(429, 'rate');
   let pub = await getJson(env, 'pub:wishes');
   if (!pub || !Array.isArray(pub.items)) pub = await rebuildPub(env);
+  return json(200, { ok: true, ts: pub.ts, items: pub.items }, { 'Cache-Control': 'public, max-age=60' });
+}
+
+// GET /bugs — the reports the owner has switched on (LOG-169), public fields only.
+async function handleBugs(env, iph) {
+  if (await rateLimited(env, 'bugs', iph)) return fail(429, 'rate');
+  let pub = await getJson(env, 'pub:bugs');
+  if (!pub || !Array.isArray(pub.items)) pub = await rebuildPubBugs(env);
   return json(200, { ok: true, ts: pub.ts, items: pub.items }, { 'Cache-Control': 'public, max-age=60' });
 }
 
@@ -619,7 +636,7 @@ async function handleAdminUpdate(request, env, ctx) {
       const m = await wishMail(env, new URL(request.url).origin, it, change);
       mail(env, ctx, it.email, m.subject, m.text);
     }
-  }
+  } else await rebuildPubBugs(env);   // LOG-169: the 顯示 switch or the verdict changed
   return json(200, { ok: true, item: it });
 }
 
@@ -648,7 +665,7 @@ async function handleAdminDelete(request, env) {
   const found = await findById(env, r.data.id, ['wish', 'bug']);
   if (!found) return fail(404, 'notfound');
   await env.POOL.delete(found.key);
-  if (found.item.type === 'wish') await rebuildPub(env);
+  if (found.item.type === 'wish') await rebuildPub(env); else await rebuildPubBugs(env);
   return json(200, { ok: true });
 }
 
@@ -687,6 +704,7 @@ export default {
       // Public routes
       if (path === '/submit') return withCors(method === 'POST' ? await handleSubmit(request, env, ctx, iph) : fail(405, 'method'));
       if (path === '/wishes') return withCors(method === 'GET' ? await handleWishes(env, iph) : fail(405, 'method'));
+      if (path === '/bugs') return withCors(method === 'GET' ? await handleBugs(env, iph) : fail(405, 'method'));
       if (path === '/vote') return withCors(method === 'POST' ? await handleVote(request, env, iph) : fail(405, 'method'));
       if (path === '/mine') return withCors(method === 'POST' ? await handleMine(request, env, iph) : fail(405, 'method'));
       if (path === '/unsub') return method === 'GET' ? handleUnsub(url, env, iph) : withCors(fail(405, 'method'));   // a browser navigation from the mail; no CORS needed

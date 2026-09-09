@@ -850,6 +850,18 @@
       "zh": "不受理",
       "en": "Dismissed"
     },
+    "bug_show_on": {
+      "zh": "顯示：開啟",
+      "en": "Shown: on"
+    },
+    "bug_show_off": {
+      "zh": "顯示：關閉",
+      "en": "Shown: off"
+    },
+    "pillar_reports": {
+      "zh": "訪客回報",
+      "en": "Reports from visitors"
+    },
     "contact_intro": {
       "zh": "找我合作的話，入口都在這裡。",
       "en": "Everything you need to reach me for a project."
