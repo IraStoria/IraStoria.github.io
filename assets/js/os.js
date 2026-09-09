@@ -1872,7 +1872,7 @@
                the slider cross-fades, or in split mode pans the original hard left and the transcription hard right.
      YouTube goes first; an embed error, a ready timeout or a play that never lands falls back to local and shows the notice
      (ui.tr_notice: fallback + the left/right experiment, contact to remove). The visitor can switch by hand either way. */
-  var TR_YT_API = 'https://www.youtube.com/iframe_api', TR_YT_READY_MS = 9000, TR_YT_PLAY_MS = 7000, TR_SYNC_S = 0.08, TR_END_PAD_S = 1.2, TR_EXIT_MS = 600, TR_YT_LAG_S = -0.09, TR_LAG_STEP = 0.01, TR_SNAP = 25, TR_LEAD_S = 4, TR_HOLD_S = 0.2, TR_RESUME_HOLD_MS = 300;   /* TR_RESUME_HOLD_MS (追記⑳): after a resume or a seek YouTube fires PLAYING ~0.23 s before its sound is back (measured 0.88 s vs our 0.65 s); the rendition waits this long so it does not play alone */   /* 追記⑯: the pre-roll - from the moment the stage opens the MIDI clock runs from -TR_LEAD_S on the wall clock (the notes fall in at once) and holds at -TR_HOLD_S until the sound is ready; the sound then joins the clock where it stands, no jump, no count-in wait */   /* TR_WARM_MS (追記⑭): after the embed has proven it can play, the stage waits this long (its own transition) before the real start */   /* -0.09: the user's own ear on their machine (追記⑧); negative = the rendition may run slightly AHEAD of what getCurrentTime() says */   /* TR_YT_LAG_S (the user: youtube 的播放啟動延遲 0.2-0.5 s): getCurrentTime() runs ahead of what the video actually sounds; the MIDI clock trails it by this much in yt mode. The bar's 對齊 −/+ nudges it per machine (localStorage tr_ytlag) */
+  var TR_YT_API = 'https://www.youtube.com/iframe_api', TR_YT_READY_MS = 9000, TR_YT_PLAY_MS = 7000, TR_SYNC_S = 0.08, TR_END_PAD_S = 1.2, TR_EXIT_MS = 600, TR_YT_LAG_S = 0, TR_LAG_STEP = 0.01, TR_SNAP = 25, TR_LEAD_S = 4, TR_HOLD_S = 0.2, TR_RESUME_HOLD_MS = 300;   /* TR_RESUME_HOLD_MS (追記⑳): after a resume or a seek YouTube fires PLAYING ~0.23 s before its sound is back (measured 0.88 s vs our 0.65 s); the rendition waits this long so it does not play alone */   /* 追記⑯: the pre-roll - from the moment the stage opens the MIDI clock runs from -TR_LEAD_S on the wall clock (the notes fall in at once) and holds at -TR_HOLD_S until the sound is ready; the sound then joins the clock where it stands, no jump, no count-in wait */   /* TR_WARM_MS (追記⑭): after the embed has proven it can play, the stage waits this long (its own transition) before the real start */   /* 0 (追記㉒): a machine's own playout latency is not a default - the visitor nudges with 對齊 and the value stays on their machine */   /* TR_YT_LAG_S (the user: youtube 的播放啟動延遲 0.2-0.5 s): getCurrentTime() runs ahead of what the video actually sounds; the MIDI clock trails it by this much in yt mode. The bar's 對齊 −/+ nudges it per machine (localStorage tr_ytlag) */
   var trStage = (function () {
     var HOST = desktop, WV = wave;
     var active = false, wid = null, ui = null, veil = null, veil2 = null, ctx = null, master = null, mgain = null, muted = false, ducked = false, hint = null, langSeen = null;
@@ -2072,6 +2072,7 @@
         var nd = e.target.closest('[data-nudge]'); if (nd) { hideTip(); setLag((mode === 'yt' ? ytLag : loLag) + TR_LAG_STEP * parseInt(nd.dataset.nudge, 10)); return; }
         var sc = e.target.closest('.tr-secs [data-t]'); if (sc) { seek(parseFloat(sc.dataset.t)); return; }
         var ca = e.target.closest('.tr-notice [data-app]'); if (ca) { e.preventDefault(); openApp(ca.dataset.app); return; }
+        if (e.target.closest('.tr-tip')) { hideTip(); return; }
       });
       var seekEl = ui.querySelector('.tr-seek'), drag = false, at = function (ev) { var r = seekEl.getBoundingClientRect(); return Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)); };
       seekEl.addEventListener('pointerdown', function (ev) { drag = true; try { seekEl.setPointerCapture(ev.pointerId); } catch (e) {} if (dur) seek(at(ev) * dur); });
@@ -2087,10 +2088,10 @@
     }
     function paintLag() { if (!ui) return; var a = ui.querySelector('.tr-align'); if (!a) return; var v = mode === 'yt' ? ytLag : loLag; a.querySelector('.tr-align-l').textContent = U.tr_align; a.querySelector('.tr-lag').textContent = (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' s'; }
     function setCached(v) { cached = !!v && hasFallback; hideTip(); paintSrc(); applyMix(); }
-    function hideTip() { if (!ui) return; var t = ui.querySelector('.tr-tip'); if (t) t.hidden = true; clearTimeout(tipTimer); }
+    function hideTip() { if (!ui) return; var t = ui.querySelector('.tr-tip'); clearTimeout(tipTimer); if (!t || t.hidden) return; t.classList.add('bye'); tipTimer = setTimeout(function () { t.hidden = true; t.classList.remove('bye'); }, 500); }   /* 追記㉒: fades out (click, a nudge, the switch, or 10 s) */
     function showTip() {   /* 追記㉑(2): five seconds in, a small bubble over the cached-copy switch: out of sync? use Align; if nothing helps, the cached copy */
       if (!ui || tipShown || mode !== 'yt' || cached || !hasFallback) return; tipShown = true;
-      var t = ui.querySelector('.tr-tip'); if (!t) return; t.hidden = false; clearTimeout(tipTimer); tipTimer = setTimeout(hideTip, 14000);
+      var t = ui.querySelector('.tr-tip'); if (!t) return; t.hidden = false; t.classList.remove('bye'); clearTimeout(tipTimer); tipTimer = setTimeout(hideTip, 10000);
     }
     function paintModes() { if (!ui) return; ui.querySelectorAll('[data-mode]').forEach(function (b) { b.classList.toggle('on', (b.dataset.mode === 'lr') === split); }); var lr = ui.querySelector('[data-mode="lr"]'); if (lr) lr.disabled = !hasFallback; }
     function paintSrc() {
