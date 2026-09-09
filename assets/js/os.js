@@ -202,7 +202,8 @@
     var ub = $('#upd-hide'); if (ub) { ub.title = U.updates_hide; ub.setAttribute('aria-label', U.updates_hide); }
     var ul = $('#upd-log'); if (ul) ul.innerHTML = (D.updates || []).length ? D.updates.map(function (u) { return '<div class="msg"><time>' + esc(u.date) + '</time><p>' + esc(u.text) + '</p></div>'; }).join('') : '<p class="note">' + esc(U.updates_empty) + '</p>';
     document.querySelectorAll('.np-cap .np-lbl').forEach(function (l) { var stt = l.querySelector('.np-state'); l.textContent = U.player_now + (stt ? ' · ' : ''); if (stt) l.appendChild(stt); });
-    if (typeof secStage !== 'undefined' && secStage && secStage.active()) secStage.relabel();   /* the native section stage follows an in-place language switch (zone labels, mode buttons, exit) */
+    if (typeof secStage !== 'undefined' && secStage && secStage.active()) secStage.relabel();
+    if (typeof trStage !== 'undefined' && trStage && trStage.active()) trStage.relabel();   /* LOG-172: the compare stage's labels, section names and notice */   /* the native section stage follows an in-place language switch (zone labels, mode buttons, exit) */
     caption.reset();
     Object.keys(wins).forEach(function (a) { var w = wins[a]; if (!TITLES[a]) return; w.setAttribute('aria-label', TITLES[a]); var tt = w.querySelector('.win-title'); if (tt) tt.innerHTML = '<span class="wg">' + (ICON[a] || GLYPH[a]) + '</span> ' + esc(TITLES[a]); var ft = w.querySelector('.win-foot a'); if (ft) ft.textContent = U.open_page; if (RENDER[a]) RENDER[a](w.querySelector('.win-body'), w); });
     relabelPranks();
@@ -360,6 +361,7 @@
   function hexRgb(h) { var v = parseInt(String(h).replace('#', ''), 16); return ((v >> 16) & 255) + ',' + ((v >> 8) & 255) + ',' + (v & 255); }   /* '#4a90e0' -> '74,144,224' (wave.tint speaks r,g,b) */
   var ext = {
     api: function () {
+      if (typeof trStage !== 'undefined' && trStage && trStage.active()) return trStage.src();   /* compare stage (LOG-172): caption, line, spectrum and the waterfall follow the transcription's MIDI clock */
       if (typeof stage !== 'undefined' && stage && stage.active()) return stage.src();   /* ADE stage: caption and progress follow the four stems */
       if (typeof secStage !== 'undefined' && secStage && secStage.active()) { var sp = secStage.src(); if (sp) { try { if (sp.state().active) return sp; } catch (e) {} } }   /* section stage (shell-native): same contract — while it is still loading the caption stays on the (ducked) OS player, as the iframe version did */
       for (var i = extFrames.length - 1; i >= 0; i--) {
@@ -410,7 +412,9 @@
     if (url !== HB_URL) { HB_URL = url; HB_ON = false; if (hasBeat) { HB_ON = HB_ARMED; HB_ARMED = Math.random() < HB_CHANCE; } }
     return HB_ON;
   }
+  var WFX_SPARK_N = 5, WFX_SPARK_MS = 1300, WFX_SPARK_MAX = 360, WFX_SPARK_G = 60;   /* 追記⑩(3): richer - seven per note, wider in size and life, on gravity arcs */   /* 追記⑨(6): the compare stage's note clearing = the four-piano MIDI form's (white-hot burst on the line + bokeh sparks splashing back up); grey residue off */
   function makeWaterfall() {
+    var sparks = [], fxRun = 0, lastPosFx = 0;
     var url = '', data = null, pending = null, FLASH_S = 0.3, anim = null, lastPos = 0, ANIM_IN_MS = 1600, ANIM_SWAP_IN_MS = 600, ANIM_OUT_MS = 450, BOOT_FADE_MS = 3000, next = null, pre = null, hb = false;
     // pre-roll (boot): the clock runs from -lead s while the connect lines grow, so the first notes fall the full height before the music starts
     var slew = null, SLEW_MS = 500;
@@ -429,14 +433,14 @@
       return out;
     }
     function prep(j) {
-      j.tracks.forEach(function (t) { t.rgb = t.rgb0 = hex(t.color || '#e0b04a'); var md = 0; t.notes.forEach(function (n) { if (n[1] - n[0] > md) md = n[1] - n[0]; }); t.maxDur = md; t.notesN = t.lane === 'pitch' ? mergeNarrow(t.notes) : t.notes; });
+      j.tracks.forEach(function (t) { t.rgb = t.rgb0 = hex(t.color || '#e0b04a'); t.core = t.core ? hex(t.core) : null; t.rim = t.rim ? hex(t.rim) : null;   /* core / rim (LOG-173 追記③): the eclipse note - dark body, a faint coloured rim light, a cold-white core */ var md = 0; t.notes.forEach(function (n) { if (n[1] - n[0] > md) md = n[1] - n[0]; }); t.maxDur = md; t.notesN = t.lane === 'pitch' ? mergeNarrow(t.notes) : t.notes; });
       return j;
     }
     // track change: the current layer slides up and out, the new one (once fetched) slides in from the top edge; the very first layer glides in slowly (boot)
     function ensure(st, now) {
       var u = st.notes || '';
       if (u === url) return; url = u; hb = false;
-      var show = !!u && wfOn();
+      var show = !!u && (st.wf || wfOn());   /* st.wf: the compare stage's notes ARE the show - they never depend on the page's 10 % roll */
       if (data) { anim = { mode: 'out', t0: now, ms: ANIM_OUT_MS, pos: lastPos }; next = null; }   /* the leaving layer keeps the old track's clock so its notes do not jump */
       pending = null;
       if (!show) return;
@@ -467,6 +471,14 @@
     // draw(g2, W, H, y, st, nowMs): notes are drawn over the bars (under the line); pitched X shares the bars' log-frequency mapping
     function draw(g2, W, H, y, st, nowMs) {
       ensure(st, nowMs);
+      if (st.wfx && data && st.notes === url) data.fx = true;   /* the look is remembered ON the data: a layer shown as eclipse leaves as eclipse (追記⑫(2): the grey residue used to pop up the moment the stage let go) */
+      var fx = !!(data && data.fx);
+      if (!fx) sparks.length = 0;
+      else { var pv_ = st.pos || 0; if (pv_ + 1 < lastPosFx) fxRun++; lastPosFx = pv_;   /* a seek backwards is a new pass: the notes may spark again */
+        if (sparks.length) { g2.save(); g2.globalCompositeOperation = 'lighter';
+          for (var si2 = sparks.length - 1; si2 >= 0; si2--) { var sp2 = sparks[si2], ag2 = nowMs - sp2.t0, kk = 1 - ag2 / sp2.life; if (kk <= 0) { sparks.splice(si2, 1); continue; }
+            g2.fillStyle = 'rgba(' + sp2.col + ',' + (0.8 * kk).toFixed(3) + ')'; g2.beginPath();   /* additive dots, no blur (追記⑪) */ var ts_ = ag2 / 1000; g2.arc(sp2.x + sp2.vx * ts_, sp2.y + sp2.vy * ts_ + 0.5 * (sp2.g || 0) * ts_ * ts_, sp2.r * (0.5 + 0.5 * kk), 0, Math.PI * 2); g2.fill(); }
+          g2.shadowBlur = 0; g2.restore(); } }
       var shift = 0, alpha = 1;
       if (anim) {   // entrance / exit choreography: the whole layer translates vertically and fades (no abrupt pop-in)
         var p = Math.min(1, (nowMs - anim.t0) / anim.ms);
@@ -531,19 +543,33 @@
           if (!col) { w = narrow ? Math.max(9, semi * 2.5) : Math.max(5, semi * 1.25); bx = xPitch(nt[2]) - w / 2; x = bx; }   /* phone: ~2.5 semitones wide (>= 9 px) — fat blocks, overlap allowed */   /* user's call: bigger notes over strict non-overlap (rims keep neighbours readable); >=5px on narrow screens */
           var dur = nt[1] - nt[0], bf = now < t0 ? 0 : Math.min(1, (Math.min(now, nt[1]) - t0) / dur);
           if (bent) x = bx + bendSmooth(nt, bf, dur, semi, xPitch);   /* the block (and its flash) sits where the pitch currently is */
+          if (fx && !col) { var scx_ = W / 2, sgap = 9; if (x < scx_ + sgap && x + w > scx_ - sgap) x = (x + w / 2 < scx_) ? scx_ - sgap - w : scx_ + sgap; }   /* 追記⑪(4): nothing sits on the seam - a note that would is pushed to its own side */
           var yTop = y - (t1 - now) * pps, yBot = y - (t0 - now) * pps, vel = nt[3] / 127;
           if (yBot - yTop < 6) yTop = yBot - 6;
           var live = t0 <= now && now < t1, above = Math.min(yBot, y), below = Math.max(yTop, y);
           if (above > yTop) {   // still above the line: filled + outlined, brighter as it nears the line; the sounding note glows; a soft dark drop shadow lifts it off the bars
             var near = 1 - Math.min(1, (y - above) / y), fa = 0.32 + 0.45 * (0.5 + 0.5 * vel) * (0.35 + 0.65 * near);
             rrect(g2, x + 0.5, yTop + 0.5, w - 1, above - yTop - 1, 3);
-            if (live) { g2.shadowColor = 'rgba(' + t.rgb + ',.95)'; g2.shadowBlur = 16; fa = 0.95; }
+            var rim = t.rim || t.rgb;
+            if (live) { g2.shadowColor = 'rgba(' + rim + ',.95)'; g2.shadowBlur = 16; fa = 0.95; }
+            else if (fx) {   /* 追記⑪(1)(2): eclipse look WITHOUT shadowBlur (hundreds of blurred notes a frame was the stutter) - two concentric translucent halos, wide and soft, brighter as the note nears the line */
+              var ha = 0.05 + 0.09 * near, hh = above - yTop; g2.shadowBlur = 0;
+              g2.fillStyle = 'rgba(' + rim + ',' + (ha * 0.45).toFixed(3) + ')'; rrect(g2, x - 9, yTop - 7, w + 18, hh + 14, 9); g2.fill();
+              g2.fillStyle = 'rgba(' + rim + ',' + ha.toFixed(3) + ')'; rrect(g2, x - 4, yTop - 3, w + 8, hh + 6, 6); g2.fill();
+              rrect(g2, x + 0.5, yTop + 0.5, w - 1, hh - 1, 3); fa = Math.min(1, fa * 1.1);
+            }
             else { g2.shadowColor = 'rgba(0,0,0,.8)'; g2.shadowBlur = 8; g2.shadowOffsetY = 2; }
             g2.fillStyle = 'rgba(' + t.rgb + ',' + fa.toFixed(3) + ')'; g2.fill(); g2.shadowBlur = 0; g2.shadowOffsetY = 0;
-            g2.strokeStyle = 'rgba(' + t.rgb + ',' + (live ? 1 : 0.55 + 0.45 * near).toFixed(3) + ')'; g2.stroke();
-            g2.strokeStyle = 'rgba(8,10,16,.55)'; rrect(g2, x - 0.5, yTop - 0.5, w + 1, above - yTop + 1, 4); g2.stroke();   /* dark rim separates overlapping notes */
+            g2.strokeStyle = 'rgba(' + rim + ',' + (live ? 1 : (t.rim ? 0.35 : 0.55) + 0.45 * near).toFixed(3) + ')'; g2.stroke();   /* a rim colour (eclipse look) draws the outline in its own faint light */
+            if (fx) { g2.lineWidth = 1; g2.strokeStyle = 'rgba(255,252,255,' + (0.18 + 0.3 * near).toFixed(3) + ')'; rrect(g2, x - 0.5, yTop - 0.5, w + 1, above - yTop + 1, 4); g2.stroke(); }   /* 追記⑩(4)/⑪(2): eclipse look - a thin white light edge instead of the dark rim (no blur) */
+            else { g2.strokeStyle = 'rgba(8,10,16,.55)'; rrect(g2, x - 0.5, yTop - 0.5, w + 1, above - yTop + 1, 4); g2.stroke(); }   /* dark rim separates overlapping notes */
+            if (t.core) {   /* the cold-white core: a narrower, shorter light inside the body; it glows when the note sounds */
+              var bh = above - yTop - 1, cw = Math.max(2, (w - 1) * 0.42), chh = Math.max(2, bh * 0.62), ca = live ? 0.95 : 0.28 + 0.42 * near;
+              if (live) { g2.shadowColor = 'rgba(' + t.core + ',.9)'; g2.shadowBlur = 10; }
+              g2.fillStyle = 'rgba(' + t.core + ',' + ca.toFixed(3) + ')'; rrect(g2, x + 0.5 + ((w - 1) - cw) / 2, yTop + 0.5 + (bh - chh) / 2, cw, chh, 2); g2.fill(); g2.shadowBlur = 0;
+            }
           }
-          if (yBot > below) {   // past the line: grey, outlined, fading with distance; a bent note leaves the path it actually travelled
+          if (yBot > below && !fx) {   // past the line: grey, outlined, fading with distance; a bent note leaves the path it actually travelled   (eclipse look: nothing - the burst and the sparks are the clearing)
             var d = Math.min(1, (below - y) / (H * TAIL_FRAC)), d2 = Math.min(1, (yBot - y) / (H * TAIL_FRAC)), gg = g2.createLinearGradient(0, below, 0, yBot);
             gg.addColorStop(0, 'rgba(150,158,176,' + (0.22 * (1 - d)).toFixed(3) + ')'); gg.addColorStop(1, 'rgba(150,158,176,' + (0.22 * (1 - d2)).toFixed(3) + ')');
             if (bent) {   // ribbon: the note's centre line through time, stroked at the note's width with round joins (even thickness along the curve)
@@ -576,6 +602,11 @@
             g2.fillStyle = 'rgba(255,255,255,' + (0.85 * kf).toFixed(3) + ')'; g2.fillRect(x - ex / 2, y - fh / 2, w + ex, fh);
             g2.fillStyle = 'rgba(' + t.rgb + ',' + (0.6 * kf).toFixed(3) + ')'; g2.fillRect(x - ex, y - fh, w + ex * 2, fh * 2);
             g2.shadowBlur = 0;
+          }
+          if (fx && age >= 0 && age < 0.12 && nt._s !== fxRun) {   /* bokeh sparks, once per pass: they splash back UP into the fall, shrinking as they fade */
+            nt._s = fxRun;
+            for (var sj = 0; sj < WFX_SPARK_N; sj++) { var big = Math.random() < 0.25; sparks.push({ x: x + w / 2 + (Math.random() - 0.5) * w * 1.4, y: y - Math.random() * 3, vx: (Math.random() - 0.5) * 90, vy: -(30 + 120 * Math.random()), g: WFX_SPARK_G * (0.5 + Math.random()), r: big ? 2.2 + 1.8 * Math.random() : 0.8 + 1.4 * Math.random(), col: Math.random() < 0.45 ? '255,255,255' : t.rgb, t0: nowMs, life: WFX_SPARK_MS * (0.45 + 1.1 * Math.random()) }); }
+            if (sparks.length > WFX_SPARK_MAX) sparks.splice(0, sparks.length - WFX_SPARK_MAX);
           }
         }
       });
@@ -621,6 +652,7 @@
     var wf = withNotes ? makeWaterfall() : null;
     var headPx = -1;
     var restoreT0 = 0, restoreDur = 1400, gleam = null, dimK = null, dimCv = null;   /* gleam: this frame's travelling flash band; dimK: the tail's in-canvas dim floor (the LINE is spared); dimCv: the reused keep-mask offscreen */   /* LOG-112 追記⑬: after the outro door's hand-back the LINE is already on screen (it lived through the door) - the grey, unplayed part fades back in in place, ADE-style, instead of regrowing from the left */
+    var splitCfg = null, SPLIT_COL_L = '108,92,224', SPLIT_COL_R = '184,84,176', SPLIT_LINE_L = '212,212,252', SPLIT_LINE_R = '248,210,236', SPLIT_LINE = '230,224,248', SPLIT_DEEP = '30,16,58';   /* 追記⑨: the two halves in two eclipse hues - the transcription (left) lit blue-violet, the original (right) red-violet; SPLIT_LINE: the neutral centre divider */   /* LOG-173 split mode: {kL, kR} 0..1 loudness per half (left = transcription, right = original); null = the normal single line. 追記②: the ECLIPSE pairing in purple - a deep violet for the bars and the glow (as 255,110,90 is for the four pianos), a pale lavender-white for the line itself (as 255,232,200 is) */
     var tintFrom = ['224,176,74', '224,176,74'], tintTo = ['224,176,74', '224,176,74'], tintT0 = 0, tintDur = 1, tintCur = ['224,176,74', '224,176,74'], TINT_MS = 900, TINT_OUT_MS = 2200, TINT_BLUR = 22, TINT_W = 1.2, TINT_A = 1.0, TINT_CORONA = 32, TINT_CORONA_A = 0.40, tintShadow = '255,110,90';   /* tint = the stage's eclipsed ring: STAGE_RING_W, its brightness, STAGE_ECL_BLUR corona in STAGE_ECL_COL */
     var GDBG_UI = /[?&]ghostdbg/.test(location.search), GDBG = GDBG_UI || TELE, gdbgT = 0, gdbgEl = null;   /* GHOSTDBG (temporary diagnosis, 2026-09-06): on-screen readout + window.__ghostlog ring of the ghost's numbers - REMOVE when the phone case is closed */
     function gdbg(o) { if (!GDBG) return; o.t = Math.round(performance.now()); o.cv = cv && cv.id; var L = window.__ghostlog = window.__ghostlog || []; L.push(o); if (L.length > 4000) L.shift(); if (TELE) teleQ.push(o); if (!GDBG_UI || o.ev) return; if (o.t - gdbgT < 250) return; gdbgT = o.t; if (!gdbgEl) { gdbgEl = document.createElement('pre'); gdbgEl.id = 'ghostdbg'; gdbgEl.style.cssText = 'position:fixed;left:4px;top:4px;z-index:99999;margin:0;padding:4px 6px;font:11px/1.3 monospace;color:#0f0;background:rgba(0,0,0,.7);pointer-events:none;white-space:pre'; document.body.appendChild(gdbgEl); } gdbgEl.textContent = Object.keys(o).map(function (k) { var v = o[k]; return k + '=' + (typeof v === 'number' ? (Math.round(v * 1000) / 1000) : v); }).join('\n'); }
@@ -662,7 +694,9 @@
       if (mode === 'live' && an) {
         // spectrum bars (same log-frequency mapping as the player). On pause the bars fall gradually instead of vanishing.
         var n = Math.max(W < 700 ? PHONE_MIN_BARS : 48, Math.min(128, Math.floor(W / 12))), bw = W / n, maxH = H * 0.28 * boostK, any = false;   /* phone: no 48-bar floor, so the bars keep desktop proportions instead of turning into 6 px sticks */   /* boostK: the section stage raises the bars so the bass/bk hits read clearly */
-        var lv = barLevels(an, n);
+        var lv, srcA = splitCfg ? ext.api() : null;
+        if (srcA && srcA.analysers) { var pr = srcA.analysers(), nh = n >> 1; lv = (pr[0] ? barLevels(pr[0], nh) : new Array(nh).fill(0)).reverse().concat(pr[1] ? barLevels(pr[1], n - nh) : new Array(n - nh).fill(0)); }   /* 追記⑬ split spectrum: the left half is the transcription's, MIRRORED (追記⑭(3): lows at the seam, highs at the edge, symmetric with the original's half), the right half the original's */
+        else lv = barLevels(an, n);
         if (levels.length !== n) levels = new Array(n).fill(0);
         g2.shadowBlur = 0;
         // the whole spectrum doubles as the progress bar: bars/baseline left of the play head are amber, the unplayed part is a quiet grey (frac frozen while paused)
@@ -673,6 +707,9 @@
           var rel_ = now - reflowT0; if (rel_ >= reflowHold + REFLOW_OUT_MS) reflowT0 = 0; else if (rel_ < REFLOW_IN_MS) fracNow = reflowFrom * (1 - ease(rel_ / REFLOW_IN_MS)); else if (rel_ < reflowHold) fracNow = 0; else fracNow = fracNow * ease((rel_ - reflowHold) / REFLOW_OUT_MS);   /* retreat to the left edge (with the colour change), wait for the line to glide down, then slide out to where the track is */
         }
         var px = W * fracNow, px0 = px;   /* px0: true progress — the ECG side ignores the clearing sweep (it read as a line being erased) */
+        var sp = (splitCfg && m <= 0) ? splitCfg : null, scx = W / 2, sxl = scx - fracNow * scx, sxr = scx + fracNow * (W - scx), SL = null, SR = null;   /* split: both halves grow outward from the centre */
+        function sideCol(k, right) { k = Math.max(0, Math.min(1, k)); var base = right ? SPLIT_COL_R : SPLIT_COL_L, c = lerpCol(SPLIT_DEEP, base, 0.2 + 0.8 * k), ln = lerpCol(SPLIT_DEEP, right ? SPLIT_LINE_R : SPLIT_LINE_L, 0.3 + 0.7 * k); return { col: c, line: ln, glow: base, p: k, g: grad(y, y - maxH, c, 0.55, 1), gr: grad(y, y + maxH * 0.45, c, 0.22, 0) }; }   /* 追記⑮(2): from a deep violet (not slate) up to the side's colour, fuller alpha: the bars read as lit, not pale */   /* LOG-173 追記①: the whole stage is purple; each half's BRIGHTNESS is that side's effective loudness (lean × its volume trim): silent -> a dim purple-grey floor, full -> bright purple with its glow */
+        if (sp) { SL = sideCol(sp.kL, false); SR = sideCol(sp.kR, true); gGrey = grad(y, y - maxH, '62,44,110', 0.30, 0.62); gGreyR = grad(y, y + maxH * 0.45, '62,44,110', 0.14, 0); }   /* split: the unplayed bars are a dim deep violet, not slate */
         // right after the line joins, a grey sweep runs right→left over the amber line ("clearing" the progress bar) before real progress takes over
         // unplayed bars are a solid cool slate (not translucent white — that reads as fog on the dark wallpaper); gradients only dim the foot near the line
         var gAmb = grad(y, y - maxH, LC, 0.35, 0.95), gGrey = grad(y, y - maxH, UC, 0.45, 0.95),
@@ -711,6 +748,12 @@
           g2.fillStyle = gGrey; g2.fillRect(x, y - h, w, h);
           g2.fillStyle = gGreyR; g2.fillRect(x, y, w, h * 0.45);
           if (ra < 1) g2.globalAlpha = 1;
+          if (sp) {   /* 追記⑨(5): the played part is the OVERLAP of the bar with its half's played interval, so the heads slide through a bar pixel by pixel instead of flipping whole bars */
+            var xc_ = x + w / 2, isL = xc_ < scx, sc_ = isL ? SL : SR, lo_ = isL ? sxl : scx, hi_ = isL ? scx : sxr, ax0 = Math.max(x, lo_), ax1 = Math.min(x + w, hi_);
+            if (ax1 > ax0 + 0.2) { if (sc_.p > 0) { g2.shadowColor = 'rgba(' + sc_.glow + ',' + (0.85 * sc_.p).toFixed(2) + ')'; g2.shadowBlur = TINT_BLUR * sc_.p; } g2.fillStyle = sc_.g; g2.fillRect(ax0, y - h, ax1 - ax0, h); g2.shadowBlur = 0; g2.fillStyle = sc_.gr; g2.fillRect(ax0, y, ax1 - ax0, h * 0.45);
+              if (h > 2 && sc_.p > 0.05) { g2.fillStyle = 'rgba(255,250,255,' + (0.55 * sc_.p).toFixed(3) + ')'; g2.fillRect(ax0, y - h, ax1 - ax0, 1.5); } }   /* 追記⑩(2): a white light on the tip of each played bar */
+            continue;
+          }
           var aw = Math.min(w, px - x);
           if (aw > 0) { if (tg > 0) { g2.shadowColor = 'rgba(' + tintShadow + ',' + (0.85 * tg).toFixed(2) + ')'; g2.shadowBlur = TINT_BLUR * tg; } g2.fillStyle = gAmb; g2.fillRect(x, y - h, aw, h); g2.shadowBlur = 0; g2.fillStyle = gAmbR; g2.fillRect(x, y, aw, h * 0.45); }   /* tinted: the played bars glow like the eclipsed rings, and the glow fades with the tint */
         }
@@ -786,7 +829,28 @@
         // baseline glow eases between 'sound' (1) and 'silence' (.55) instead of snapping — no more glow dropping out when a track starts quietly
         glow += ((any ? 1 : 0.55) - glow) * 0.05;
         // hb mode: the trace IS the line — the flat baseline fades out with the morph so there is only one line
-        paintLine = function () {   /* ★ THE RULE, learnt three times over (追記㉓): a line that must stay bright is REDRAWN - never spared through a mask band, because bar slices cross any band ("音量條的小股包"). The whole baseline (corona, amber, grey, play head, mark) lives in this closure so the dim mask can call it back at full strength. */
+        paintLine = function () {
+        if (sp) {   /* LOG-173 split line: [sxl, centre] wears the transcription's colour, [centre, sxr] the original's; heads at both outer ends */
+          headPx = sxr;
+          [[sxl, scx, SL, sxl], [scx, sxr, SR, sxr]].forEach(function (seg) {   /* 追記⑩(2): the eclipse corona - a soft band of the half's own light under its played line, with a radial cap at its head (the four-piano tint corona, per side) */
+            var c = seg[2], x0_ = seg[0], x1_ = seg[1], hx_ = seg[3]; if (x1_ - x0_ < 0.5 || c.p <= 0.02) return;
+            g2.save(); g2.globalCompositeOperation = 'lighter';
+            var cg = g2.createLinearGradient(0, y - TINT_CORONA, 0, y + TINT_CORONA), ca_ = TINT_CORONA_A * c.p;
+            cg.addColorStop(0, 'rgba(' + c.glow + ',0)'); cg.addColorStop(0.25, 'rgba(' + c.glow + ',' + (ca_ * 0.22).toFixed(3) + ')'); cg.addColorStop(0.5, 'rgba(' + c.glow + ',' + ca_.toFixed(3) + ')'); cg.addColorStop(0.75, 'rgba(' + c.glow + ',' + (ca_ * 0.22).toFixed(3) + ')'); cg.addColorStop(1, 'rgba(' + c.glow + ',0)');
+            g2.fillStyle = cg; g2.fillRect(x0_, y - TINT_CORONA, x1_ - x0_, TINT_CORONA * 2);
+            var cc = g2.createRadialGradient(hx_, y, 0, hx_, y, TINT_CORONA); cc.addColorStop(0, 'rgba(255,250,255,' + (ca_ * 0.9).toFixed(3) + ')'); cc.addColorStop(0.4, 'rgba(' + c.glow + ',' + (ca_ * 0.5).toFixed(3) + ')'); cc.addColorStop(1, 'rgba(' + c.glow + ',0)');
+            g2.fillStyle = cc; g2.fillRect(hx_ - TINT_CORONA, y - TINT_CORONA, TINT_CORONA * 2, TINT_CORONA * 2); g2.restore();
+          });
+          [[sxl, scx, SL], [scx, sxr, SR]].forEach(function (seg) { var c = seg[2]; if (seg[1] - seg[0] < 0.5) return; g2.lineWidth = 2 + (TINT_W - 2) * c.p; g2.strokeStyle = 'rgba(' + lerpCol(c.line, '255,252,255', 0.8 * c.p) + ',' + (0.55 + 0.45 * c.p).toFixed(3) + ')'; g2.shadowColor = 'rgba(' + c.glow + ',' + (0.6 + 0.35 * c.p).toFixed(2) + ')'; g2.shadowBlur = 18 * (1 - c.p) + TINT_BLUR * c.p; g2.beginPath(); g2.moveTo(seg[0], y); g2.lineTo(seg[1], y); g2.stroke(); });   /* the line itself goes white-hot as its side comes up */
+          g2.lineWidth = 2; g2.strokeStyle = 'rgba(255,255,255,' + (0.22 * ra).toFixed(3) + ')'; g2.shadowBlur = 0; g2.beginPath(); if (sxl > 0.5) { g2.moveTo(0, y); g2.lineTo(sxl, y); } if (sxr < W - 0.5) { g2.moveTo(sxr, y); g2.lineTo(W, y); } g2.stroke();
+          [[sxl, SL, -1], [sxr, SR, 1]].forEach(function (hd) { var c = hd[1]; g2.lineWidth = 2 + (TINT_W - 2) * c.p; g2.strokeStyle = 'rgba(255,252,255,' + (0.6 + 0.4 * c.p).toFixed(2) + ')'; g2.shadowColor = 'rgba(' + c.glow + ',.95)'; g2.shadowBlur = 24 * (1 - c.p) + TINT_BLUR * c.p; g2.beginPath(); g2.moveTo(hd[0], y); g2.lineTo(hd[0] - hd[2] * 14, y); g2.stroke(); });   /* white-cored heads in their half's glow */
+          var dxc = Math.round(scx); g2.shadowBlur = 0;   /* 追記⑪(3): a thin black seam with a soft glow around it, no edge lines */
+          var dg = g2.createLinearGradient(dxc - 14, 0, dxc + 14, 0); dg.addColorStop(0, 'rgba(' + SPLIT_LINE + ',0)'); dg.addColorStop(0.5, 'rgba(' + SPLIT_LINE + ',.13)'); dg.addColorStop(1, 'rgba(' + SPLIT_LINE + ',0)');
+          g2.fillStyle = dg; g2.fillRect(dxc - 14, 0, 28, H);
+          g2.fillStyle = 'rgba(2,2,8,.72)'; g2.fillRect(dxc - 1.5, 0, 3, H);
+          g2.shadowBlur = 0; return;
+        }
+        /* ★ THE RULE, learnt three times over (追記㉓): a line that must stay bright is REDRAWN - never spared through a mask band, because bar slices cross any band ("音量條的小股包"). The whole baseline (corona, amber, grey, play head, mark) lives in this closure so the dim mask can call it back at full strength. */
         if (lpx > edge && tg > 0) {   /* corona: a wide soft band of the eclipse colour under the line (vertical falloff) with a radial cap of the same falloff at the play head — one pass, no blur, so there is no seam */
           g2.save(); g2.globalCompositeOperation = 'lighter';
           var cg = g2.createLinearGradient(0, y - TINT_CORONA, 0, y + TINT_CORONA); cg.addColorStop(0, 'rgba(' + tintShadow + ',0)'); cg.addColorStop(0.25, 'rgba(' + tintShadow + ',' + (TINT_CORONA_A * 0.22 * tg).toFixed(3) + ')'); cg.addColorStop(0.5, 'rgba(' + tintShadow + ',' + (TINT_CORONA_A * tg).toFixed(3) + ')'); cg.addColorStop(0.75, 'rgba(' + tintShadow + ',' + (TINT_CORONA_A * 0.22 * tg).toFixed(3) + ')'); cg.addColorStop(1, 'rgba(' + tintShadow + ',0)');   /* hollow-ish: bright only near the line, a long thin tail */
@@ -838,7 +902,7 @@
     function sweep(bars, fromFrac) { gdbg({ ev: 'sweep', bars: !!bars, from: fromFrac }); clearT0 = performance.now(); clearBars = !!bars; clearFrom = (fromFrac == null) ? 1 : Math.max(0, Math.min(1, fromFrac)); }
     function flush() { for (var fi = 0; fi < levels.length; fi++) levels[fi] = 0; }   /* drop the held bar heights: on an audio-source handover the rising bars must carry the NEW source's sound, not the old one's residue */
     function yAim(t) { t = Math.max(0.05, Math.min(0.95, t)); if (t === yTo) return; ySpan = Math.abs(t - yCur) || 1e-4; yTo = t; }   /* record the distance so the glide lands in Y_MS whatever the journey */
-    return { start: start, connect: connect, sweep: sweep, flush: flush, hb: function () { return !!(wf && wf.hb()); }, squash: function (on) { squashTo = on ? 0 : 1; }, boost: function (k, dec) { boostK = k || 1; decayK = dec || 1; }, centre: function (on) { yAim(on ? 0.5 : yRatio); }, lineAt: function (r) { yAim(r == null ? yRatio : r); },   /* lineAt: an explicit resting height (null = home). LOG-132 aims it at whatever the phone's button panel leaves free */ head: function () { return headPx; }, tint: function (col, shadow, ms) { tintFrom = tintCur.slice(); tintTo = [col || AMB0, shadow || AMB0]; tintT0 = performance.now(); tintDur = col ? (ms || TINT_MS) : TINT_OUT_MS; },   /* null = back to amber, slowly */
+    return { start: start, connect: connect, sweep: sweep, flush: flush, hb: function () { return !!(wf && wf.hb()); }, squash: function (on) { squashTo = on ? 0 : 1; }, split: function (c) { splitCfg = c || null; }, splitInfo: function () { return splitCfg; }, boost: function (k, dec) { boostK = k || 1; decayK = dec || 1; }, centre: function (on) { yAim(on ? 0.5 : yRatio); }, lineAt: function (r) { yAim(r == null ? yRatio : r); },   /* lineAt: an explicit resting height (null = home). LOG-132 aims it at whatever the phone's button panel leaves free */ head: function () { return headPx; }, tint: function (col, shadow, ms) { tintFrom = tintCur.slice(); tintTo = [col || AMB0, shadow || AMB0]; tintT0 = performance.now(); tintDur = col ? (ms || TINT_MS) : TINT_OUT_MS; },   /* null = back to amber, slowly */
              ghost: function (frac) { ghostT0 = performance.now(); ghostFrac = Math.max(0, Math.min(1, frac == null ? 1 : frac)); ghostCol = tintCur[0]; gdbg({ ev: 'ghost', frac: frac, col: ghostCol }); }, tintNow: function () { return tintCur[0]; },   /* snapshot the outgoing fill: it fades out where it stood; tintNow = the line's current eased colour (the caption paints with the same brush) */
              ghostInfo: function () { if (!ghostT0) return null; var gp = (performance.now() - ghostT0) / GHOST_MS; return gp >= 1 ? null : { col: ghostCol, k: 1 - gp };
  },   /* the fading previous colour (k 1->0 on the ghost clock) — the caption's not-yet-repainted part wears it */
@@ -882,13 +946,13 @@
     // desktop caption doubles as a mini transport: pause / previous / next without opening the player window
     els.forEach(function (el) {
       var pp = el.querySelector('.np-pp'), pv = el.querySelector('.np-prev'), nx = el.querySelector('.np-next');
-      if (pp) pp.addEventListener('click', function () { if (stage.active()) stage.toggle(); else if (secStage.active()) secStage.toggle(); else { var ax = ext.api(); if (ax && ax.toggle) ax.toggle(); else player.toggle(); } refresh(); });   /* on the ADE stage the transport drives the four stems; an active section player (its state IS the caption) takes the pause too — never the background music */
+      if (pp) pp.addEventListener('click', function () { if (trStage.active()) trStage.toggle(); else if (stage.active()) stage.toggle(); else if (secStage.active()) secStage.toggle(); else { var ax = ext.api(); if (ax && ax.toggle) ax.toggle(); else player.toggle(); } refresh(); });   /* on the ADE stage the transport drives the four stems; an active section player (its state IS the caption) takes the pause too — never the background music */
       /* prev/next follow the SAME ownership chain as pause and mute: an active section stage (or a demo holding the
          audio) owns the transport, and neither has a next track to go to — the buttons must NOT fall through to the
          background music (pressing ⏭ on the section stage started the OS playlist underneath the show). */
-      if (pv) pv.addEventListener('click', function () { if (stage.active()) stage.prev(); else if (!secStage.active() && !ext.api()) player.prev(); refresh(); });
-      if (nx) nx.addEventListener('click', function () { if (stage.active()) stage.next(); else if (!secStage.active() && !ext.api()) player.next(); refresh(); });
-      var mu = el.querySelector('.np-mute'); if (mu) mu.addEventListener('click', function () { if (stage.active()) stage.toggleMute(); else if (secStage.active()) secStage.toggleMute(); else { var ax2 = ext.api(); if (ax2 && ax2.toggleMute) ax2.toggleMute(); else player.toggleMute(); } refresh(); });   /* on the stage the speaker silences the four stems; an active section player takes the mute the same way (the OS music is already ducked) */
+      if (pv) pv.addEventListener('click', function () { if (trStage.active()) trStage.prev(); else if (stage.active()) stage.prev(); else if (!secStage.active() && !ext.api()) player.prev(); refresh(); });
+      if (nx) nx.addEventListener('click', function () { if (trStage.active()) trStage.next(); else if (stage.active()) stage.next(); else if (!secStage.active() && !ext.api()) player.next(); refresh(); });
+      var mu = el.querySelector('.np-mute'); if (mu) mu.addEventListener('click', function () { if (trStage.active()) trStage.toggleMute(); else if (stage.active()) stage.toggleMute(); else if (secStage.active()) secStage.toggleMute(); else { var ax2 = ext.api(); if (ax2 && ax2.toggleMute) ax2.toggleMute(); else player.toggleMute(); } refresh(); });   /* on the stage the speaker silences the four stems; an active section player takes the mute the same way (the OS music is already ducked) */
       var t = el.querySelector('.np-title'); if (t) t.addEventListener('click', function () { openApp('player'); });
     });
     function arm() { player.prepare(); els.forEach(function (el) { el.style.transitionDuration = CONNECT_MS + 'ms'; }); if (!timer) timer = setInterval(refresh, 400); refresh(); }
@@ -1795,6 +1859,352 @@
     return { start: start, stop: function () { stop(false); }, active: function () { return active; }, src: function () { return src; }, toggle: toggle, prev: prev, next: function () { if (active) next(); }, veilMidi: veilMidi,
              toggleMute: function () { smuted = !smuted; if (mgain && ctx) mgain.gain.setTargetAtTime(smuted ? 0.0001 : 1, ctx.currentTime, 0.03); },
              debug: function () { var o = { active: active, ctx: ctx ? ctx.state : '-', idx: idx, playing: !!(ch && ch.playing), pos: ch && ch.playing && ctx ? +(ctx.currentTime - ch.t0).toFixed(2) : 0, dur: ch ? +ch.dur.toFixed(1) : 0, grow: +grow.toFixed(2), lx: Math.round(lx), ly: Math.round(ly), geo: geo, mwf: midiForm ? { data: !!(ch && ch.mwf), run: mwfRun, sparks: sparks.length } : false, veil: mwfVeil }; if (ch) KEYS.forEach(function (k) { var c = ch[k]; o[k] = { buf: !!c.buf, g: +c.g.gain.value.toFixed(3), pan: c.pan ? +c.pan.pan.value.toFixed(2) : null, lp: Math.round(c.lp.frequency.value) }; }); return o; } };
+  })();
+
+  // ============================================================ compare stage (LOG-172 · feat.transcription-compare · ADR-006 追記①)
+  /* A transcription played against its original, on the desktop itself. The stage is an `ext` source on the four-piano stage's terms:
+     the caption, the progress line and the WATERFALL follow its state() — notes = the work's reduced notes JSON, pos = the MIDI clock —
+     so the ten-voice fall the secret track already had is reused untouched (the MIDI never enters the repo, LOG-078).
+     Two audio paths for the original:
+       yt    — the original plays in a YouTube iframe (IFrame API); the rendition plays in WebAudio and chases yt.getCurrentTime()
+               (re-started when the two drift past TR_SYNC_S). The slider cross-fades yt.setVolume against the rendition gain.
+       local — the hosted copy and the rendition decode into ONE context and start on one ctx clock (the four-piano pattern);
+               the slider cross-fades, or in split mode pans the original hard left and the transcription hard right.
+     YouTube goes first; an embed error, a ready timeout or a play that never lands falls back to local and shows the notice
+     (ui.tr_notice: fallback + the left/right experiment, contact to remove). The visitor can switch by hand either way. */
+  var TR_YT_API = 'https://www.youtube.com/iframe_api', TR_YT_READY_MS = 9000, TR_YT_PLAY_MS = 7000, TR_SYNC_S = 0.08, TR_END_PAD_S = 1.2, TR_EXIT_MS = 600, TR_YT_LAG_S = -0.09, TR_LAG_STEP = 0.01, TR_SNAP = 25, TR_LEAD_S = 4, TR_HOLD_S = 0.2, TR_RESUME_HOLD_MS = 300;   /* TR_RESUME_HOLD_MS (追記⑳): after a resume or a seek YouTube fires PLAYING ~0.23 s before its sound is back (measured 0.88 s vs our 0.65 s); the rendition waits this long so it does not play alone */   /* 追記⑯: the pre-roll - from the moment the stage opens the MIDI clock runs from -TR_LEAD_S on the wall clock (the notes fall in at once) and holds at -TR_HOLD_S until the sound is ready; the sound then joins the clock where it stands, no jump, no count-in wait */   /* TR_WARM_MS (追記⑭): after the embed has proven it can play, the stage waits this long (its own transition) before the real start */   /* -0.09: the user's own ear on their machine (追記⑧); negative = the rendition may run slightly AHEAD of what getCurrentTime() says */   /* TR_YT_LAG_S (the user: youtube 的播放啟動延遲 0.2-0.5 s): getCurrentTime() runs ahead of what the video actually sounds; the MIDI clock trails it by this much in yt mode. The bar's 對齊 −/+ nudges it per machine (localStorage tr_ytlag) */
+  var trStage = (function () {
+    var HOST = desktop, WV = wave;
+    var active = false, wid = null, ui = null, veil = null, veil2 = null, ctx = null, master = null, mgain = null, muted = false, ducked = false, hint = null, langSeen = null;
+    var orig = null, tr = null;                                 /* channels: { off, url, buf, src, g, pan, done, total } — off: seconds into the file where the MIDI's 0 sits */
+    var mode = 'yt', split = false, mix = 0.5, pref = null, canYT = false, hasFallback = false;   /* pref: the visitor's own source choice; canYT: the work embeds a YouTube original */
+    var T0 = 0, pausedAt = 0, playing = false, started = false, dur = 0, pendingT = null, endAt = 0, preT0 = 0;   /* preT0: performance.now() when the stage opened (the pre-roll clock's zero) */   /* local clock: T = ctx.currentTime - T0 while playing, pausedAt otherwise; pendingT: a play(T) waiting for a buffer */
+    var yt = null, ytEl = null, ytReady = false, ytFailed = false, ytBuf = false, ytT = 0, ytAt = 0, ytReadyTimer = 0, ytPlayTimer = 0, ytPend = false, ytWarm = 0, resumeTimer = 0;   /* ytWarm: 0 cold, 1 warming (muted pre-roll), 2 warmed and parked at the start */   /* ytT/ytAt: last polled MIDI time and when; ytPend: a play() sent, waiting for PLAYING */
+    var raf = 0, secs = [], toastTimer = 0, dbg = null, ytLag = TR_YT_LAG_S, loLag = 0, origBase = 0, volT = 1, volO = 1, origGain = 1;   /* volT/volO (LOG-173): per-side volume trims on top of the lean (localStorage tr_volt / tr_volo) */
+    try { var vt_ = parseFloat(localStorage.getItem('tr_volt')); if (!isNaN(vt_)) volT = Math.max(0, Math.min(1, vt_)); var vo_ = parseFloat(localStorage.getItem('tr_volo')); if (!isNaN(vo_)) volO = Math.max(0, Math.min(1, vo_)); } catch (e) {}   /* loLag (追記⑦): the same 對齊 nudge in local mode, moving the hosted original against the transcription (per machine, tr_lolag) */
+    try { var lg = parseFloat(localStorage.getItem('tr_ytlag')); if (!isNaN(lg)) ytLag = Math.max(-1, Math.min(1, lg)); var ll = parseFloat(localStorage.getItem('tr_lolag')); if (!isNaN(ll)) loLag = Math.max(-1, Math.min(1, ll)); } catch (e) {}
+    function work() { return D.works.filter(function (x) { return x.id === wid; })[0] || null; }   /* re-read each time: D is swapped on a language switch */
+    function preT() { return Math.min(-TR_HOLD_S, -TR_LEAD_S + (performance.now() - preT0) / 1000); }   /* the pre-roll clock */
+    function T() {
+      if (!started) return preT();
+      if (mode === 'yt') return Math.max(-TR_LEAD_S, ytT - ytLag + ((playing && !ytBuf) ? (performance.now() - ytAt) / 1000 : 0));   /* may sit below 0 for the video's own lead-in */
+      return playing && ctx ? Math.max(-TR_LEAD_S - 1, ctx.currentTime - T0) : pausedAt;
+    }
+    /* ---- audio graph: one context, one limiter, one analyser (the desktop spectrum reads it); per channel gain -> panner */
+    function ensureCtx() {
+      if (ctx) return;
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      var lim = ctx.createDynamicsCompressor(); lim.threshold.value = -3; lim.knee.value = 6; lim.ratio.value = 12; lim.attack.value = 0.003; lim.release.value = 0.15;
+      master = ctx.createAnalyser(); master.fftSize = 2048; master.minDecibels = -96; master.maxDecibels = 6; master.smoothingTimeConstant = 0.8;
+      mgain = ctx.createGain(); mgain.gain.value = muted ? 0.0001 : 1;
+      lim.connect(master); master.connect(mgain); mgain.connect(ctx.destination); ctx.__out = lim;
+    }
+    function chan(url, off) {
+      var g = ctx.createGain(), pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null, an = ctx.createAnalyser(), gM = ctx.createGain(), mute = ctx.createGain();
+      an.fftSize = 2048; an.minDecibels = -96; an.maxDecibels = 6; an.smoothingTimeConstant = 0.8;   /* 追記⑬/⑭: a per-channel analyser on its own METER path (src -> gM -> an -> silent), so the bars can show a side even when its audible path is muted - the hosted copy runs in sync, muted, under the YouTube embed */
+      g.gain.value = 0.0001; gM.gain.value = 0.0001; mute.gain.value = 0;
+      if (pan) { g.connect(pan); pan.connect(ctx.__out); } else g.connect(ctx.__out);
+      gM.connect(an); an.connect(mute); mute.connect(ctx.__out);
+      return { url: url, off: off || 0, buf: null, src: null, g: g, gM: gM, pan: pan, an: an, done: 0, total: 0 };
+    }
+    var runSeq = 0;   /* one per start(): a download or decode that lands after the stage was left (or re-entered) belongs to a run that no longer exists */
+    function fetchInto(c, onDone) {
+      var run = runSeq, live = function () { return active && ctx && run === runSeq; };
+      var xhr = new XMLHttpRequest(); xhr.open('GET', '../' + c.url); xhr.responseType = 'arraybuffer';
+      xhr.onprogress = function (e) { if (!live()) return; c.done = e.loaded; c.total = e.lengthComputable ? e.total : 0; progress(); };
+      xhr.onload = function () {
+        if (!live()) return;
+        if (!(xhr.status >= 200 && xhr.status < 300)) return fail();
+        c.done = c.total = xhr.response.byteLength; progress();
+        ctx.decodeAudioData(xhr.response, function (buf) { if (!live()) return; c.buf = buf; onDone(); }, function () { if (live()) fail(); });
+      };
+      xhr.onerror = fail; xhr.send();
+    }
+    function fail() { if (hint) { hint.textContent = 'audio error'; hint.classList.remove('gone'); } }
+    function progress() {
+      if (!hint || started) return;
+      var d = 0, t = 0; [orig, tr].forEach(function (c) { if (c) { d += c.done; t += c.total; } });
+      hint.textContent = U.tr_loading + (t ? ' ' + Math.round(100 * d / t) + '%' : '');
+    }
+    /* a channel starts so that its file time = T + off; a negative file time (the render's leading silence is longer than T) waits it out */
+    function playCh(c, t) {
+      stopCh(c); if (!c || !c.buf || !ctx) return;
+      var b = t + c.off; if (b >= c.buf.duration) return;
+      var s = ctx.createBufferSource(); s.buffer = c.buf; s.connect(c.g); s.connect(c.gM);
+      if (b >= 0) s.start(ctx.currentTime, b); else s.start(ctx.currentTime - b, 0);
+      c.src = s; c.t0 = ctx.currentTime - t;
+    }
+    function stopCh(c) { if (c && c.src) { try { c.src.stop(); } catch (e) {} try { c.src.disconnect(); } catch (e) {} c.src = null; } }
+    /* ---- the slider: equal-power cross-fade, or (local only) a hard left/right split with the slider as balance */
+    function applyMix() {
+      if (!ctx) return;
+      var now = ctx.currentTime, oG, tG;
+      if (split && hasFallback) { oG = Math.min(1, 2 * (1 - mix)); tG = Math.min(1, 2 * mix); }
+      else { oG = Math.cos(mix * Math.PI / 2); tG = Math.sin(mix * Math.PI / 2); }
+      tG *= volT; oG *= volO;
+      WV.split({ kL: tG, kR: oG });   /* the line's two halves follow each side's EFFECTIVE loudness (lean × volume trim) */
+      if (ui) { var pctEl = ui.querySelector('.tr-pct'); if (pctEl) pctEl.textContent = Math.round(mix * 100) + '% / ' + Math.round((1 - mix) * 100) + '%'; }   /* 追記⑩(5): transcription % / original % above the slider */
+      var oGyt = oG; oG *= origGain;   /* 追記⑩(1): YouTube is not trimmed - the ceiling is the hosted copy's alone */   /* 追記⑨(3): the original is inherently louder (measured -11.8 vs -20.7 dBFS RMS); media.original.gain (0.36 = -8.9 dB) is its ceiling, so the two sides balance at equal slider positions. The LINE was fed above, before this trim: equal loudness = equal brightness */
+      if (tr) { tr.g.gain.setTargetAtTime(Math.max(0.0001, tG), now, 0.02); tr.gM.gain.setTargetAtTime(Math.max(0.0001, tG), now, 0.02); if (tr.pan) tr.pan.pan.setTargetAtTime(split ? -1 : 0, now, 0.02); }   /* 追記⑨(2): split = transcription in the LEFT ear, the original in the RIGHT - the same sides as the slider and the line */
+      var cachedAudible = mode === 'local' || (split && hasFallback);   /* 追記⑱(1): in yt mode the split hands the original's ear to the cached copy (the video is muted, its picture stays) */
+      if (orig) { orig.g.gain.setTargetAtTime(cachedAudible ? Math.max(0.0001, oG) : 0.0001, now, 0.02); orig.gM.gain.setTargetAtTime(Math.max(0.0001, oGyt), now, 0.02); if (orig.pan) orig.pan.pan.setTargetAtTime(split ? 1 : 0, now, 0.02); }   /* 追記⑭(2): the meter follows the video's level (lean x trim, no ceiling) - the bars show the original even in yt mode */
+      if (yt && ytReady) { try { yt.setVolume(mode === 'yt' && !split ? Math.round(100 * oGyt) : 0); } catch (e) {} }
+    }
+    /* ---- transport on the MIDI clock */
+    function play(t) {
+      if (!ctx) return; if (ctx.state === 'suspended') ctx.resume();
+      if (mode === 'yt') {
+        if (!yt || !ytReady) { pendingT = t; return; }
+        var o = work().media.original; ytT = t; ytAt = performance.now(); ytBuf = true; ytPend = true;
+        try { yt.seekTo(t + (o.offset_s || 0), true); yt.playVideo(); } catch (e) { return ytFail('call'); }
+        clearTimeout(ytPlayTimer); ytPlayTimer = setTimeout(function () { if (active && mode === 'yt' && ytPend) ytFail('play'); }, TR_YT_PLAY_MS);
+        return;
+      }
+      if (!tr.buf || (orig && !orig.buf)) { pendingT = t; return; }
+      T0 = ctx.currentTime - t; playing = true; started = true; pausedAt = t; playCh(orig, t); playCh(tr, t); applyMix(); landed();
+    }
+    function pause() {
+      if (!playing) return;
+      if (mode === 'yt') { try { yt.pauseVideo(); } catch (e) {} return; }   /* the PAUSED event lands the rest */
+      pausedAt = T(); playing = false; stopCh(orig); stopCh(tr);
+    }
+    function seek(t) {
+      t = Math.max(0, Math.min(dur || t, t));
+      if (mode === 'yt') { if (playing) play(t); else { ytT = t; ytAt = performance.now(); pausedAt = t; try { yt.seekTo(t + (work().media.original.offset_s || 0), true); yt.pauseVideo(); } catch (e) {} } return; }
+      if (playing) play(t); else pausedAt = t;
+    }
+    function toggle() { if (!started || T() < 0) return; if (playing) pause(); else play(mode === 'yt' ? T() : pausedAt); }   /* no pausing inside the count-in */
+    var hintTimer = 0;
+    function landed() { if (hint && !hint.classList.contains('gone')) { hint.textContent = U.tr_hint; clearTimeout(hintTimer); hintTimer = setTimeout(function () { if (hint) hint.classList.add('gone'); }, 4000); } if (!raf) raf = requestAnimationFrame(tick); }
+    function maybeStart() {
+      if (started || !active) return;
+      var ok = tr && tr.buf && (mode === 'yt' ? ytReady : (!orig || orig.buf));
+      if (!ok) return;
+      if (mode === 'yt' && ytWarm === 0) {   /* 追記⑭(1): warm the embed first - muted pre-roll until it really plays, then park; play(0) follows after TR_WARM_MS (onYT) */
+        ytWarm = 1; ytPend = true; if (hint) hint.textContent = U.tr_yt_wait;
+        try { yt.mute(); yt.playVideo(); } catch (e) { return ytFail('call'); }   /* from the top: the video's own lead-in is the last stretch of the pre-roll */
+        clearTimeout(ytPlayTimer); ytPlayTimer = setTimeout(function () { if (active && mode === 'yt' && ytPend) ytFail('play'); }, TR_YT_PLAY_MS);
+        return;
+      }
+      if (mode === 'yt') return;   /* yt: the warm-up's PLAYING starts it */
+      var t = preT(); T0 = ctx.currentTime - t; started = true; playing = true; pausedAt = t; playCh(orig, t); playCh(tr, t); applyMix(); landed();   /* local: join the pre-roll clock where it stands; negative file times start later by themselves */
+    }
+    /* ---- YouTube (IFrame API), loaded only when the stage opens */
+    function loadYT() {
+      if (window.YT && window.YT.Player) return makeYT();
+      var prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = function () { if (prev) try { prev(); } catch (e) {} if (active) makeYT(); };
+      if (!document.querySelector('script[src="' + TR_YT_API + '"]')) { var s = document.createElement('script'); s.src = TR_YT_API; s.async = true; s.onerror = function () { ytFail('script'); }; document.head.appendChild(s); }
+      clearTimeout(ytReadyTimer); ytReadyTimer = setTimeout(function () { if (active && !ytReady) ytFail('ready'); }, TR_YT_READY_MS);
+    }
+    function makeYT() {
+      if (!active || yt) return; var o = work().media.original;
+      try {
+        yt = new YT.Player(ytEl, { host: 'https://www.youtube-nocookie.com', videoId: o.id, width: 320, height: 180,
+          playerVars: { autoplay: 0, controls: 0, rel: 0, modestbranding: 1, playsinline: 1, disablekb: 1, fs: 0, iv_load_policy: 3, origin: location.origin },
+          events: { onReady: function () { ytReady = true; clearTimeout(ytReadyTimer); paintSrc(); applyMix(); if (muted) try { yt.mute(); } catch (e) {} if (pendingT != null && mode === 'yt') { var t = pendingT; pendingT = null; play(t); } else maybeStart(); },
+                    onStateChange: onYT, onError: function () { ytFail('error'); } } });
+      } catch (e) { ytFail('ctor'); }
+      clearTimeout(ytReadyTimer); ytReadyTimer = setTimeout(function () { if (active && !ytReady) ytFail('ready'); }, TR_YT_READY_MS);
+    }
+    function onYT(e) {
+      if (!active || mode !== 'yt') return; var s = e.data, o = work().media.original;
+      if (ytWarm === 1) {   /* 追記⑯: the muted pre-roll play from the top IS the start - the first PLAYING joins the clock (the video's own lead-in runs below 0), the sound is simply unmuted. A pause+seek+play here re-spun the decoder and the whole page hitched (the user: 畫面全部都會頓一下、影片微微載入一下) */
+        if (s === 1) { ytPend = false; clearTimeout(ytPlayTimer); ytWarm = 2; ytBuf = false; pollYT(); started = true; playing = true; try { if (!muted) yt.unMute(); } catch (e) {} playCh(tr, T()); playCh(orig, T()); applyMix(); landed(); }
+        return;
+      }
+      if (s === 1) { ytPend = false; clearTimeout(ytPlayTimer); ytBuf = false; pollYT(); playing = true; started = true; applyMix(); landed();
+        clearTimeout(resumeTimer); resumeTimer = setTimeout(function () { if (active && mode === 'yt' && playing && !ytBuf) { playCh(tr, T()); playCh(orig, T()); } }, TR_RESUME_HOLD_MS); }   /* 追記⑳: the rendition (and the muted hosted copy behind the bars) join only once the video's sound is back */
+      else if (s === 2) { clearTimeout(resumeTimer); pollYT(); pausedAt = T(); playing = false; stopCh(tr); stopCh(orig); }
+      else if (s === 3) { clearTimeout(resumeTimer); ytBuf = true; stopCh(tr); stopCh(orig); }
+      else if (s === 0) { playing = false; stopCh(tr); stopCh(orig); end(); }
+    }
+    function pollYT() { if (!yt || !ytReady) return; try { var t = yt.getCurrentTime(); if (typeof t === 'number' && !isNaN(t)) { ytT = t - (work().media.original.offset_s || 0); ytAt = performance.now(); } } catch (e) {} }
+    function ytFail(why) {
+      if (!active || ytFailed) return; ytFailed = true; ytPend = false; clearTimeout(ytReadyTimer); clearTimeout(ytPlayTimer);
+      trail.log('tr-yt-fail', why);
+      if (mode === 'yt') { if (hasFallback) { setMode('local', true); toast(U.tr_yt_fail); } else fail(); }
+      paintSrc();
+    }
+    /* ---- source switch (by hand or by fallback): the MIDI clock and the play state carry over */
+    function setMode(m, auto) {
+      if (m === mode) return; if (m === 'yt' && (!canYT || ytFailed)) return; if (m === 'local' && !hasFallback) return;
+      var t = T(), was = playing || ytPend;
+      if (mode === 'yt') { ytPend = false; clearTimeout(ytPlayTimer); try { yt.pauseVideo(); } catch (e) {} playing = false; stopCh(tr); }
+      else { playing = false; stopCh(orig); stopCh(tr); }
+      mode = m; pausedAt = t; if (!auto) pref = m;
+      if (ui) { ui.classList.toggle('local', mode === 'local'); var yb = ui.querySelector('.tr-yt'); if (yb) yb.classList.toggle('off', mode !== 'yt'); }
+      paintSrc(); applyMix();
+      if (mode === 'yt' && ytWarm === 1) return;   /* the warm-up's PLAYING will start it */
+      if (was || !started) play(t);
+    }
+    function end() {
+      playing = false; stopCh(orig); stopCh(tr);
+      if (hint) { hint.textContent = U.tr_end; hint.classList.remove('gone'); }
+      setTimeout(function () { if (active) stop(false); }, 1400);
+    }
+    /* ---- UI */
+    function build(w) {
+      ui = document.createElement('div'); ui.className = 'stage-ui tr-ui'; ui.setAttribute('aria-label', w.title);
+      ui.innerHTML = '<div class="st-hint">' + esc(U.tr_loading) + '</div>' +
+        '<div class="st-head"><button class="st-exit" type="button">' + esc(U.stage_exit) + '</button></div>' +
+        '<div class="tr-yt"><div class="tr-yt-in"></div></div>' +   /* YT.Player REPLACES the element it is given: the inner div goes, the outer keeps the box, the dimming class and the rounded corners */
+        '<div class="tr-bar">' +
+          '<div class="tr-row tr-row1"><span class="tr-vol tr-vol-l"><input type="range" class="tr-volt" min="0" max="1000" value="' + Math.round(volT * 1000) + '"></span><span class="tr-lbl tr-lo"></span><span class="tr-mixwrap"><b class="tr-pct"></b><input class="tr-mix" type="range" min="0" max="1000" value="' + Math.round((1 - mix) * 1000) + '" aria-label="mix" list="tr-mix-ticks"><datalist id="tr-mix-ticks"><option value="500"></option></datalist></span><span class="tr-lbl tr-hi"></span><span class="tr-vol tr-vol-r"><input type="range" class="tr-volo" min="0" max="1000" value="' + Math.round(volO * 1000) + '"></span></div>' +   /* 追記⑱: row 1 = the pan, symmetric: volume · transcription · [pan] · original · volume */
+          '<div class="tr-row tr-row2"><div class="tr-modes"><button type="button" data-mode="xf"></button><button type="button" data-mode="lr"></button></div>' +
+            '<div class="tr-src"><i class="dot"></i><span class="tr-src-t"></span><button type="button" class="tr-src-sw"></button></div>' +
+            '<span class="tr-align"><span class="tr-align-l"></span><button type="button" data-nudge="-1" aria-label="earlier">\u2212</button><b class="tr-lag"></b><button type="button" data-nudge="1" aria-label="later">+</button></span></div>' +   /* row 2 = modes · source · align (the i button is gone: the notice shows itself) */
+          '<div class="tr-secs"><div class="tr-cues"></div><div class="tr-seek" role="slider" aria-label="seek"><i></i></div></div>' +   /* 追記⑲: the cues live ON the seek bar - a tick through the bar at each cue, the button beside it (rows alternate) */
+          '<div class="tr-toast"></div>' +
+        '</div>' +
+        '<div class="tr-notice" hidden><b></b><p></p><em></em></div>';   /* 追記⑱: lies OVER the video box whenever the cached copy is the one sounding (the switch, the automatic fallback, or the split in yt mode) */
+      hint = ui.querySelector('.st-hint'); ytEl = ui.querySelector('.tr-yt-in');
+      veil = document.createElement('div'); veil.className = 'tr-veil'; veil2 = document.createElement('div'); veil2.className = 'tr-veil tr-veil-dim'; var waveEl = $('#wave'); if (waveEl) { HOST.insertBefore(veil, waveEl); HOST.insertBefore(veil2, waveEl); } else { HOST.appendChild(veil); HOST.appendChild(veil2); }   /* 追記⑫(1)/⑬: the hue veil blends (mix-blend-mode: color) against the desktop itself - it must NOT be a child of another stacking context, or it only blends with that; the vignette is its sibling */   /* 追記⑪(6): the eclipse tint over the desktop - under the line, the notes and the windows (the four-piano stage's placement) */
+      HOST.appendChild(ui); document.body.classList.add('tr-on'); requestAnimationFrame(function () { if (ui) ui.classList.add('in'); if (veil) veil.classList.add('in'); if (veil2) veil2.classList.add('in'); });   /* body.tr-on (追記⑭): the sticky note is torn off while the stage runs */
+      ui.querySelector('.st-exit').addEventListener('click', function () { stop(false); });
+      var mixEl = ui.querySelector('.tr-mix'); mixEl.addEventListener('input', function () { var v = +mixEl.value; if (Math.abs(v - 500) <= TR_SNAP && v !== 500) { v = 500; mixEl.value = 500; } mix = 1 - v / 1000; applyMix(); });   /* left = transcription (mix 1), right = original (mix 0); 追記⑨(7): the thumb snaps to the centre within TR_SNAP */
+      var vt = ui.querySelector('.tr-volt'), vo = ui.querySelector('.tr-volo');
+      vt.addEventListener('input', function () { volT = vt.value / 1000; try { localStorage.setItem('tr_volt', String(volT)); } catch (e) {} applyMix(); });
+      vo.addEventListener('input', function () { volO = vo.value / 1000; try { localStorage.setItem('tr_volo', String(volO)); } catch (e) {} applyMix(); });
+      ui.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-mode]'); if (b) { if (b.dataset.mode === 'lr' && !hasFallback) return; split = b.dataset.mode === 'lr'; paintModes(); paintSrc(); applyMix(); return; }   /* 追記⑱(1): the split works in yt mode too - the cached copy carries the original's ear while the video keeps the picture */
+        var sw = e.target.closest('.tr-src-sw'); if (sw) { setMode(mode === 'yt' ? 'local' : 'yt', false); return; }
+        var nd = e.target.closest('[data-nudge]'); if (nd) { setLag((mode === 'yt' ? ytLag : loLag) + TR_LAG_STEP * parseInt(nd.dataset.nudge, 10)); return; }
+        var sc = e.target.closest('.tr-secs [data-t]'); if (sc) { seek(parseFloat(sc.dataset.t)); return; }
+        var ca = e.target.closest('.tr-notice [data-app]'); if (ca) { e.preventDefault(); openApp(ca.dataset.app); return; }
+      });
+      var seekEl = ui.querySelector('.tr-seek'), drag = false, at = function (ev) { var r = seekEl.getBoundingClientRect(); return Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)); };
+      seekEl.addEventListener('pointerdown', function (ev) { drag = true; try { seekEl.setPointerCapture(ev.pointerId); } catch (e) {} if (dur) seek(at(ev) * dur); });
+      seekEl.addEventListener('pointermove', function (ev) { if (drag && dur) seek(at(ev) * dur); });
+      seekEl.addEventListener('pointerup', function () { drag = false; }); seekEl.addEventListener('pointercancel', function () { drag = false; });
+      relabel();
+    }
+    function setLag(v) {
+      v = Math.round(Math.max(-1, Math.min(1, v)) * 100) / 100;
+      if (mode === 'yt') { ytLag = v; try { localStorage.setItem('tr_ytlag', String(ytLag)); } catch (e) {} }   /* the drift check in tick() re-starts the rendition on the new clock within a frame */
+      else { loLag = v; try { localStorage.setItem('tr_lolag', String(loLag)); } catch (e) {} if (orig) { orig.off = origBase + loLag; if (playing) playCh(orig, T()); } }   /* local: the hosted original moves, the transcription (and the waterfall) stay */
+      paintLag();
+    }
+    function paintLag() { if (!ui) return; var a = ui.querySelector('.tr-align'); if (!a) return; var v = mode === 'yt' ? ytLag : loLag; a.querySelector('.tr-align-l').textContent = U.tr_align; a.querySelector('.tr-lag').textContent = (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' s'; }
+    function paintModes() { if (!ui) return; ui.querySelectorAll('[data-mode]').forEach(function (b) { b.classList.toggle('on', (b.dataset.mode === 'lr') === split); }); var lr = ui.querySelector('[data-mode="lr"]'); if (lr) lr.disabled = !hasFallback; }
+    function paintSrc() {
+      if (!ui) return; var s = ui.querySelector('.tr-src'), t = ui.querySelector('.tr-src-t'), sw = ui.querySelector('.tr-src-sw');
+      var cachedSounds = hasFallback && (mode === 'local' || split);   /* the cached copy is what you hear: the switch, the fallback, or the split's right ear */
+      s.classList.toggle('local', cachedSounds); t.textContent = mode === 'local' ? U.tr_src_local : (split ? U.tr_src_split : U.tr_src_yt);
+      sw.textContent = mode === 'yt' ? U.tr_switch_local : U.tr_switch_yt;
+      sw.hidden = !(canYT && hasFallback) || (mode === 'local' && ytFailed);   /* no way back to a YouTube that already failed this run */
+      var yb = ui.querySelector('.tr-yt'); if (yb) { yb.classList.toggle('off', mode !== 'yt'); yb.hidden = !canYT; }
+      paintLag();
+      var n = ui.querySelector('.tr-notice'); if (n) n.hidden = !cachedSounds;   /* forced up, over the video, for as long as the cached copy is the one sounding */
+      paintModes();
+    }
+    function relabel() {
+      if (!ui) return; var w = work(); if (!w) return; langSeen = D.lang;
+      ui.querySelector('.st-exit').textContent = U.stage_exit;
+      ui.querySelector('.tr-lo').textContent = U.tr_trans; ui.querySelector('.tr-hi').textContent = U.tr_orig;
+      ui.querySelector('.tr-volt').title = U.tr_vol + ' · ' + U.tr_trans; ui.querySelector('.tr-volo').title = U.tr_vol + ' · ' + U.tr_orig; ui.querySelector('.tr-volt').setAttribute('aria-label', U.tr_vol + ' ' + U.tr_trans); ui.querySelector('.tr-volo').setAttribute('aria-label', U.tr_vol + ' ' + U.tr_orig);
+      ui.querySelector('[data-mode="xf"]').textContent = U.tr_mode_xf; ui.querySelector('[data-mode="lr"]').textContent = U.tr_mode_lr;
+      secs = w.sections || [];
+      ui.querySelector('.tr-cues').innerHTML = secs.map(function (s, i) { return '<b class="tick" data-i="' + i + '"></b><button type="button" data-t="' + s.t + '" class="' + (i % 2 ? 'alt' : '') + '">' + esc(s.label) + '</button>'; }).join('');
+      layoutSecs();
+      var n = ui.querySelector('.tr-notice'); n.querySelector('b').textContent = U.tr_notice_head; n.querySelector('em').textContent = U.tr_notice_note;
+      n.querySelector('p').innerHTML = esc(U.tr_notice).replace('{contact}', '<a data-app="contact" href="#">' + esc(U.app_contact) + '</a>');
+      if (hint && !hint.classList.contains('gone') && started) hint.textContent = U.tr_hint;
+      paintSrc();
+    }
+    function paintCaption() {   /* 追記⑮(3): the now-playing name wears the stage's two colours (the four-piano stage paints its own red the same way; cleared in stop()) */
+      var el = document.querySelector('#np-desktop .np-title'); if (!el) return;
+      if (el.dataset.trTint !== '1') { el.dataset.trTint = '1'; el.style.color = 'rgb(214,150,255)'; el.style.textShadow = '0 0 12px rgba(150,110,240,.55)'; }   /* solid colours, no clipped gradient: transparent text plus a text-shadow paints the glyphs twice (追記⑮ first try) */
+      var tg_ = el.querySelector('.np-tag'), rs_ = el.querySelector('.np-rest');
+      if (tg_ && tg_.dataset.trTint !== '1') { tg_.dataset.trTint = '1'; tg_.style.color = 'rgb(168,156,255)'; }   /* the app name in the transcription's blue-violet */
+      if (rs_ && rs_.dataset.trTint !== '1') { rs_.dataset.trTint = '1'; rs_.style.color = 'rgb(226,146,220)'; }   /* the piece in the original's red-violet */
+    }
+    function clearCaption() { var el = document.querySelector('#np-desktop .np-title'); if (!el) return; [el].concat(Array.prototype.slice.call(el.querySelectorAll('.np-tag, .np-rest'))).forEach(function (e_) { delete e_.dataset.trTint; e_.style.color = ''; e_.style.textShadow = ''; e_.style.backgroundImage = ''; e_.style.webkitBackgroundClip = ''; e_.style.backgroundClip = ''; }); }
+    function layoutSecs() {   /* 追記⑱(3): each cue at its place on the timeline; neighbours alternate rows so close cues do not collide */
+      if (!ui || !secs.length) return; var D_ = dur || (secs[secs.length - 1].t + 12), el = ui.querySelector('.tr-cues');
+      el.querySelectorAll('.tick').forEach(function (b, i) { b.style.left = (100 * secs[i].t / D_).toFixed(2) + '%'; });
+      el.querySelectorAll('[data-t]').forEach(function (b, i) { b.style.left = (100 * secs[i].t / D_).toFixed(2) + '%'; });
+    }
+    function toast(msg) { if (!ui) return; var t = ui.querySelector('.tr-toast'); t.textContent = msg; clearTimeout(toastTimer); toastTimer = setTimeout(function () { if (ui) t.textContent = ''; }, 8000); }
+    function tick() {
+      raf = 0; if (!active) return;
+      if (mode === 'yt' && playing) {
+        pollYT();
+        if (tr && tr.src && !ytBuf) { var tt = ctx.currentTime - tr.t0, drift = tt - T(); if (Math.abs(drift) > TR_SYNC_S) { playCh(tr, T()); playCh(orig, T()); } }   /* the rendition (and the muted hosted copy behind the bars) chase the video */
+      }
+      var t = T();
+      paintCaption();
+      if (ui) {
+        var cur = -1; for (var i = 0; i < secs.length; i++) if (secs[i].t <= t + 0.001) cur = i;
+        ui.querySelectorAll('.tr-secs [data-t]').forEach(function (b, i) { b.classList.toggle('on', i === cur); });
+        var bar = ui.querySelector('.tr-seek i'); if (bar) bar.style.width = (dur ? Math.min(100, t / dur * 100) : 0) + '%';
+        if (D.lang !== langSeen) relabel();
+      }
+      if (mode === 'local' && playing && dur && t >= dur + TR_END_PAD_S) { end(); return; }
+      raf = requestAnimationFrame(tick);
+    }
+    /* ---- open / close */
+    function start(id) {
+      var w = D.works.filter(function (x) { return x.id === id && x.type === 'transcription'; })[0]; if (!w || PHONE) return;
+      if (active) stop(true);
+      if (typeof stage !== 'undefined' && stage.active()) stage.stop();
+      if (typeof secStage !== 'undefined' && secStage.active()) secStage.stop();
+      trail.log('tr', id);
+      active = true; runSeq++; wid = id; started = false; preT0 = performance.now(); playing = false; pausedAt = 0; pendingT = null; dur = 0; muted = false; split = false; mix = 0.5;
+      yt = null; ytReady = false; ytFailed = false; ytBuf = false; ytPend = false; ytWarm = 0; ytT = 0; ytAt = performance.now();
+      var m = w.media, o = m.original || {}, r = m.rendition || {};
+      canYT = o.kind === 'youtube'; hasFallback = canYT ? !!o.fallback : !!o.src; origGain = (o.gain != null) ? o.gain : 1;
+      if (/[?&]debug/.test(location.search) && /[?&]trlocal/.test(location.search)) pref = 'local';   /* the probe: skip YouTube, local from the first note */
+      mode = (canYT && !(pref === 'local' && hasFallback)) ? 'yt' : 'local';
+      ensureCtx();   /* born inside the opening click (LOG-130): a context made later starts suspended */
+      tr = chan(r.src, r.offset_s || 0);
+      origBase = canYT ? (o.fallback_offset_s != null ? o.fallback_offset_s : (o.offset_s || 0)) : (o.offset_s || 0);   /* 追記⑦: the hosted copy may sit on its own clock (fallback_offset_s); without one it is taken as a rip of the embed and shares offset_s */
+      orig = hasFallback ? chan(canYT ? o.fallback : o.src, origBase + loLag) : null;   /* the hosted copy is fetched either way: it is the fallback AND the split mode's source */
+      build(w);
+      if (ui) ui.classList.toggle('local', mode === 'local');
+      if (!raf) raf = requestAnimationFrame(tick);   /* the pre-roll: the bar and the clock run from the moment the stage opens */
+      fetchInto(tr, function () { dur = Math.max(0, tr.buf.duration - tr.off); layoutSecs(); if (pendingT != null && (mode === 'yt' || !orig || orig.buf)) { var t = pendingT; pendingT = null; play(t); } else maybeStart(); });
+      if (orig) fetchInto(orig, function () { if (pendingT != null && mode === 'local' && tr.buf) { var t = pendingT; pendingT = null; play(t); } else maybeStart(); });
+      if (canYT) loadYT();
+      WV.sweep(true, player.state().frac || 0);
+      if (player.isPlaying()) { ducked = true; player.duck(true); }
+      document.addEventListener('keydown', onKey);
+      if (/[?&]debug/.test(location.search)) window.__trLine = function () { return WV.splitInfo(); };   /* survives stop(): the probe checks the line was handed back */
+      if (/[?&]debug/.test(location.search)) window.__tr = { state: function () { return src.state(); }, mode: function () { return mode; }, setMode: function (m) { setMode(m, false); }, mix: function (v) { if (v != null) { mix = v; if (ui) ui.querySelector('.tr-mix').value = Math.round((1 - v) * 1000); applyMix(); } return mix; }, split: function (v) { if (v != null && mode === 'local') { split = !!v; paintModes(); applyMix(); } return split; }, seek: seek, toggle: toggle, ytFail: function () { ytFail('probe'); }, lag: function (v) { if (v != null) setLag(v); return mode === 'yt' ? ytLag : loLag; }, vol: function (side, v) { if (v != null) { if (side === 't') volT = v; else volO = v; if (ui) { ui.querySelector(side === 't' ? '.tr-volt' : '.tr-volo').value = Math.round(v * 1000); } applyMix(); } return side === 't' ? volT : volO; }, debug: debug };
+    }
+    function onKey(e) { if (e.key === 'Escape') stop(false); }
+    function stop(immediate) {
+      if (!active) return; active = false;
+      clearTimeout(ytReadyTimer); clearTimeout(ytPlayTimer); clearTimeout(toastTimer); clearTimeout(resumeTimer); document.removeEventListener('keydown', onKey);
+      playing = false; stopCh(orig); stopCh(tr);
+      if (yt) { try { yt.destroy(); } catch (e) {} yt = null; } ytReady = false;
+      if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; master = null; mgain = null; }
+      orig = tr = null; if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      WV.split(null);
+      var u = ui, v_ = veil, v2_ = veil2; ui = null; veil = null; veil2 = null; hint = null; ytEl = null; document.body.classList.remove('tr-on'); clearCaption();
+      if (u) { u.classList.remove('in'); setTimeout(function () { u.remove(); }, immediate ? 0 : TR_EXIT_MS); }
+      [v_, v2_].forEach(function (vv) { if (vv) { vv.classList.remove('in'); setTimeout(function () { vv.remove(); }, immediate ? 0 : TR_EXIT_MS + 300); } });
+      var wasDucked = ducked; ducked = false;
+      if (wasDucked) setTimeout(function () { player.unduck(); }, immediate ? 0 : 300);
+      if (window.__tr) try { delete window.__tr; } catch (e) {}
+    }
+    function debug() { return { active: active, mode: mode, split: split, mix: +mix.toFixed(3), lag: ytLag, loLag: loLag, volT: volT, volO: volO, origGain: origGain, warm: ytWarm, line: WV.splitInfo(), playing: playing, started: started, pos: +T().toFixed(2), dur: +dur.toFixed(1), yt: { ready: ytReady, failed: ytFailed, buf: ytBuf, pend: ytPend }, ctx: ctx ? ctx.state : '-',
+      orig: orig ? { buf: !!orig.buf, src: !!orig.src, g: +orig.g.gain.value.toFixed(3), pan: orig.pan ? +orig.pan.pan.value.toFixed(2) : null, off: orig.off } : null,
+      tr: tr ? { buf: !!tr.buf, src: !!tr.src, g: +tr.g.gain.value.toFixed(3), pan: tr.pan ? +tr.pan.pan.value.toFixed(2) : null, off: tr.off } : null }; }
+    /* now-playing source while the stage runs: caption + progress line + spectrum analyser + the waterfall's notes and clock */
+    var src = {
+      state: function () {
+        var w = work(), t = T(), tag = TITLES.works, rest = w ? w.title : '';
+        return { title: tag + ' | ' + rest, parts: { tag: tag, rest: rest }, id: 'tr', pos: Math.min(t, dur || t), dur: dur, playing: playing, started: started, frac: dur ? Math.max(0, Math.min(1, t / dur)) : 0,
+                 muted: muted, vol: 1, notes: w && w.media ? (w.media.notes || '') : '', sr: ctx ? ctx.sampleRate : 48000, active: true, wf: true, wfx: true };   /* wfx: the eclipse note look (追記⑨) */   /* wf: the waterfall shows for this source regardless of the page's roll */
+      },
+      analyser: function () { return master; },
+      analysers: function () { return [tr ? tr.an : null, orig ? orig.an : null]; },   /* [left = transcription, right = original]; in yt mode the original's is silent (the video's sound is not ours to read) */
+      toggle: toggle
+    };
+    function toggleMute() { muted = !muted; if (mgain && ctx) mgain.gain.setTargetAtTime(muted ? 0.0001 : 1, ctx.currentTime, 0.03); if (yt && ytReady) { try { if (muted) yt.mute(); else yt.unMute(); } catch (e) {} } }
+    function stepSec(d) { if (!secs.length) return; var t = T(), cur = -1, ref = d < 0 ? t - 1.5 : t + 0.001; for (var i = 0; i < secs.length; i++) if (secs[i].t <= ref) cur = i; var n = d < 0 ? Math.max(0, cur) : Math.min(secs.length - 1, cur + 1); seek(secs[n].t); }   /* prev: back to this section's start when more than 1.5 s into it, else the one before */
+    return { start: start, stop: function (im) { stop(!!im); }, active: function () { return active; }, src: function () { return src; }, toggle: toggle, prev: function () { stepSec(-1); }, next: function () { stepSec(1); }, toggleMute: toggleMute, relabel: relabel, debug: debug };
   })();
 
   function openApp(app) {
@@ -5189,6 +5599,7 @@
     trail.log('demo', id);
     if (PHONE) return phone.openDemo(id);
     var d = D.demos.filter(function (x) { return x.path === id; })[0]; if (!d) return;
+    if (trStage.active()) trStage.stop(true);   /* LOG-172: one stage at a time - the compare stage leaves before another opens */
     if (d.native === 'stage') { minimize('demos'); if (secStage.active()) secStage.stop(); return stage.start(d); }   /* shell-native: the desktop itself is the stage, no iframe */
     if (d.stage_ui) { minimize('demos'); return secStage.start(d); }   /* stage-capable iframe demo: presented on the desktop instead of a window (the phone keeps its panel) */
     var key = 'demo-' + id.replace(/[^a-z0-9-]/gi, '-'), w = wins[key];
@@ -5338,10 +5749,12 @@
     var m = w.media || {}, acts = [];
     if (m.demo) acts.push('<button class="btn" data-demo="' + esc(m.demo.replace(/\/$/, '')) + '">' + esc(U.open_demo) + '</button>');   /* same in-shell window / panel as the Demos app */
     if (w.type === 'music' && !m.local && (m.youtube || m.soundcloud)) acts.push('<button class="btn ghost" data-play="' + esc(w.id) + '">' + esc(U.listen) + '</button>');   /* local tracks: the inline panel is the control */
+    if (w.type === 'transcription' && !PHONE) acts.push('<button class="btn" data-tr="' + esc(w.id) + '">' + esc(U.tr_open) + '</button>');   /* LOG-172: the compare stage (desktop only this round) */
     (w.links || []).forEach(function (l) { acts.push('<a class="btn ghost" href="' + esc(l.url) + '" rel="noopener">' + esc(l.label) + '</a>'); });
     return '<li data-type="' + esc(w.type) + '"><span class="badge ' + esc(w.type) + '">' + esc(U['type_' + w.type]) + '</span><div style="flex:1">' +
       '<div class="t">' + esc(w.title) + ' <span class="meta">' + w.year + '</span></div><div class="d">' + esc(w.desc) + '</div>' +
       (m.demo ? '' : mediaHTML(w)) + (m.demo ? '<div class="meta" style="margin:.3rem 0">' + esc(w.platform === 'desktop' ? U.platform_desktop : U.platform_all) + '</div>' : '') +
+      (w.type === 'transcription' && PHONE ? '<div class="meta" style="margin:.3rem 0">' + esc(U.tr_desktop_only) + '</div>' : '') +
       (acts.length ? '<div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.4rem">' + acts.join('') + '</div>' : '') + '</div></li>';
   }
 
@@ -6129,6 +6542,7 @@
         var f = e.target.closest('[data-f]'); if (f) { body.querySelectorAll('[data-f]').forEach(function (b) { b.classList.toggle('on', b === f); }); body.querySelectorAll('.list li').forEach(function (li) { li.hidden = !(f.dataset.f === 'all' || li.dataset.type === f.dataset.f); }); }
         var p = e.target.closest('[data-play]'); if (p) { openApp('player'); player.playId(p.dataset.play); }
         var b = e.target.closest('[data-demo]'); if (b) openDemo(b.dataset.demo);
+        var tb = e.target.closest('[data-tr]'); if (tb) { minimize('works'); trStage.start(tb.dataset.tr); }   /* LOG-172 */
       });
     },
     demos: function (body) {

@@ -67,6 +67,27 @@ wav.write_bytes(b"RIFF")
 expect_refused("wav local media refused", with_works(lambda w: w[0]["media"].update(local="assets/_t.wav")), "must be mp3/ogg")
 wav.unlink()
 
+# ---- LOG-172: transcription compare (feat.transcription-compare / ADR-006 追記①)
+TR = [i for i, w in enumerate(works) if w.get("type") == "transcription"]
+ok("works.json carries the Death Piano transcription entry", len(TR) == 1 and works[TR[0]]["id"] == "dp-tr", str(TR))
+_ti = TR[0]
+expect_refused("transcription without rendition refused", with_works(lambda w: w[_ti]["media"].pop("rendition")), "media.rendition must be")
+expect_refused("transcription rendition file missing refused", with_works(lambda w: w[_ti]["media"]["rendition"].update(src="assets/audio/nope.mp3")), "media.rendition.src not found")
+expect_refused("transcription original with a bad kind refused", with_works(lambda w: w[_ti]["media"]["original"].update(kind="vimeo")), "must be 'youtube' or 'local'")
+expect_refused("transcription with a malformed YouTube id refused", with_works(lambda w: w[_ti]["media"]["original"].update(id="abc")), "11-character YouTube video id")
+expect_refused("transcription fallback must be a real mp3", with_works(lambda w: w[_ti]["media"]["original"].update(fallback="assets/audio/ghost.mp3")), "media.original.fallback not found")
+expect_refused("transcription notes must exist", with_works(lambda w: w[_ti]["media"].update(notes="assets/notes/ghost.json")), "media.notes must name an existing")
+expect_refused("transcription media may not carry the player's keys", with_works(lambda w: w[_ti]["media"].update(local="assets/audio/dp.mp3")), "unknown media key")
+expect_refused("section cue points must increase", with_works(lambda w: w[_ti]["sections"][2].update(t=1.0)), "'t' must increase")
+expect_refused("section labels are bilingual", with_works(lambda w: w[_ti]["sections"][0].pop("en")), "missing or empty 'en'")
+expect_refused("rendition offset must be a number", with_works(lambda w: w[_ti]["media"]["rendition"].update(offset_s="2.4")), "offset_s must be a number")
+expect_refused("fallback offset must be a number", with_works(lambda w: w[_ti]["media"]["original"].update(fallback_offset_s="x")), "fallback_offset_s must be a number")
+expect_refused("original gain must sit in (0, 1]", with_works(lambda w: w[_ti]["media"]["original"].update(gain=1.5)), "gain must be a number in (0, 1]")
+ok("a local-kind original needs no YouTube id", bool(with_works(lambda w: w[_ti]["media"].update(original={"kind": "local", "src": "assets/audio/dp.mp3", "offset_s": 0}))()))
+for k in ("type_transcription", "tr_open", "tr_desktop_only", "tr_notice", "tr_notice_head", "tr_yt_fail", "tr_mode_lr", "tr_src_local"):
+    ok(f"site.json ui.{k} present and bilingual", isinstance(site["ui"].get(k), dict) and site["ui"][k].get("zh") and site["ui"][k].get("en"))
+ok("the notice names the contact app by a placeholder, never an email address", "{contact}" in site["ui"]["tr_notice"]["zh"] and "{contact}" in site["ui"]["tr_notice"]["en"] and "@" not in site["ui"]["tr_notice"]["zh"] and "@" not in site["ui"]["tr_notice"]["en"])
+
 # ---- 2. demo contract (ADR-004)
 dj = ROOT / "demos" / "transition" / "demo.json"
 orig = dj.read_text(encoding="utf-8")
@@ -211,6 +232,15 @@ ok("prank pages: English side has no Chinese, both pools present", not _pleak an
 ok("desktop shell embeds the prank pages", all('"prank"' in pages[f"{l}/index.html"] for l in ("zh", "en")))
 ok("school names never in Chinese", all(not _CJK.search(e["school"]) for e in _res["education"]))
 ok("Formosa Studio title is the 2026-09-08 one", any(c["title"]["zh"] in ("臺灣區域聯絡人 | 製作人助理", "臺灣區域聯絡人 / 製作人助理") for c in _res["current"]) and not any("端口" in json.dumps(c, ensure_ascii=False) for c in _res["current"]))
+
+# ---- LOG-172: the compare stage's data reaches the desktop payload
+_zh = (ROOT / "zh" / "index.html").read_text(encoding="utf-8") if (ROOT / "zh" / "index.html").exists() else ""
+ok("desktop payload carries dp-tr with a versioned rendition and localised sections", '"id": "dp-tr"' in _zh and 'dp-tr.mp3?v=' in _zh and '"label": "序奏"' in _zh and '"label": "Intro"' in _zh)
+_os = (ROOT / "assets" / "js" / "os.js").read_text(encoding="utf-8")
+ok("os.js: the compare stage is asked first in ext.api()", "trStage.active()) return trStage.src()" in _os)
+ok("os.js: the waterfall honours a source that insists on its notes (st.wf)", "(st.wf || wfOn())" in _os)
+ok("os.js: the transport routes pause / prev / next / mute to the compare stage", _os.count("if (trStage.active()) trStage.") >= 4)
+ok("os.js: YouTube's IFrame API loads only from the stage (no page-load third-party script)", _os.count("youtube.com/iframe_api") == 1 and "iframe_api" not in (ROOT / "templates" / "desktop.html").read_text(encoding="utf-8"))
 
 # ---- LOG-161: 恥辱柱 / 許願池 / 合作聯絡
 _bugs = B.load_bugs()

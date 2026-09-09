@@ -941,6 +941,94 @@
     "wish_totp_back": {
       "zh": "返回許願池",
       "en": "Back to the well"
+    },
+    "type_transcription": {
+      "zh": "採譜",
+      "en": "Transcription"
+    },
+    "tr_open": {
+      "zh": "開啟對照舞台",
+      "en": "Open the compare stage"
+    },
+    "tr_desktop_only": {
+      "zh": "對照舞台目前只在電腦版提供。",
+      "en": "The compare stage is desktop-only for now."
+    },
+    "tr_loading": {
+      "zh": "載入音軌…",
+      "en": "Loading the tracks…"
+    },
+    "tr_hint": {
+      "zh": "拖動滑桿在原曲與採譜之間切換；段落鍵讓兩邊一起跳到那一段",
+      "en": "Drag the slider between the original and the transcription; a section button jumps both to that section"
+    },
+    "tr_orig": {
+      "zh": "原曲",
+      "en": "Original"
+    },
+    "tr_trans": {
+      "zh": "採譜",
+      "en": "Transcription"
+    },
+    "tr_mode_xf": {
+      "zh": "交叉混音",
+      "en": "Cross-fade"
+    },
+    "tr_mode_lr": {
+      "zh": "左右分耳",
+      "en": "Left / right"
+    },
+    "tr_src_yt": {
+      "zh": "原曲：YouTube",
+      "en": "Original: YouTube"
+    },
+    "tr_src_local": {
+      "zh": "原曲：暫存音源",
+      "en": "Original: cached copy"
+    },
+    "tr_switch_yt": {
+      "zh": "改用 YouTube",
+      "en": "Use YouTube"
+    },
+    "tr_switch_local": {
+      "zh": "使用暫存音源",
+      "en": "Use the cached copy"
+    },
+    "tr_yt_fail": {
+      "zh": "YouTube 無法播放，已切換到自載備援。",
+      "en": "YouTube could not play — switched to the hosted fallback."
+    },
+    "tr_yt_wait": {
+      "zh": "等待 YouTube…",
+      "en": "Waiting for YouTube…"
+    },
+    "tr_notice_head": {
+      "zh": "關於自載的原曲音檔",
+      "en": "About the hosted copy of the original"
+    },
+    "tr_notice": {
+      "zh": "原曲《Death Piano》由 Xi 創作，著作權歸原作者所有。本頁自載的原曲音檔有兩個用途：一是 YouTube 嵌入無法播放時的備援，二是提供原曲與採譜成果的左右聲道對照互動體驗（實驗性質）。僅供對照，不作營利、不提供下載。權利人若希望移除，請透過站內「{contact}」來信，收到即下架。",
+      "en": "\"Death Piano\" is composed by Xi; all rights to the original remain with its author. The copy hosted here serves two purposes: a fallback when the YouTube embed cannot play, and an experimental left/right-channel comparison between the original and the transcription. It is for comparison only, not monetized, and cannot be downloaded. Rights holders who wish it removed: please write via the site's \"{contact}\" app and it will be taken down on receipt."
+    },
+    "tr_end": {
+      "zh": "對照結束",
+      "en": "End of the comparison"
+    },
+    "tr_align": {
+      "zh": "對齊",
+      "en": "Align"
+    },
+    "tr_vol": {
+      "zh": "音量",
+      "en": "Volume"
+    },
+    "tr_src_split": {
+      "zh": "原曲：暫存音源（分耳）",
+      "en": "Original: cached copy (split)"
+    },
+    "tr_notice_note": {
+      "zh": "這是為求對照體驗的備用方案，不是主要播放來源；主要來源仍是 YouTube 嵌入。",
+      "en": "A fallback kept for the comparison experience, not the primary source — the YouTube embed remains the primary source."
     }
   },
   "about_body": {

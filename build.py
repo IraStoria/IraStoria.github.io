@@ -31,7 +31,7 @@ DEMOS = ROOT / "demos"
 MAX_MEDIA_BYTES = 10 * 1024 * 1024
 LANGS = ["zh", "en"]
 HTML_LANG = {"zh": "zh-Hant", "en": "en"}
-TYPES = ["music", "game", "tool", "demo"]
+TYPES = ["music", "game", "tool", "demo", "transcription"]   # transcription (LOG-172): a transcription played against its original on the compare stage
 OUTPUT_DIRS = LANGS  # directories build.py owns and may wipe
 
 
@@ -223,6 +223,72 @@ def load_site():
     return site
 
 
+def local_audio(path, what, p):
+    """A self-hosted audio file: must exist, be mp3/ogg and stay under the 10 MB line (ADR-005)."""
+    if not isinstance(path, str) or not path:
+        raise BuildError(f"{p}: {what} must be a file path")
+    lp = ROOT / path
+    if not lp.exists():
+        raise BuildError(f"{p}: {what} not found: {path}")
+    if lp.suffix.lower() not in (".mp3", ".ogg"):
+        raise BuildError(f"{p}: {what} must be mp3/ogg (ADR-005)")
+    if lp.stat().st_size > MAX_MEDIA_BYTES:
+        raise BuildError(f"{p}: {what} exceeds 10 MB (ADR-005)")
+
+
+def check_transcription(w, media, p):
+    """feat.transcription-compare (LOG-172 / ADR-006 追記①): the compare stage's media contract.
+    original: {kind: youtube|local, id|src, offset_s?, fallback?, fallback_offset_s?} — a third-party original is embedded (YouTube) and may carry a
+              self-hosted fallback that only sounds when the embed cannot (the notice text lives in site.json ui.tr_notice);
+    rendition: {src, offset_s?} — the transcription's own render (self-hosted, always);
+    notes: the reduced notes JSON the waterfall draws (the MIDI itself never enters the repo, LOG-078);
+    sections: [{t, zh, en}] strictly increasing MIDI-time cue points for the section buttons (optional)."""
+    orig = media.get("original")
+    if not isinstance(orig, dict):
+        raise BuildError(f"{p}: media.original must be an object {{kind, id|src, offset_s?, fallback?}}")
+    kind = orig.get("kind")
+    if kind not in ("youtube", "local"):
+        raise BuildError(f"{p}: media.original.kind must be 'youtube' or 'local'")
+    if kind == "youtube":
+        if not isinstance(orig.get("id"), str) or not re.fullmatch(r"[A-Za-z0-9_-]{11}", orig["id"]):
+            raise BuildError(f"{p}: media.original.id must be an 11-character YouTube video id")
+        if "fallback" in orig:
+            local_audio(orig["fallback"], "media.original.fallback", p)
+    else:
+        local_audio(orig.get("src"), "media.original.src", p)
+    for k in ("offset_s", "fallback_offset_s"):   # fallback_offset_s (追記⑦): the hosted copy's own MIDI-0 position when it is not a straight rip of the embed
+        if k in orig and not isinstance(orig[k], (int, float)):
+            raise BuildError(f"{p}: media.original.{k} must be a number (seconds)")
+    if "gain" in orig and not (isinstance(orig["gain"], (int, float)) and 0 < orig["gain"] <= 1):   # LOG-173 追記⑨: the original's loudness ceiling (a louder master balanced against the render)
+        raise BuildError(f"{p}: media.original.gain must be a number in (0, 1]")
+    rend = media.get("rendition")
+    if not isinstance(rend, dict):
+        raise BuildError(f"{p}: media.rendition must be an object {{src, offset_s?}}")
+    local_audio(rend.get("src"), "media.rendition.src", p)
+    if "offset_s" in rend and not isinstance(rend["offset_s"], (int, float)):
+        raise BuildError(f"{p}: media.rendition.offset_s must be a number (seconds)")
+    notes = media.get("notes")
+    if not isinstance(notes, str) or not (ROOT / notes).exists():
+        raise BuildError(f"{p}: media.notes must name an existing notes JSON (the compare stage draws it)")
+    if "score" in media:
+        sp = ROOT / media["score"]
+        if not sp.exists() or sp.suffix.lower() not in (".pdf", ".png", ".jpg", ".jpeg", ".webp"):
+            raise BuildError(f"{p}: media.score must be an existing pdf/png/jpg/webp")
+        if sp.stat().st_size > MAX_MEDIA_BYTES:
+            raise BuildError(f"{p}: media.score exceeds 10 MB")
+    secs = w.get("sections", [])
+    if not isinstance(secs, list):
+        raise BuildError(f"{p}: sections must be a list of {{t, zh, en}}")
+    last = -1.0
+    for j, s in enumerate(secs):
+        if not isinstance(s, dict) or not isinstance(s.get("t"), (int, float)) or s["t"] < 0:
+            raise BuildError(f"{p}.sections[{j}]: 't' must be a non-negative number (seconds on the MIDI clock)")
+        if s["t"] <= last:
+            raise BuildError(f"{p}.sections[{j}]: 't' must increase (got {s['t']} after {last})")
+        last = s["t"]
+        bilingual({k: v for k, v in s.items() if k != "t"}, f"{p}.sections[{j}]")
+
+
 def load_works():
     load_updates()   # validate (fail-closed) — build_pages re-reads it
     works = read_json(CONTENT / "works.json")
@@ -246,11 +312,14 @@ def load_works():
         media = w.get("media") or {}
         if not isinstance(media, dict):
             raise BuildError(f"{p} ({wid}): 'media' must be an object")
-        allowed = {"youtube", "soundcloud", "local", "demo", "notes"}
+        is_tr = w.get("type") == "transcription"
+        allowed = {"original", "rendition", "notes", "score"} if is_tr else {"youtube", "soundcloud", "local", "demo", "notes"}
         bad = set(media) - allowed
         if bad:
             raise BuildError(f"{p} ({wid}): unknown media key(s) {sorted(bad)}; allowed {sorted(allowed)}")
-        if "notes" in media and ("local" not in media or not (ROOT / media["notes"]).exists()):
+        if is_tr:
+            check_transcription(w, media, f"{p} ({wid})")
+        elif "notes" in media and ("local" not in media or not (ROOT / media["notes"]).exists()):
             raise BuildError(f"{p} ({wid}): media.notes needs media.local and an existing file ({media['notes']})")
         if "local" in media:
             lp = ROOT / media["local"]
@@ -559,19 +628,27 @@ def build_pages(site, works, demos, articles):
         # home = desktop OS shell (client renders apps from embedded JSON; sub-pages remain as deep links)
         def loc_media(m):
             m = dict(m, local=local_versioned(m["local"])) if "local" in m else m
-            return dict(m, notes=local_versioned(m["notes"])) if "notes" in m else m
+            m = dict(m, notes=local_versioned(m["notes"])) if "notes" in m else m
+            if "rendition" in m: m = dict(m, rendition=dict(m["rendition"], src=local_versioned(m["rendition"]["src"])))   # compare stage (LOG-172): the self-hosted files ride the same ?v= cache-busting as the player's
+            if "original" in m:
+                o = dict(m["original"])
+                if "fallback" in o: o["fallback"] = local_versioned(o["fallback"])
+                if "src" in o: o["src"] = local_versioned(o["src"])
+                m = dict(m, original=o)
+            return m
 
-        def loc(w):
+        def loc(w, lang):   # lang is a parameter on purpose (LOG-172): as a closure it read the page loop's language, so the other language's works payload (alt) came out in the page's own language
             return {"id": w["id"], "type": w["type"], "year": w["year"], "featured": bool(w.get("featured")), "secret": bool(w.get("secret")),
                     "title": w["title"][lang], "desc": w["desc"][lang], "media": loc_media(w.get("media") or {}),
-                    "platform": w["platform"], "links": [{"label": l["label"][lang], "url": l["url"]} for l in w.get("links", [])]}
+                    "platform": w["platform"], "links": [{"label": l["label"][lang], "url": l["url"]} for l in w.get("links", [])],
+                    "sections": [{"t": s["t"], "label": s[lang]} for s in w.get("sections", [])]}
         def home_data(lang):
           return {
             "lang": lang, "site_name": site["site_name"], "author": site["author"][lang], "tagline": site["tagline"][lang], "hero_intro": site["hero_intro"][lang],
             "about": site["about_body"][lang], "contact": loc_deep(site["contact"], lang), "resume": loc_deep(site["resume"], lang), "bugs": loc_deep(site["bugs"], lang), "backend": backend_url(site), "prank": loc_deep(site.get("prank_pages") or {"serious": [], "silly": []}, lang), "host": re.sub(r"^https?://", "", site["base_url"]).strip("/"),
             "ui": {k: v[lang] for k, v in site["ui"].items()},
             "fx": {name: {k: (local_versioned(v) if k in ("video", "sound") and v else v) for k, v in f.items() if not k.startswith("_")} for name, f in (site.get("fx") or {}).items()},
-            "works": [loc(w) for w in works],
+            "works": [loc(w, lang) for w in works],
             "updates": [{"date": u["date"], "text": u[lang]} for u in load_updates()],
             "demos": [{"path": rel, "title": m["title"][lang], "desc": m["desc"][lang], "platform": m["platform"], "year": m.get("year", ""), "ver": demo_ver(rel), "native": m.get("native", ""), "stage_ui": bool(m.get("stage_ui")),   # stage_ui: the desktop presents this iframe demo on the desktop itself (?stage=1), not in a window
 

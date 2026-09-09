@@ -163,5 +163,82 @@
       "interactive-music",
       "web-audio"
     ]
+  },
+  {
+    "id": "dp-tr",
+    "type": "transcription",
+    "year": 2026,
+    "featured": true,
+    "title": {
+      "zh": "Death Piano（Xi）採譜對照",
+      "en": "Death Piano (Xi) — transcription"
+    },
+    "desc": {
+      "zh": "十軌鋼琴採譜，與原曲同步對照：一支滑桿在原曲與採譜之間交叉混音；自載模式另可左右分耳。",
+      "en": "A ten-voice piano transcription played against the original: one slider cross-fades between the two; the self-hosted mode can also split them left / right."
+    },
+    "media": {
+      "original": {
+        "kind": "youtube",
+        "id": "UxGOfPbPBPw",
+        "offset_s": 0.615,
+        "fallback": "assets/audio/dp-orig.mp3",
+        "fallback_offset_s": 0.02,
+        "gain": 0.36
+      },
+      "rendition": {
+        "src": "assets/audio/dp-tr.mp3",
+        "offset_s": 0.02
+      },
+      "notes": "assets/notes/dp.json"
+    },
+    "sections": [
+      {
+        "t": 0,
+        "zh": "序奏",
+        "en": "Intro"
+      },
+      {
+        "t": 36.71,
+        "zh": "過渡",
+        "en": "Bridge"
+      },
+      {
+        "t": 44.21,
+        "zh": "主段 I",
+        "en": "Main I"
+      },
+      {
+        "t": 66.8,
+        "zh": "主段 II",
+        "en": "Main II"
+      },
+      {
+        "t": 92.22,
+        "zh": "慢板",
+        "en": "Slow"
+      },
+      {
+        "t": 120.44,
+        "zh": "漸快",
+        "en": "Accel."
+      },
+      {
+        "t": 140.17,
+        "zh": "終段",
+        "en": "Finale"
+      },
+      {
+        "t": 155.68,
+        "zh": "尾聲",
+        "en": "Coda"
+      }
+    ],
+    "platform": "desktop",
+    "links": [],
+    "tags": [
+      "transcription",
+      "piano"
+    ]
   }
 ]
