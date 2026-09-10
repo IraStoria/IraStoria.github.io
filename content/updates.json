@@ -1,5 +1,10 @@
 [
   {
+    "date": "2026-09-10",
+    "zh": "採譜對照舞台多了第二首：Oliver Dragojević 的《Kad u te nestane mi vire》（A l'Olympia 現場，客席 Matija Dedić），2024 私人委託案例，鋼琴與電鋼琴兩軌。這首的影片不開放嵌入，所以以自載音檔對照；舞台換上桃紅×橘紅的亮色配色，鋼琴軌畫高八度好分辨。桌面上的面板現在可以拖，不拖時照開啟順序往上疊；採譜影片框按住任何地方就拖、快速點按＝播放暫停、靠邊自動吸附。切「左右分耳」會先跳出提醒。離開舞台時顏色慢慢淡回桌面，曲子播完不再重落一次音符。",
+    "en": "The compare stage has a second piece: Oliver Dragojević's \"Kad u te nestane mi vire\" (live at L'Olympia, with Matija Dedić), a 2024 private commission transcribed as piano and e-piano. Its video cannot be embedded, so the comparison uses a hosted copy; the stage wears a bright peach-pink / orange-red palette and draws the piano an octave up. Desktop panels can be dragged and otherwise stack upward in the order opened; the video box drags from anywhere, a quick tap plays or pauses, and it snaps to an edge when released near one. Split ears now opens with a note. Leaving the stage, the colours fade back to the desktop, and a finished piece no longer drops its notes a second time."
+  },
+  {
     "date": "2026-09-09",
     "zh": "桌面版的「許願池」與「恥辱柱」不再開視窗，直接在桌面上演：許願池是 dock 上方一格清玻璃對話框，一次問一句，願望像片尾字幕一樣在畫面各處逐字浮出，地平線下是會起漣漪的水面；許願時可以留 email（選填、不公開），願望有進展會寄信通知你。恥辱柱的名冊改成從左往右飄過的彈幕，已伏法的淺綠、還在逃的紅，滑鼠停上去那一則會停下來讓你看清楚。",
     "en": "On the desktop the Wishing Well and the Pillar of Shame no longer open windows - they play out on the desktop itself. The well is a clear-glass prompt above the dock, one question at a time; wishes surface across the screen like end credits, typed out letter by letter, over water that ripples below the horizon. You may leave an email with a wish (optional, never shown) and get a note when it moves. The pillar's roster now streams left to right like bullet comments - executed ones in pale green, the ones still at large in red - and a line stops under your pointer so you can read it."

@@ -69,8 +69,19 @@ wav.unlink()
 
 # ---- LOG-172: transcription compare (feat.transcription-compare / ADR-006 追記①)
 TR = [i for i, w in enumerate(works) if w.get("type") == "transcription"]
-ok("works.json carries the Death Piano transcription entry", len(TR) == 1 and works[TR[0]]["id"] == "dp-tr", str(TR))
+ok("works.json carries the two transcription entries (dp-tr, olympia-tr)", [works[i]["id"] for i in TR] == ["dp-tr", "olympia-tr"], str([works[i]["id"] for i in TR]))
 _ti = TR[0]
+_oly = works[TR[1]]   # LOG-176: the second entry - MIDI 0 sits 2.8 s BEFORE the recording starts (negative offsets are legal), eight sections, the hosted copy under the 10 MB line
+ok("olympia-tr: hosted original (the video owner forbids embedding, IFrame error 150) with a negative offset", _oly["media"]["original"]["kind"] == "local" and _oly["media"]["original"]["offset_s"] == -2.8 and "fallback" not in _oly["media"]["original"])
+ok("olympia-tr: its own rights text (the site-wide one names Death Piano), bilingual, with the {contact} hook", all(_oly["media"]["original"][k].get("zh") and _oly["media"]["original"][k].get("en") for k in ("notice", "notice_note")) and "{contact}" in _oly["media"]["original"]["notice"]["zh"] and "Oliver" in _oly["media"]["original"]["notice"]["en"])
+expect_refused("a one-language notice is refused", with_works(lambda w: w[TR[1]]["media"]["original"]["notice"].pop("en")), "missing or empty 'en'")
+ok("olympia-tr: opens with the transcription at half volume; dp keeps the default (no volume key)", _oly["media"]["rendition"].get("volume") == 0.5 and "volume" not in works[TR[0]]["media"]["rendition"])
+expect_refused("a rendition volume outside (0, 1] is refused", with_works(lambda w: w[TR[1]]["media"]["rendition"].update(volume=1.5)), "media.rendition.volume must be")
+ok("olympia-tr: its own stage palette (peach-pink left, orange-red right)", _oly["media"].get("palette") == {"l": "#ff4f8b", "r": "#ff7a3a"})
+expect_refused("a palette that is not two hex colours is refused", with_works(lambda w: w[TR[1]]["media"].update(palette={"l": "pink", "r": "#ff7a3a"})), "media.palette must be")
+ok("olympia-tr: eight increasing sections, bilingual", len(_oly["sections"]) == 8 and all(_oly["sections"][i]["t"] > _oly["sections"][i - 1]["t"] for i in range(1, 8)) and all(x.get("zh") and x.get("en") for x in _oly["sections"]))
+ok("olympia-tr: notes JSON generated from content/midi/olympia.mid", (ROOT / _oly["media"]["notes"]).exists() and (ROOT / "content/midi/olympia.map.json").exists())
+ok("olympia-tr: hosted copy and render under 10 MB", (ROOT / _oly["media"]["original"]["src"]).stat().st_size < 10 * 1024 * 1024 and (ROOT / _oly["media"]["rendition"]["src"]).stat().st_size < 10 * 1024 * 1024)
 expect_refused("transcription without rendition refused", with_works(lambda w: w[_ti]["media"].pop("rendition")), "media.rendition must be")
 expect_refused("transcription rendition file missing refused", with_works(lambda w: w[_ti]["media"]["rendition"].update(src="assets/audio/nope.mp3")), "media.rendition.src not found")
 expect_refused("transcription original with a bad kind refused", with_works(lambda w: w[_ti]["media"]["original"].update(kind="vimeo")), "must be 'youtube' or 'local'")

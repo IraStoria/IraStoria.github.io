@@ -708,8 +708,8 @@
         }
         var px = W * fracNow, px0 = px;   /* px0: true progress — the ECG side ignores the clearing sweep (it read as a line being erased) */
         var sp = (splitCfg && m <= 0) ? splitCfg : null, scx = W / 2, sxl = scx - fracNow * scx, sxr = scx + fracNow * (W - scx), SL = null, SR = null;   /* split: both halves grow outward from the centre */
-        function sideCol(k, right) { k = Math.max(0, Math.min(1, k)); var base = right ? SPLIT_COL_R : SPLIT_COL_L, c = lerpCol(SPLIT_DEEP, base, 0.2 + 0.8 * k), ln = lerpCol(SPLIT_DEEP, right ? SPLIT_LINE_R : SPLIT_LINE_L, 0.3 + 0.7 * k); return { col: c, line: ln, glow: base, p: k, g: grad(y, y - maxH, c, 0.55, 1), gr: grad(y, y + maxH * 0.45, c, 0.22, 0) }; }   /* 追記⑮(2): from a deep violet (not slate) up to the side's colour, fuller alpha: the bars read as lit, not pale */   /* LOG-173 追記①: the whole stage is purple; each half's BRIGHTNESS is that side's effective loudness (lean × its volume trim): silent -> a dim purple-grey floor, full -> bright purple with its glow */
-        if (sp) { SL = sideCol(sp.kL, false); SR = sideCol(sp.kR, true); gGrey = grad(y, y - maxH, '62,44,110', 0.30, 0.62); gGreyR = grad(y, y + maxH * 0.45, '62,44,110', 0.14, 0); }   /* split: the unplayed bars are a dim deep violet, not slate */
+        function sideCol(k, right) { k = Math.max(0, Math.min(1, k)); var deep = sp.deep || SPLIT_DEEP, base = right ? (sp.r || SPLIT_COL_R) : (sp.l || SPLIT_COL_L), kf = sp.kf != null ? sp.kf : 0.2, af = sp.af != null ? sp.af : 0.55, c = lerpCol(deep, base, kf + (1 - kf) * k), ln = lerpCol(deep, right ? (sp.lr || SPLIT_LINE_R) : (sp.ll || SPLIT_LINE_L), 0.3 + 0.7 * k);   /* LOG-177: a work's own palette (sp.l/r/ll/lr/deep/grey) overrides the eclipse purples; kf/af (追記⑭): brightness and alpha floors, so a half-volume side still reads as lit */ return { col: c, line: ln, glow: base, p: k, g: grad(y, y - maxH, c, af, 1), gr: grad(y, y + maxH * 0.45, c, 0.22, 0) }; }   /* 追記⑮(2): from a deep violet (not slate) up to the side's colour, fuller alpha: the bars read as lit, not pale */   /* LOG-173 追記①: the whole stage is purple; each half's BRIGHTNESS is that side's effective loudness (lean × its volume trim): silent -> a dim purple-grey floor, full -> bright purple with its glow */
+        if (sp) { SL = sideCol(sp.kL, false); SR = sideCol(sp.kR, true); var gc = sp.grey || '62,44,110'; gGrey = grad(y, y - maxH, gc, 0.30, 0.62); gGreyR = grad(y, y + maxH * 0.45, gc, 0.14, 0); }   /* split: the unplayed bars are a dim deep violet, not slate */
         // right after the line joins, a grey sweep runs right→left over the amber line ("clearing" the progress bar) before real progress takes over
         // unplayed bars are a solid cool slate (not translucent white — that reads as fog on the dark wallpaper); gradients only dim the foot near the line
         var gAmb = grad(y, y - maxH, LC, 0.35, 0.95), gGrey = grad(y, y - maxH, UC, 0.45, 0.95),
@@ -845,7 +845,7 @@
           g2.lineWidth = 2; g2.strokeStyle = 'rgba(255,255,255,' + (0.22 * ra).toFixed(3) + ')'; g2.shadowBlur = 0; g2.beginPath(); if (sxl > 0.5) { g2.moveTo(0, y); g2.lineTo(sxl, y); } if (sxr < W - 0.5) { g2.moveTo(sxr, y); g2.lineTo(W, y); } g2.stroke();
           [[sxl, SL, -1], [sxr, SR, 1]].forEach(function (hd) { var c = hd[1]; g2.lineWidth = 2 + (TINT_W - 2) * c.p; g2.strokeStyle = 'rgba(255,252,255,' + (0.6 + 0.4 * c.p).toFixed(2) + ')'; g2.shadowColor = 'rgba(' + c.glow + ',.95)'; g2.shadowBlur = 24 * (1 - c.p) + TINT_BLUR * c.p; g2.beginPath(); g2.moveTo(hd[0], y); g2.lineTo(hd[0] - hd[2] * 14, y); g2.stroke(); });   /* white-cored heads in their half's glow */
           var dxc = Math.round(scx); g2.shadowBlur = 0;   /* 追記⑪(3): a thin black seam with a soft glow around it, no edge lines */
-          var dg = g2.createLinearGradient(dxc - 14, 0, dxc + 14, 0); dg.addColorStop(0, 'rgba(' + SPLIT_LINE + ',0)'); dg.addColorStop(0.5, 'rgba(' + SPLIT_LINE + ',.13)'); dg.addColorStop(1, 'rgba(' + SPLIT_LINE + ',0)');
+          var dg = g2.createLinearGradient(dxc - 14, 0, dxc + 14, 0); var sl_ = (splitCfg && splitCfg.line) || SPLIT_LINE; dg.addColorStop(0, 'rgba(' + sl_ + ',0)'); dg.addColorStop(0.5, 'rgba(' + sl_ + ',.13)'); dg.addColorStop(1, 'rgba(' + sl_ + ',0)');
           g2.fillStyle = dg; g2.fillRect(dxc - 14, 0, 28, H);
           g2.fillStyle = 'rgba(2,2,8,.72)'; g2.fillRect(dxc - 1.5, 0, 3, H);
           g2.shadowBlur = 0; return;
@@ -1872,24 +1872,111 @@
                the slider cross-fades, or in split mode pans the original hard left and the transcription hard right.
      YouTube goes first; an embed error, a ready timeout or a play that never lands falls back to local and shows the notice
      (ui.tr_notice: fallback + the left/right experiment, contact to remove). The visitor can switch by hand either way. */
-  var TR_YT_API = 'https://www.youtube.com/iframe_api', TR_YT_READY_MS = 9000, TR_YT_PLAY_MS = 7000, TR_SYNC_S = 0.08, TR_END_PAD_S = 1.2, TR_EXIT_MS = 600, TR_YT_LAG_S = 0, TR_LAG_STEP = 0.01, TR_SNAP = 25, TR_LEAD_S = 4, TR_HOLD_S = 0.2, TR_RESUME_HOLD_MS = 300;   /* TR_RESUME_HOLD_MS (追記⑳): after a resume or a seek YouTube fires PLAYING ~0.23 s before its sound is back (measured 0.88 s vs our 0.65 s); the rendition waits this long so it does not play alone */   /* 追記⑯: the pre-roll - from the moment the stage opens the MIDI clock runs from -TR_LEAD_S on the wall clock (the notes fall in at once) and holds at -TR_HOLD_S until the sound is ready; the sound then joins the clock where it stands, no jump, no count-in wait */   /* TR_WARM_MS (追記⑭): after the embed has proven it can play, the stage waits this long (its own transition) before the real start */   /* 0 (追記㉒): a machine's own playout latency is not a default - the visitor nudges with 對齊 and the value stays on their machine */   /* TR_YT_LAG_S (the user: youtube 的播放啟動延遲 0.2-0.5 s): getCurrentTime() runs ahead of what the video actually sounds; the MIDI clock trails it by this much in yt mode. The bar's 對齊 −/+ nudges it per machine (localStorage tr_ytlag) */
+  var TR_YT_API = 'https://www.youtube.com/iframe_api', TR_YT_READY_MS = 9000, TR_YT_PLAY_MS = 7000, TR_SYNC_S = 0.08, TR_END_PAD_S = 1.2, TR_EXIT_MS = 600, TR_VEIL_OUT_MS = 1800, TR_LEAD_LOCAL_S = 2, TR_YT_LAG_S = 0, TR_LAG_STEP = 0.01, TR_SNAP = 25, TR_LEAD_S = 4, TR_HOLD_S = 0.2, TR_RESUME_HOLD_MS = 300;   /* TR_RESUME_HOLD_MS (追記⑳): after a resume or a seek YouTube fires PLAYING ~0.23 s before its sound is back (measured 0.88 s vs our 0.65 s); the rendition waits this long so it does not play alone */   /* 追記⑯: the pre-roll - from the moment the stage opens the MIDI clock runs from -TR_LEAD_S on the wall clock (the notes fall in at once) and holds at -TR_HOLD_S until the sound is ready; the sound then joins the clock where it stands, no jump, no count-in wait */   /* TR_WARM_MS (追記⑭): after the embed has proven it can play, the stage waits this long (its own transition) before the real start */   /* 0 (追記㉒): a machine's own playout latency is not a default - the visitor nudges with 對齊 and the value stays on their machine */   /* TR_YT_LAG_S (the user: youtube 的播放啟動延遲 0.2-0.5 s): getCurrentTime() runs ahead of what the video actually sounds; the MIDI clock trails it by this much in yt mode. The bar's 對齊 −/+ nudges it per machine (localStorage tr_ytlag) */
+  var panels = (function () {   /* LOG-175 (the user: 許願池跟恥辱柱會被採譜的面板遮擋…面板可以拖移，不拖移時以開啟先後順序向上堆疊): the desktop's floating panels - the wishing well's and the pillar's glass box, the compare stage's bar - share ONE stack above the dock. Opened order = bottom -> up (a later one sits on top of the earlier ones it overlaps sideways, never over them); any of them can be dragged away by its background and then keeps that spot until it closes; the rest re-flow. */
+    var list = [], GAP = 12, EDGE = 8, TAP_MS = 250, SNAP_MIN = 64, ro = (typeof ResizeObserver !== 'undefined') ? new ResizeObserver(function () { layout(); }) : null, NOGRAB = 'button,input,textarea,select,a,label,[contenteditable],.tr-seek,.wchip,.well-x,.hovbub';
+    function shown(p) { return !p.el.hidden && p.on && p.el.isConnected && (!p.vis || p.vis()); }
+    function layout() {
+      var W = desktop.clientWidth, H = desktop.clientHeight, placed = [];
+      list.forEach(function (p) {
+        if (!shown(p)) return;
+        var el = p.el, r = el.getBoundingClientRect(), h = el.offsetHeight, w = el.offsetWidth;
+        if (p.dragged) {   /* a dragged panel keeps its own spot, only clamped back on screen after a resize */
+          var l = parseFloat(el.style.left) || 0, b = parseFloat(el.style.bottom) || 0, cx = p.centred ? w / 2 : 0;
+          l = Math.min(Math.max(l, EDGE + cx), W - w + cx - EDGE); b = Math.min(Math.max(b, EDGE), Math.max(EDGE, H - h - EDGE));
+          el.style.left = l + 'px'; el.style.bottom = b + 'px'; placed.push({ p: p, l: l - cx, r: l - cx + w, b: b, h: h }); return;
+        }
+        var hr = desktop.getBoundingClientRect(), L = r.left - hr.left, R = r.right - hr.left, floor = p.base();
+        if (p.extra) [].forEach.call(el.querySelectorAll(p.extra), function (x) { if (x.hidden) return; var xr = x.getBoundingClientRect(); if (!xr.height) return; h = Math.max(h, r.bottom - xr.top); L = Math.min(L, xr.left - hr.left); R = Math.max(R, xr.right - hr.left); });   /* 追記③: a bubble hanging over the bar counts as the bar's footprint, so a box seated above never covers it */
+        placed.forEach(function (q) { if (q.p.grp && q.p.grp === p.grp) return; if (q.r > L && q.l < R) floor = Math.max(floor, q.b + q.h + GAP); });
+        el.style.bottom = floor + 'px'; placed.push({ p: p, l: L, r: R, b: floor, h: h });
+      });
+    }
+    function drag(p) {   /* by the panel's own background - never a field, a button, a slider */
+      var el = p.el, sx = 0, sy = 0, l0 = 0, b0 = 0, r0 = null, moved = false, id = null, cap = null, t0 = 0;
+      el.addEventListener('pointerdown', function (e) {
+        if (e.button !== 0 || !shown(p) || e.target.closest(NOGRAB)) return;
+        var cs = getComputedStyle(el); sx = e.clientX; sy = e.clientY; l0 = parseFloat(cs.left) || 0; b0 = parseFloat(cs.bottom) || 0; r0 = el.getBoundingClientRect(); moved = false; id = e.pointerId; t0 = performance.now();
+        cap = e.target; try { cap.setPointerCapture(id); } catch (_) {}   /* capture on the piece under the pointer, never on a pointer-events:none wrapper (Chrome stops delivering to such a target) */
+        e.preventDefault();   /* no compatibility mousedown: otherwise a grab that lands inside an existing text selection starts Chrome's native drag of that selection and the pointer stream ends in pointercancel after one move (the probe caught it: a selection swept across the desktop had swallowed the grip) */
+        el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+      });
+      function move(e) {
+        if (e.pointerId !== id) return;
+        var dx = e.clientX - sx, dy = e.clientY - sy;
+        if (!moved) { if (Math.abs(dx) < 3 && Math.abs(dy) < 3) return; moved = true; p.dragged = true; el.classList.add('dragging'); el.style.left = l0 + 'px'; el.style.bottom = b0 + 'px'; el.style.right = 'auto'; el.style.top = 'auto'; }
+        var hr = desktop.getBoundingClientRect(), W = desktop.clientWidth, H = desktop.clientHeight;
+        dx = Math.min(Math.max(dx, EDGE - (r0.left - hr.left)), W - EDGE - (r0.right - hr.left));
+        dy = Math.min(Math.max(dy, EDGE - (r0.top - hr.top)), H - EDGE - (r0.bottom - hr.top));
+        el.style.left = (l0 + dx) + 'px'; el.style.bottom = (b0 - dy) + 'px';
+        e.preventDefault();
+      }
+      function up(e) {
+        if (e.pointerId !== id) return; id = null;
+        el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
+        try { (cap || el).releasePointerCapture(e.pointerId); } catch (_) {} cap = null;
+        if (moved) { el.classList.remove('dragging'); if (p.snap) snap(p); trail.log('drag', p.name); layout(); }
+        else if (p.tap && performance.now() - t0 < TAP_MS && e.target.closest(p.tapOn || '*')) p.tap(e);   /* 追記②: a quick tap is the click; a hold that never moved is nothing */
+      }
+    }
+    function snap(p) {   /* 追記② (the user: 放開時若靠近邊界會自動吸附): released within p.snap.at of a desktop edge = parked on that edge with the panel's own margin (x / y; the top keeps the menubar clear). at < 1 is a fraction of the panel's own width / height (追記④: the user asked for a larger ratio), never under SNAP_MIN */
+      var el = p.el, hr = desktop.getBoundingClientRect(), r = el.getBoundingClientRect(), W = desktop.clientWidth, H = desktop.clientHeight, cx = p.centred ? r.width / 2 : 0, o = p.snap, mb = $('.menubar', desktop), top = (mb ? mb.offsetHeight : 0) + o.y;
+      var L = parseFloat(el.style.left) || 0, B = parseFloat(el.style.bottom) || 0, ax = o.at < 1 ? Math.max(SNAP_MIN, o.at * r.width) : o.at, ay = o.at < 1 ? Math.max(SNAP_MIN, o.at * r.height) : o.at;
+      if (r.left - hr.left < ax) L = o.x + cx; else if (hr.left + W - r.right < ax) L = W - r.width - o.x + cx;
+      if (hr.top + H - r.bottom < ay) B = o.y; else if (r.top - hr.top < top + ay) B = H - r.height - top;
+      el.style.left = L + 'px'; el.style.bottom = B + 'px';
+    }
+    function add(o) {   /* o.el; o.name; o.base(): its own resting bottom (px); o.grp: panels of one owner never stack on each other; o.centred: positioned by its centre (translateX(-50%)); o.vis(): counts as shown only while true; o.tap(e)/o.tapOn: a quick tap on tapOn calls tap; o.snap:{at,x,y}: park on a desktop edge when released within at (px, or a fraction of the panel's size) of it; o.extra: selector of pieces hanging outside the box that still count as its footprint */
+      var p = { el: o.el, name: o.name, base: o.base || function () { return 16; }, grp: o.grp || null, centred: !!o.centred, vis: o.vis || null, tap: o.tap || null, tapOn: o.tapOn || null, snap: o.snap || null, extra: o.extra || null, on: false, dragged: false };
+      list.push(p); o.el.classList.add('panel'); drag(p); if (ro) ro.observe(o.el);
+      return { show: function () { list.splice(list.indexOf(p), 1); list.push(p); p.on = true; p.dragged = false; p.el.classList.remove('dragging'); p.el.style.left = ''; p.el.style.right = ''; p.el.style.top = ''; layout(); },   /* opened again = back in the stack, in today's order */
+               hide: function () { p.on = false; p.dragged = false; layout(); },
+               layout: layout,
+               drop: function () { p.on = false; var i = list.indexOf(p); if (i >= 0) list.splice(i, 1); if (ro) ro.unobserve(p.el); layout(); },
+               dragged: function () { return p.dragged; } };
+    }
+    window.addEventListener('resize', function () { layout(); });
+    if (/[?&]debug/.test(location.search)) window.__panels = { layout: layout, list: function () { return list.filter(shown).map(function (p) { return { name: p.name, dragged: p.dragged, bottom: p.el.style.bottom, left: p.el.style.left }; }); } };
+    return { add: add, layout: layout };
+  })();
   var trStage = (function () {
     var HOST = desktop, WV = wave;
     var exitPend = null;   /* 追記㉔: the exit's pending unduck - a re-entry before it fires must cancel it and keep the music ducked (the four-piano stage's exitPending; the user saw the OS music come back under a re-entered stage on another machine) */
-    var active = false, wid = null, ui = null, veil = null, veil2 = null, ctx = null, master = null, mgain = null, muted = false, ducked = false, hint = null, langSeen = null;
+    var active = false, wid = null, ui = null, veil = null, veil2 = null, ctx = null, master = null, mgain = null, muted = false, ducked = false, hint = null, langSeen = null, barPan = null, ytPan = null;   /* barPan / ytPan (LOG-175): the bar's seat in the shared panel stack; the video box (with the notice over it) is a panel too, dragged by its grip */
     var orig = null, tr = null;                                 /* channels: { off, url, buf, src, g, pan, done, total } — off: seconds into the file where the MIDI's 0 sits */
-    var mode = 'yt', split = false, mix = 0.5, pref = null, canYT = false, hasFallback = false, cached = false, tipShown = false, tipTimer = 0;   /* cached (追記㉑): the hosted copy sounds while the video runs on, muted, as the clock - switching back is a volume swap, no seek, no reload; mode 'local' is only the real fallback (the video is dead) */   /* pref: the visitor's own source choice; canYT: the work embeds a YouTube original */
+    var mode = 'yt', split = false, mix = 0.5, pref = null, canYT = false, hasFallback = false, cached = false, tipShown = false, tipTimer = 0, lrAck = false;   /* lrAck (追記③): the split-ears warning was acknowledged in this run */   /* cached (追記㉑): the hosted copy sounds while the video runs on, muted, as the clock - switching back is a volume swap, no seek, no reload; mode 'local' is only the real fallback (the video is dead) */   /* pref: the visitor's own source choice; canYT: the work embeds a YouTube original */
     var T0 = 0, pausedAt = 0, playing = false, started = false, dur = 0, pendingT = null, endAt = 0, preT0 = 0;   /* preT0: performance.now() when the stage opened (the pre-roll clock's zero) */   /* local clock: T = ctx.currentTime - T0 while playing, pausedAt otherwise; pendingT: a play(T) waiting for a buffer */
     var yt = null, ytEl = null, ytReady = false, ytFailed = false, ytBuf = false, ytT = 0, ytAt = 0, ytReadyTimer = 0, ytPlayTimer = 0, ytPend = false, ytWarm = 0, resumeTimer = 0;   /* ytWarm: 0 cold, 1 warming (muted pre-roll), 2 warmed and parked at the start */   /* ytT/ytAt: last polled MIDI time and when; ytPend: a play() sent, waiting for PLAYING */
-    var raf = 0, secs = [], toastTimer = 0, dbg = null, ytLag = TR_YT_LAG_S, loLag = 0, origBase = 0, volT = 1, volO = 1, origGain = 1, autoLag = 0;   /* autoLag (追記㉓): -AudioContext.outputLatency, read once the context runs - this machine's own WebAudio output delay, compensated automatically; the 對齊 nudge is the residual on top (the user's ear said -0.09 where the machine reported 0.072) */   /* volT/volO (LOG-173): per-side volume trims on top of the lean (localStorage tr_volt / tr_volo) */
-    try { var vt_ = parseFloat(localStorage.getItem('tr_volt')); if (!isNaN(vt_)) volT = Math.max(0, Math.min(1, vt_)); var vo_ = parseFloat(localStorage.getItem('tr_volo')); if (!isNaN(vo_)) volO = Math.max(0, Math.min(1, vo_)); } catch (e) {}   /* loLag (追記⑦): the same 對齊 nudge in local mode, moving the hosted original against the transcription (per machine, tr_lolag) */
+    var TR_SKIP_LEAD_S = 0.6, skip = 0;   /* LOG-177 追記② (the user: 新的前面載入時間太長): the MIDI clock starts 0.6 s before the FIRST NOTE (build injects media.first_note_s), not at MIDI 0 - olympia has 3.8 s of nothing before its first note on top of the 4 s pre-roll */
+    var palC = null;   /* LOG-177: this work's two stage colours (media.palette {l, r}, hex) and everything derived from them; null = the eclipse purples baked into the CSS / the wave */
+    function hexRgb(h) { if (typeof h !== 'string' || !/^#[0-9a-f]{6}$/i.test(h)) return null; return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
+    function mixC(a, b, t) { return [0, 1, 2].map(function (i) { return Math.round(a[i] + (b[i] - a[i]) * t); }); }
+    function rgbS(c) { return c.join(','); }
+    function hexS(c) { return '#' + c.map(function (v) { return ('0' + v.toString(16)).slice(-2); }).join(''); }
+    function palette(w) {
+      var p = (w && w.media && w.media.palette) || {}, L = hexRgb(p.l), R = hexRgb(p.r); if (!L || !R) return null;
+      var W_ = [255, 255, 255], K = [0, 0, 0], mid = mixC(L, R, 0.5);
+      return { L: L, R: R, mid: mid, light: mixC(mid, W_, 0.5), text: mixC(mid, W_, 0.8), white: mixC(mid, W_, 0.93), deep: mixC(mid, K, 0.7),
+               veilL: mixC(L, K, 0.18), veilM: mixC(mid, K, 0.5), veilR: mixC(R, K, 0.18),   /* 追記⑥ (the user: 概念對了，稍微暗一點點): a shade down so the bars and the seek bar stand out again */   /* 追記②④ (the user: 用亮色、背景不要太暗 -> 要昨天 dp 做錯的那種亮色背景): the gradient is painted straight on (blend normal), so the stops ARE the colours; the dim veil is nearly off */
+               bl: mixC(L, W_, 0.35), br: mixC(R, W_, 0.35), ll: mixC(L, W_, 0.65), lr: mixC(R, W_, 0.65), line: mixC(mid, W_, 0.8), sdeep: mixC(mid, K, 0.8), grey: mixC(mid, K, 0.62),   /* 追記⑫ (the user: 音量條像蒙在霧裡): on the bright ground the bars go lighter than the ground, the floor much darker */
+               capL: mixC(L, W_, 0.4), capR: mixC(R, W_, 0.4), cap: mixC(mid, W_, 0.5) };
+    }
+    function paintPalette(el) {   /* the CSS reads var(--tr…, <purple>) everywhere; with no palette nothing is set and the purples show */
+      if (!el || !palC) return; var v = { '--trl': hexS(palC.L), '--trr': hexS(palC.R), '--trl-rgb': rgbS(palC.L), '--trr-rgb': rgbS(palC.R), '--tr-mid': hexS(palC.mid), '--tr-mid-rgb': rgbS(palC.mid), '--tr-light': hexS(palC.light), '--tr-light-rgb': rgbS(palC.light), '--tr-text': hexS(palC.text), '--tr-text-rgb': rgbS(palC.text), '--tr-white': hexS(palC.white), '--tr-deep-rgb': rgbS(palC.deep), '--tr-veil-l': hexS(palC.veilL), '--tr-veil-m': hexS(palC.veilM), '--tr-veil-r': hexS(palC.veilR), '--tr-vig': '0.34', '--tr-dim1': '0.10', '--tr-dim2': '0.06', '--tr-dim3': '0.07', '--tr-veil-blend': 'normal', '--tr-veil-op': '0.78', '--tr-dim-op': '0.7', '--tr-bar-bg': 'rgba(24,10,14,.84)' };
+      var Hh = desktop.clientHeight || 1, yr = Math.round(100 * ((WV.baseY && WV.baseY()) || Hh * 0.58) / Hh);   /* 追記⑭: a dark band behind the line's bars (the band follows the line's height) */
+      v['--tr-band'] = 'linear-gradient(180deg,rgba(0,0,0,0) ' + (yr - 26) + '%,rgba(0,0,0,.42) ' + (yr - 4) + '%,rgba(0,0,0,.42) ' + (yr + 3) + '%,rgba(0,0,0,0) ' + (yr + 16) + '%)';
+      for (var k in v) el.style.setProperty(k, v[k]); el.classList.add('pal');
+    }
+    var raf = 0, secs = [], toastTimer = 0, dbg = null, ytLag = TR_YT_LAG_S, loLag = 0, origBase = 0, volT = 1, volO = 1, origGain = 1, autoLag = 0;   /* volT: this WORK's default (media.rendition.volume, LOG-177 追記⑪ - only the new piece opens at half; dp stays at 1) or the visitor's own trim for it, read in start() */   /* autoLag (追記㉓): -AudioContext.outputLatency, read once the context runs - this machine's own WebAudio output delay, compensated automatically; the 對齊 nudge is the residual on top (the user's ear said -0.09 where the machine reported 0.072) */   /* volT/volO (LOG-173): per-side volume trims on top of the lean (localStorage tr_volt / tr_volo) */
+    try { var vo_ = parseFloat(localStorage.getItem('tr_volo')); if (!isNaN(vo_)) volO = Math.max(0, Math.min(1, vo_)); } catch (e) {}   /* loLag (追記⑦): the same 對齊 nudge in local mode, moving the hosted original against the transcription (per machine, tr_lolag) */
     try { var lg = parseFloat(localStorage.getItem('tr_ytlag')); if (!isNaN(lg)) ytLag = Math.max(-1, Math.min(1, lg)); var ll = parseFloat(localStorage.getItem('tr_lolag')); if (!isNaN(ll)) loLag = Math.max(-1, Math.min(1, ll)); } catch (e) {}
     function work() { return D.works.filter(function (x) { return x.id === wid; })[0] || null; }   /* re-read each time: D is swapped on a language switch */
-    function preT() { return Math.min(-TR_HOLD_S, -TR_LEAD_S + (performance.now() - preT0) / 1000); }   /* the pre-roll clock */
+    var leadS = TR_LEAD_S;   /* 追記⑫: the pre-roll - 4 s when a YouTube embed has to warm up, 2 s for a hosted pair (the user: 這首本來就不需要載入) */
+    function preT() { return Math.min(-TR_HOLD_S, -leadS + (performance.now() - preT0) / 1000); }   /* the pre-roll clock */
     function T() {
       if (!started) return preT();
-      if (mode === 'yt') return Math.max(-TR_LEAD_S, ytT - (ytLag + autoLag) + ((playing && !ytBuf) ? (performance.now() - ytAt) / 1000 : 0));   /* may sit below 0 for the video's own lead-in */
-      return playing && ctx ? Math.max(-TR_LEAD_S - 1, ctx.currentTime - T0) : pausedAt;
+      if (mode === 'yt') return Math.max(-leadS, ytT - (ytLag + autoLag) + ((playing && !ytBuf) ? (performance.now() - ytAt) / 1000 : 0));   /* may sit below 0 for the video's own lead-in */
+      return playing && ctx ? Math.max(-leadS - 1, ctx.currentTime - T0) : pausedAt;
     }
     /* ---- audio graph: one context, one limiter, one analyser (the desktop spectrum reads it); per channel gain -> panner */
     function ensureCtx() {
@@ -1943,7 +2030,7 @@
       if (split && hasFallback) { oG = Math.min(1, 2 * (1 - mix)); tG = Math.min(1, 2 * mix); }
       else { oG = Math.cos(mix * Math.PI / 2); tG = Math.sin(mix * Math.PI / 2); }
       tG *= volT; oG *= volO;
-      WV.split({ kL: tG, kR: oG });   /* the line's two halves follow each side's EFFECTIVE loudness (lean × volume trim) */
+      WV.split(palC ? { kL: tG, kR: oG, l: rgbS(palC.bl), r: rgbS(palC.br), ll: rgbS(palC.ll), lr: rgbS(palC.lr), line: rgbS(palC.line), deep: rgbS(palC.sdeep), grey: rgbS(palC.grey), kf: 0.55, af: 0.9 } : { kL: tG, kR: oG });   /* the line's two halves follow each side's EFFECTIVE loudness (lean × volume trim); LOG-177: in the work's own colours when it has them */
       if (ui) { var pctEl = ui.querySelector('.tr-pct'); if (pctEl) pctEl.textContent = Math.round(mix * 100) + '% / ' + Math.round((1 - mix) * 100) + '%'; }   /* 追記⑩(5): transcription % / original % above the slider */
       var oGyt = oG; oG *= origGain;   /* 追記⑩(1): YouTube is not trimmed - the ceiling is the hosted copy's alone */   /* 追記⑨(3): the original is inherently louder (measured -11.8 vs -20.7 dBFS RMS); media.original.gain (0.36 = -8.9 dB) is its ceiling, so the two sides balance at equal slider positions. The LINE was fed above, before this trim: equal loudness = equal brightness */
       if (tr) { tr.g.gain.setTargetAtTime(Math.max(0.0001, tG), now, 0.02); tr.gM.gain.setTargetAtTime(Math.max(0.0001, tG), now, 0.02); if (tr.pan) tr.pan.pan.setTargetAtTime(split ? -1 : 0, now, 0.02); }   /* 追記⑨(2): split = transcription in the LEFT ear, the original in the RIGHT - the same sides as the slider and the line */
@@ -1988,7 +2075,7 @@
         return;
       }
       if (mode === 'yt') return;   /* yt: the warm-up's PLAYING starts it */
-      var t = preT(); T0 = ctx.currentTime - t; started = true; playing = true; pausedAt = t; playCh(orig, t); playCh(tr, t); applyMix(); landed();   /* local: join the pre-roll clock where it stands; negative file times start later by themselves */
+      var t = preT() + skip; T0 = ctx.currentTime - t; started = true; playing = true; pausedAt = t; playCh(orig, t); playCh(tr, t); applyMix(); landed();   /* local: join the pre-roll clock where it stands (shifted so it lands just before the first note); negative file times start later by themselves */
     }
     /* ---- YouTube (IFrame API), loaded only when the stage opens */
     function loadYT() {
@@ -2040,7 +2127,7 @@
       if (was || !started) play(t);
     }
     function end() {
-      playing = false; stopCh(orig); stopCh(tr);
+      pausedAt = T(); playing = false; stopCh(orig); stopCh(tr);   /* LOG-177 追記⑫ (the user: 結束時又有 MIDI 跑出來的老毛病): freeze the clock AT THE END - with playing off, T() returns pausedAt, which still held the last seek (the waterfall jumped back and dropped those notes again) */
       if (hint) { hint.textContent = U.tr_end; hint.classList.remove('gone'); }
       setTimeout(function () { if (active) stop(false); }, 1400);
     }
@@ -2049,7 +2136,8 @@
       ui = document.createElement('div'); ui.className = 'stage-ui tr-ui'; ui.setAttribute('aria-label', w.title);
       ui.innerHTML = '<div class="st-hint">' + esc(U.tr_loading) + '</div>' +
         '<div class="st-head"><button class="st-exit" type="button">' + esc(U.stage_exit) + '</button></div>' +
-        '<div class="tr-yt"><div class="tr-yt-in"></div></div>' +   /* YT.Player REPLACES the element it is given: the inner div goes, the outer keeps the box, the dimming class and the rounded corners */
+        '<div class="tr-vid"><div class="tr-yt"><div class="tr-yt-in"></div></div><i class="tr-shield"></i>' +   /* LOG-175 追記①②: the video box and the notice over it travel together in .tr-vid. The shield lies over the iframe (which would eat the pointer): press anywhere and drag, a quick tap plays/pauses, a release near an edge parks there. The bar must stay OUTSIDE this wrapper (its left:50% would resolve against the 330 px box) */
+        '<div class="tr-notice" hidden><b></b><p></p><em></em></div></div>' +   /* 追記⑱: lies OVER the video box whenever the cached copy is the one sounding (the switch, the automatic fallback, or the split in yt mode) */   /* YT.Player REPLACES the element it is given: the inner div goes, the outer keeps the box, the dimming class and the rounded corners */
         '<div class="tr-bar">' +
           '<div class="tr-row tr-row1"><span class="tr-vol tr-vol-l"><input type="range" class="tr-volt" min="0" max="1000" value="' + Math.round(volT * 1000) + '"></span><span class="tr-lbl tr-lo"></span><span class="tr-mixwrap"><b class="tr-pct"></b><input class="tr-mix" type="range" min="0" max="1000" value="' + Math.round((1 - mix) * 1000) + '" aria-label="mix" list="tr-mix-ticks"><datalist id="tr-mix-ticks"><option value="500"></option></datalist></span><span class="tr-lbl tr-hi"></span><span class="tr-vol tr-vol-r"><input type="range" class="tr-volo" min="0" max="1000" value="' + Math.round(volO * 1000) + '"></span></div>' +   /* 追記⑱: row 1 = the pan, symmetric: volume · transcription · [pan] · original · volume */
           '<div class="tr-row tr-row2"><div class="tr-modes"><button type="button" data-mode="xf"></button><button type="button" data-mode="lr"></button></div>' +
@@ -2057,18 +2145,22 @@
             '<span class="tr-align"><span class="tr-align-l"></span><button type="button" data-nudge="-1" aria-label="earlier">\u2212</button><b class="tr-lag"></b><button type="button" data-nudge="1" aria-label="later">+</button><small class="tr-lag-auto"></small></span></div>' +   /* row 2 = modes · source · align (+ the automatic output-latency compensation, read from the machine) */
           '<div class="tr-secs"><div class="tr-cues"></div><div class="tr-seek" role="slider" aria-label="seek"><i></i></div></div>' +   /* 追記⑲: the cues live ON the seek bar - a tick through the bar at each cue, the button beside it (rows alternate) */
           '<div class="tr-toast"></div>' +
+          '<div class="tr-lrtip" hidden role="alertdialog"><p class="tr-lrtip-t"></p><p><b class="tr-lrtip-em"></b></p><small class="tr-lrtip-by"></small><button type="button" class="tr-lrtip-ok"></button></div>' +   /* 追記③ (the user: 左右分耳時跳出泡泡提示…要點「我知道了」才會消失): the warning hangs over the WHOLE bar (not over row 1, which it would cover if anchored to the mode buttons); only its button dismisses it */
         '</div>' +
-        '<div class="tr-notice" hidden><b></b><p></p><em></em></div>';   /* 追記⑱: lies OVER the video box whenever the cached copy is the one sounding (the switch, the automatic fallback, or the split in yt mode) */
+        '';
       hint = ui.querySelector('.st-hint'); ytEl = ui.querySelector('.tr-yt-in');
       veil = document.createElement('div'); veil.className = 'tr-veil'; veil2 = document.createElement('div'); veil2.className = 'tr-veil tr-veil-dim'; var waveEl = $('#wave'); if (waveEl) { HOST.insertBefore(veil, waveEl); HOST.insertBefore(veil2, waveEl); } else { HOST.appendChild(veil); HOST.appendChild(veil2); }   /* 追記⑫(1)/⑬: the hue veil blends (mix-blend-mode: color) against the desktop itself - it must NOT be a child of another stacking context, or it only blends with that; the vignette is its sibling */   /* 追記⑪(6): the eclipse tint over the desktop - under the line, the notes and the windows (the four-piano stage's placement) */
-      HOST.appendChild(ui); document.body.classList.add('tr-on'); requestAnimationFrame(function () { if (ui) ui.classList.add('in'); if (veil) veil.classList.add('in'); if (veil2) veil2.classList.add('in'); });   /* body.tr-on (追記⑭): the sticky note is torn off while the stage runs */
+      paintPalette(ui); paintPalette(veil); paintPalette(veil2);
+      HOST.appendChild(ui); document.body.classList.add('tr-on'); barPan = panels.add({ el: ui.querySelector('.tr-bar'), name: 'tr-bar', grp: 'tr', centred: true, base: function () { return 64; }, extra: '.tr-tip,.tr-lrtip' }); barPan.show(); var vid = ui.querySelector('.tr-vid'); ytPan = panels.add({ el: vid, name: 'tr-vid', grp: 'tr', base: function () { return 12; }, vis: function () { return !vid.classList.contains('empty'); }, tapOn: '.tr-shield', tap: function () { toggle(); }, snap: { at: 0.35, x: 14, y: 12 } }); ytPan.show(); requestAnimationFrame(function () { if (ui) ui.classList.add('in'); if (veil) veil.classList.add('in'); if (veil2) veil2.classList.add('in'); });   /* body.tr-on (追記⑭): the sticky note is torn off while the stage runs */
       ui.querySelector('.st-exit').addEventListener('click', function () { stop(false); });
       var mixEl = ui.querySelector('.tr-mix'); mixEl.addEventListener('input', function () { var v = +mixEl.value; if (Math.abs(v - 500) <= TR_SNAP && v !== 500) { v = 500; mixEl.value = 500; } mix = 1 - v / 1000; applyMix(); });   /* left = transcription (mix 1), right = original (mix 0); 追記⑨(7): the thumb snaps to the centre within TR_SNAP */
       var vt = ui.querySelector('.tr-volt'), vo = ui.querySelector('.tr-volo');
-      vt.addEventListener('input', function () { volT = vt.value / 1000; try { localStorage.setItem('tr_volt', String(volT)); } catch (e) {} applyMix(); });
+      vt.addEventListener('input', function () { volT = vt.value / 1000; try { localStorage.setItem('tr_volt.' + wid, String(volT)); } catch (e) {} applyMix(); });   /* 追記⑪: the trim is remembered per work */
       vo.addEventListener('input', function () { volO = vo.value / 1000; try { localStorage.setItem('tr_volo', String(volO)); } catch (e) {} applyMix(); });
       ui.addEventListener('click', function (e) {
-        var b = e.target.closest('[data-mode]'); if (b) { if (b.dataset.mode === 'lr' && !hasFallback) return; split = b.dataset.mode === 'lr'; paintModes(); paintSrc(); applyMix(); return; }   /* 追記⑱(1): the split works in yt mode too - the cached copy carries the original's ear while the video keeps the picture */
+        if (e.target.closest('.tr-lrtip-ok')) { lrAck = true; hideLrTip(); return; }   /* 追記③: the only way the warning goes */
+        if (e.target.closest('.tr-lrtip')) return;
+        var b = e.target.closest('[data-mode]'); if (b) { if (b.dataset.mode === 'lr' && !hasFallback) return; split = b.dataset.mode === 'lr'; paintModes(); paintSrc(); applyMix(); if (split) showLrTip(); return; }   /* 追記⑱(1): the split works in yt mode too - the cached copy carries the original's ear while the video keeps the picture */
         var sw = e.target.closest('.tr-src-sw'); if (sw) { if (mode === 'yt') setCached(!cached); else setMode('yt', false); return; }   /* 追記㉑: with the video alive the switch is a volume swap (no reload either way) */
         var nd = e.target.closest('[data-nudge]'); if (nd) { hideTip(); setLag((mode === 'yt' ? ytLag : loLag) + TR_LAG_STEP * parseInt(nd.dataset.nudge, 10)); return; }
         var sc = e.target.closest('.tr-secs [data-t]'); if (sc) { seek(parseFloat(sc.dataset.t)); return; }
@@ -2089,10 +2181,14 @@
     }
     function paintLag() { if (!ui) return; var a = ui.querySelector('.tr-align'); if (!a) return; var v = mode === 'yt' ? ytLag : loLag; a.querySelector('.tr-align-l').textContent = U.tr_align; a.querySelector('.tr-lag').textContent = (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' s'; var au = a.querySelector('.tr-lag-auto'); if (au) { au.hidden = mode !== 'yt'; au.textContent = U.tr_auto + ' ' + (autoLag >= 0 ? '+' : '−') + Math.abs(autoLag).toFixed(2) + ' s'; au.title = U.tr_auto_title; } }
     function setCached(v) { cached = !!v && hasFallback; hideTip(); paintSrc(); applyMix(); }
-    function hideTip() { if (!ui) return; var t = ui.querySelector('.tr-tip'); clearTimeout(tipTimer); if (!t || t.hidden) return; t.classList.add('bye'); tipTimer = setTimeout(function () { t.hidden = true; t.classList.remove('bye'); }, 500); }   /* 追記㉒: fades out (click, a nudge, the switch, or 10 s) */
+    function hideTip() { if (!ui) return; var t = ui.querySelector('.tr-tip'); clearTimeout(tipTimer); if (!t || t.hidden) return; t.classList.add('bye'); tipTimer = setTimeout(function () { t.hidden = true; t.classList.remove('bye'); if (barPan) barPan.layout(); }, 500); }   /* 追記㉒: fades out (click, a nudge, the switch, or 10 s) */
+    function showLrTip() {   /* 追記③: entering split ears (once per run, until acknowledged): a warning over the button - a comparison tool, use real stereo, unequal sound in the two ears can grow uncomfortable, headphones especially */
+      if (!ui || lrAck) return; var t = ui.querySelector('.tr-lrtip'); if (!t || !t.hidden) return; t.hidden = false; t.classList.remove('bye'); if (barPan) barPan.layout();
+    }
+    function hideLrTip() { if (!ui) return; var t = ui.querySelector('.tr-lrtip'); if (!t || t.hidden) return; t.classList.add('bye'); setTimeout(function () { t.hidden = true; t.classList.remove('bye'); if (barPan) barPan.layout(); }, 500); }
     function showTip() {   /* 追記㉑(2): five seconds in, a small bubble over the cached-copy switch: out of sync? use Align; if nothing helps, the cached copy. It stays until clicked (追記㉔) */
       if (!ui || tipShown || mode !== 'yt' || cached || !hasFallback) return; tipShown = true;
-      var t = ui.querySelector('.tr-tip'); if (!t) return; t.hidden = false; t.classList.remove('bye'); clearTimeout(tipTimer);   /* 追記㉔: no auto-hide - it stays until clicked (the bubble, a nudge, or the switch) */
+      var t = ui.querySelector('.tr-tip'); if (!t) return; t.hidden = false; t.classList.remove('bye'); clearTimeout(tipTimer); if (barPan) barPan.layout();   /* 追記㉔: no auto-hide - it stays until clicked (the bubble, a nudge, or the switch) */
     }
     function paintModes() { if (!ui) return; ui.querySelectorAll('[data-mode]').forEach(function (b) { b.classList.toggle('on', (b.dataset.mode === 'lr') === split); }); var lr = ui.querySelector('[data-mode="lr"]'); if (lr) lr.disabled = !hasFallback; }
     function paintSrc() {
@@ -2103,7 +2199,8 @@
       sw.hidden = !(canYT && hasFallback) || (mode === 'local' && ytFailed);   /* no way back to a YouTube that already failed this run */
       var yb = ui.querySelector('.tr-yt'); if (yb) { yb.classList.toggle('off', mode !== 'yt' || cached); yb.hidden = !canYT; }
       paintLag();
-      var n = ui.querySelector('.tr-notice'); if (n) n.hidden = !cachedSounds;   /* forced up, over the video, for as long as the cached copy is the one sounding */
+      var n = ui.querySelector('.tr-notice'); if (n) n.hidden = !cachedSounds;
+      var vd = ui.querySelector('.tr-vid'); if (vd) { vd.classList.toggle('empty', (!yb || yb.hidden) && (!n || n.hidden)); if (ytPan) ytPan.layout(); }   /* LOG-175 追記①: nothing to see = no shield, and no seat in the stack */   /* forced up, over the video, for as long as the cached copy is the one sounding */
       paintModes();
     }
     function relabel() {
@@ -2111,24 +2208,32 @@
       ui.querySelector('.st-exit').textContent = U.stage_exit;
       ui.querySelector('.tr-lo').textContent = U.tr_trans; ui.querySelector('.tr-hi').textContent = U.tr_orig;
       var tip = ui.querySelector('.tr-tip'); if (tip) tip.textContent = U.tr_tip;
+      ui.querySelector('.tr-lrtip-t').textContent = U.tr_lr_warn; ui.querySelector('.tr-lrtip-em').textContent = U.tr_lr_warn_em; ui.querySelector('.tr-lrtip-by').textContent = U.tr_lr_warn_by; ui.querySelector('.tr-lrtip-ok').textContent = U.tr_lr_ok;   /* 追記③⑤ */
       ui.querySelector('.tr-volt').title = U.tr_vol + ' · ' + U.tr_trans; ui.querySelector('.tr-volo').title = U.tr_vol + ' · ' + U.tr_orig; ui.querySelector('.tr-volt').setAttribute('aria-label', U.tr_vol + ' ' + U.tr_trans); ui.querySelector('.tr-volo').setAttribute('aria-label', U.tr_vol + ' ' + U.tr_orig);
       ui.querySelector('[data-mode="xf"]').textContent = U.tr_mode_xf; ui.querySelector('[data-mode="lr"]').textContent = U.tr_mode_lr;
       secs = w.sections || [];
       ui.querySelector('.tr-cues').innerHTML = secs.map(function (s, i) { return '<b class="tick" data-i="' + i + '"></b><button type="button" data-t="' + s.t + '" class="' + (i % 2 ? 'alt' : '') + '">' + esc(s.label) + '</button>'; }).join('');
       layoutSecs();
-      var n = ui.querySelector('.tr-notice'); n.querySelector('b').textContent = U.tr_notice_head; n.querySelector('em').textContent = U.tr_notice_note;
-      n.querySelector('p').innerHTML = esc(U.tr_notice).replace('{contact}', '<a data-app="contact" href="#">' + esc(U.app_contact) + '</a>');
+      var n = ui.querySelector('.tr-notice'), o_ = w.media.original || {}; n.querySelector('b').textContent = U.tr_notice_head;   /* LOG-176: a work may carry its own rights text (media.original.notice / notice_note, localised by build); the site-wide ui.tr_notice is Death Piano's */
+      var nn = o_.notice_note != null ? o_.notice_note : U.tr_notice_note; n.querySelector('em').textContent = nn; n.querySelector('em').hidden = !nn;
+      n.querySelector('p').innerHTML = esc(o_.notice || U.tr_notice).replace('{contact}', '<a data-app="contact" href="#">' + esc(U.app_contact) + '</a>');
       if (hint && !hint.classList.contains('gone') && started) hint.textContent = U.tr_hint;
       paintSrc();
     }
-    function paintCaption() {   /* 追記⑮(3): the now-playing name wears the stage's two colours (the four-piano stage paints its own red the same way; cleared in stop()) */
-      var el = document.querySelector('#np-desktop .np-title'); if (!el) return;
-      if (el.dataset.trTint !== '1') { el.dataset.trTint = '1'; el.style.color = 'rgb(214,150,255)'; el.style.textShadow = '0 0 12px rgba(150,110,240,.55)'; }   /* solid colours, no clipped gradient: transparent text plus a text-shadow paints the glyphs twice (追記⑮ first try) */
-      var tg_ = el.querySelector('.np-tag'), rs_ = el.querySelector('.np-rest');
-      if (tg_ && tg_.dataset.trTint !== '1') { tg_.dataset.trTint = '1'; tg_.style.color = 'rgb(168,156,255)'; }   /* the app name in the transcription's blue-violet */
-      if (rs_ && rs_.dataset.trTint !== '1') { rs_.dataset.trTint = '1'; rs_.style.color = 'rgb(226,146,220)'; }   /* the piece in the original's red-violet */
+    var capTimer = 0;
+    function paintCaption() {   /* 追記⑮(3)/LOG-177 追記⑧: the now-playing name wears the stage's two colours through three registered custom properties on #np-desktop (os.css @property --np-c/--np-cl/--np-cr); the title's own dataset flag is only a marker (probes) and comes back after every rebuild */
+      var np = document.querySelector('#np-desktop'), el = np && np.querySelector('.np-title'); if (!np || !el) return;
+      if (np.dataset.trTint !== '1') {
+        np.dataset.trTint = '1'; clearTimeout(capTimer); np.classList.add('np-tint');
+        np.style.setProperty('--np-c', 'rgb(' + (palC ? rgbS(palC.cap) : '214,150,255') + ')'); np.style.setProperty('--np-cl', 'rgb(' + (palC ? rgbS(palC.capL) : '168,156,255') + ')'); np.style.setProperty('--np-cr', 'rgb(' + (palC ? rgbS(palC.capR) : '226,146,220') + ')');
+      }
+      if (el.dataset.trTint !== '1') el.dataset.trTint = '1';
     }
-    function clearCaption() { var el = document.querySelector('#np-desktop .np-title'); if (!el) return; [el].concat(Array.prototype.slice.call(el.querySelectorAll('.np-tag, .np-rest'))).forEach(function (e_) { delete e_.dataset.trTint; e_.style.color = ''; e_.style.textShadow = ''; e_.style.backgroundImage = ''; e_.style.webkitBackgroundClip = ''; e_.style.backgroundClip = ''; }); }
+    function clearCaption() {   /* 追記③⑧: the three properties glide back to the amber over 1.6 s (registered = animatable, inherited = a rebuilt span picks the moving value up); the class goes once they have landed */
+      var np = document.querySelector('#np-desktop'); if (!np) return; var el = np.querySelector('.np-title'); if (el) delete el.dataset.trTint; delete np.dataset.trTint;
+      ['--np-c', '--np-cl', '--np-cr'].forEach(function (k) { np.style.setProperty(k, '#e0b04a'); });
+      clearTimeout(capTimer); capTimer = setTimeout(function () { if (np.dataset.trTint !== '1') { np.classList.remove('np-tint'); ['--np-c', '--np-cl', '--np-cr'].forEach(function (k) { np.style.removeProperty(k); }); } }, 1800);
+    }
     function layoutSecs() {   /* 追記⑱(3): each cue at its place on the timeline; neighbours alternate rows so close cues do not collide */
       if (!ui || !secs.length) return; var D_ = dur || (secs[secs.length - 1].t + 12), el = ui.querySelector('.tr-cues');
       el.querySelectorAll('.tick').forEach(function (b, i) { b.style.left = (100 * secs[i].t / D_).toFixed(2) + '%'; });
@@ -2163,9 +2268,11 @@
       if (typeof secStage !== 'undefined' && secStage.active()) secStage.stop();
       trail.log('tr', id);
       active = true; runSeq++; wid = id; started = false; preT0 = performance.now(); playing = false; pausedAt = 0; pendingT = null; dur = 0; muted = false; split = false; mix = 0.5;
-      yt = null; ytReady = false; ytFailed = false; ytBuf = false; ytPend = false; ytWarm = 0; ytT = 0; ytAt = performance.now(); cached = false; tipShown = false;
+      yt = null; ytReady = false; ytFailed = false; ytBuf = false; ytPend = false; ytWarm = 0; ytT = 0; ytAt = performance.now(); cached = false; tipShown = false; lrAck = false;
       var m = w.media, o = m.original || {}, r = m.rendition || {};
-      canYT = o.kind === 'youtube'; hasFallback = canYT ? !!o.fallback : !!o.src; origGain = (o.gain != null) ? o.gain : 1;
+      palC = palette(w); skip = Math.max(0, (typeof m.first_note_s === 'number' ? m.first_note_s : 0) - TR_SKIP_LEAD_S);
+      volT = (typeof r.volume === 'number') ? r.volume : 1; try { var vt_ = parseFloat(localStorage.getItem('tr_volt.' + id)); if (!isNaN(vt_)) volT = Math.max(0, Math.min(1, vt_)); } catch (e) {}   /* 追記⑪: the work's own default, then the visitor's remembered trim for this work */
+      canYT = o.kind === 'youtube'; leadS = canYT ? TR_LEAD_S : TR_LEAD_LOCAL_S; hasFallback = canYT ? !!o.fallback : !!o.src; origGain = (o.gain != null) ? o.gain : 1;
       if (/[?&]debug/.test(location.search) && /[?&]trlocal/.test(location.search)) pref = 'local';   /* the probe: skip YouTube, local from the first note */
       mode = (canYT && !(pref === 'local' && hasFallback)) ? 'yt' : 'local';
       ensureCtx();   /* born inside the opening click (LOG-130): a context made later starts suspended */
@@ -2193,15 +2300,16 @@
       if (yt) { try { yt.destroy(); } catch (e) {} yt = null; } ytReady = false;
       if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; master = null; mgain = null; }
       orig = tr = null; if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      WV.tint(palC ? rgbS(palC.mid) : '146,88,200', palC ? rgbS(palC.light) : '200,180,255', 1); WV.tint(null);   /* 追記③ (the user: 退出舞台時顏色慢慢換成桌面顏色，dp 也是): the line leaves the split wearing the stage's colour, then the tint system fades it to amber over TINT_OUT_MS */
       WV.split(null);
-      var u = ui, v_ = veil, v2_ = veil2; ui = null; veil = null; veil2 = null; hint = null; ytEl = null; document.body.classList.remove('tr-on'); clearCaption();
+      var u = ui, v_ = veil, v2_ = veil2; ui = null; veil = null; veil2 = null; hint = null; ytEl = null; document.body.classList.remove('tr-on'); clearCaption(); if (barPan) { barPan.drop(); barPan = null; } if (ytPan) { ytPan.drop(); ytPan = null; }
       if (u) { u.classList.remove('in'); setTimeout(function () { u.remove(); }, immediate ? 0 : TR_EXIT_MS); }
-      [v_, v2_].forEach(function (vv) { if (vv) { vv.classList.remove('in'); setTimeout(function () { vv.remove(); }, immediate ? 0 : TR_EXIT_MS + 300); } });
+      [v_, v2_].forEach(function (vv) { if (vv) { vv.classList.remove('in'); setTimeout(function () { vv.remove(); }, immediate ? 0 : TR_VEIL_OUT_MS); } });   /* 追記⑤: the veils fade over 1.6 s (os.css) - taken out only after that */
       var wasDucked = ducked; ducked = false;
       if (wasDucked) exitPend = setTimeout(function () { exitPend = null; player.unduck(); }, immediate ? 0 : 300);
       if (window.__tr) try { delete window.__tr; } catch (e) {}
     }
-    function debug() { return { active: active, mode: mode, cached: cached, split: split, mix: +mix.toFixed(3), lag: ytLag, autoLag: autoLag, loLag: loLag, volT: volT, volO: volO, origGain: origGain, warm: ytWarm, line: WV.splitInfo(), playing: playing, started: started, pos: +T().toFixed(2), dur: +dur.toFixed(1), yt: { ready: ytReady, failed: ytFailed, buf: ytBuf, pend: ytPend }, ctx: ctx ? ctx.state : '-',
+    function debug() { return { active: active, mode: mode, cached: cached, split: split, skip: skip, palette: !!palC, mix: +mix.toFixed(3), lag: ytLag, autoLag: autoLag, loLag: loLag, volT: volT, volO: volO, origGain: origGain, warm: ytWarm, line: WV.splitInfo(), playing: playing, started: started, pos: +T().toFixed(2), dur: +dur.toFixed(1), yt: { ready: ytReady, failed: ytFailed, buf: ytBuf, pend: ytPend }, ctx: ctx ? ctx.state : '-',
       orig: orig ? { buf: !!orig.buf, src: !!orig.src, g: +orig.g.gain.value.toFixed(3), pan: orig.pan ? +orig.pan.pan.value.toFixed(2) : null, off: orig.off } : null,
       tr: tr ? { buf: !!tr.buf, src: !!tr.src, g: +tr.g.gain.value.toFixed(3), pan: tr.pan ? +tr.pan.pan.value.toFixed(2) : null, off: tr.off } : null }; }
     /* now-playing source while the stage runs: caption + progress line + spectrum analyser + the waterfall's notes and clock */
@@ -6048,9 +6156,12 @@
   function glassBox(o) {   /* o.cls: a second class on the box; o.html(): a page's inner HTML; o.wire(box, focusIt): its handlers; o.close(); o.slide(fromToken, toToken): ask for the sideways swap */
     var el = document.createElement('div'); el.className = 'well-bub ' + (o.cls || ''); el.hidden = true; desktop.appendChild(el);
     var shown = null, receipt = '', box;
-    function place() {   /* centred over the dock, never anchored to a button. Transform-free (offsetTop): a language swap drops the dock 120 px on a transform (os.css swap-out) and relabel() lands right in it */
-      var W = desktop.clientWidth, w = Math.min(720, W - 32), top = 0, n = dock; while (n && n !== desktop) { top += n.offsetTop; n = n.offsetParent; }
-      el.style.width = w + 'px'; el.style.left = Math.round((W - w) / 2) + 'px'; el.style.bottom = (desktop.clientHeight - top + 16) + 'px';
+    function base() { var top = 0, n = dock; while (n && n !== desktop) { top += n.offsetTop; n = n.offsetParent; } return desktop.clientHeight - top + 16; }   /* its resting spot: 16 px over the dock. Transform-free (offsetTop): a language swap drops the dock 120 px on a transform (os.css swap-out) and relabel() lands right in it */
+    var pan = panels.add({ el: el, name: (o.cls || 'glass'), base: base });   /* LOG-175: bottom comes from the shared stack; once dragged the box keeps its own spot */
+    function place() {   /* centred over the dock, never anchored to a button */
+      var W = desktop.clientWidth, w = Math.min(720, W - 32);
+      el.style.width = w + 'px'; if (!pan.dragged()) el.style.left = Math.round((W - w) / 2) + 'px';
+      pan.layout();
     }
     function paint(focusIt, token) {   /* the old page fades out, the box glides to its new height, the new page fades in */
       var old = $('.well-in', el), h0 = el.offsetHeight, slide = !!(old && o.slide && o.slide(shown, token)); shown = token;
@@ -6070,8 +6181,8 @@
     }
     function say(t, cls) { var m = $('.msg', el); if (m) { m.className = 'msg ' + (cls || ''); m.textContent = t; } }
     function focusFirst() { var q = $('textarea,input,.wchip.on,.wchip', el); if (q) q.focus(); }
-    function show(token) { el.hidden = false; el.innerHTML = ''; shown = null; paint(false, token); place(); el.classList.remove('in'); void el.offsetWidth; el.classList.add('in'); setTimeout(function () { if (!el.hidden && el.classList.contains('in')) focusFirst(); }, 250); }
-    function hide() { el.classList.remove('in'); setTimeout(function () { if (!el.classList.contains('in')) el.hidden = true; }, 400); }
+    function show(token) { el.hidden = false; el.innerHTML = ''; shown = null; pan.show(); paint(false, token); place(); el.classList.remove('in'); void el.offsetWidth; el.classList.add('in'); setTimeout(function () { if (!el.hidden && el.classList.contains('in')) focusFirst(); }, 250); }
+    function hide() { el.classList.remove('in'); pan.hide(); setTimeout(function () { if (!el.classList.contains('in')) el.hidden = true; }, 400); }
     box = { el: el, paint: paint, place: place, say: say, show: show, hide: hide, focus: focusFirst, receipt: function (t) { receipt = t; }, hasFocus: function () { return el.contains(document.activeElement); } };
     return box;
   }
@@ -6192,7 +6303,7 @@
     }
     function blocks() {   /* every visible piece of the desktop is a keep-out (the user: 不要出現在有東西或會被遮住的地方) */
       var hr = host.getBoundingClientRect(), out = [];
-      [].forEach.call(host.querySelectorAll('.menubar,.icons,.hero-text,.updates,.sticky,#np-desktop,#dock,.well-bub,.win:not(.minimized)'), function (e) {
+      [].forEach.call(host.querySelectorAll('.menubar,.icons,.hero-text,.updates,.sticky,#np-desktop,#dock,.well-bub,.win:not(.minimized),.tr-ui .tr-bar,.tr-ui .tr-yt,.tr-ui .tr-notice'), function (e) {   /* LOG-175: the compare stage's bar, video box and notice are keep-outs too (the user: 被採譜的面板遮擋) */
         if (e.hidden) return; var cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden') return;
         var r = e.getBoundingClientRect(); if (!r.width || !r.height) return; out.push({ l: r.left - hr.left - 12, t: r.top - hr.top - 8, r: r.right - hr.left + 12, b: r.bottom - hr.top + 8 });
       });
@@ -6356,7 +6467,7 @@
       host.addEventListener('pointermove', track); host.addEventListener('pointerleave', function () { hold(null, 0); });   /* LOG-170 (the user: 應用程式互動範圍內不會跟彈幕互動，剛剛要點程式結果彈幕滑過去直接不給點): the lines take no pointer events at all - the hover is a geometry test on the pointer, and never over an interactive piece of the desktop */
       window.addEventListener('resize', function () { if (on) geoUp(); });
     }
-    var held = null, KEEP = '.icons,#dock,.well-bub,.win,#np-desktop,.updates,.sticky,.menubar';   /* where the pointer is busy with something else */
+    var held = null, KEEP = '.icons,#dock,.well-bub,.win,#np-desktop,.updates,.sticky,.menubar,.tr-bar,.tr-yt,.tr-notice';   /* where the pointer is busy with something else */
     function hold(L, px) {   /* LOG-166/170: one line at a time stands still and grows a little under the pointer */
       if (held === L) return;
       if (held) { held.hold = false; held.el.classList.remove('hold'); held = null; }

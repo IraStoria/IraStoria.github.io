@@ -259,6 +259,9 @@ def check_transcription(w, media, p):
     for k in ("offset_s", "fallback_offset_s"):   # fallback_offset_s (追記⑦): the hosted copy's own MIDI-0 position when it is not a straight rip of the embed
         if k in orig and not isinstance(orig[k], (int, float)):
             raise BuildError(f"{p}: media.original.{k} must be a number (seconds)")
+    for k in ("notice", "notice_note"):   # LOG-176: the hosted copy's rights text is per work (the site-wide ui.tr_notice names Death Piano); optional, bilingual
+        if k in orig:
+            bilingual(orig[k], f"{p}.media.original.{k}")
     if "gain" in orig and not (isinstance(orig["gain"], (int, float)) and 0 < orig["gain"] <= 1):   # LOG-173 追記⑨: the original's loudness ceiling (a louder master balanced against the render)
         raise BuildError(f"{p}: media.original.gain must be a number in (0, 1]")
     rend = media.get("rendition")
@@ -267,6 +270,12 @@ def check_transcription(w, media, p):
     local_audio(rend.get("src"), "media.rendition.src", p)
     if "offset_s" in rend and not isinstance(rend["offset_s"], (int, float)):
         raise BuildError(f"{p}: media.rendition.offset_s must be a number (seconds)")
+    if "volume" in rend and not (isinstance(rend["volume"], (int, float)) and 0 < rend["volume"] <= 1):   # LOG-177 追記⑪: this work's opening transcription volume (default 1)
+        raise BuildError(f"{p}: media.rendition.volume must be a number in (0, 1]")
+    pal = media.get("palette")   # LOG-177: the stage's two colours for this work {l, r} (hex); absent = the eclipse purples
+    if pal is not None:
+        if not (isinstance(pal, dict) and set(pal.keys()) == {"l", "r"} and all(isinstance(pal[k], str) and re.fullmatch(r"#[0-9a-fA-F]{6}", pal[k]) for k in ("l", "r"))):
+            raise BuildError(f"{p}: media.palette must be {{l: '#rrggbb', r: '#rrggbb'}}")
     notes = media.get("notes")
     if not isinstance(notes, str) or not (ROOT / notes).exists():
         raise BuildError(f"{p}: media.notes must name an existing notes JSON (the compare stage draws it)")
@@ -313,7 +322,7 @@ def load_works():
         if not isinstance(media, dict):
             raise BuildError(f"{p} ({wid}): 'media' must be an object")
         is_tr = w.get("type") == "transcription"
-        allowed = {"original", "rendition", "notes", "score"} if is_tr else {"youtube", "soundcloud", "local", "demo", "notes"}
+        allowed = {"original", "rendition", "notes", "score", "palette"} if is_tr else {"youtube", "soundcloud", "local", "demo", "notes"}
         bad = set(media) - allowed
         if bad:
             raise BuildError(f"{p} ({wid}): unknown media key(s) {sorted(bad)}; allowed {sorted(allowed)}")
@@ -638,8 +647,15 @@ def build_pages(site, works, demos, articles):
             return m
 
         def loc(w, lang):   # lang is a parameter on purpose (LOG-172): as a closure it read the page loop's language, so the other language's works payload (alt) came out in the page's own language
+            med = loc_media(w.get("media") or {})
+            if w.get("type") == "transcription" and isinstance((w.get("media") or {}).get("notes"), str):   # LOG-177 追記②: where the first note falls, so the stage can skip the leading silence
+                _nj = json.loads((ROOT / w["media"]["notes"]).read_text(encoding="utf-8"))
+                _on = [nt[0] for tr_ in _nj.get("tracks", []) for nt in tr_.get("notes", [])]
+                med["first_note_s"] = round(min(_on), 3) if _on else 0
+            if isinstance(med.get("original"), dict):   # LOG-176: the hosted copy's own rights text, one language per page
+                med["original"] = {k: (v[lang] if k in ("notice", "notice_note") else v) for k, v in med["original"].items()}
             return {"id": w["id"], "type": w["type"], "year": w["year"], "featured": bool(w.get("featured")), "secret": bool(w.get("secret")),
-                    "title": w["title"][lang], "desc": w["desc"][lang], "media": loc_media(w.get("media") or {}),
+                    "title": w["title"][lang], "desc": w["desc"][lang], "media": med,
                     "platform": w["platform"], "links": [{"label": l["label"][lang], "url": l["url"]} for l in w.get("links", [])],
                     "sections": [{"t": s["t"], "label": s[lang]} for s in w.get("sections", [])]}
         def home_data(lang):

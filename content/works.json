@@ -240,5 +240,103 @@
       "transcription",
       "piano"
     ]
+  },
+  {
+    "id": "olympia-tr",
+    "type": "transcription",
+    "year": 2024,
+    "featured": true,
+    "title": {
+      "zh": "Kad u te nestane mi vire（Oliver Dragojević · A l'Olympia，客席 Matija Dedić）── 鋼琴與電鋼琴採譜",
+      "en": "Kad u te nestane mi vire (Oliver Dragojević, A l'Olympia, feat. Matija Dedić) — piano & e-piano transcription"
+    },
+    "desc": {
+      "zh": "2024 私人委託案例：把現場錄音裡的鋼琴與電鋼琴採成兩軌，對著原曲播放；一支滑桿在兩者之間交叉混音，也可以左右分耳。原曲影片的擁有者不開放嵌入，這裡以自載音檔對照。",
+      "en": "A 2024 private commission: the piano and e-piano of a live recording transcribed as two tracks and played against the original; one slider cross-fades between them, or splits them left / right. The video's owner does not allow embedding, so the comparison uses a hosted copy."
+    },
+    "media": {
+      "original": {
+        "kind": "local",
+        "src": "assets/audio/olympia-orig.mp3",
+        "offset_s": -2.8,
+        "gain": 0.35,
+        "notice": {
+          "zh": "《Kad u te nestane mi vire》為 Oliver Dragojević 的作品，此版本為 A l'Olympia 現場錄音（客席鋼琴 Matija Dedić），著作權歸原權利人（Aquarius Records）所有。原曲影片的擁有者不開放嵌入，所以本頁以自載的音檔提供原曲與採譜成果的對照（含左右聲道對照的實驗性質）。僅供對照，不作營利、不提供下載。權利人若希望移除，請透過站內「{contact}」來信，收到即下架。",
+          "en": "\"Kad u te nestane mi vire\" is Oliver Dragojević's; this version is the A l'Olympia live recording (guest pianist Matija Dedić), and all rights remain with the rights holders (Aquarius Records). The video's owner does not allow embedding, so this page compares the original with the transcription from a hosted copy (including the experimental left/right-channel split). It is for comparison only, not monetized, and cannot be downloaded. Rights holders who wish it removed: please write via the site's \"{contact}\" app and it will be taken down on receipt."
+        },
+        "notice_note": {
+          "zh": "這首沒有 YouTube 模式：影片擁有者不開放嵌入，對照一律走自載音檔。",
+          "en": "No YouTube mode for this one: the video's owner forbids embedding, so the comparison always uses the hosted copy."
+        }
+      },
+      "rendition": {
+        "src": "assets/audio/olympia-tr.mp3",
+        "offset_s": -2.77,
+        "volume": 0.5
+      },
+      "notes": "assets/notes/olympia.json",
+      "palette": {
+        "l": "#ff4f8b",
+        "r": "#ff7a3a"
+      }
+    },
+    "sections": [
+      {
+        "t": 3.0,
+        "zh": "前奏",
+        "en": "Intro"
+      },
+      {
+        "t": 33.65,
+        "zh": "第一段",
+        "en": "Verse I"
+      },
+      {
+        "t": 55.35,
+        "zh": "鋼琴進",
+        "en": "Piano in"
+      },
+      {
+        "t": 91.99,
+        "zh": "副歌",
+        "en": "Chorus"
+      },
+      {
+        "t": 150.5,
+        "zh": "即興",
+        "en": "Peak"
+      },
+      {
+        "t": 175.82,
+        "zh": "第二段",
+        "en": "Verse II"
+      },
+      {
+        "t": 233.67,
+        "zh": "電鋼琴回",
+        "en": "E-piano back"
+      },
+      {
+        "t": 269.83,
+        "zh": "尾聲",
+        "en": "Coda"
+      }
+    ],
+    "platform": "desktop",
+    "links": [
+      {
+        "label": {
+          "zh": "原曲影片（YouTube）",
+          "en": "Original video (YouTube)"
+        },
+        "url": "https://youtu.be/9ZDGVOjXaEY"
+      }
+    ],
+    "tags": [
+      "transcription",
+      "piano",
+      "e-piano",
+      "commission"
+    ]
   }
 ]
