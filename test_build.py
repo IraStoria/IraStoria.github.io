@@ -255,6 +255,14 @@ ok("os.js: the waterfall honours a source that insists on its notes (st.wf)", "(
 ok("os.js: the transport routes pause / prev / next / mute to the compare stage", _os.count("if (trStage.active()) trStage.") >= 4)
 ok("os.js: YouTube's IFrame API loads only from the stage (no page-load third-party script)", _os.count("youtube.com/iframe_api") == 1 and "iframe_api" not in (ROOT / "templates" / "desktop.html").read_text(encoding="utf-8"))
 
+# ---- LOG-179: the well's example wishes
+_ex = B.load_site().get("wish_examples") or []
+ok("site.json carries six example wishes, every wisher 範例 / Example", len(_ex) == 6 and all(e["nick"] == {"zh": "範例", "en": "Example"} for e in _ex))
+ok("the NieR line is there with the owner's reply", any("尼爾" in e["text"] and "NieR" in e.get("reply", "") for e in _ex))
+ok("example statuses are wish statuses", all(e["status"] in B.WISH_STATUSES for e in _ex))
+ok("the desktop page carries the examples in its language", '"wish_examples"' in (ROOT / "zh" / "index.html").read_text(encoding="utf-8") and "Example" in (ROOT / "en" / "index.html").read_text(encoding="utf-8"))
+expect_refused("an example with a made-up status is refused", lambda: B.check_wish_examples([dict(_ex[0], status="maybe")]), "status must be one of")
+
 # ---- LOG-161: 恥辱柱 / 許願池 / 合作聯絡
 _bugs = B.load_bugs()
 ok("bugs.json loads, newest first, >= 10 entries", len(_bugs) >= 10 and all(_bugs[i]["date"] >= _bugs[i + 1]["date"] for i in range(len(_bugs) - 1)), str(len(_bugs)))

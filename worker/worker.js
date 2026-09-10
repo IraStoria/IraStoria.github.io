@@ -181,7 +181,7 @@ function mail(env, ctx, to, subject, text) {
 // What changed for the wisher: approval, a status, a (new) reply. A link edit, an unapproval or a re-save is not news.
 function wishChange(before, it) {
   const c = [];
-  if (before.approved !== true && it.approved === true) c.push('approved');
+  if (before.approved !== true && it.approved === true && it.pub !== false) c.push('approved');   // LOG-180: no 'on the wall' line for a private wish
   if (before.status !== it.status) c.push('status');
   if ((it.reply || '') && before.reply !== it.reply) c.push('reply');
   return c;
@@ -345,7 +345,7 @@ async function rebuildPubBugs(env) {
 // Rebuild the cached public list (pub:wishes) from every approved wish.
 async function rebuildPub(env) {
   const all = await loadAll(env, 'wish:');
-  const pub = { ts: Date.now(), items: all.filter((w) => w.approved === true).map(publicWish) };
+  const pub = { ts: Date.now(), items: all.filter((w) => w.approved === true && w.pub !== false).map(publicWish) };   // LOG-180: private wishes never reach the wall
   await env.POOL.put('pub:wishes', JSON.stringify(pub));
   return pub;
 }
@@ -436,10 +436,12 @@ async function handleSubmit(request, env, ctx, iph) {
     if (!CATS.includes(data.cat)) return fail(400, 'invalid');
     if (clen(text) > LIMIT.wishText) return fail(400, 'invalid');
     const email = isStr(data.email) ? data.email.trim().toLowerCase() : '';   // LOG-165: optional; never public
+    if (data.public !== undefined && typeof data.public !== 'boolean') return fail(400, 'invalid');
+    const pub = data.public !== false;   // LOG-180: a private wish is for the owner only - never on the wall, whatever `approved` says
     if (email && (clen(email) > LIMIT.email || !EMAIL_RE.test(email))) return fail(400, 'invalid');
     const item = {
       id, type: 'wish', ts, lang: data.lang, nick, cat: data.cat, text,
-      approved: false, status: 'wishing', votes: 0, reply: '', replyLang: '', link: '', email, iph,
+      approved: false, status: 'wishing', votes: 0, reply: '', replyLang: '', link: '', email, iph, pub,
     };
     await env.POOL.put(`wish:${id}`, JSON.stringify(item));
     notifySubmit(env, ctx, '許願池 · 新願望', nick, text);
@@ -500,7 +502,7 @@ async function handleMine(request, env, iph) {
   const states = {};
   for (const id of ids) {
     const w = await getJson(env, `wish:${id}`);
-    states[id] = !w ? 'gone' : w.approved === true ? 'public' : 'pending';
+    states[id] = !w ? 'gone' : (w.approved === true && w.pub !== false) ? 'public' : 'pending';   // LOG-180: a private wish stays `pending` for its sender (there is no public card to take over)
   }
   return json(200, { ok: true, states });
 }

@@ -87,6 +87,7 @@ Body `{ pre, code }`。
 
 ### 需 `Authorization: Bearer <token>` 的端點（無效／過期／PRE-token → 401 `auth`）
 - `GET /admin/list?type=wish|bug` → `{ ok:true, items:[ 全欄位含未審 ] }`（bug 含 trail）。
+- `POST /submit` (LOG-180) wish 可帶 `public: boolean`（預設 true）；`false`＝不公開：站主收件匣看得到，放行後也**永不進 `GET /wishes`**，`/mine` 對投稿者一直回 `pending`。
 - `POST /admin/update` Body `{ id, approved?, status?, reply?, replyLang?, link?, read? }` → 只改給的欄位（`status` 依 type 驗證：wish 用五個願望狀態，bug 用 `new|open|watch|fixed|declined`，混用 → 400；bug 的 `approved` 就是收件匣的「顯示」開關）；改完若是 wish 重建 `pub:wishes`，是 bug 重建 `pub:bugs`。回 `{ ok:true, item }`。**寄信（LOG-165）**：wish 有 `email`、且這次改動對許願者算新聞——放行（false→true）／`status` 變了／`reply` 新增或改變——且 `MAIL_API_KEY`＋`MAIL_FROM` 都有設 → 背景寄**一封**純文字信（依願望 `lang`；主旨 `許願池：你的願望有新進展`／`Wishing well: news on your wish`，`done` 時加「（已實現）」／「(granted)」；內文＝暱稱、願望前 80 字、變了什麼、站址、退訂連結）。只改 `link`、取消放行、原值重存、bug 的更新一律不寄；寄信失敗不影響回應。
 - `POST /admin/delete` Body `{ id }` → 刪除；wish 則重建 `pub:wishes`。回 `{ ok:true }`。
 

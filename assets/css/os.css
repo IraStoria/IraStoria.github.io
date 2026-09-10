@@ -914,6 +914,8 @@ body.to-en .ls-track{background:rgba(16,19,28,.30)}   /* the track changes colou
 .wst-considering{color:var(--accent2);border-color:rgba(95,179,201,.4);background:rgba(95,179,201,.08)}
 .wst-building{color:var(--accent);border-color:rgba(224,176,74,.4);background:rgba(224,176,74,.1)}
 .wst-done{color:#8fd694;border-color:rgba(143,214,148,.35);background:rgba(143,214,148,.08)}
+.wst-private{color:var(--dim);border-color:var(--border);opacity:.8}   /* LOG-180: the inbox tag on a wish its sender chose to keep off the wall */
+.well-bub .well-pub .note{margin:.1rem .3rem .6rem}
 .wst-declined{color:#999;border-color:var(--border);text-decoration:line-through}
 .wish .fold{background:none;border:1px solid var(--border);color:var(--dim);border-radius:999px;padding:.2rem .8rem;font-size:12px;cursor:pointer;margin:.2rem 0 .6rem}
 .wish .fold:hover{color:var(--fg)}

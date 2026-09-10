@@ -678,6 +678,20 @@ await test('POST /mine: shape, size and origin guards; GET is 405; rate limited 
 const MAIL_API = 'https://api.resend.com/emails';
 const mailsOf = (m) => m.calls.filter((c) => c.url === MAIL_API);
 
+await test('public flag (LOG-180): default true; a private wish never reaches GET /wishes even when approved, /mine keeps it pending', async () => {
+  const env = makeEnv();
+  const a = await call(env, '/submit', { body: { ...WISH, public: false } }); eq(a.status, 200);
+  const b = await call(env, '/submit', { body: { ...WISH, text: '公開的那則' }, ip: '203.0.113.9' }); eq(b.status, 200);
+  const bad = await call(env, '/submit', { body: { ...WISH, public: 'yes' }, ip: '203.0.113.10' }); eq(bad.status, 400, 'a non-boolean public is refused');
+  eq((await env.POOL.get(`wish:${a.data.id}`, 'json')).pub, false, 'stored'); eq((await env.POOL.get(`wish:${b.data.id}`, 'json')).pub, true, 'default true');
+  for (const id of [a.data.id, b.data.id]) eq((await call(env, '/admin/update', { body: { id, approved: true }, headers: bearer(env) })).status, 200);
+  const wall = await call(env, '/wishes');
+  eq(wall.data.items.some((w) => w.id === a.data.id), false, 'the private wish is not on the wall');
+  eq(wall.data.items.some((w) => w.id === b.data.id), true, 'the public one is');
+  const mine = await call(env, '/mine', { body: { ids: [a.data.id, b.data.id] } });
+  eq(mine.data.states[a.data.id], 'pending', 'private stays pending for its sender'); eq(mine.data.states[b.data.id], 'public');
+});
+
 await test('email (LOG-165): optional on a wish, validated, lowercased, stored, never public', async () => {
   const env = makeEnv();
   const a = await call(env, '/submit', { body: { ...WISH, email: ' Wisher@Example.COM ' } });

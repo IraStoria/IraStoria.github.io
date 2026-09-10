@@ -85,6 +85,80 @@
       "en": "About"
     }
   },
+  "wish_examples": [
+      {
+          "nick": {
+              "zh": "範例",
+              "en": "Example"
+          },
+          "lang": "zh",
+          "cat": "transcription",
+          "text": "想看《夏日》完整採譜，最好附上原曲對照。",
+          "status": "building",
+          "reply": "正在做，先做前奏。",
+          "ts": 1756684800000
+      },
+      {
+          "nick": {
+              "zh": "範例",
+              "en": "Example"
+          },
+          "lang": "en",
+          "cat": "interactive",
+          "text": "A demo where the four pianos react to the microphone.",
+          "status": "considering",
+          "reply": "",
+          "ts": 1756771200000
+      },
+      {
+          "nick": {
+              "zh": "範例",
+              "en": "Example"
+          },
+          "lang": "zh",
+          "cat": "feature",
+          "text": "播放器可以顯示歌詞或段落名稱嗎？",
+          "status": "wishing",
+          "reply": "",
+          "ts": 1756857600000
+      },
+      {
+          "nick": {
+              "zh": "範例",
+              "en": "Example"
+          },
+          "lang": "en",
+          "cat": "design",
+          "text": "Dark mode toggle for the desktop wallpaper.",
+          "status": "done",
+          "reply": "Shipped — see the demos app.",
+          "ts": 1756944000000
+      },
+      {
+          "nick": {
+              "zh": "範例",
+              "en": "Example"
+          },
+          "lang": "zh",
+          "cat": "code",
+          "text": "請做一個 Cubase 自動存檔插件。",
+          "status": "declined",
+          "reply": "這個 Cubase 自己有，就不重造了。",
+          "ts": 1757030400000
+      },
+      {
+          "nick": {
+              "zh": "範例",
+              "en": "Example"
+          },
+          "lang": "zh",
+          "cat": "other",
+          "text": "如果你覺得這很像尼爾工作人員名單的顯示方式，那你猜對了。",
+          "status": "done",
+          "reply": "因為尼爾就是我喜歡的遊戲之一（NieR:Automata）。",
+          "ts": 1757116800000
+      }
+  ],
   "ui": {
     "featured": {
       "zh": "精選作品",
@@ -733,6 +807,30 @@
     "well_ask_mail": {
       "zh": "要不要留個 email？有進展時通知你（不會公開，可留空）。",
       "en": "Leave an email if you'd like news on it (never shown, optional)."
+    },
+    "well_ask_pub": {
+      "zh": "你希望公開這個願望嗎？",
+      "en": "Do you want this wish to be public?"
+    },
+    "well_pub_note": {
+      "zh": "公開的願望會出現在牆上，可以累積附議；附議的人越多，實現的機會也越高。不公開的願望只有站主看得到。",
+      "en": "A public wish goes on the wall and can gather seconds; the more people second it, the better its odds. A private wish is seen by the site owner only."
+    },
+    "wish_pub_yes": {
+      "zh": "公開",
+      "en": "Public"
+    },
+    "wish_pub_no": {
+      "zh": "不公開",
+      "en": "Private"
+    },
+    "wish_form_pub": {
+      "zh": "公開這個願望（可累積附議，附議越多越可能實現）",
+      "en": "Make this wish public (it can gather seconds; more seconds, better odds)"
+    },
+    "wish_admin_private": {
+      "zh": "不公開",
+      "en": "private"
     },
     "wish_form_mail": {
       "zh": "email（選填，不公開）",

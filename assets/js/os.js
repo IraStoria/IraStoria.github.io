@@ -5954,7 +5954,7 @@
   function wishCard(w, opts) {
     opts = opts || {}; var voted = opts.voted || {}, act = wishLink(w.link), on = !!voted[w.id];
     return '<div class="wcard' + (opts.mine ? ' mine' : '') + '" data-id="' + esc(w.id || '') + '"><div class="wh"><span class="wst wst-' + esc(w.status) + '">' + esc(opts.mine ? U.wish_mine : stLabel(w.status)) + '</span><span class="nick">' + esc(w.nick) + '</span><span class="cat">' + esc(catLabel(w.cat)) + '</span><span class="when">' + esc(when(w.ts)) + '</span></div><p class="txt">' + esc(w.text) + '</p>' +
-      (opts.mine ? '' : '<div class="wf"><button type="button" class="vote' + (on ? ' on' : '') + '"' + (on ? ' disabled' : '') + '>' + esc(on ? U.wish_voted : U.wish_vote) + ' \u00b7 ' + (w.votes || 0) + '</button>' + (act ? '<button type="button" class="wl">' + esc(U.wish_link) + '</button>' : '') + '</div>') +
+      ((opts.mine || w.example) ? '' : '<div class="wf"><button type="button" class="vote' + (on ? ' on' : '') + '"' + (on ? ' disabled' : '') + '>' + esc(on ? U.wish_voted : U.wish_vote) + ' \u00b7 ' + (w.votes || 0) + '</button>' + (act ? '<button type="button" class="wl">' + esc(U.wish_link) + '</button>' : '') + '</div>') +
       (w.reply ? '<p class="reply"><b>' + esc(U.wish_reply) + '</b>' + esc(w.reply) + '</p>' : '') + '</div>';
   }
   function wallHTML(items, mine, showDone) {
@@ -5977,11 +5977,14 @@
      cached by the browser for 60 s; the owner's browser marks `wishes_fresh` after each moderation action and the next load
      goes round the cache with a throw-away query. The same detour runs when /mine reports a copy as public that the
      (possibly stale) list does not show yet. */
+  function withEx(items) {   /* LOG-179 (the user: 許願池那些範例的字幕可以出現，願望許願者都改成範例): the site's own example wishes (site.json wish_examples, wisher 範例, no id = no +1) ride ahead of the pool's real ones - the well and the wall both go through here */
+    return (D.wish_examples || []).map(function (e) { var o = {}; for (var k in e) o[k] = e[k]; o.example = true; o.votes = 0; o.id = ''; return o; }).concat(items || []);
+  }
   function fetchWall(fresh) {
     return pool.get('/wishes' + (fresh ? '?f=' + Date.now() : '')).then(function (r) {
       if (!r.ok || !Array.isArray(r.items)) throw r;
       try { sessionStorage.setItem('wishes', JSON.stringify({ ts: Date.now(), items: r.items })); } catch (e) {}
-      return r.items;
+      return withEx(r.items);
     });
   }
   function reconcileMine(items, repaint) {   /* repaint(freshItems | null): null = only the copies changed; a list = adopt it (LOG-162: shared by the wall and the well) */
@@ -6019,7 +6022,7 @@
   }
   function wishFormHTML() {
     if (!pool.on()) return '<p class="note">' + esc(U.wish_offline) + '</p>';
-    return '<form class="pform wform" novalidate><div class="row"><input name="nick" placeholder="' + esc(U.wish_form_nick) + '" maxlength="24"><select name="cat" aria-label="' + esc(U.wish_form_cat) + '">' + WISH_CATS.map(function (c) { return '<option value="' + c + '">' + esc(catLabel(c)) + '</option>'; }).join('') + '</select></div><div class="row"><input name="mail" type="email" placeholder="' + esc(U.wish_form_mail) + '" maxlength="120" autocomplete="email" inputmode="email" spellcheck="false"></div><p class="small">' + esc(U.wish_mail_note) + '</p><textarea name="text" rows="3" placeholder="' + esc(U.wish_form_text) + '" maxlength="600"></textarea><div class="actions"><button class="btn send" type="submit">' + esc(U.wish_send) + '</button><p class="msg"></p></div></form>';
+    return '<form class="pform wform" novalidate><div class="row"><input name="nick" placeholder="' + esc(U.wish_form_nick) + '" maxlength="24"><select name="cat" aria-label="' + esc(U.wish_form_cat) + '">' + WISH_CATS.map(function (c) { return '<option value="' + c + '">' + esc(catLabel(c)) + '</option>'; }).join('') + '</select></div><div class="row"><input name="mail" type="email" placeholder="' + esc(U.wish_form_mail) + '" maxlength="120" autocomplete="email" inputmode="email" spellcheck="false"></div><p class="small">' + esc(U.wish_mail_note) + '</p><textarea name="text" rows="3" placeholder="' + esc(U.wish_form_text) + '" maxlength="600"></textarea><div class="actions"><label class="chk pub"><input type="checkbox" name="pub" checked> ' + esc(U.wish_form_pub) + '</label><button class="btn send" type="submit">' + esc(U.wish_send) + '</button><p class="msg"></p></div></form>';
   }
   function wireWishForm(body) {
     var f = $('.wform', body); if (!f) return; var E = f.elements, msg = $('.msg', f), send = $('.send', f);
@@ -6028,10 +6031,11 @@
       if (!nick || !text) { msg.className = 'msg err'; msg.textContent = U.wish_need; return; }
       var mail = E.mail ? E.mail.value.trim().toLowerCase().slice(0, 120) : ''; if (mail && !MAIL_RE.test(mail)) { msg.className = 'msg err'; msg.textContent = U.wish_mail_bad; return; }   /* LOG-165 */
       send.disabled = true; msg.className = 'msg'; msg.textContent = U.wish_sending;
-      var payload = { type: 'wish', lang: lang, nick: nick, cat: cat, text: text }; if (mail) payload.email = mail;
+      var pub = E.pub ? !!E.pub.checked : true;   /* LOG-180 */
+      var payload = { type: 'wish', lang: lang, nick: nick, cat: cat, text: text, public: pub }; if (mail) payload.email = mail;
       pool.post('/submit', payload).then(function (r) {
         if (!r.ok) throw r;
-        var mine = mineLoad(); mine.push({ id: r.id || '', ts: Date.now(), lang: lang, nick: nick, cat: cat, text: text, status: 'wishing' }); mineSave(mine);   /* V7: the sender sees their own wish at once, marked pending */
+        var mine = mineLoad(); mine.push({ id: r.id || '', ts: Date.now(), lang: lang, nick: nick, cat: cat, text: text, status: 'wishing', pub: pub }); mineSave(mine);   /* V7: the sender sees their own wish at once, marked pending */
         msg.className = 'msg ok'; msg.textContent = U.wish_sent; E.text.value = ''; trail.log('wish', 'sent');
         var wall = $('.wall', body); if (wall) paintWall(wall);
       }).catch(function () { msg.className = 'msg err'; msg.textContent = U.wish_fail; }).then(function () { send.disabled = false; });
@@ -6053,7 +6057,7 @@
         '<div class="ctl"><select class="bstatus">' + BUG_ST.map(function (st) { return '<option value="' + st + '"' + (st === bst ? ' selected' : '') + '>' + esc(bugStLabel(st)) + '</option>'; }).join('') + '</select><button type="button" class="btn save">' + esc(U.wish_admin_save) + '</button>' + (tr ? '<button type="button" class="btn sec ttoggle">' + esc(U.wish_admin_trail) + ' (' + tr.length + ')</button>' : '') + '<button type="button" class="btn sec show' + (it.approved ? ' on' : '') + '" aria-pressed="' + (it.approved ? 'true' : 'false') + '">' + esc(it.approved ? U.bug_show_on : U.bug_show_off) + '</button><button type="button" class="btn sec danger del">' + esc(U.wish_admin_delete) + '</button><span class="msg"></span></div>' +
         (tr ? '<pre class="trail" hidden>' + esc(tr.map(function (x) { return typeof x === 'string' ? x : JSON.stringify(x); }).join('\n')) + '</pre>' : '') + '</div>';
     }
-    return '<div class="wrow' + (it.approved ? '' : ' pending') + '" data-id="' + esc(it.id) + '"><div class="wh"><span class="wst wst-' + esc(it.status) + '">' + esc(stLabel(it.status)) + '</span><span class="nick">' + esc(it.nick) + '</span>' + (it.email ? '<span class="mailyes" title="' + esc(it.email) + '">\u2709</span>' : '') + '<span class="cat">' + esc(catLabel(it.cat)) + '</span><span class="when">' + esc(when(it.ts)) + ' \u00b7 ' + esc(it.lang || '') + ' \u00b7 +' + (it.votes || 0) + '</span><span class="wst ' + (it.approved ? 'wst-done' : 'wst-building') + '">' + esc(it.approved ? U.wish_admin_live : U.wish_admin_pending) + '</span></div><p class="txt">' + esc(it.text) + '</p>' +
+    return '<div class="wrow' + (it.approved ? '' : ' pending') + '" data-id="' + esc(it.id) + '"><div class="wh"><span class="wst wst-' + esc(it.status) + '">' + esc(stLabel(it.status)) + '</span><span class="nick">' + esc(it.nick) + '</span>' + (it.pub === false ? '<span class="wst wst-private">' + esc(U.wish_admin_private) + '</span>' : '') + '' + (it.email ? '<span class="mailyes" title="' + esc(it.email) + '">\u2709</span>' : '') + '<span class="cat">' + esc(catLabel(it.cat)) + '</span><span class="when">' + esc(when(it.ts)) + ' \u00b7 ' + esc(it.lang || '') + ' \u00b7 +' + (it.votes || 0) + '</span><span class="wst ' + (it.approved ? 'wst-done' : 'wst-building') + '">' + esc(it.approved ? U.wish_admin_live : U.wish_admin_pending) + '</span></div><p class="txt">' + esc(it.text) + '</p>' +
       '<div class="ctl"><select class="status">' + WISH_ST.map(function (st) { return '<option value="' + st + '"' + (st === it.status ? ' selected' : '') + '>' + esc(stLabel(st)) + '</option>'; }).join('') + '</select><input class="reply" placeholder="' + esc(U.wish_admin_reply) + '" value="' + esc(it.reply || '') + '" maxlength="2000"><input class="link" placeholder="' + esc(U.wish_admin_link) + '" value="' + esc(it.link || '') + '" maxlength="200"><button type="button" class="btn save">' + esc(U.wish_admin_save) + '</button><button type="button" class="btn sec appr">' + esc(it.approved ? U.wish_admin_unapprove : U.wish_admin_approve) + '</button><button type="button" class="btn sec danger del">' + esc(U.wish_admin_delete) + '</button><span class="msg"></span></div></div>';
   }
   function wireAdmin(body) {
@@ -6223,18 +6227,19 @@
       L.extra = Math.min(WELL_HOVER_BONUS_MAX, L.extra + WELL_HOVER_BONUS_MS);
     }
     /* ---- the composer: a conversation. kind → wish → name. */
-    var step = 0, ans = { cat: '', text: '', nick: '', mail: '' }, chipBub = null;   /* LOG-165: mail = the optional email (step 3) */
+    var step = 0, ans = { cat: '', text: '', nick: '', mail: '', pub: true }, chipBub = null;   /* LOG-165: mail = the optional email (step 3) */
     function bubbleHTML() {
       var title = U.app_wishpool;
       if (!pool.on()) return '<div class="well-cap"><b>' + esc(title) + '</b></div><p class="note">' + esc(U.wish_offline) + '</p>';
       var ctl, cut = function (t) { return '「' + esc(t.length > 22 ? t.slice(0, 22) + '…' : t) + '」'; };
-      var done = (step > 0 ? '<button type="button" class="wdone" data-step="0">' + esc(catLabel(ans.cat)) + '</button>' : '') + (step > 1 ? '<button type="button" class="wdone" data-step="1">' + cut(ans.text) + '</button>' : '') + (step > 2 && ans.mail ? '<button type="button" class="wdone" data-step="2">' + esc(maskMail(ans.mail)) + '</button>' : '');
-      var ask = ['well_ask_cat', 'well_ask_text', 'well_ask_mail', 'well_ask_nick'][step];   /* LOG-165 (the user: 多一個階段 3 階，原有 3 移到 4): kind → wish → email (optional) → name */
+      var done = (step > 0 ? '<button type="button" class="wdone" data-step="0">' + esc(catLabel(ans.cat)) + '</button>' : '') + (step > 1 ? '<button type="button" class="wdone" data-step="1">' + cut(ans.text) + '</button>' : '') + (step > 2 && ans.mail ? '<button type="button" class="wdone" data-step="2">' + esc(maskMail(ans.mail)) + '</button>' : '') + (step > 3 ? '<button type="button" class="wdone" data-step="3">' + esc(ans.nick) + '</button>' : '');
+      var ask = ['well_ask_cat', 'well_ask_text', 'well_ask_mail', 'well_ask_nick', 'well_ask_pub'][step];   /* LOG-165 (the user: 多一個階段 3 階，原有 3 移到 4): kind → wish → email (optional) → name; LOG-180 (the user: 願望暱稱輸入後多加一層「你希望公開此願望嗎？」): → public? */
       if (step === 0) ctl = '<div class="well-chips">' + WISH_CATS.map(function (c) { return '<button type="button" class="wchip' + (c === ans.cat ? ' on' : '') + '" data-cat="' + c + '">' + esc(catLabel(c)) + '</button>'; }).join('') + '</div>';
       else if (step === 1) ctl = glassField('ta', 'text', { max: 600, label: U.wish_form_text });
       else if (step === 2) ctl = glassField('mail', 'mail', { max: 120, ph: U.wish_form_mail });
-      else ctl = glassField('in', 'nick', { max: 24, ph: U.wish_form_nick });
-      return '<div class="well-cap"><b>' + esc(title) + '</b><div class="well-done">' + done + '</div></div><p class="well-ask">' + esc(U[ask]) + '</p><div class="well-row">' + ctl + '<p class="msg"></p>' + glassNav(step > 0, step === 3, U.wish_send) + '</div>';
+      else if (step === 3) ctl = glassField('in', 'nick', { max: 24, ph: U.wish_form_nick });
+      else ctl = '<div class="well-pub"><p class="note">' + esc(U.well_pub_note) + '</p><div class="well-chips"><button type="button" class="wchip' + (ans.pub ? ' on' : '') + '" data-pub="1">' + esc(U.wish_pub_yes) + '</button><button type="button" class="wchip' + (ans.pub ? '' : ' on') + '" data-pub="0">' + esc(U.wish_pub_no) + '</button></div></div>';   /* LOG-180: public (default) or private, with the why */
+      return '<div class="well-cap"><b>' + esc(title) + '</b><div class="well-done">' + done + '</div></div><p class="well-ask">' + esc(U[ask]) + '</p><div class="well-row">' + ctl + '<p class="msg"></p>' + glassNav(step > 0, step === 4, U.wish_send) + '</div>';
     }
     function wire(b, focusIt) {
       chipBub = null; if (!pool.on()) return;
@@ -6260,22 +6265,28 @@
         var mnext = function () { var v = ml.value.trim().toLowerCase().slice(0, 120); if (v && !MAIL_RE.test(v)) { b.say(U.wish_mail_bad, 'err'); ml.focus(); return; } ans.mail = v; step = 3; b.paint(true, step); };
         ml.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); mnext(); } });
         send.addEventListener('click', mnext); focusLater(ml);
-      } else {
+      } else if (step === 3) {   /* LOG-180: the name is a step of its own now; Enter / send moves on to the public question */
         inp.value = ans.nick; inp.addEventListener('input', function () { ans.nick = inp.value; });
+        var nnext = function () { var nick = inp.value.trim().slice(0, 24); if (!nick) { b.say(U.wish_need, 'err'); inp.focus(); return; } ans.nick = nick; step = 4; b.paint(true, step); };
+        inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); nnext(); } });
+        send.addEventListener('click', nnext); focusLater(inp);
+      } else {
+        var pubChips = [].slice.call(b.el.querySelectorAll('.well-pub .wchip'));
+        pubChips.forEach(function (x) { x.addEventListener('click', function () { ans.pub = x.getAttribute('data-pub') === '1'; pubChips.forEach(function (y) { y.classList.toggle('on', y === x); }); }); });
         var submit = function () {
-          var nick = inp.value.trim().slice(0, 24); if (!nick) { b.say(U.wish_need, 'err'); inp.focus(); return; }
-          ans.nick = nick; send.disabled = true; inp.disabled = true; b.say(U.wish_sending);
-          var payload = { type: 'wish', lang: lang, nick: nick, cat: ans.cat, text: ans.text }; if (ans.mail) payload.email = ans.mail;   /* LOG-165: only when given; the sender's own copy never carries it */
+          var nick = ans.nick; if (!nick) { step = 3; b.paint(true, step); return; }
+          send.disabled = true; pubChips.forEach(function (x) { x.disabled = true; }); b.say(U.wish_sending);
+          var payload = { type: 'wish', lang: lang, nick: nick, cat: ans.cat, text: ans.text, public: !!ans.pub }; if (ans.mail) payload.email = ans.mail;   /* LOG-165: only when given; the sender's own copy never carries it */   /* LOG-180: public = on the wall once approved; private = the owner only */
           pool.post('/submit', payload).then(function (r) {
             if (!r.ok) throw r;
-            var m = { id: r.id || '', ts: Date.now(), lang: lang, nick: nick, cat: ans.cat, text: ans.text, status: 'wishing' }, mine = mineLoad(); mine.push(m); mineSave(mine);
+            var m = { id: r.id || '', ts: Date.now(), lang: lang, nick: nick, cat: ans.cat, text: ans.text, status: 'wishing', pub: !!ans.pub }, mine = mineLoad(); mine.push(m); mineSave(mine);
             trail.log('wish', 'sent'); burst(W / 2, H - (parseFloat(b.el.style.bottom) || 0) + 8, 4);   /* the wish drops into the well just under the composer */
             surface({ w: m, mine: true }, 0);   /* and comes up at once, near, marked 審核中 */
-            ans.text = ''; ans.cat = ''; step = 0; b.receipt(U.wish_sent); b.paint(false, step);   /* back to the first question (the name is kept); the receipt shows on the fresh page */
-          }).catch(function () { b.say(U.wish_fail, 'err'); send.disabled = false; inp.disabled = false; });
+            ans.text = ''; ans.cat = ''; ans.pub = true; step = 0; b.receipt(U.wish_sent); b.paint(false, step);   /* back to the first question (the name is kept); the receipt shows on the fresh page */
+          }).catch(function () { b.say(U.wish_fail, 'err'); send.disabled = false; pubChips.forEach(function (x) { x.disabled = false; }); });
         };
-        inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
-        send.addEventListener('click', submit); focusLater(inp);
+        b.el.querySelector('.well-pub').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+        send.addEventListener('click', submit); focusLater(b.el.querySelector('.well-pub .wchip.on'));
       }
     }
     /* ---- the lines */
@@ -6285,7 +6296,7 @@
     function load() {
       if (!pool.on()) { loaded = true; reorder(); return; }
       var cached = null; try { cached = JSON.parse(sessionStorage.getItem('wishes') || 'null'); } catch (e) {}
-      if (cached && cached.items) { items = cached.items; loaded = true; reorder(); }
+      if (cached && cached.items) { items = withEx(cached.items); loaded = true; reorder(); }
       fetchWall(false).then(function (it) { items = it; loaded = true; reorder(); reconcileMine(it, function (fresh) { if (fresh) items = fresh; reorder(); }); })
         .catch(function () { loaded = true; if (!items.length) reorder(); });
     }

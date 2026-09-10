@@ -177,10 +177,38 @@ def bilingual(obj, path):
 
 
 # ---------------------------------------------------------------- loading + validation
+WISH_STATUSES = ("wishing", "considering", "building", "done", "declined")
+
+
+def check_wish_examples(ex):
+    """LOG-179: site.json wish_examples - the example wishes the well and the wall show ahead of the pool's real ones.
+    Each: nick {zh,en}, lang zh|en, cat, text, status (one of the wish statuses), reply (may be empty), ts (ms). Fail-closed."""
+    if not isinstance(ex, list):
+        raise BuildError("site.json: wish_examples must be a list")
+    for i, e in enumerate(ex):
+        p = f"site.json.wish_examples[{i}]"
+        if not isinstance(e, dict):
+            raise BuildError(f"{p}: must be an object")
+        bilingual(e.get("nick"), f"{p}.nick")
+        if e.get("lang") not in LANGS:
+            raise BuildError(f"{p}: lang must be one of {LANGS}")
+        for k in ("cat", "text"):
+            if not (isinstance(e.get(k), str) and e[k].strip()):
+                raise BuildError(f"{p}: {k} must be a non-empty string")
+        if e.get("status") not in WISH_STATUSES:
+            raise BuildError(f"{p}: status must be one of {WISH_STATUSES}")
+        if "reply" in e and not isinstance(e["reply"], str):
+            raise BuildError(f"{p}: reply must be a string")
+        if not isinstance(e.get("ts"), (int, float)):
+            raise BuildError(f"{p}: ts must be a number (ms)")
+    return ex
+
+
 def load_site():
     site = read_json(CONTENT / "site.json")
     site["resume"] = load_resume()
     site["bugs"] = load_bugs()
+    site["wish_examples"] = check_wish_examples(site.get("wish_examples") or [])   # LOG-179: the well's built-in example wishes
     for i, sv in enumerate((site.get("contact") or {}).get("services") or []):
         if not sv.get("key"):
             raise BuildError(f"site.json: contact.services[{i}].key required")
@@ -663,7 +691,7 @@ def build_pages(site, works, demos, articles):
         def home_data(lang):
           return {
             "lang": lang, "site_name": site["site_name"], "author": site["author"][lang], "tagline": site["tagline"][lang], "hero_intro": site["hero_intro"][lang],
-            "about": site["about_body"][lang], "contact": loc_deep(site["contact"], lang), "resume": loc_deep(site["resume"], lang), "bugs": loc_deep(site["bugs"], lang), "backend": backend_url(site), "prank": loc_deep(site.get("prank_pages") or {"serious": [], "silly": []}, lang), "host": re.sub(r"^https?://", "", site["base_url"]).strip("/"),
+            "about": site["about_body"][lang], "contact": loc_deep(site["contact"], lang), "resume": loc_deep(site["resume"], lang), "bugs": loc_deep(site["bugs"], lang), "wish_examples": loc_deep(site.get("wish_examples") or [], lang), "backend": backend_url(site), "prank": loc_deep(site.get("prank_pages") or {"serious": [], "silly": []}, lang), "host": re.sub(r"^https?://", "", site["base_url"]).strip("/"),
             "ui": {k: v[lang] for k, v in site["ui"].items()},
             "fx": {name: {k: (local_versioned(v) if k in ("video", "sound") and v else v) for k, v in f.items() if not k.startswith("_")} for name, f in (site.get("fx") or {}).items()},
             "works": [loc(w, lang) for w in works],
