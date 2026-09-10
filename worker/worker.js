@@ -694,7 +694,7 @@ export default {
       // Health — no rate limit.
       if (path === '/' || path === '/health') {
         if (method !== 'GET') return withCors(fail(405, 'method'));
-        return withCors(json(200, { ok: true, service: 'pool', ts: Date.now() }));
+        return withCors(json(200, { ok: true, service: 'pool', ver: 'LOG-180', ts: Date.now() }));   // ver: which paste is live (LOG-180 = the public/private wish flag)
       }
 
       // Every POST must come from an allowed Origin.
