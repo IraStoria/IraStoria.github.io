@@ -259,6 +259,8 @@ def check_transcription(w, media, p):
     for k in ("offset_s", "fallback_offset_s"):   # fallback_offset_s (追記⑦): the hosted copy's own MIDI-0 position when it is not a straight rip of the embed
         if k in orig and not isinstance(orig[k], (int, float)):
             raise BuildError(f"{p}: media.original.{k} must be a number (seconds)")
+    if "url" in orig and not (isinstance(orig["url"], str) and re.match(r"https?://", orig["url"])):   # LOG-178: a hosted-only original may point at where it lives (the stage offers the link)
+        raise BuildError(f"{p}: media.original.url must be an http(s) URL")
     for k in ("notice", "notice_note"):   # LOG-176: the hosted copy's rights text is per work (the site-wide ui.tr_notice names Death Piano); optional, bilingual
         if k in orig:
             bilingual(orig[k], f"{p}.media.original.{k}")

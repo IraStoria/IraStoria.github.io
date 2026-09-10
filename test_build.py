@@ -77,6 +77,8 @@ ok("olympia-tr: its own rights text (the site-wide one names Death Piano), bilin
 expect_refused("a one-language notice is refused", with_works(lambda w: w[TR[1]]["media"]["original"]["notice"].pop("en")), "missing or empty 'en'")
 ok("olympia-tr: opens with the transcription at half volume; dp keeps the default (no volume key)", _oly["media"]["rendition"].get("volume") == 0.5 and "volume" not in works[TR[0]]["media"]["rendition"])
 expect_refused("a rendition volume outside (0, 1] is refused", with_works(lambda w: w[TR[1]]["media"]["rendition"].update(volume=1.5)), "media.rendition.volume must be")
+ok("olympia-tr: the original's link rides on media.original.url (the stage offers it in the switch's seat)", _oly["media"]["original"].get("url") == "https://youtu.be/9ZDGVOjXaEY")
+expect_refused("a non-http original url is refused", with_works(lambda w: w[TR[1]]["media"]["original"].update(url="javascript:alert(1)")), "media.original.url must be")
 ok("olympia-tr: its own stage palette (peach-pink left, orange-red right)", _oly["media"].get("palette") == {"l": "#ff4f8b", "r": "#ff7a3a"})
 expect_refused("a palette that is not two hex colours is refused", with_works(lambda w: w[TR[1]]["media"].update(palette={"l": "pink", "r": "#ff7a3a"})), "media.palette must be")
 ok("olympia-tr: eight increasing sections, bilingual", len(_oly["sections"]) == 8 and all(_oly["sections"][i]["t"] > _oly["sections"][i - 1]["t"] for i in range(1, 8)) and all(x.get("zh") and x.get("en") for x in _oly["sections"]))

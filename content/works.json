@@ -267,7 +267,8 @@
         "notice_note": {
           "zh": "這首沒有 YouTube 模式：影片擁有者不開放嵌入，對照一律走自載音檔。",
           "en": "No YouTube mode for this one: the video's owner forbids embedding, so the comparison always uses the hosted copy."
-        }
+        },
+        "url": "https://youtu.be/9ZDGVOjXaEY"
       },
       "rendition": {
         "src": "assets/audio/olympia-tr.mp3",

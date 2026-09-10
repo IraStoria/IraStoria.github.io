@@ -1872,7 +1872,7 @@
                the slider cross-fades, or in split mode pans the original hard left and the transcription hard right.
      YouTube goes first; an embed error, a ready timeout or a play that never lands falls back to local and shows the notice
      (ui.tr_notice: fallback + the left/right experiment, contact to remove). The visitor can switch by hand either way. */
-  var TR_YT_API = 'https://www.youtube.com/iframe_api', TR_YT_READY_MS = 9000, TR_YT_PLAY_MS = 7000, TR_SYNC_S = 0.08, TR_END_PAD_S = 1.2, TR_EXIT_MS = 600, TR_VEIL_OUT_MS = 1800, TR_LEAD_LOCAL_S = 2, TR_YT_LAG_S = 0, TR_LAG_STEP = 0.01, TR_SNAP = 25, TR_LEAD_S = 4, TR_HOLD_S = 0.2, TR_RESUME_HOLD_MS = 300;   /* TR_RESUME_HOLD_MS (追記⑳): after a resume or a seek YouTube fires PLAYING ~0.23 s before its sound is back (measured 0.88 s vs our 0.65 s); the rendition waits this long so it does not play alone */   /* 追記⑯: the pre-roll - from the moment the stage opens the MIDI clock runs from -TR_LEAD_S on the wall clock (the notes fall in at once) and holds at -TR_HOLD_S until the sound is ready; the sound then joins the clock where it stands, no jump, no count-in wait */   /* TR_WARM_MS (追記⑭): after the embed has proven it can play, the stage waits this long (its own transition) before the real start */   /* 0 (追記㉒): a machine's own playout latency is not a default - the visitor nudges with 對齊 and the value stays on their machine */   /* TR_YT_LAG_S (the user: youtube 的播放啟動延遲 0.2-0.5 s): getCurrentTime() runs ahead of what the video actually sounds; the MIDI clock trails it by this much in yt mode. The bar's 對齊 −/+ nudges it per machine (localStorage tr_ytlag) */
+  var TR_YT_API = 'https://www.youtube.com/iframe_api', TR_YT_READY_MS = 9000, TR_YT_PLAY_MS = 7000, TR_SYNC_S = 0.08, TR_END_PAD_S = 1.2, TR_EXIT_MS = 600, TR_VEIL_OUT_MS = 1800, TR_LEAD_LOCAL_S = 2, TR_MASTER = 1.2, TR_YT_LAG_S = 0, TR_LAG_STEP = 0.01, TR_SNAP = 25, TR_LEAD_S = 4, TR_HOLD_S = 0.2, TR_RESUME_HOLD_MS = 300;   /* TR_RESUME_HOLD_MS (追記⑳): after a resume or a seek YouTube fires PLAYING ~0.23 s before its sound is back (measured 0.88 s vs our 0.65 s); the rendition waits this long so it does not play alone */   /* 追記⑯: the pre-roll - from the moment the stage opens the MIDI clock runs from -TR_LEAD_S on the wall clock (the notes fall in at once) and holds at -TR_HOLD_S until the sound is ready; the sound then joins the clock where it stands, no jump, no count-in wait */   /* TR_WARM_MS (追記⑭): after the embed has proven it can play, the stage waits this long (its own transition) before the real start */   /* 0 (追記㉒): a machine's own playout latency is not a default - the visitor nudges with 對齊 and the value stays on their machine */   /* TR_YT_LAG_S (the user: youtube 的播放啟動延遲 0.2-0.5 s): getCurrentTime() runs ahead of what the video actually sounds; the MIDI clock trails it by this much in yt mode. The bar's 對齊 −/+ nudges it per machine (localStorage tr_ytlag) */
   var panels = (function () {   /* LOG-175 (the user: 許願池跟恥辱柱會被採譜的面板遮擋…面板可以拖移，不拖移時以開啟先後順序向上堆疊): the desktop's floating panels - the wishing well's and the pillar's glass box, the compare stage's bar - share ONE stack above the dock. Opened order = bottom -> up (a later one sits on top of the earlier ones it overlaps sideways, never over them); any of them can be dragged away by its background and then keeps that spot until it closes; the rest re-flow. */
     var list = [], GAP = 12, EDGE = 8, TAP_MS = 250, SNAP_MIN = 64, ro = (typeof ResizeObserver !== 'undefined') ? new ResizeObserver(function () { layout(); }) : null, NOGRAB = 'button,input,textarea,select,a,label,[contenteditable],.tr-seek,.wchip,.well-x,.hovbub';
     function shown(p) { return !p.el.hidden && p.on && p.el.isConnected && (!p.vis || p.vis()); }
@@ -1984,7 +1984,7 @@
       ctx = new (window.AudioContext || window.webkitAudioContext)();
       var lim = ctx.createDynamicsCompressor(); lim.threshold.value = -3; lim.knee.value = 6; lim.ratio.value = 12; lim.attack.value = 0.003; lim.release.value = 0.15;
       master = ctx.createAnalyser(); master.fftSize = 2048; master.minDecibels = -96; master.maxDecibels = 6; master.smoothingTimeConstant = 0.8;
-      mgain = ctx.createGain(); mgain.gain.value = muted ? 0.0001 : 1;
+      mgain = ctx.createGain(); mgain.gain.value = muted ? 0.0001 : TR_MASTER;
       lim.connect(master); master.connect(mgain); mgain.connect(ctx.destination); ctx.__out = lim;
     }
     function chan(url, off) {
@@ -2141,7 +2141,7 @@
         '<div class="tr-bar">' +
           '<div class="tr-row tr-row1"><span class="tr-vol tr-vol-l"><input type="range" class="tr-volt" min="0" max="1000" value="' + Math.round(volT * 1000) + '"></span><span class="tr-lbl tr-lo"></span><span class="tr-mixwrap"><b class="tr-pct"></b><input class="tr-mix" type="range" min="0" max="1000" value="' + Math.round((1 - mix) * 1000) + '" aria-label="mix" list="tr-mix-ticks"><datalist id="tr-mix-ticks"><option value="500"></option></datalist></span><span class="tr-lbl tr-hi"></span><span class="tr-vol tr-vol-r"><input type="range" class="tr-volo" min="0" max="1000" value="' + Math.round(volO * 1000) + '"></span></div>' +   /* 追記⑱: row 1 = the pan, symmetric: volume · transcription · [pan] · original · volume */
           '<div class="tr-row tr-row2"><div class="tr-modes"><button type="button" data-mode="xf"></button><button type="button" data-mode="lr"></button></div>' +
-            '<div class="tr-src"><i class="dot"></i><span class="tr-src-t"></span><button type="button" class="tr-src-sw"></button><div class="tr-tip" hidden role="status"></div></div>' +
+            '<div class="tr-src"><i class="dot"></i><span class="tr-src-t"></span><button type="button" class="tr-src-sw"></button><a class="tr-src-go" hidden target="_blank" rel="noopener"></a><div class="tr-tip" hidden role="status"></div></div>' +
             '<span class="tr-align"><span class="tr-align-l"></span><button type="button" data-nudge="-1" aria-label="earlier">\u2212</button><b class="tr-lag"></b><button type="button" data-nudge="1" aria-label="later">+</button><small class="tr-lag-auto"></small></span></div>' +   /* row 2 = modes · source · align (+ the automatic output-latency compensation, read from the machine) */
           '<div class="tr-secs"><div class="tr-cues"></div><div class="tr-seek" role="slider" aria-label="seek"><i></i></div></div>' +   /* 追記⑲: the cues live ON the seek bar - a tick through the bar at each cue, the button beside it (rows alternate) */
           '<div class="tr-toast"></div>' +
@@ -2161,6 +2161,7 @@
         if (e.target.closest('.tr-lrtip-ok')) { lrAck = true; hideLrTip(); return; }   /* 追記③: the only way the warning goes */
         if (e.target.closest('.tr-lrtip')) return;
         var b = e.target.closest('[data-mode]'); if (b) { if (b.dataset.mode === 'lr' && !hasFallback) return; split = b.dataset.mode === 'lr'; paintModes(); paintSrc(); applyMix(); if (split) showLrTip(); return; }   /* 追記⑱(1): the split works in yt mode too - the cached copy carries the original's ear while the video keeps the picture */
+        if (e.target.closest('.tr-src-go')) { if (playing) pause(); return; }   /* LOG-178: let the anchor open its tab; the stage pauses so the two do not play over each other */
         var sw = e.target.closest('.tr-src-sw'); if (sw) { if (mode === 'yt') setCached(!cached); else setMode('yt', false); return; }   /* 追記㉑: with the video alive the switch is a volume swap (no reload either way) */
         var nd = e.target.closest('[data-nudge]'); if (nd) { hideTip(); setLag((mode === 'yt' ? ytLag : loLag) + TR_LAG_STEP * parseInt(nd.dataset.nudge, 10)); return; }
         var sc = e.target.closest('.tr-secs [data-t]'); if (sc) { seek(parseFloat(sc.dataset.t)); return; }
@@ -2197,6 +2198,7 @@
       s.classList.toggle('local', cachedSounds); t.textContent = (mode === 'local' || cached) ? U.tr_src_local : (split ? U.tr_src_split : U.tr_src_yt);
       sw.textContent = (mode === 'yt' && !cached) ? U.tr_switch_local : U.tr_switch_yt;
       sw.hidden = !(canYT && hasFallback) || (mode === 'local' && ytFailed);   /* no way back to a YouTube that already failed this run */
+      var go = ui.querySelector('.tr-src-go'), ou = (work().media.original || {}).url; if (go) { go.hidden = !(!canYT && ou); if (ou) { go.href = ou; go.textContent = U.tr_src_open; } }   /* LOG-178 (the user: 位置用原本「使用暫存音源」按鈕，改成前往原影片連結): a hosted-only piece offers the original's link in the switch's seat; the click pauses the stage and opens a new tab */
       var yb = ui.querySelector('.tr-yt'); if (yb) { yb.classList.toggle('off', mode !== 'yt' || cached); yb.hidden = !canYT; }
       paintLag();
       var n = ui.querySelector('.tr-notice'); if (n) n.hidden = !cachedSounds;
@@ -2213,7 +2215,7 @@
       ui.querySelector('[data-mode="xf"]').textContent = U.tr_mode_xf; ui.querySelector('[data-mode="lr"]').textContent = U.tr_mode_lr;
       secs = w.sections || [];
       ui.querySelector('.tr-cues').innerHTML = secs.map(function (s, i) { return '<b class="tick" data-i="' + i + '"></b><button type="button" data-t="' + s.t + '" class="' + (i % 2 ? 'alt' : '') + '">' + esc(s.label) + '</button>'; }).join('');
-      layoutSecs();
+      paintSrc();   /* LOG-178: the source row (and the original-video link) follows the language too */ layoutSecs();
       var n = ui.querySelector('.tr-notice'), o_ = w.media.original || {}; n.querySelector('b').textContent = U.tr_notice_head;   /* LOG-176: a work may carry its own rights text (media.original.notice / notice_note, localised by build); the site-wide ui.tr_notice is Death Piano's */
       var nn = o_.notice_note != null ? o_.notice_note : U.tr_notice_note; n.querySelector('em').textContent = nn; n.querySelector('em').hidden = !nn;
       n.querySelector('p').innerHTML = esc(o_.notice || U.tr_notice).replace('{contact}', '<a data-app="contact" href="#">' + esc(U.app_contact) + '</a>');
@@ -2323,7 +2325,7 @@
       analysers: function () { return [tr ? tr.an : null, orig ? orig.an : null]; },   /* [left = transcription, right = original]; in yt mode the original's is silent (the video's sound is not ours to read) */
       toggle: toggle
     };
-    function toggleMute() { muted = !muted; if (mgain && ctx) mgain.gain.setTargetAtTime(muted ? 0.0001 : 1, ctx.currentTime, 0.03); if (yt && ytReady) { try { if (muted) yt.mute(); else yt.unMute(); } catch (e) {} } }
+    function toggleMute() { muted = !muted; if (mgain && ctx) mgain.gain.setTargetAtTime(muted ? 0.0001 : TR_MASTER, ctx.currentTime, 0.03); if (yt && ytReady) { try { if (muted) yt.mute(); else yt.unMute(); } catch (e) {} } }
     function stepSec(d) { if (!secs.length) return; var t = T(), cur = -1, ref = d < 0 ? t - 1.5 : t + 0.001; for (var i = 0; i < secs.length; i++) if (secs[i].t <= ref) cur = i; var n = d < 0 ? Math.max(0, cur) : Math.min(secs.length - 1, cur + 1); seek(secs[n].t); }   /* prev: back to this section's start when more than 1.5 s into it, else the one before */
     return { start: start, stop: function (im) { stop(!!im); }, active: function () { return active; }, src: function () { return src; }, toggle: toggle, prev: function () { stepSec(-1); }, next: function () { stepSec(1); }, toggleMute: toggleMute, relabel: relabel, debug: debug };
   })();
