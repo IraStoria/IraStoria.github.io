@@ -86,78 +86,174 @@
     }
   },
   "wish_examples": [
-      {
-          "nick": {
-              "zh": "範例",
-              "en": "Example"
-          },
-          "lang": "zh",
-          "cat": "transcription",
-          "text": "想看《夏日》完整採譜，最好附上原曲對照。",
-          "status": "building",
-          "reply": "正在做，先做前奏。",
-          "ts": 1756684800000
+    {
+      "nick": {
+        "zh": "範例",
+        "en": "Example"
       },
-      {
-          "nick": {
-              "zh": "範例",
-              "en": "Example"
-          },
-          "lang": "en",
-          "cat": "interactive",
-          "text": "A demo where the four pianos react to the microphone.",
-          "status": "considering",
-          "reply": "",
-          "ts": 1756771200000
+      "lang": "zh",
+      "cat": "transcription",
+      "text": "想看《夏日》完整採譜，最好附上原曲對照。",
+      "status": "building",
+      "reply": "正在做，先做前奏。",
+      "ts": 1756684800000
+    },
+    {
+      "nick": {
+        "zh": "範例",
+        "en": "Example"
       },
-      {
-          "nick": {
-              "zh": "範例",
-              "en": "Example"
-          },
-          "lang": "zh",
-          "cat": "feature",
-          "text": "播放器可以顯示歌詞或段落名稱嗎？",
-          "status": "wishing",
-          "reply": "",
-          "ts": 1756857600000
+      "lang": "en",
+      "cat": "interactive",
+      "text": "A demo where the four pianos react to the microphone.",
+      "status": "considering",
+      "reply": "",
+      "ts": 1756771200000
+    },
+    {
+      "nick": {
+        "zh": "範例",
+        "en": "Example"
       },
-      {
-          "nick": {
-              "zh": "範例",
-              "en": "Example"
-          },
-          "lang": "en",
-          "cat": "design",
-          "text": "Dark mode toggle for the desktop wallpaper.",
-          "status": "done",
-          "reply": "Shipped — see the demos app.",
-          "ts": 1756944000000
+      "lang": "zh",
+      "cat": "feature",
+      "text": "播放器可以顯示歌詞或段落名稱嗎？",
+      "status": "wishing",
+      "reply": "",
+      "ts": 1756857600000
+    },
+    {
+      "nick": {
+        "zh": "範例",
+        "en": "Example"
       },
-      {
-          "nick": {
-              "zh": "範例",
-              "en": "Example"
-          },
-          "lang": "zh",
-          "cat": "code",
-          "text": "請做一個 Cubase 自動存檔插件。",
-          "status": "declined",
-          "reply": "這個 Cubase 自己有，就不重造了。",
-          "ts": 1757030400000
+      "lang": "en",
+      "cat": "design",
+      "text": "Dark mode toggle for the desktop wallpaper.",
+      "status": "done",
+      "reply": "Shipped — see the demos app.",
+      "ts": 1756944000000
+    },
+    {
+      "nick": {
+        "zh": "範例",
+        "en": "Example"
       },
-      {
-          "nick": {
-              "zh": "範例",
-              "en": "Example"
-          },
-          "lang": "zh",
-          "cat": "other",
-          "text": "如果你覺得這很像尼爾工作人員名單的顯示方式，那你猜對了。",
-          "status": "done",
-          "reply": "因為尼爾就是我喜歡的遊戲之一。",
-          "ts": 1757116800000
-      }
+      "lang": "zh",
+      "cat": "code",
+      "text": "請做一個 Cubase 自動存檔插件。",
+      "status": "declined",
+      "reply": "這個 Cubase 自己有，就不重造了。",
+      "ts": 1757030400000
+    },
+    {
+      "nick": {
+        "zh": "範例",
+        "en": "Example"
+      },
+      "lang": "zh",
+      "cat": "other",
+      "text": "如果你覺得這很像尼爾工作人員名單的顯示方式，那你猜對了。",
+      "status": "done",
+      "reply": "因為尼爾就是我喜歡的遊戲之一。",
+      "ts": 1757116800000
+    },
+    {
+      "nick": {
+        "zh": "範例",
+        "en": "Example"
+      },
+      "lang": "zh",
+      "cat": "transcription",
+      "text": "想聽鋼琴曲的採譜跟原曲左右分開對照，看看差在哪。",
+      "status": "done",
+      "reply": "採譜對照舞台有「左右分耳」，自己切切看。",
+      "ts": 1757203200000
+    },
+    {
+      "nick": {
+        "zh": "範例",
+        "en": "Example"
+      },
+      "lang": "en",
+      "cat": "feature",
+      "text": "A keyboard shortcut list somewhere - I keep guessing.",
+      "status": "considering",
+      "reply": "",
+      "ts": 1757289600000
+    },
+    {
+      "nick": {
+        "zh": "範例",
+        "en": "Example"
+      },
+      "lang": "zh",
+      "cat": "design",
+      "text": "手機版的鎖屏可以換一張自己的照片嗎？",
+      "status": "wishing",
+      "reply": "",
+      "ts": 1757376000000
+    },
+    {
+      "nick": {
+        "zh": "範例",
+        "en": "Example"
+      },
+      "lang": "zh",
+      "cat": "interactive",
+      "text": "四台鋼琴那個舞台，能不能用滑鼠拖著觀眾的位置走？",
+      "status": "done",
+      "reply": "可以，滑鼠就是觀眾。",
+      "ts": 1757462400000
+    },
+    {
+      "nick": {
+        "zh": "範例",
+        "en": "Example"
+      },
+      "lang": "en",
+      "cat": "code",
+      "text": "Export the piano waterfall as a video I can post.",
+      "status": "declined",
+      "reply": "Not for now - the waterfall is meant to be played live, not rendered.",
+      "ts": 1757548800000
+    },
+    {
+      "nick": {
+        "zh": "範例",
+        "en": "Example"
+      },
+      "lang": "zh",
+      "cat": "feature",
+      "text": "背景音樂可以記住我上次聽到哪裡嗎？",
+      "status": "building",
+      "reply": "",
+      "ts": 1757635200000
+    },
+    {
+      "nick": {
+        "zh": "範例",
+        "en": "Example"
+      },
+      "lang": "en",
+      "cat": "transcription",
+      "text": "More game-music transcriptions, please - the tricky ones.",
+      "status": "wishing",
+      "reply": "",
+      "ts": 1757721600000
+    },
+    {
+      "nick": {
+        "zh": "範例",
+        "en": "Example"
+      },
+      "lang": "zh",
+      "cat": "other",
+      "text": "這個網站的桌面圖示排成「形是故意的嗎？",
+      "status": "done",
+      "reply": "是故意的。",
+      "ts": 1757808000000
+    }
   ],
   "ui": {
     "featured": {

@@ -5977,8 +5977,10 @@
      cached by the browser for 60 s; the owner's browser marks `wishes_fresh` after each moderation action and the next load
      goes round the cache with a throw-away query. The same detour runs when /mine reports a copy as public that the
      (possibly stale) list does not show yet. */
-  function withEx(items) {   /* LOG-179 (the user: 許願池那些範例的字幕可以出現，願望許願者都改成範例): the site's own example wishes (site.json wish_examples, wisher 範例, no id = no +1) ride ahead of the pool's real ones - the well and the wall both go through here */
-    return (D.wish_examples || []).map(function (e) { var o = {}; for (var k in e) o[k] = e[k]; o.example = true; o.votes = 0; o.id = ''; return o; }).concat(items || []);
+  var EX_TOTAL = 14;   /* LOG-179 追記① (the user: 願望越來越多時就可以把範例慢慢拿掉，顯示邏輯以真人留言為優先): the examples only top the wall up to this many lines - every real wish pushes one example out, and past this many real ones no example shows at all */
+  function withEx(items) {   /* LOG-179 (the user: 許願池那些範例的字幕可以出現，願望許願者都改成範例): the site's own example wishes (site.json wish_examples, wisher 範例, no id = no +1) fill in after the pool's real ones - the well and the wall both go through here */
+    items = items || []; var need = Math.max(0, EX_TOTAL - items.length);
+    return items.concat((D.wish_examples || []).slice(0, need).map(function (e) { var o = {}; for (var k in e) o[k] = e[k]; o.example = true; o.votes = 0; o.id = ''; return o; }));
   }
   function fetchWall(fresh) {
     return pool.get('/wishes' + (fresh ? '?f=' + Date.now() : '')).then(function (r) {

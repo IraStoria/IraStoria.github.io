@@ -257,7 +257,7 @@ ok("os.js: YouTube's IFrame API loads only from the stage (no page-load third-pa
 
 # ---- LOG-179: the well's example wishes
 _ex = B.load_site().get("wish_examples") or []
-ok("site.json carries six example wishes, every wisher 範例 / Example", len(_ex) == 6 and all(e["nick"] == {"zh": "範例", "en": "Example"} for e in _ex))
+ok("site.json carries fourteen example wishes, every wisher 範例 / Example", len(_ex) == 14 and all(e["nick"] == {"zh": "範例", "en": "Example"} for e in _ex))
 ok("the NieR line is there with the owner's reply", any("尼爾" in e["text"] and "尼爾" in e.get("reply", "") and "NieR" not in e.get("reply", "") for e in _ex))
 ok("example statuses are wish statuses", all(e["status"] in B.WISH_STATUSES for e in _ex))
 ok("the desktop page carries the examples in its language", '"wish_examples"' in (ROOT / "zh" / "index.html").read_text(encoding="utf-8") and "Example" in (ROOT / "en" / "index.html").read_text(encoding="utf-8"))
