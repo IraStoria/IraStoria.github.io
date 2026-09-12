@@ -2410,15 +2410,18 @@
             {
               "layers": [
                 "TR"
-              ]
+              ],
+              "noTail": true
             },
             {
               "layers": [
                 "TR"
               ],
-              "noPre": true
+              "noPre": true,
+              "noTail": true
             }
           ],
+          "assumed": "noTail ticked but the note only randomises pre - tail off in both variants",
           "note": "user: 無pre(random)"
         },
         {
@@ -2467,14 +2470,6 @@
         },
         {
           "from": "B2",
-          "to": "A",
-          "layers": [
-            "TR"
-          ],
-          "amended": "2026-09-12 「B回A不+1, C回A不+1」"
-        },
-        {
-          "from": "B2",
           "to": "C1",
           "random": [
             {
@@ -2488,19 +2483,10 @@
           "note": "user: 無PRE (RANDOM)"
         },
         {
-          "from": "B2",
-          "to": "E1",
-          "layers": [
-            "DRUM",
-            "HIT1"
-          ]
-        },
-        {
           "from": "C1",
           "to": "A",
           "layers": [
-            "TR",
-            "DRUM"
+            "TR"
           ],
           "amended": "2026-09-12 「B回A不+1, C回A不+1」"
         },
@@ -2561,13 +2547,6 @@
         },
         {
           "from": "D1",
-          "to": "A",
-          "layers": [
-            "HIT1"
-          ]
-        },
-        {
-          "from": "D1",
           "to": "B2",
           "layers": [],
           "noPre": true
@@ -2576,8 +2555,7 @@
           "from": "D2",
           "to": "A",
           "layers": [
-            "TR",
-            "DRUM"
+            "TR"
           ]
         },
         {
@@ -2817,7 +2795,7 @@
           "note": "G1's pre-entry bar as a transition (user 2026-09-12, Downloads \"G1preentry.mp3\", 1.463 s): starts where G1's own pick-up would, seam - 1 bar @172. trimStart = the measured lag against G1's own pre-entry (cross-correlation, 27.2 ms), not the 25 ms rule. Post zone only (from E2 on) - a rule naming it from anywhere else is ignored by the engine and refused by test_build."
         }
       },
-      "transitions_note": "LOG-185 / ADR-012 (user 2026-09-12 16:35 「已經調好了，可以應用了」): one rule per (from, to) pair, generated from the Transition Lab checklist plan_final_0912_1636.json by _tools_transition/apply_plan.py - edit the plan or the script, not this list. `from` = a section id, or A for the intro AND A2 (both hand over like A); `to` = a section id, I for the outro, or A for any hand-back to A (A1 later pass / A2 - the simple stage only). `layers` = seamLayers keys, every one starting preBars before the seam on the audio clock, armed at the decision with the next section and taken back with it. `noPre` = the incoming section enters ON the seam at its logical start (its own pick-up is skipped); `noTail` = the outgoing section stops at the seam (its tail does not ring across); with both gone the 15 ms crossfade applies, as if the data said 0. `mute` = {layer: [note ordinals]} silenced from that onset (layer.notes) to the next listed onset or the end. `random` = the variants the user listed for that seam, one drawn per seam (an empty layers list = nothing). `assumed` marks the readings where the tick and the note disagreed."
+      "transitions_note": "LOG-185 / ADR-012 (user 2026-09-12 16:35 「已經調好了，可以應用了」): one rule per (from, to) pair, generated from the Transition Lab checklist plan_final_0912_2241.json (2026-09-12 22:41, 「紀錄後更新上線」; the 16:36 plan before it) by _tools_transition/apply_plan.py - edit the plan or the script, not this list. `from` = a section id, or A for the intro AND A2 (both hand over like A); `to` = a section id, I for the outro, or A for any hand-back to A (A1 later pass / A2 - the simple stage only). `layers` = seamLayers keys, every one starting preBars before the seam on the audio clock, armed at the decision with the next section and taken back with it. `noPre` = the incoming section enters ON the seam at its logical start (its own pick-up is skipped); `noTail` = the outgoing section stops at the seam (its tail does not ring across); with both gone the 15 ms crossfade applies, as if the data said 0. `mute` = {layer: [note ordinals]} silenced from that onset (layer.notes) to the next listed onset or the end. `random` = the variants the user listed for that seam, one drawn per seam (an empty layers list = nothing). `assumed` marks the readings where the tick and the note disagreed."
     }
   ],
   "song": {

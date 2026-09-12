@@ -469,7 +469,7 @@ ok("LOG-185: TR lists its three note onsets (the third IS the seam: 1.636 s = 1 
    _lay["TR"].get("notes") == [0.808, 1.222, 1.636] and abs(_lay["TR"]["notes"][2] - 1.65517) < 0.03)
 _rules = _tr184
 _pairs = [(t["from"], t["to"]) for t in _rules]
-ok("LOG-185: 43 rules (44 from the plan, C2>A emptied by the user's 「B回A不+1, C回A不+1」), one per pair, every end a section id / A / I", len(_rules) == 43 and len(set(_pairs)) == 43 and all(f in _sids and t in _sids for f, t in _pairs))
+ok("LOG-187: 40 rules (the 22:41 plan, 40 marked rows - B2>A / B2>E1 / D1>A dropped by the user), one per pair, every end a section id / A / I", len(_rules) == 40 and len(set(_pairs)) == 40 and all(f in _sids and t in _sids for f, t in _pairs))
 def _vars(t): return [t] if "random" not in t else t["random"]
 ok("LOG-185: every layer a rule (or a variant) names exists; every random rule has >= 2 variants and no plain layers of its own",
    all(all(k in _lay for k in v.get("layers", [])) for t in _rules for v in _vars(t))
@@ -484,7 +484,8 @@ ok("LOG-185: the user's readings are in the table as he wrote them (spot checks)
    and _byp[("A", "D1")]["layers"] == ["TR", "DRUM"] and _byp[("A", "D1")]["mute"] == {"TR": [3]}
    and _byp[("C1", "B1")]["random"] == [{"layers": [], "noPre": True}, {"layers": [], "noTail": True, "noPre": True}]   # 「C-B無pre」 (LOG-186)
    and _byp[("F1", "I_loop")]["layers"] == ["HIT1"] and _byp[("F1", "I_loop")].get("noTail") is True
-   and _byp[("B1", "A")]["layers"] == ["TR"] and _byp[("B2", "A")]["layers"] == ["TR"] and _byp[("C1", "A")]["layers"] == ["TR", "DRUM"] and ("C2", "A") not in _byp   # 「B回A不+1, C回A不+1」
+   and _byp[("B1", "A")]["layers"] == ["TR"] and _byp[("C1", "A")]["layers"] == ["TR"] and _byp[("D2", "A")]["layers"] == ["TR"] and all(p not in _byp for p in (("B2", "A"), ("C2", "A"), ("D1", "A")))   # 22:41 plan: X>A = TR only where ticked (「B回A不+1, C回A不+1」 still holds)
+   and _byp[("B1", "C1")]["random"] == [{"layers": ["TR"], "noTail": True}, {"layers": ["TR"], "noPre": True, "noTail": True}]   # LOG-187: 無tail ticked on top of 「無pre(random)」 - tail off in both variants, pre drawn
    and _byp[("I_loop", "F1")]["layers"] == ["HIT1", "G1PRE"] and _byp[("H2", "G1")].get("noPre") is True and _byp[("H2", "G1")]["layers"] == [])
 ok("LOG-185: schedule() / fadeOut() read the pair's noPre / noTail off the drawn rule, and the crossfade follows",
    "var pre = r.noPre ? 0 : preSec(seg), post = (cur && !r.noTail) ? postSec(cur.seg) : 0, xf = (cur && pre <= 0 && !post)" in _js182
