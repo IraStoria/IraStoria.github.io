@@ -907,7 +907,7 @@
              ghostInfo: function () { if (!ghostT0) return null; var gp = (performance.now() - ghostT0) / GHOST_MS; return gp >= 1 ? null : { col: ghostCol, k: 1 - gp };
  },   /* the fading previous colour (k 1->0 on the ghost clock) — the caption's not-yet-repainted part wears it */
              restore: function (ms) { restoreT0 = performance.now(); restoreDur = Math.max(50, ms || 1400); },   /* the grey part fades back in in place (the line itself never left) */
-             farewell: function () { if (!collT0 && !blankW) collT0 = performance.now(); }, reappear: function () { blankW = false; collT0 = 0; if (!regrowT0) regrowT0 = performance.now(); }, reflowCancel: function () { reflowT0 = 0; }, gleamSet: function (g_) { gleam = g_ || null; }, dimSet: function (k_) { dimK = (k_ == null || k_ >= 0.999) ? null : Math.max(0, k_); }, reflow: function (fromFrac, holdMs) { reflowT0 = performance.now(); reflowFrom = Math.max(0, Math.min(1, fromFrac || 0)); reflowHold = Math.max(REFLOW_IN_MS, holdMs || REFLOW_IN_MS); }, baseY: function () { return cv ? cv.clientHeight * yTo : 0; } };
+             farewell: function () { if (!collT0 && !blankW) collT0 = performance.now(); }, reappear: function () { blankW = false; collT0 = 0; if (!regrowT0) regrowT0 = performance.now(); }, reflowCancel: function () { reflowT0 = 0; }, gleamSet: function (g_) { gleam = g_ || null; }, dimSet: function (k_) { dimK = (k_ == null || k_ >= 0.999) ? null : Math.max(0, k_); }, reflow: function (fromFrac, holdMs) { reflowT0 = performance.now(); reflowFrom = Math.max(0, Math.min(1, fromFrac || 0)); reflowHold = Math.max(REFLOW_IN_MS, holdMs || REFLOW_IN_MS); }, baseY: function () { return cv ? cv.clientHeight * yTo : 0; }, markX: function () { var mk = markCur == null ? null : markCur; return (cv && mk != null) ? cv.clientWidth * Math.max(0, Math.min(1, mk)) : null; } };   /* markX (LOG-182 追記⑦): where the decision tick is DRAWN right now - the lesson's bubble points at the tick itself, not at the middle of the line */
   }
   var DESK_WAVE_Y = 0.58, PH_WAVE_Y = 0.47;   /* where each shell's play line rests. Named because LOG-132 reasons about the phone's from two further places, and three copies of 0.47 would drift apart the first time one of them moved. */
   var wave = makeWave($('#wave'), DESK_WAVE_Y, true), phoneWave = makeWave($('#ph-wave'), PH_WAVE_Y, true);   /* waterfall on both shells */  // phone: slightly above centre
@@ -2476,7 +2476,25 @@
      The desktop line, caption, transport and duck follow through the same ext contract (state() keeps the iframe shape);
      the phone keeps its iframe panel and the demo page itself is untouched. Escape or the「離開舞台」button leaves. */
   var DSTAGE_TAIL_MS = 3800;   /* (DSTAGE_OUT_MS retired in LOG-143: the manual exit no longer has a clock of its own - it runs on LEAVE_HOLD, the outro's) */   /* TAIL: after the door's hand-back the outro's tail is still singing (I: 12 beats @172 ~ 4.2 s past the logical end) - the desktop's bars and music wait this long before rising, so the ear and the bars never disagree (追記⑰: "tail還沒播完音量條就被切回桌面") */
-  function makeSecPlayer(base, ver, host, onBye) {
+  function makeSecPlayer(base, ver, host, onBye, opts) {
+    /* LOG-182 (feat.stage-tutorial · ADR-011): the engine now has TWO button faces over the same rules. opts.mode 'simple' = the
+       teaching stage (the user: 把他想成一個簡易版的額外舞台): one button per GROUP showing only its letter (pressing it queues
+       version 1; the pair rule brings version 2 as ever), FORWARD ONLY (a group already played is spent and greys out), no loop,
+       no random/in-order buttons, and the auto flow walks the config order to the end. opts.on(type, info) is the event tap
+       the shell's lesson listens to; opts.onSwitch(to) is the level switch button in the tail; opts.noSwitch hides it (the phone). */
+    opts = opts || {};
+    var SIMPLE = opts.mode === 'simple', locked = false, played = {};
+    /* LOG-182 追記③ (the user): the simple stage OPENS ON A LOOP instead of the fixed intro - A1 without drums (`HOLD`) passes round
+       for as long as the lesson talks, the drum loop (`DRUMS`, layer 2) is faded in on top when the lesson says so, and when the
+       lesson is ready to demonstrate the next pass is replaced by A2 (`RELEASE`, the intro's second half), which hands over to B
+       exactly as the intro did. Both halves read as 'A' everywhere (letter / alias). */
+    var HOLD = null, HOLDL = null, DRUMS = null, RELEASE = null, holding = true, drumOn = false, drumGain = null, drumSrcs = [];   /* HOLDL (追記⑥): the pass for every turn after the first, entered `openBars` in - the opening's two beats are heard once, not on every turn of the loop (LOG-184: and it is a DIFFERENT render, `hold.file`, where the first pass is `hold.firstFile`) */
+    var LAYERS = {}, TRANS = [], stemPend = null, stemSrcs = [];   /* LOG-185 (ADR-012): LAYERS = the theme's seam layer files by key (TR / DRUM / HIT1 / G1PRE), TRANS = one rule per (from, to) pair - which layers ride that seam, whether the incoming pick-up or the outgoing tail is skipped, which note of a layer is silenced, and the random variants the user listed. stemPend = the layer voices armed for the seam that has not happened yet - the only ones a retake may take back; stemSrcs = every layer voice still sounding, so a hard stop can ramp them all out */
+    /* LOG-182 追記⑤ (the user: 教學模式不要用"按鈕"，改成播放順序排列。段落可以在正確的空間內左右拖移，然後只會線性播放): the simple
+       stage is the LINE the music will walk - A | first half | E | second half | I - not a row of things to press. The visitor drags
+       a letter left or right INSIDE its own zone to change the order; playback follows the line, group after group, to I. */
+    var PRE = ['B', 'C', 'D'], POST = ['F', 'G', 'H'], lineOrder = { pre: [], post: [] }, drag = null;
+    function emit(type, info) { if (opts.on) { try { opts.on(type, info || {}); } catch (e) {} } }
     /* base = '../demos/interactive-player/' — files in segments.json are relative to the demo directory (like the ADE stems) */
     var LOOKAHEAD = 0.25, TICK = 25;
     var FREEJUMP = /[?&]debug/.test(location.search);   /* 追記㉜ ?debug: choose()/key() may queue ANY section, allow list or not (A straight to I) - reviewing the outro meant walking the whole legal path every time. The pair rule steps aside for it too; the automatic flow (decide's own picks) still obeys every rule, so the show itself is unchanged */
@@ -2491,6 +2509,7 @@
        the first at the hand-over, silently dropping it. One slot, always drawn, is the whole fix. */
     var cur = null, nxt = null, pending = null, nxtForced = false;   /* nxtForced: the locked next section is the PAIR RULE'S doing (or the loop's), not a choice anyone made - the one case that is not announced (see render) */
     var randomAuto = false, lastId = null, loopCount = 0, mate = null, autoMode = 'seq';   /* loopCount: consecutive passes of the loop segment (it leaves only on an even count); mate: the OTHER version of the group just entered — whichever version is picked plays first, its mate follows before anything else */
+    var forceId = null;   /* LOG-183 (the user: 示範走教學專用排程，繞過規則表): the lesson's continuation demo walks A1 -> B1 -> A2 -> C1 -> B1 -> A1 (LOG-186: C1 goes straight on to B1 and B1 back to the opening; C2 is out of the demonstration), and two of those seams (B1 -> A2, B1 -> A1) are moves the allow table forbids because A only ever goes forward. ONE slot, consumed by the next decision, checked before every other rule - the show's own flow never reads it. */
     var trackListeners = [], byeFired = false;   /* the two-bars-out farewell is fired from tick() ON THE AUDIO CLOCK - never from a wall-clock timer (see the outro branch) */
     function fireTrack(fromFrac) { trackListeners.forEach(function (fn) { try { fn(fromFrac); } catch (e) {} }); }
     function markPair(seg) {   /* entering a section: does it complete a pair, or open one? */
@@ -2504,17 +2523,43 @@
       SEG = th.segments; GROUPS = th.groups || []; byId = {}; byGroup = {};
       SEG.forEach(function (s) { byId[s.id] = s; }); GROUPS.forEach(function (g) { byGroup[g.id] = g; });
       if (INTRO) byId[INTRO.id] = INTRO; if (OUTRO) byId[OUTRO.id] = OUTRO;
+      var TU = (SIMPLE && th.tutorial) || null; HOLD = TU && TU.hold ? TU.hold : null; DRUMS = TU && TU.drums ? TU.drums : null; RELEASE = TU && TU.release ? TU.release : null;
+      HOLDL = null;
+      if (HOLD && HOLD.openBars) {
+        HOLDL = {}; for (var hk in HOLD) HOLDL[hk] = HOLD[hk]; HOLDL.skipBars = HOLD.openBars; HOLDL.durationSec = (HOLD.durationSec || 0) - HOLD.openBars * (60 / (HOLD.bpmIn || 120) * (th.beatsPerBar || CFG.beatsPerBar || 4));   /* same id = same caption; shorter logical length = eight bars */
+        /* ★ LOG-184 (the user: 第一次要播 _1st 那一版，之後每一圈換另一版): the loop has TWO renders of the same eight bars.
+           `firstFile` is the pass that is heard from the top (openBars = the two opening beats sound once, LOG-182 追記⑥),
+           `file` every pass after it. Same id, same length, same grid - only the mp3 differs, so they need two BUFFERS and
+           one caption: `bufId` is what keys the buffer, `id` still says A1 everywhere. HOLD stays the FIRST pass (start()
+           enters on it and decide() hands to HOLDL from then on), so a re-mount - 再看一次教學, 結束教學, a level switch -
+           is a fresh first pass by construction: there is no way back into the loop without rebuilding the engine. */
+        if (HOLD.firstFile) { var H1 = {}; for (var fk in HOLD) H1[fk] = HOLD[fk]; H1.file = HOLD.firstFile; H1.bufId = HOLD.id + '_1st'; HOLD = H1; }
+      }
+      if (HOLD) byId[HOLD.id] = HOLD; if (RELEASE) byId[RELEASE.id] = RELEASE;   /* byId['A1'] is the FIRST pass - decide()'s `fs === HOLD` test reads it to mean 'another turn', which is HOLDL */
+      /* ★ LOG-185 / ADR-012 (the user, 2026-09-12 16:35, after auditioning all 111 successions in the Transition Lab: 已經調好了，可以應用了):
+         what a seam does depends on the PAIR, not on either section. `seamLayers` are the files (each with its own pick-up:
+         it starts preBars before the seam so its material lands where the user placed it), `transitions[]` is one rule per
+         (from, to) - `layers` to stack, `noPre` / `noTail` to skip the incoming pick-up / the outgoing tail for THIS pair only,
+         `mute` to silence a numbered note of a layer, `random` for the variants the user listed (one drawn per seam). The
+         table is generated from the lab's checklist (apply_plan.py) - nothing in here knows a B1 or a C1 by name. */
+      LAYERS = {}; var SL = th.seamLayers || {};
+      for (var lk in SL) { var lo = {}; for (var lf in SL[lk]) lo[lf] = SL[lk][lf]; lo.key = lk; if (!lo.id) lo.id = 'L:' + lk; LAYERS[lk] = lo; }
+      TRANS = (th.transitions || []).map(function (t, i) { var o = {}; for (var k in t) o[k] = t[k]; if (!o.id) o.id = 'TR' + i + ':' + t.from + '>' + t.to; return o; });
     }
-    function isBookend(seg) { return seg === INTRO || seg === OUTRO; }
-    function bufKey(seg) { return TH.id + ':' + seg.id; }
-    function allSegs() { var a = SEG.slice(); if (INTRO) a.unshift(INTRO); if (OUTRO) a.push(OUTRO); return a; }
+    function isBookend(seg) { return seg === INTRO || seg === OUTRO || !!(seg && seg.bookend); }   /* LOG-182: the hold and the release are the intro's stand-ins */
+    function isOpening(seg) { return isBookend(seg) && seg !== OUTRO; }
+    function isHold(seg) { return !!seg && !!HOLD && (seg === HOLD || seg === HOLDL); }
+    function bufKey(seg) { return TH.id + ':' + (seg.bufId || seg.id); }   /* LOG-184: bufId, when a segment has one, is what tells two renders of the SAME id apart (the hold's first pass vs. every later one) */
+    function holdSplit() { return !!(HOLD && HOLDL && HOLDL.file !== HOLD.file); }   /* LOG-184: two files, two buffers - both have to be down before the first pass sounds or pass 2 would enter on nothing */
+    function allSegs() { var a = SEG.slice(); if (INTRO) a.unshift(INTRO); if (OUTRO) a.push(OUTRO); if (HOLD) a.unshift(HOLD); if (holdSplit()) a.unshift(HOLDL); if (RELEASE) a.push(RELEASE); if (DRUMS) a.push(DRUMS); return a.concat(layerList()); }   /* LOG-182: the tutorial's files load with the rest (simple mode only - they are null otherwise) */   /* LOG-184/185: the seam layers load with them - they are not sections (no entry in the allow table), so candidates() never sees them */
+    function layerList() { var a = []; for (var k in LAYERS) a.push(LAYERS[k]); return a; }
     /* ---- timing model (per segment) */
     function barSec(bpm) { return 60 / bpm * CFG.beatsPerBar; }
     function preSec(seg) { return (seg.preBars || 0) * barSec(seg.bpmIn); }      /* pick-up runs at the incoming tempo */
     function postSec(seg) { return (seg.tailBars || 0) * barSec(seg.bpmOut); }   /* tail rings at the outgoing tempo */
     function logicalSec(seg) { var b = buffers[bufKey(seg)]; return b ? Math.max(0.1, (seg.durationSec || b.duration) - preSec(seg) - postSec(seg)) : 0; }   /* durationSec: true length for files whose mp3 has no gapless tag */
     function colorOf(seg) { return (byGroup[seg.group] || {}).color || '#e0b04a'; }
-    function nameOf(seg) { return seg === OUTRO ? seg.id + ' End' : seg.id.replace('_', ' '); }   /* LOG-135 (the user: 將 I 按鈕變成 I End 然後放在 I loop 下面): the ending is named for what it DOES. One name for the button, the caption and the now-playing line - they must never disagree about what is sounding. */
+    function nameOf(seg) { if (SIMPLE) return seg === OUTRO ? 'I' : (isBookend(seg) ? (seg.letter || seg.id) : seg.group); return seg === OUTRO ? seg.id + ' End' : seg.id.replace('_', ' '); }   /* LOG-182 simple: the caption and the button say the GROUP's letter - the two halves are one thing there */   /* LOG-135 (the user: 將 I 按鈕變成 I End 然後放在 I loop 下面): the ending is named for what it DOES. One name for the button, the caption and the now-playing line - they must never disagree about what is sounding. */
     function groupVersions(seg) { return SEG.filter(function (s) { return s.group === seg.group; }); }
     function verIdx(seg) { return isBookend(seg) ? 0 : groupVersions(seg).indexOf(seg); }
     /* ---- tempo clock (LOG-110): the night-city scene rides the AUDIO clock, never animation time — a pause freezes the
@@ -2565,7 +2610,7 @@
       }
       return tm.T;
     }
-    function signLetter(seg) { return isBookend(seg) ? seg.id : (seg.loop ? 'I' : seg.group); }   /* what the neon sign reads: A / I for the bookends, the group letter otherwise */
+    function signLetter(seg) { return isBookend(seg) ? (seg.letter || seg.id) : (seg.loop ? 'I' : seg.group); }   /* what the neon sign reads: A / I for the bookends, the group letter otherwise */
     function hexHsl(hex) {   /* -> [h 0-360, s 0-1, l 0-1] */
       var v = parseInt(hex.slice(1), 16), r = ((v >> 16) & 255) / 255, g = ((v >> 8) & 255) / 255, b = (v & 255) / 255;
       var mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn, h = 0, s = 0;
@@ -2657,31 +2702,103 @@
     function loadBuffer(seg, onFetched, urgent) { return qFetch(base + seg.file, seg.id).then(function (ab) { try { if (onFetched) onFetched(); } catch (e) {} return decode(ab, urgent, seg.id); }); }   /* LOG-127: the progress readout is a SIDE EFFECT - it reports on the load, it is not part of it. It used to sit directly in the chain, so when it threw (see above) the decode below it never ran. Whatever it does now, the audio still gets decoded. */
     function ready(s) { return !!buffers[bufKey(s)]; }   /* progressive loading: a segment still decoding under the music must never be scheduled (only conceivable seconds into the intro — everything is down long before the first decision) */
     /* ---- scheduler */
-    function schedule(seg, entry) {
-      var src = ctx.createBufferSource(), g = ctx.createGain();
+    function schedule(seg, entry, rule) {   /* rule (LOG-185): the seam rule already drawn for THIS hand-over (null for the first section) - it may say the incoming pick-up is skipped or the outgoing tail is cut, for this pair only */
+      var src = ctx.createBufferSource(), g = ctx.createGain(), r = rule || {};
       src.buffer = buffers[bufKey(seg)]; src.connect(g); g.connect(master);
-      var pre = preSec(seg), xf = (cur && pre <= 0 && !postSec(cur.seg)) ? CFG.crossfadeMs / 1000 : 0;   /* tiny equal-power seam only when nothing overlaps */
+      var pre = r.noPre ? 0 : preSec(seg), post = (cur && !r.noTail) ? postSec(cur.seg) : 0, xf = (cur && pre <= 0 && !post) ? CFG.crossfadeMs / 1000 : 0;   /* tiny equal-power seam only when nothing overlaps - a pair rule that removes the overlap gets the crossfade, exactly as if the data said 0 */
       if (xf > 0) { g.gain.setValueAtTime(0, entry); g.gain.linearRampToValueAtTime(1, entry + xf); }
-      src.start(entry - pre, seg.trimStart || 0);   /* trimStart skips an mp3 encoder delay when the file carries no gapless tag */
-      return { seg: seg, start: entry, end: entry + logicalSec(seg), audioStart: entry - pre, src: src, gain: g };
+      src.start(entry - pre, (seg.trimStart || 0) + (seg.skipBars ? seg.skipBars * barSec(seg.bpmIn || 120) : 0) + (r.noPre ? preSec(seg) : 0));   /* trimStart skips an mp3 encoder delay when the file carries no gapless tag; skipBars (追記⑥) enters a later pass of the opening loop after its two opening beats; noPre (LOG-185) enters ON the seam at the logical start - the pick-up bar of the file is simply never read */
+      if (isHold(seg) && drumOn) drums(entry, 0, seg.skipBars ? 0 : null);   /* LOG-182: layer 2 rides every pass of the hold once it is on; nothing of it leaks past the pass */
+      return { seg: seg, start: entry, end: entry + logicalSec(seg), audioStart: entry - pre, src: src, gain: g, rule: rule || null };
+    }
+    function schedNext(seg) { var r = drawRule(cur.seg, seg); nxt = schedule(seg, cur.end, r); armStem(cur.seg, seg, cur.end, r); return nxt; }   /* LOG-184/185: EVERY decision goes through here - the pair's rule is drawn ONCE (a random variant stays drawn for this seam), the next section is scheduled on it, the seam layers are armed on the same audio-clock time, and fadeOut() below reads the same rule off `nxt` - one draw, three readers, one place that takes it all back */
+    /* ---- ★ LOG-185 / ADR-012 THE SEAM LAYERS (grown from LOG-184's single B1 -> A stem, which is now just one row of the table).
+       Files that belong to the JOIN, not to either section: they are armed at the DECISION - the same moment the next section's
+       source is scheduled - so they ride the audio clock exactly as the sections do, never a setTimeout. Each layer's `preBars`
+       is its pick-up: the file starts preBars before the seam (TR / DRUM / HIT1: 1 bar @145 = 1.6552 s; G1PRE: 1 bar @172 =
+       1.3953 s) and its material lands where the user placed it when he auditioned the pair. The lookup is on the PAIR: `from`
+       is the outgoing section's id or its alias (A2 hands over as A does), `to` is the incoming id, I for the outro, or the
+       letter A for any hand-back to A (only the simple stage ever does that). One draw per seam: a rule with `random` picks
+       one of the user's listed variants here and the same object is read by schedule(), fadeOut() and armStem(). */
+    function ruleFor(fromSeg, toSeg) {
+      if (!fromSeg || !toSeg) return null;
+      var L = isBookend(toSeg) ? signLetter(toSeg) : null;
+      for (var i = 0; i < TRANS.length; i++) {
+        var t = TRANS[i];
+        if (t.from !== fromSeg.id && !(fromSeg.alias && !isHold(fromSeg) && t.from === fromSeg.alias)) continue;   /* the hold (A1) never leaves as A: only the intro and A2 do */
+        if (t.to === toSeg.id || (L && t.to === L)) return t;
+      }
+      return null;
+    }
+    function drawRule(fromSeg, toSeg) {   /* the rule as it applies to THIS seam: a `random` rule collapses to one of its variants (the user: 備註裡列出的選項之間每次接縫任選其一，含 N＝什麼都不放) */
+      var t = ruleFor(fromSeg, toSeg); if (!t) return null;
+      if (!(t.random && t.random.length)) return t;
+      var v = t.random[Math.floor(Math.random() * t.random.length)], o = {};
+      for (var k in t) if (k !== 'random') o[k] = t[k];
+      for (var vk in v) o[vk] = v[vk];
+      o.variant = t.random.indexOf(v); return o;
+    }
+    function armStem(fromSeg, toSeg, seam, rule) {
+      dropStem();   /* one seam at a time: whatever was armed for a seam that is being re-decided goes with it */
+      if (!ctx || !fromSeg || !rule || !(rule.layers && rule.layers.length)) return;
+      var armed = [];
+      rule.layers.forEach(function (key) {
+        var Ly = LAYERS[key]; if (!Ly || !ready(Ly)) return;
+        if (Ly.onlyFrom && Ly.onlyFrom.indexOf(fromSeg.id) < 0) return;   /* G1PRE is post-zone only: a rule that names it from the wrong place is ignored, not honoured */
+        var at = Math.max(ctx.currentTime, seam - (Ly.preBars || 0) * barSec(Ly.bpmIn || 120));   /* the decision falls seconds before the seam, so the clamp is a guard, not a path */
+        var src = ctx.createBufferSource(), g = ctx.createGain(), trim = Ly.trimStart || 0;
+        src.buffer = buffers[bufKey(Ly)]; src.connect(g); g.connect(master);   /* the same output chain as the sections: it is part of the mix, not a layer with its own fader */
+        var mute = rule.mute && rule.mute[key];   /* 「TR第三個音不播」(the user, 16:40: 先試引擎靜音): the layer's gain is taken to 0 just before that note's onset (Ly.notes, measured in the file) and stays there until the next listed onset - or, for the last listed note, to the end, so its delay tail goes with it */
+        if (mute && Ly.notes) mute.forEach(function (n) {
+          var t0 = Ly.notes[n - 1], t1 = Ly.notes[n]; if (t0 == null) return;
+          var a = at + t0 - trim; g.gain.setValueAtTime(1, a - 0.008); g.gain.linearRampToValueAtTime(0, a - 0.002);
+          if (t1 != null) { var b = at + t1 - trim; g.gain.setValueAtTime(0, b - 0.008); g.gain.linearRampToValueAtTime(1, b - 0.002); }
+        });
+        src.start(at, trim);
+        var v = { src: src, gain: g, at: at, id: Ly.id, key: key, seam: seam };
+        src.onended = function () { var i = stemSrcs.indexOf(v); if (i >= 0) stemSrcs.splice(i, 1); if (stemPend) { var j = stemPend.indexOf(v); if (j >= 0) stemPend.splice(j, 1); if (!stemPend.length) stemPend = null; } };
+        stemSrcs.push(v); armed.push(v);
+      });
+      stemPend = armed.length ? armed : null;
+    }
+    function dropStem() {   /* the armed layers are taken back exactly as the scheduled next section is (retake / release / reorder / stop) - with a 20 ms ramp, because by then they may already be sounding */
+      if (!stemPend) return; var vs = stemPend; stemPend = null;
+      vs.forEach(function (v) {
+        var i = stemSrcs.indexOf(v); if (i >= 0) stemSrcs.splice(i, 1);
+        try { var n = ctx ? ctx.currentTime : 0; v.gain.gain.cancelScheduledValues(n); v.gain.gain.setValueAtTime(v.gain.gain.value, n); v.gain.gain.linearRampToValueAtTime(0, n + 0.02); v.src.stop(n + 0.03); } catch (e) {}
+      });
+    }
+    function drums(at, rel, leadOverride) {   /* the 8-bar drum loop for the pass that began `rel` seconds before `at`: on the FIRST pass it enters `offsetBars` in (after the opening's two beats), on later passes (追記⑥, no opening beats) from the pass's first beat; it ends with the pass - its own gain so the lesson can fade it in */
+      if (!DRUMS || !ready(DRUMS) || !ctx) return;
+      if (!drumGain) { drumGain = ctx.createGain(); drumGain.gain.value = 0; drumGain.connect(master); }
+      var lead = leadOverride != null ? leadOverride : (DRUMS.offsetBars || 0) * barSec(DRUMS.bpmIn || 120), off = Math.max(0, rel - lead), L = logicalSec(DRUMS) - off; if (L <= 0.05) return;
+      var src = ctx.createBufferSource(); src.buffer = buffers[bufKey(DRUMS)]; src.connect(drumGain);
+      src._at = rel < lead ? at + (lead - rel) : at;   /* LOG-183: when this pass's drums are due - release() has to be able to take back a pass that is scheduled but has not sounded */
+      src.start(src._at, (DRUMS.trimStart || 0) + off, L); drumSrcs.push(src); src.onended = function () { var i = drumSrcs.indexOf(src); if (i >= 0) drumSrcs.splice(i, 1); };
+    }
+    function drumLayer(on, tc) {   /* the lesson's switch: fades in over ~2 s from wherever the pass is (or slower - LOG-183 追記②, the lesson asks for ~9 s); off fades out the same way */
+      drumOn = !!on; if (!ctx) return;
+      if (drumOn && cur && isHold(cur.seg) && !drumSrcs.length) { var rel = Math.max(0, ctx.currentTime - cur.start); drums(ctx.currentTime + 0.02, rel, cur.seg.skipBars ? 0 : null); if (nxt && isHold(nxt.seg)) drums(nxt.start, 0, nxt.seg.skipBars ? 0 : null); }
+      if (drumGain) { drumGain.gain.cancelScheduledValues(ctx.currentTime); drumGain.gain.setTargetAtTime(drumOn ? 1 : 0.0001, ctx.currentTime, drumOn ? (tc || 0.7) : 0.4); }
     }
     function fadeOut(item) {
-      var post = postSec(item.seg), xf = (!post && nxt && preSec(nxt.seg) <= 0) ? CFG.crossfadeMs / 1000 : 0;
+      var r = (nxt && nxt.rule) || {}, post = r.noTail ? 0 : postSec(item.seg), xf = (!post && nxt && (r.noPre ? 0 : preSec(nxt.seg)) <= 0) ? CFG.crossfadeMs / 1000 : 0;   /* LOG-185: the pair's rule (drawn in schedNext, carried on nxt) may cut this tail at the seam / skip the next pick-up - the crossfade test reads the same rule schedule() did */
       if (post > 0) { item.src.stop(item.end + post); }            /* let the tail ring out over the next section */
       else if (xf > 0) { item.gain.gain.setValueAtTime(1, item.end); item.gain.gain.linearRampToValueAtTime(0, item.end + xf); item.src.stop(item.end + xf); }
       else item.src.stop(item.end);
     }
-    function candidates(fromId) { return allSegs().filter(function (s) { return s !== INTRO && allowed(fromId, s.id); }); }
+    function candidates(fromId) { return allSegs().filter(function (s) { return !isOpening(s) && s !== DRUMS && allowed(fromId, s.id); }); }
     function decisionLead() {
       var lead = (CFG.decisionLeadBeats || 0) * (60 / cur.seg.bpmOut);
       candidates(cur.seg.id).forEach(function (s) { lead = Math.max(lead, preSec(s)); });
+      layerList().forEach(function (Ly) { lead = Math.max(lead, (Ly.preBars || 0) * barSec(Ly.bpmIn || 120)); });   /* LOG-185: a seam layer is armed at the decision and starts preBars before the seam - the decision must fall before the earliest of them (8 beats already does; this is the guard that keeps it true if the data changes) */
       return lead + LOOKAHEAD;
     }
     function allowed(fromId, toId) {   /* the rules always hold on the stage (they ARE the pre-entry/tail model); repeats are the rules' business */
       var to = byId[toId], from = byId[fromId];
-      if (!to || !from || to === INTRO) return false;
+      if (!to || !from || isOpening(to)) return false;
       if (from === OUTRO) return false;
-      var A = TH.allow || {}, a = A[fromId] || A[from.group];   /* per-segment first, then per-group */
+      var A = TH.allow || {}, a = A[fromId] || A[from.group] || (from.alias ? A[from.alias] : null);   /* LOG-182: A1 / A2 follow A's own list */   /* per-segment first, then per-group */
       if (!a) return true;
       return a.indexOf(toId) >= 0 || a.indexOf(to.group) >= 0 || (to === OUTRO && a.indexOf('OUTRO') >= 0);
     }
@@ -2690,14 +2807,15 @@
     function pickNext(fromId) {
       var from = byId[fromId];
       var order = SEG.filter(function (s) { return !s.loop; }); if (OUTRO) order.push(OUTRO);
-      var i = order.indexOf(from), pool = order.slice(i + 1).filter(function (s) { return s.group !== from.group && allowed(fromId, s.id) && ready(s); });
+      var i = order.indexOf(from), pool = order.slice(i + 1).filter(function (s) { return s.group !== from.group && allowed(fromId, s.id) && ready(s) && !(SIMPLE && played[s.group]); });   /* LOG-182 simple: a group already played is never walked into again */
       if (from.loop) pool = order.filter(function (s) { return s.group !== from.group && allowed(fromId, s.id) && ready(s); });
+      if (!pool.length && SIMPLE && OUTRO && allowed(fromId, OUTRO.id) && ready(OUTRO)) return OUTRO;   /* LOG-182 simple: nothing left ahead = the line ends by itself */
       return pool.length ? pool[0] : pickRandom(fromId);
     }
     function pickRandom(fromId) {
       var from = byId[fromId];
       if (from.loop) return from;   /* outro loop: keeps looping itself until the user picks something */
-      var pool = SEG.filter(function (s) { return s.group !== from.group && allowed(fromId, s.id) && s.id !== fromId && ready(s); });   /* the group just completed as a pair — random moves to a different group */
+      var pool = SEG.filter(function (s) { return s.group !== from.group && allowed(fromId, s.id) && s.id !== fromId && ready(s) && !(SIMPLE && (played[s.group] || s.loop)); });   /* the group just completed as a pair — random moves to a different group */
       if (!pool.length) pool = SEG.filter(function (s) { return allowed(fromId, s.id) && ready(s); });
       if (!pool.length) pool = SEG.filter(ready);
       if (!pool.length) return from;   /* nothing else decoded yet: repeat the current section (unreachable in practice — the first decision sits ~20 s in) */
@@ -2707,22 +2825,40 @@
       /* a group plays out whole, in the order it was entered: whichever version was picked plays first, its mate ALWAYS follows
          (any queued pick waits for the decision after); the outro loop leaves only after an even number of passes */
       var forced = null;
+      if (forceId) {   /* LOG-183: the lesson's own schedule outranks every rule below - it is the ONE caller allowed to write a seam the allow table does not contain (see forceId's note) */
+        var fs = byId[forceId]; if (fs === HOLD && HOLDL) fs = HOLDL;   /* 'A1' from the demo means ANOTHER TURN of the loop: the eight-bar body, entered after the opening's two beats, exactly as every later pass is */
+        forceId = null;
+        if (fs && ready(fs)) {
+          mate = null; randomAuto = false; pending = null;
+          schedNext(fs); nxtForced = true; fadeOut(cur); render();
+          emit('decide', { id: fs.id, forced: true, auto: false, tut: true, hold: isHold(fs) }); return;
+        }
+      }
+      if (isHold(cur.seg)) {   /* LOG-182 追記③: the opening loop - another pass while the lesson holds (追記⑥: from after the opening beats), A2 once it lets go */
+        var nh = (holding || !RELEASE || !ready(RELEASE)) ? (HOLDL || HOLD) : RELEASE;
+        schedNext(nh); nxtForced = true; fadeOut(cur); render(); emit('decide', { id: nh.id, forced: true, auto: false, hold: isHold(nh) }); return;
+      }
       if (FREEJUMP && pending && byId[pending] && byId[pending] !== INTRO && ready(byId[pending])) {   /* ?debug: the free jump outranks the pair rule too - queueing I from inside a half-played group must not detour through the mate (追記㉜) */
         mate = null; randomAuto = false;
-        nxt = schedule(byId[pending], cur.end); nxtForced = false; pending = null; fadeOut(cur); render(); return;
+        var fj = byId[pending]; schedNext(fj); nxtForced = false; pending = null; fadeOut(cur); render(); emit('decide', { id: fj.id, forced: false, auto: false }); return;   /* LOG-182: the lesson listens on this path too (the probes run with ?debug) */
       }
       if (cur.seg.loop && loopCount % 2 === 1) forced = cur.seg;
       else if (mate && allowed(cur.seg.id, mate.id)) forced = mate;   /* the pair rule is the user's own design — but it may NOT drive a move the allow list forbids (LOG-113) */
       else if (mate) mate = null;   /* ★ THE PAIR CANNOT BE COMPLETED BACKWARDS. Entering the E group at E2 (the pre-zone is allowed to jump straight there) opened a pair whose mate is E1, and forcing it drove E2 -> E1 - the one reversal the rules forbid - after which E1's only legal successor is E2, which opened the pair again: E2 -> E1 -> E2 -> E1 with no way out of the middle zone. The pair is dropped instead, and the decision below is the ordinary one (E2 -> the post zone). Every other two-version group is allowed both ways, so nothing else changes: checked mechanically against the allow table, and the only forbidden pair move in it is E2 -> E1. */
       if (forced && !ready(forced)) forced = null;   /* still decoding under the music (early-intro edge only) — fall through to a decoded pick */
-      if (forced) { randomAuto = false; nxt = schedule(forced, cur.end); nxtForced = true; fadeOut(cur); render(); return; }   /* ★ THE ONE HAND-OVER THAT IS NOT ANNOUNCED (the user, 2026-09-05: 必播時不需要額外再亮起來，直接滑過去繼續播即可): the pair's second half is inevitable - it is not a choice, so lighting it as 'next' only competed with the pick the user actually made. The droplet sliding there IS the announcement. Everything else - the user's pick AND whatever the auto modes pick (the user: 順序或隨機的電腦選字母切換的待播還是要出現) - is announced normally. */   /* `pending` is left untouched — it applies after the pair completes, and render() keeps showing it the whole time */
+      if (SIMPLE && !forced) {   /* LOG-182 追記⑤: the simple stage walks its line - no picks, no auto mode */
+        var ln = lineNext(cur.seg);
+        if (ln && ready(ln)) { randomAuto = false; schedNext(ln); nxtForced = false; fadeOut(cur); render(); emit('decide', { id: ln.id, forced: false, auto: false, line: true }); return; }
+      }
+      if (forced) { randomAuto = false; schedNext(forced); nxtForced = true; fadeOut(cur); render(); emit('decide', { id: forced.id, forced: true, auto: false }); return; }   /* ★ THE ONE HAND-OVER THAT IS NOT ANNOUNCED (the user, 2026-09-05: 必播時不需要額外再亮起來，直接滑過去繼續播即可): the pair's second half is inevitable - it is not a choice, so lighting it as 'next' only competed with the pick the user actually made. The droplet sliding there IS the announcement. Everything else - the user's pick AND whatever the auto modes pick (the user: 順序或隨機的電腦選字母切換的待播還是要出現) - is announced normally. */   /* `pending` is left untouched — it applies after the pair completes, and render() keeps showing it the whole time */
       var choice = null;
       if (pending && allowed(cur.seg.id, pending) && ready(byId[pending])) { choice = byId[pending]; randomAuto = false; pending = null; }   /* ★ LOG-126: `pending` is cleared HERE, where it is consumed, and nowhere else. It used to be nulled unconditionally at the bottom of decide(), so a pick whose audio had not finished decoding (routine on a phone, see the priority-loading note above) was silently binned - the user pressed a section, nothing acknowledged it, and the stage carried on (`選擇其他段落也只會跳回同一個不斷重複`). A pick that cannot be honoured yet is not a mistake; it is a pick that waits, exactly as one made from an illegal spot already did. Pressing it again still takes it back. */
       else { choice = autoMode === 'seq' ? pickNext(cur.seg.id) : pickRandom(cur.seg.id); randomAuto = !(choice.loop && autoMode === 'random'); }
       nxtForced = false;   /* a real decision was taken here, by the user or by the auto mode - either way the stage says which section is coming */
-      nxt = schedule(choice, cur.end);
+      schedNext(choice);
       fadeOut(cur);
       render();
+      emit('decide', { id: choice.id, forced: false, auto: randomAuto });   /* LOG-182: the lesson narrates the decision - 'auto' = nobody picked, the flow chose */
     }
     function tick() {
       var now = ctx.currentTime;
@@ -2738,7 +2874,9 @@
       }
       if (!nxt && now >= cur.end - decisionLead()) decide();
       if (nxt && now >= cur.end) {           /* hand-over */
-        lastId = cur.seg.id; cur = nxt; nxt = null; nxtForced = false; fireTrack(1);
+        lastId = cur.seg.id; cur = nxt; nxt = null; nxtForced = false; stemPend = null; fireTrack(1);   /* LOG-184/185: the seam layers have crossed their seam - no longer take-back-able, they just ring on under the new section until their own onended */
+        if (cur.seg.group) played[cur.seg.group] = true;   /* LOG-182: the group is spent the moment it sounds (simple mode reads this; advanced ignores it) */
+        emit('enter', { id: cur.seg.id, group: isBookend(cur.seg) ? cur.seg.id : cur.seg.group, ver: isBookend(cur.seg) ? 0 : verIdx(cur.seg) + 1, from: lastId, outro: cur.seg === OUTRO });
         loopCount = cur.seg.loop ? loopCount + 1 : 0;
         markPair(cur.seg);
         if (pending === cur.seg.id) pending = null;   /* ★ LOG-126: the pick is SATISFIED the moment its section starts sounding, however it got there. Holding `pending` until decide() consumes it (the fix above) left it stuck when the section arrived some other way - picking E2 while E1 played queued it, the PAIR RULE played it, and decide() then found a pick that could not follow itself and, no longer allowed to bin it, kept the queued mark on screen for the rest of the show. */
@@ -2760,7 +2898,11 @@
       /* progressive start (LOG-109 追記①): the INTRO alone gates playback — it fetches and decodes first (urgent), the music
          enters on its count-in downbeat, and the other seventeen decode UNDERNEATH the intro's 25 s at a gentle pace
          (PLAY_GAP_MS between allocations). Nothing on the desktop waits for the full set any more. */
-      var first = INTRO || SEG[0];
+      var first = HOLD || INTRO || SEG[0];
+      /* ★ LOG-184: the hold's SECOND render gates playback too. Pass 2 is decided ~5 s before pass 1 ends and enters with no
+         seam at all, so if `hold.file` were still decoding there would be a hole where the loop should simply turn over.
+         Both go down urgently and begin() waits for the pair; on the desktop they are two ~300 KB files. */
+      var urgent = [first]; if (holdSplit() && urgent.indexOf(HOLDL) < 0) urgent.push(HOLDL);
       var pending = allSegs().filter(function (s) { return !buffers[bufKey(s)]; }), done = 0, fetched = 0, began = false;
       var prog = function () { loadProg = (pending && pending.length && !began) ? { d: fetched + done, t: pending.length * 2 } : null; };   /* both phases counted: downloaded + decoded / total*2 (the shell's hint shows the percentage at the line, until the music is up) */
       /* ★★ LOG-127 THE ROOT CAUSE of `只會跳回同一個不斷重複`. `pending` is this function's list of segments still
@@ -2776,16 +2918,17 @@
       if (pending.length) prog();
       var begin = function () {
         if (began || dead) return; began = true; loadProg = null;
-        running = true; pending = null; randomAuto = false; lastId = null; loopCount = 0; mate = null;
+        running = true; pending = null; randomAuto = false; lastId = null; loopCount = 0; mate = null; played = {};
         var entry = ctx.currentTime + 0.05 + preSec(first);   /* first entry sits after its own pick-up: start times can't be negative */
         if (stageLead && stageT0 !== null) { entry = Math.max(entry, stageT0 + stageLead + preSec(first)); stageT0 = null; }   /* the music enters on the count-in's downbeat (or as soon as the intro's decode allows, whichever is later) */
         cur = schedule(first, entry); nxt = null; nxtForced = false;
         markPair(first);   /* starting inside a two-version group opens its pair too */
         primeSoon();   /* the intro is playing and nothing else is down yet: this is the decision that used to starve */
         fireTrack(0);
+        emit('begin', { id: first.id, at: entry });   /* LOG-183: `at` is the DOWNBEAT on the audio clock - the lesson's whole script is timed from it (begin fires as soon as the first file is decoded, which can be a count-in ahead of the first sound) */
         timer = setInterval(tick, TICK); render();
       };
-      var rest = pending.filter(function (s) { return s !== first; });
+      var rest = pending.filter(function (s) { return urgent.indexOf(s) < 0; });
       var loadRest = function () {
         rest.forEach(function (s) {   /* LOG-127: per segment, not Promise.all - one failure used to reject the aggregate and report ONE warning for however many segments were actually lost, which is how the bug above stayed invisible. Now each one succeeds or fails on its own, says which, and gets a second try: a segment lost to a single dropped request would otherwise be missing from every pool for the rest of the show. */
           var attempt = function (retry) {
@@ -2796,9 +2939,12 @@
           attempt(true);
         });
       };
-      if (pending.indexOf(first) >= 0) {
-        loadBuffer(first, function () { fetched++; prog(); }, true).then(function (b) { buffers[bufKey(first)] = b; done++; prog(); begin(); })
-          .catch(function (err) { running = false; loadProg = null; clearInterval(timer); cur = nxt = null; render(); console.warn('section stage: start failed', err); });
+      var need = urgent.filter(function (s) { return pending.indexOf(s) >= 0; }), left = need.length;   /* LOG-184: one gate, however many renders the opening has */
+      if (left) {
+        need.forEach(function (s) {
+          loadBuffer(s, function () { fetched++; prog(); }, true).then(function (b) { buffers[bufKey(s)] = b; done++; prog(); if (!--left) begin(); })
+            .catch(function (err) { running = false; loadProg = null; clearInterval(timer); cur = nxt = null; render(); console.warn('section stage: start failed', err); });
+        });
         loadRest();   /* the rest fetch alongside (cap 2); their decodes queue behind the urgent intro */
       } else { begin(); loadRest(); }
     }
@@ -2806,6 +2952,9 @@
       running = false; dead = true; clearInterval(timer); if (startTimer) { clearTimeout(startTimer); startTimer = 0; }
       if (paused) { paused = false; try { ctx.resume(); } catch (e) {} }   /* never leave the context suspended: the fade-out needs a running clock */
       [cur, nxt].forEach(function (it) { if (it) { try { it.gain.gain.cancelScheduledValues(0); it.gain.gain.setValueAtTime(it.gain.gain.value, ctx.currentTime); it.gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1); it.src.stop(ctx.currentTime + 0.12); } catch (e) {} } });
+      if (drumGain) { try { drumGain.gain.cancelScheduledValues(0); drumGain.gain.setValueAtTime(drumGain.gain.value, ctx.currentTime); drumGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1); } catch (e) {} }
+      drumSrcs.forEach(function (d) { try { d.stop(ctx.currentTime + 0.12); } catch (e) {} }); drumSrcs = [];
+      stemPend = null; stemSrcs.forEach(function (s) { try { s.gain.gain.cancelScheduledValues(0); s.gain.gain.setValueAtTime(s.gain.gain.value, ctx.currentTime); s.gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1); s.src.stop(ctx.currentTime + 0.12); } catch (e) {} }); stemSrcs = [];   /* LOG-184/185: a seam layer ringing under the hard stop ramps out with everything else */
       cur = nxt = null; pending = null; nxtForced = false; randomAuto = false; render();
       var c = ctx; ctx = null; if (c) setTimeout(function () { try { c.close(); } catch (e) {} }, 500);
     }
@@ -2815,31 +2964,36 @@
       cur = nxt = null;
       var c = ctx; ctx = null; if (c) setTimeout(function () { try { c.close(); } catch (e) {} }, tail * 1000);
     }
-    function choose(id) {
+    function choose(id, force) {   /* force: the lesson's own press (LOG-182) - it goes through while the buttons are locked */
       if (!running) return;
+      if (SIMPLE) return;   /* 追記⑤: the line is arranged, not picked */
+      if (locked && !force) return;   /* LOG-182 (the user: 演示中鎖住按鈕): a locked stage swallows the visitor's picks - keys included, see key() */
+      if (SIMPLE && byId[id] && played[byId[id].group] && pending !== id) { bump(id); return; }   /* simple: no going back to a group already played */
       var free = FREEJUMP && byId[id] && byId[id] !== INTRO;   /* ?debug: any section may be queued (追記㉜) */
       if (pending === id) { pending = null; render(); return; }   /* ★ 排隊操作 (LOG-118 ②c): pressing the pick again takes it back - queueing used to be a one-way door. Taking it back comes FIRST: it must work even from a spot the pick could not be made from */
       var afterId = (nxt || cur).seg.id;   /* the pick must be a legal successor of whatever it will actually follow: the locked next section if there is one, else the one playing */
       if (!free && !allowed(afterId, id)) { bump(id); return; }   /* not on offer from there - say so on the button instead of swallowing the click */
       pending = id;
+      emit('pending', { id: id, group: byId[id].group || id, forced: !!force });
       needSoon(id);   /* LOG-126: a pick for a section that is not down yet used to be refused at the decision AND dropped - now it goes to the head of both queues and waits in `pending` until it can be honoured */
       if (!nxt) randomAuto = false;   /* the auto badge stops breathing only once the pick can actually take the next decision */
       render();
     }
-    function key(k) {   /* a letter queues that group's first version; the same letter again cycles its versions; I = outro, L = the loop */
+    function key(k) {
+      if (locked || SIMPLE) return;   /* LOG-182 (追記⑤: no letters on the simple stage either) */   /* a letter queues that group's first version; the same letter again cycles its versions; I = outro, L = the loop */
       if (!running) return;
       var g = String(k || '').toUpperCase();
       if (g === 'I' && OUTRO) { choose(OUTRO.id); return; }
-      if (g === 'L' && byId.I_loop) { choose('I_loop'); return; }
+      if (g === 'L' && byId.I_loop) { if (!SIMPLE) choose('I_loop'); return; }
       if (!byGroup[g]) return;
       var segs = SEG.filter(function (s) { return s.group === g; }), i = 0;
       var curPick = pending;
       if (curPick && byId[curPick] && byId[curPick].group === g) i = (segs.findIndex(function (s) { return s.id === curPick; }) + 1) % segs.length;
-      choose(segs[i].id);
+      choose(segs[SIMPLE ? 0 : i].id);   /* simple: a letter is its group's version 1, no cycling */
     }
     /* ---- UI: the demo's stage surface, built as shell DOM (zones · glass-bubble buttons · the spring droplet) */
     var segsEl = document.createElement('div'); segsEl.className = 'ds-secs'; host.appendChild(segsEl);
-    var segBtns = {}, colEls = {}, randomBtn = null, seqBtn = null, outroBtn = null, zlabs = [];
+    var segBtns = {}, colEls = {}, randomBtn = null, seqBtn = null, outroBtn = null, zlabs = [];   /* LOG-182 simple: segBtns / colEls are keyed by the tile's LETTER (A · B..H · I) */
     function mkSeg(cls, onClick) {
       var b = document.createElement('button'); b.type = 'button'; b.className = cls;
       b.innerHTML = '<span class="nm"></span>';
@@ -2850,6 +3004,7 @@
     function bump(id) { flash(segBtns[id], 'nope'); }   /* the pick is not on offer from where the music is: a short nudge, never a silent swallow */
     function buildButtons() {
       segsEl.innerHTML = ''; segBtns = {}; colEls = {}; zlabs = [];
+      if (SIMPLE) return buildLine();
       /* zones: first half {B,C,D} · bridge {E} · second half {F,G,H,I_loop}; no ↓ between versions (the pair frame carries the grouping) */
       var zones = [{ k: 'sec_zone_pre', g: ['B', 'C', 'D'] }, { k: 'sec_zone_gate', g: ['E'] }, { k: 'sec_zone_post', g: ['F', 'G', 'H', 'I_loop'] }];
       zones.forEach(function (z) {
@@ -2869,14 +3024,215 @@
         segsEl.appendChild(band);
       });
       var tail = document.createElement('div'); tail.className = 'zone ctrl';
-      var tl = document.createElement('div'); tl.className = 'zlab'; tl.textContent = ' '; tail.appendChild(tl);
-      if (OUTRO) { outroBtn = mkSeg('seg outro', function () { choose(OUTRO.id); }); (colEls[OUTRO.id + '_loop'] || colEls[OUTRO.id] || tail).appendChild(outroBtn); segBtns[OUTRO.id] = outroBtn; }   /* LOG-135: I End sits UNDER I loop, in that column, because that is where it is understood - and the post zone's other columns already hold two, so it costs no height. It is NOT a version pair: `pair` is decided from SEG, which has no outro in it, so the pair frame never draws around these two and the forced-mate rule never sees them as a couple. */
+      var tl = document.createElement('div'); tl.className = 'zlab'; tl.textContent = ' '; tail.appendChild(tl);
+      if (OUTRO) { outroBtn = mkSeg('seg outro', function () { choose(OUTRO.id); }); (colEls[OUTRO.id + '_loop'] || colEls[OUTRO.id] || tail).appendChild(outroBtn); segBtns[OUTRO.id] = outroBtn; }   /* LOG-135: I End sits UNDER I loop, in that column, because that is where it is understood - and the level switch (LOG-182) lives in the stage's head, not here */
       randomBtn = mkSeg('seg random', function () { autoMode = 'random'; pending = null; randomAuto = false; render(); });
       seqBtn = mkSeg('seg random seq', function () { autoMode = 'seq'; pending = null; randomAuto = false; render(); });
       tail.appendChild(randomBtn); tail.appendChild(seqBtn); segsEl.appendChild(tail);
     }
+    /* ---- LOG-182 追記⑤ the simple stage's LINE: five zones of equal height (opening · first half · bridge · second half · ending), a | between
+       them, one floating tile per group. A, E and I are fixed; the first half's three and the second half's three can be dragged into a
+       new order inside their own zone - every seam of the new order must be a move the rules allow (version 2 of one group into version
+       1 of the next), or the tile bounces back. segBtns / colEls are keyed by the tile's letter here. */
+    function buildLine() {
+      lineOrder.pre = PRE.filter(function (g) { return !!byGroup[g]; }); lineOrder.post = POST.filter(function (g) { return !!byGroup[g]; });
+      var zones = [{ k: 'sec_zone_intro', tiles: ['A'] }, { k: 'sec_zone_pre', zone: 'pre' }, { k: 'sec_zone_gate', tiles: ['E'] }, { k: 'sec_zone_post', zone: 'post' }, { k: 'sec_zone_end', tiles: ['I'] }];
+      var n = 0;
+      zones.forEach(function (z, zi) {
+        if (zi) { var sep = document.createElement('div'); sep.className = 'zsep' + (opts.reveal ? ' hid' : ''); sep.setAttribute('aria-hidden', 'true'); segsEl.appendChild(sep); }
+        var band = document.createElement('div'); band.className = 'zone ' + (z.zone ? 'free' : 'fixed'); band.setAttribute('data-zone', z.zone || z.tiles[0]);
+        var lab = document.createElement('div'); lab.className = 'zlab' + (opts.reveal ? ' hid' : ''); lab.setAttribute('data-u', z.k); lab.textContent = U[z.k] || ''; band.appendChild(lab); zlabs.push(lab);
+        var cols = document.createElement('div'); cols.className = 'zcols'; band.appendChild(cols);
+        (z.zone ? lineOrder[z.zone] : z.tiles).forEach(function (g) {
+          var color = (g === 'A' || g === 'I' || !byGroup[g]) ? '#e8e8e4' : byGroup[g].color;
+          var col = document.createElement('div'); col.className = 'col' + (opts.reveal ? ' hid' : ''); col.style.setProperty('--c', color); col.style.setProperty('--i', n++);   /* 追記⑦ (the user: 按鈕不要馬上出現，隨著教學一步一步出現): with a lesson to come, every tile, label and | starts hidden and the lesson reveals them one by one */
+          var t = document.createElement('div'); t.className = 'seg tile' + (z.zone ? '' : ' fixed'); t.setAttribute('data-g', g); t.style.setProperty('--c', color);
+          var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = g; t.appendChild(nm);
+          col.appendChild(t); cols.appendChild(col); segBtns[g] = t; colEls[g] = col;
+        });
+        segsEl.appendChild(band);
+      });
+      segsEl.classList.add('simple'); segsEl.classList.toggle('locked', locked); segsEl.classList.toggle('arrows', !opts.reveal);   /* the arrows between the tiles (追記⑦: 出現箭頭表示播放順序) are part of the line; the lesson switches them on when it explains the order */
+    }
+    function reveal(what, g) {   /* 追記⑦: the lesson's hand on the curtain - 'tile' + letter, 'zones' (labels and the |), 'arrows', or everything */
+      if (what === 'tile') { var c = colEls[g]; if (c) c.classList.remove('hid'); return; }
+      if (what === 'zones') { segsEl.querySelectorAll('.zlab.hid,.zsep.hid').forEach(function (e) { e.classList.remove('hid'); }); return; }
+      if (what === 'arrows') { segsEl.classList.add('arrows'); return; }
+      segsEl.querySelectorAll('.hid').forEach(function (e) { e.classList.remove('hid'); }); segsEl.classList.add('arrows');
+    }
+    function canTake(zone, order) {   /* the same tests reorder() makes, without committing - the drag asks on every step so an order the rules refuse never LOOKS taken (追記⑦, the user: 明明換過去了，卻會被吸回去) */
+      var old = lineOrder[zone]; if (!old || old.length !== order.length) return false;
+      if (old.join() === order.join()) return true;
+      for (var i = 0; i < old.length; i++) { if (!movableKey(old[i]) && order[i] !== old[i]) return false; }
+      if (old.slice().sort().join() !== order.slice().sort().join()) return false;
+      return lineOk(zone, order);
+    }
+    function tileKey(seg) { return isOpening(seg) ? 'A' : (seg === OUTRO ? 'I' : seg.group); }
+    function v1(g) { return SEG.filter(function (s) { return s.group === g; })[0] || null; }
+    function lineOf() { return ['A'].concat(lineOrder.pre, ['E'], lineOrder.post, ['I']); }
+    /* ★ LOG-184 (the user: 簡易舞台上每一種順序都要合法). On the line the ORDER is no longer the allow table's business - but the
+       table still picks the VERSION, because a group is entered at whichever of its two the music can actually reach. So: the
+       first version the table permits from the segment that is playing, and if it permits neither (D2 -> C, C2 -> B, F2 which
+       only ever follows F1) the group's own version 1 anyway - the seam the visitor asked for wins over the table. */
+    function lineVer(fromId, g) {
+      var vs = SEG.filter(function (s) { return s.group === g; }); if (!vs.length) return null;
+      for (var i = 0; i < vs.length; i++) if (allowed(fromId, vs[i].id)) return vs[i];
+      return vs[0];
+    }
+    function lineNext(seg) {   /* the group after this one on the line (the pair rule brings the other version); null past the end */
+      var line = lineOf(), i = line.indexOf(tileKey(seg)); if (i < 0 || i >= line.length - 1) return null;
+      var nk = line[i + 1]; return nk === 'I' ? OUTRO : lineVer(seg.id, nk);
+    }
+    function lastOf(k) { if (k === 'A') return RELEASE ? RELEASE.id : (INTRO ? INTRO.id : 'A'); var vs = SEG.filter(function (s) { return s.group === k; }); return vs.length ? vs[vs.length - 1].id : k; }
+    function firstOf(k) { if (k === 'I') return OUTRO ? OUTRO.id : 'I'; var v = v1(k); return v ? v.id : k; }
+    /* ★ LOG-184 (the user, 2026-09-12: 簡易舞台不要有「誰不能接誰」的限制). EVERY ORDER IS LEGAL ON THE LINE. The allow table
+       only ever permitted the three ROTATIONS of B C D (D2 has no C successor, C2 no B), so half of what a visitor tried to do
+       in the first half bounced - and in the second half the table forbade nothing at all, which made the refusal look random.
+       The zones stay (A | B C D | E | F G H | I) and so does 'a group already played does not come back'; what goes is the
+       inter-segment ban. The VERSION is still the table's call (lineVer above). The ADVANCED player is untouched: this test is
+       reached only from canTake() / reorder(), which only the simple stage's line has. */
+    function lineOk(zone, order) {   /* every seam in the zone - and the seams in from the zone before and out to the one after - must be a move the rules allow */
+      if (SIMPLE) return true;
+      var seq = [zone === 'pre' ? 'A' : 'E'].concat(order, [zone === 'pre' ? 'E' : 'I']);
+      for (var i = 0; i < seq.length - 1; i++) if (!allowed(lastOf(seq[i]), firstOf(seq[i + 1]))) return false;
+      return true;
+    }
+    /* ★ LOG-183 追記③ (the user: BCD 現在根本不能自由換). The locked next used to be pinned in its slot from the moment it was DECIDED -
+       5.2 s before the seam - and in the simple stage the decision for B1 is taken during A, so B sat pinned at the front of the first
+       half for the whole opening. The theme's allow table only permits the three ROTATIONS of B C D (D2 has no C successor, C2 no B),
+       and every rotation starts with a different letter: pin the first slot and not one alternative survives, every drag bounces.
+       Now a next that has NOT SOUNDED yet is still movable, and reorder() takes the scheduled next back (the recipe release() already
+       uses) and decides again from the new line. A next that is sounding, or about to (0.2 s), stays where it is. */
+    function nextSounding() { return !!(nxt && ctx && ctx.currentTime >= nxt.start - 0.2); }
+    function movableKey(g) { return !!segBtns[g] && running && !played[g] && !(cur && tileKey(cur.seg) === g) && !(nxt && tileKey(nxt.seg) === g && nextSounding()) && !(segBtns[g].classList.contains('fixed')); }
+    function retake() {   /* the scheduled next has not sounded: stop it, forget it, decide again (the line may say something else now) */
+      if (!(running && ctx && cur && nxt) || nextSounding()) return false;
+      var at = nxt.start;
+      try { nxt.src.stop(0); } catch (e) {}
+      dropStem();   /* LOG-184: the stem was armed for THIS seam - the seam is being re-decided, so it goes too */
+      drumSrcs = drumSrcs.filter(function (d) { if (d._at != null && d._at >= at - 0.01) { try { d.stop(0); } catch (e2) {} return false; } return true; });   /* layer 2 rides each pass: the cancelled pass's drums go with it */
+      nxt = null; nxtForced = false; decide(); return true;
+    }
+    /* ★ LOG-186 (the user, 2026-09-12: 不然額外還要等一個 loop 太久了): THE PRESS ON A NEED NOT WAIT FOR THE PASS TO END. The opening
+       loop (A1, eight bars) and A2 (the intro's second half: eight bars, no pick-up) stand on the SAME eight-bar grid, so A2 can be
+       entered at the bar-and-beat the loop is at right now. A press that lands in the FIRST HALF of a pass (< 50 % of its eight
+       bars) starts A2 at once at the aligned offset (trimStart + where the loop is) and CROSSFADES the pass into it - an audible,
+       equal-power blend of RELEASE_XF_BEATS beats (2 beats @145 = 0.83 s; the user, on reading '對齊切': 我明明說 crossfading - this is
+       a blend of two aligned mixes, not the engine's 15 ms click-guard; the length is the one knob, to be tuned by ear). A press
+       in the SECOND HALF lets the pass play out and A2 follows it at the seam, as before (release() below). Only the lesson's
+       press asks for this - release(true); free simple play and 結束教學 keep the seam path. */
+    var RELEASE_XF_BEATS = 2;
+    function xfCurves(from) {   /* equal-power: the outgoing gain rides a cosine down from `from`, the incoming a sine up to 1 - the sum of squares stays 1, so the blend never dips */
+      var N = 65, dn = new Float32Array(N), up = new Float32Array(N);
+      for (var i = 0; i < N; i++) { var k = i / (N - 1) * Math.PI / 2; dn[i] = from * Math.cos(k); up[i] = Math.sin(k); }
+      return { dn: dn, up: up };
+    }
+    function releaseMid() {
+      if (!(running && ctx && cur && RELEASE && ready(RELEASE) && isHold(cur.seg)) || paused) return false;
+      var now = ctx.currentTime, bar = barSec(cur.seg.bpmIn || 120), L = logicalSec(RELEASE);
+      var loopStart = cur.start + (cur.seg.skipBars ? 0 : (HOLD.openBars || 0) * bar);   /* the first pass carries the two opening beats before its bar 1; every later pass starts ON bar 1 */
+      if ((now - loopStart) / L >= 0.5) return false;   /* second half: the pass plays out, A2 follows at the seam */
+      var at = Math.max(now + 0.05, loopStart), pos = at - loopStart, xf = RELEASE_XF_BEATS * (60 / (RELEASE.bpmIn || 120));   /* a press during the opening beats waits for bar 1 - A2 then enters at ITS bar 1 */
+      if (nxt) {   /* another turn already scheduled: taken back exactly as retake() does - it has not sounded, and the seam it was armed for is not going to happen */
+        var nat = nxt.start; try { nxt.src.stop(0); } catch (e) {}
+        dropStem();
+        drumSrcs = drumSrcs.filter(function (d) { if (d._at != null && d._at >= nat - 0.01) { try { d.stop(0); } catch (e2) {} return false; } return true; });
+        nxt = null; nxtForced = false;
+      }
+      var og = cur.gain.gain, cv = xfCurves(og.value); og.cancelScheduledValues(at); og.setValueAtTime(og.value, at); og.setValueCurveAtTime(cv.dn, at, xf);   /* the pass fades out under A2 on the cosine (a stop the decision may already have scheduled stays - a source cannot be re-stopped - so it plays on silently to it) */
+      try { cur.src.stop(at + xf + 0.02); } catch (e) {}
+      drumSrcs.forEach(function (d) { try { d.stop(at + xf + 0.02); } catch (e) {} }); drumSrcs = [];   /* layer 2 ends with the pass it belongs to */
+      if (drumGain) { drumGain.gain.cancelScheduledValues(at); drumGain.gain.setValueAtTime(drumGain.gain.value, at); drumGain.gain.linearRampToValueAtTime(0.0001, at + xf); }
+      var src = ctx.createBufferSource(), g = ctx.createGain();
+      src.buffer = buffers[bufKey(RELEASE)]; src.connect(g); g.connect(master);
+      g.gain.setValueAtTime(0, at); g.gain.setValueCurveAtTime(cv.up, at, xf);   /* A2 fades in on the sine over the same beats */
+      src.start(at, (RELEASE.trimStart || 0) + pos);   /* pre 0: A2 has no pick-up; the offset IS the loop's bar-and-beat, so the grid never moves */
+      lastId = cur.seg.id; cur = { seg: RELEASE, start: loopStart, end: loopStart + L, audioStart: at, src: src, gain: g, rule: null, mid: pos };   /* start lies `pos` in the past: the clock, the road and the next decision all count from the grid's bar 1, as if A2 had been there all along */
+      stemPend = null; nxtForced = false; fireTrack(1); loopCount = 0; markPair(cur.seg); if (pending === cur.seg.id) pending = null;
+      emit('enter', { id: cur.seg.id, group: cur.seg.id, ver: 0, from: lastId, outro: false, mid: pos });
+      primeSoon(); render();
+      return true;
+    }
+    function reorder(zone, order, silent) {   /* the new order is taken only if it is the same letters, keeps the ones already played / sounding / locked where they are, and every seam is legal */
+      var old = lineOrder[zone]; if (!old || old.length !== order.length) return false;
+      if (old.join() === order.join()) return true;
+      for (var i = 0; i < old.length; i++) { if (!movableKey(old[i]) && order[i] !== old[i]) return false; }
+      if (old.slice().sort().join() !== order.slice().sort().join()) return false;
+      if (!lineOk(zone, order)) return false;
+      lineOrder[zone] = order.slice();
+      if (nxt && !nxtForced && !isHold(nxt.seg) && cur && lineNext(cur.seg) !== nxt.seg) retake();   /* 追記③: the line no longer leads to the next that was locked - it has not sounded, so it is not too late */
+      if (!silent) emit('reorder', { zone: zone, order: order.slice() }); return true;
+    }
+    function applyOrder(zone, animate) {   /* the DOM follows lineOrder; animate = FLIP, the tiles glide to their new places */
+      var cols = segsEl.querySelector('.zone[data-zone="' + zone + '"] .zcols'); if (!cols) return;
+      var list = lineOrder[zone].map(function (g) { return colEls[g]; }), before = {};
+      if (animate) list.forEach(function (c) { before[c.firstChild.getAttribute('data-g')] = c.getBoundingClientRect().left; });
+      list.forEach(function (c) { cols.appendChild(c); });
+      if (!animate) return;
+      list.forEach(function (c) {
+        var t = c.firstChild, dx = before[t.getAttribute('data-g')] - c.getBoundingClientRect().left; if (Math.abs(dx) < 0.5) return;
+        t.style.transition = 'none'; t.style.transform = 'translateX(' + dx + 'px)'; void t.offsetWidth;
+        t.style.transition = 'transform .55s cubic-bezier(.2,.7,.2,1)'; t.style.transform = ''; setTimeout(function () { t.style.transition = ''; }, 600);
+      });
+    }
+    function moveTile(zone, g, idx) {   /* the lesson's own move (and the API's): returns false if the rules refuse it */
+      var o = (lineOrder[zone] || []).filter(function (x) { return x !== g; }); if (o.length === (lineOrder[zone] || []).length) return false;
+      idx = Math.max(0, Math.min(o.length, idx)); o.splice(idx, 0, g);
+      if (!reorder(zone, o, true)) return false;
+      applyOrder(zone, true); render(); return true;
+    }
+    /* drag: pointer events on the line (delegated); the dragged tile follows the pointer inside the zone's movable band, the others
+       step aside as it passes them; on release the order is committed if legal, otherwise everything glides back and the tile shakes */
+    segsEl.addEventListener('pointerdown', function (e) {
+      if (!SIMPLE || locked || e.button || drag) return;
+      var t = e.target.closest ? e.target.closest('.seg.tile') : null; if (!t || !t.classList.contains('movable')) return;
+      var g = t.getAttribute('data-g'), band = t.closest('.zone'), zone = band ? band.getAttribute('data-zone') : ''; if (zone !== 'pre' && zone !== 'post') return;
+      var order = lineOrder[zone].slice(), i0 = order.indexOf(g); if (i0 < 0) return;
+      var lo = order.length; for (var i = 0; i < order.length; i++) if (movableKey(order[i])) { lo = i; break; }
+      var r0 = colEls[order[0]].getBoundingClientRect(), step = order.length > 1 ? colEls[order[1]].getBoundingClientRect().left - r0.left : r0.width + 6;
+      drag = { g: g, zone: zone, x0: e.clientX, order: order, i0: i0, lo: lo, hi: order.length - 1, step: step, cur: i0, tile: t, id: e.pointerId };
+      try { t.setPointerCapture(e.pointerId); } catch (e2) {}
+      t.classList.add('drag'); segsEl.classList.add('dragging'); e.preventDefault();
+    });
+    segsEl.addEventListener('pointermove', function (e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      var d = drag, dx = e.clientX - d.x0, target = Math.max(d.lo, Math.min(d.hi, d.i0 + Math.round(dx / d.step)));
+      d.cur = target;
+      var o = d.order.slice(); o.splice(d.i0, 1); o.splice(target, 0, d.g); var legal = target === d.i0 || canTake(d.zone, o);   /* 追記⑦: the others step aside ONLY for a spot the rules would accept; over a refused spot the tile wears the no-mark and nothing makes way, so what the visitor sees is what will happen on release */
+      d.tile.classList.toggle('bad', !legal);
+      d.tile.style.transform = 'translateX(' + Math.max((d.lo - d.i0) * d.step - 14, Math.min((d.hi - d.i0) * d.step + 14, dx)) + 'px)';
+      d.order.forEach(function (k, i) { if (k === d.g) return; var sh = 0; if (legal) { if (i > d.i0 && i <= target) sh = -d.step; else if (i < d.i0 && i >= target) sh = d.step; } segBtns[k].style.transform = sh ? 'translateX(' + sh + 'px)' : ''; });
+    });
+    function endDrag(e) {
+      if (!drag || (e && e.pointerId !== drag.id)) return; var d = drag; drag = null;
+      d.tile.classList.remove('drag'); d.tile.classList.remove('bad'); segsEl.classList.remove('dragging');
+      var o = d.order.slice(); o.splice(d.i0, 1); o.splice(d.cur, 0, d.g);
+      var taken = d.cur !== d.i0 && reorder(d.zone, o, false);
+      if (taken) {   /* the tiles already stand where they will land: swap the DOM under them and drop the transforms in the same frame */
+        d.order.forEach(function (k) { segBtns[k].style.transition = 'none'; segBtns[k].style.transform = ''; });
+        applyOrder(d.zone, false); void segsEl.offsetWidth; d.order.forEach(function (k) { segBtns[k].style.transition = ''; }); render();
+      } else {
+        d.order.forEach(function (k) { var t = segBtns[k]; t.style.transition = 'transform .35s ease'; t.style.transform = ''; setTimeout(function () { t.style.transition = ''; }, 400); });
+        if (d.cur !== d.i0) { flash(d.tile, 'nope'); emit('refused', { zone: d.zone, g: d.g }); }
+      }
+    }
+    segsEl.addEventListener('pointerup', endDrag); segsEl.addEventListener('pointercancel', endDrag);
+    function renderLine() {
+      var curK = cur ? tileKey(cur.seg) : null, nxtK = nxt ? tileKey(nxt.seg) : null;
+      Object.keys(segBtns).forEach(function (g) {
+        var t = segBtns[g], isCur = curK === g && !(g === 'A' && isHold(cur.seg)), isNext = !!nxt && !isCur && nxtK === g && g !== 'A';   /* 追記⑦ (the user: 播放 A loop 時 A 不要亮起，會誤導): while the opening only circles, nothing on the line is lit - A lights when the line actually sets off (A2); and A is never 'next' either (the next pass of the loop, or A2, is not a hand-over anyone sees) */
+        var spent = running && !isCur && (g === 'A' ? (!!cur && !isOpening(cur.seg)) : !!played[g]);
+        t.classList.toggle('playing', isCur); t.classList.toggle('next', isNext); t.classList.toggle('done', spent);
+        /* LOG-183 追記④ ⑨ (the user: 簡易版雖無 1／2 之分，按鈕仍要漸變成該段落的顏色 - 深色顏色也要對上): the tile's colour follows the
+           VERSION that is sounding, as the advanced buttons and the line do - version 2 = the deep shade - and goes back to the group's
+           own colour when it is not the one playing. Nothing else about the lit look changes (追記④ first try filled the tile: rejected). */
+        t.style.setProperty('--c', isCur ? segColor(cur.seg) : ((g === 'A' || g === 'I' || !byGroup[g]) ? '#e8e8e4' : byGroup[g].color));
+        t.classList.toggle('movable', !locked && movableKey(g));
+      });
+    }
     function render() {
-      if (!randomBtn) return;
+      if (!segsEl.children.length) return;
+      if (SIMPLE) { runFrame.to(null); return renderLine(); }   /* LOG-182 追記⑤ */
       GROUPS.forEach(function (g) {
         var col = colEls[g.id]; if (!col) return;
         var inG = !!cur && cur.seg.group === g.id;
@@ -2918,6 +3274,7 @@
         b.disabled = !running || (!ok && !lit);   /* a pick stays pressable even from a spot it could not be chosen from: taking it back must always be possible */
         b.classList.toggle('off', running && !ok && !lit);   /* a blocked section fades off the stage — but never the one PLAYING (the outro may not follow itself, yet it must stay lit), the locked next, or the pick already made */
       });
+      if (!randomBtn) return;
       randomBtn.querySelector('.nm').textContent = U.sec_random; seqBtn.querySelector('.nm').textContent = U.sec_seq;
       randomBtn.classList.toggle('mode', autoMode === 'random'); seqBtn.classList.toggle('mode', autoMode === 'seq');
       randomBtn.classList.toggle('auto', randomAuto && running && autoMode === 'random'); seqBtn.classList.toggle('auto', randomAuto && running && autoMode === 'seq');
@@ -2972,7 +3329,7 @@
       function goal() { return TT; }
       return { el: b, measure: measure, target: target, hide: hide, goal: goal, still: function (fn) { onStill = fn; } };
     }
-    if (window.matchMedia && window.matchMedia('(hover: hover)').matches) (function () {   /* the pointer's droplet: glides between the buttons under the mouse. LOG-125: only where there IS a pointer - on a touch screen `pointerover` fires on the tap and the pane stays parked on whatever was last touched, a second sheet of glass nobody asked for */
+    if (!SIMPLE && window.matchMedia && window.matchMedia('(hover: hover)').matches) (function () {   /* LOG-182 追記⑤: the simple stage's tiles float and are dragged - no pointer droplet there */   /* the pointer's droplet: glides between the buttons under the mouse. LOG-125: only where there IS a pointer - on a touch screen `pointerover` fires on the tap and the pane stays parked on whatever was last touched, a second sheet of glass nobody asked for */
       var d = droplet('hb2');
       host.addEventListener('pointerover', function (e) {
         var t = e.target && e.target.closest ? e.target.closest('.seg') : null; if (!t || t.disabled || t.classList.contains('off')) return;
@@ -3008,9 +3365,9 @@
     fetch(base + 'segments.json' + (ver ? '?v=' + ver : '')).then(function (r) { return r.json(); }).then(function (cfg) {
       if (dead) return;
       CFG = cfg; useTheme((cfg.themes || [])[0]);
-      var first = INTRO || SEG[0], bpm = first.bpmIn || first.bpmOut || 120;
+      var first = HOLD || INTRO || SEG[0], bpm = first.bpmIn || first.bpmOut || 120;
       stageLead = 4 * 60 / bpm; stageT0 = null;   /* four 4/4 beats at the theme's tempo (145 -> ~1.7 s of load time) */
-      buildButtons(); render();
+      buildButtons(); render(); emit('ready', { mode: SIMPLE ? 'simple' : 'adv' });
       startTimer = setTimeout(start, 1100);   /* NOTHING loads while the entrance plays: the panel and button fade-ins own the thread until they have landed; the count-in begins with the loading */
     }).catch(function (e) { console.warn('section stage: config failed', e); });
     return {
@@ -3083,7 +3440,34 @@
       onTrack: function (fn) { trackListeners.push(fn); },
       poke: function () { if (ctx && ctx.state === 'suspended' && !paused) ctx.resume(); },   /* autoplay refused (the entrance's click was a while ago): the next tap on the stage revives the context — never while paused (pause IS a suspend) */
       relabel: function () { zlabs.forEach(function (l) { l.textContent = U[l.getAttribute('data-u')] || l.textContent; }); render(); },   /* in-place language switch, shell-native bonus: the zone labels and mode buttons follow */
-      choose: choose, key: key, stop: stop, finish: finish
+      choose: choose, key: key, stop: stop, finish: finish,
+      /* LOG-182: the lesson's handles */
+      lock: function (on) { locked = !!on; segsEl.classList.toggle('locked', locked); render(); },
+      isLocked: function () { return locked; },
+      mode: function () { return SIMPLE ? 'simple' : 'adv'; },
+      btn: function (k) { return segBtns[k] || null; },
+      zone: function (k) { for (var i = 0; i < zlabs.length; i++) if (zlabs[i].getAttribute('data-u') === k) return zlabs[i]; return null; },
+      firstGroup: function () { var g = lineOrder.pre[0] || (GROUPS[0] && GROUPS[0].id); var v = g ? v1(g) : null; return v ? { group: g, id: v.id } : null; },   /* the first group on the line (simple) */
+      outroId: function () { return OUTRO ? OUTRO.id : null; },
+      surface: function () { return segsEl; },   /* the whole line - the lesson's first bubble hangs under it so it covers none of what it points at */
+      played: function () { var o = {}; for (var k in played) o[k] = true; return o; },
+      release: function (mid) {   /* LOG-182 追記③: the next pass of the opening loop becomes A2 */   /* LOG-186: mid = the lesson's press - inside the first half of a pass A2 enters NOW, on the grid (releaseMid) */
+        holding = false;
+        if (mid && releaseMid()) return;
+        /* ★ LOG-183 (the user: 開頭循環會一直等到玩家按 A). The press now ARRIVES WHENEVER IT ARRIVES, and the decision for the
+           pass that is sounding was taken up to 5.2 s ago - another turn of the loop is already scheduled, so A2 would not
+           set off for another eighteen seconds and the press would read as ignored. Take that turn back (it is only ever the
+           same eight bars, not yet sounding) and decide again, so A2 follows the pass the visitor pressed during. */
+        if (running && ctx && cur && nxt && isHold(cur.seg) && isHold(nxt.seg) && ctx.currentTime < nxt.start - 0.2) retake();   /* 追記③: the same recipe reorder() uses */
+      },
+      force: function (id) { forceId = id || null; },   /* LOG-183: the lesson's continuation demo - the next decision plays THIS, allow table or not */
+      tutReset: function () { played = {}; mate = null; loopCount = 0; lastId = null; pending = null; render(); },   /* LOG-183: the demo played B and C for real - forget it ever happened, so the visitor's own line still has every letter to arrange */
+      now: function () { return ctx ? ctx.currentTime : 0; },   /* LOG-183: THE LESSON'S CLOCK. Everything it schedules runs on the audio clock, so a suspended context (pause) freezes the script exactly where it is - the old setTimeouts kept counting through a pause and the lesson talked over silence */
+      frozen: function () { return !!paused; },
+      holding: function () { return !!HOLD && holding; },
+      line: lineOf, order: function (z) { return (lineOrder[z] || []).slice(); }, move: moveTile, movable: movableKey,   /* 追記⑤ */
+      layer: drumLayer,
+      reveal: reveal   /* 追記⑦: the lesson draws the curtain piece by piece */
     };
   }
   /* ---- ?debug: A REFERENCE GRID, purely so a change can be described by naming a cell instead of by pointing at a
@@ -5528,7 +5912,7 @@
        exit goes through the plain farewell that predates LOG-112. */
     var PH = PHONE, HOST = PH ? ($('#phone') || document.body) : desktop, WV = PH ? phoneWave : wave,
         NPSEL = PH ? '#np-phone .np-title' : '#np-desktop .np-title', phPop = null;
-    var el = null, head = null, active = false, eng = null, road = null, watch = 0, seen = false, fw = false, viaDoor = false, runTok = null, tRaf = 0, hint = null, ducked = false, unduckPending = false, pendEl = null;   /* viaDoor: the exit came through the outro's letter door (LOG-112 追記⑬) - the hand-back keeps the line instead of regrowing it; runTok: which run the engine/road callbacks belong to (a stale tail's bye must not stop a newer run) */   /* fw: the outro farewell has taken the line down; tRaf: the caption-tint loop; hint: the loading readout; pendEl: the previous run's surface, still animating out — a quick re-entry removes it at once (cancelling its timers alone would strand it in the DOM) */
+    var el = null, head = null, active = false, eng = null, road = null, watch = 0, seen = false, fw = false, viaDoor = false, runTok = null, tRaf = 0, hint = null, ducked = false, unduckPending = false, pendEl = null, tut = null, tutAgain = false, askEl = null, demoD = null;   /* LOG-183: tutAgain = the 再看一次教學 button's one-shot flag, read by the next mount */   /* LOG-182: tut = the simple stage's lesson; askEl = the first-visit question; demoD = the demo being staged (the level switch rebuilds the engine from it) */   /* viaDoor: the exit came through the outro's letter door (LOG-112 追記⑬) - the hand-back keeps the line instead of regrowing it; runTok: which run the engine/road callbacks belong to (a stale tail's bye must not stop a newer run) */   /* fw: the outro farewell has taken the line down; tRaf: the caption-tint loop; hint: the loading readout; pendEl: the previous run's surface, still animating out — a quick re-entry removes it at once (cancelling its timers alone would strand it in the DOM) */
     var lastSec = null, aheadCol = '224,176,74', lastTint = '224,176,74';   /* the caption HOLDS the previous section's colour ahead of the play head — it never fades, only the sweeping new colour replaces it */
     var stopTimers = [];   /* the exit choreography's timers — a quick re-entry must cancel them (or the bars would pop back up mid-entrance) */
     function paintTitle() {   /* ADE's title treatment, in the section's colour: each half is a gradient clipped to its glyphs — part colour behind the play head, amber ahead, glowing with the covered share; the colour is the line's own eased tint, so both change together */
@@ -5616,10 +6000,16 @@
       el = document.createElement('div'); el.className = 'dstage' + (PH ? ' ph' : ''); el.setAttribute('aria-label', d.title);
       el.innerHTML = '<div class="ds-panel"><div class="ds-sec"></div></div>';
       head = document.createElement('div'); head.className = 'stage-ui';
-      head.innerHTML = '<div class="st-hint">' + esc(U.stage_loading_sec) + '</div><div class="st-head"><button class="st-exit" type="button">' + esc(U.stage_exit) + '</button></div>';   /* the ADE stage's loading readout, at the line's centre */
+      head.innerHTML = '<div class="st-hint">' + esc(U.stage_loading_sec) + '</div><div class="st-head"><button class="st-again" type="button" hidden></button><button class="st-level" type="button" hidden></button><button class="st-exit" type="button">' + esc(U.stage_exit) + '</button></div>';   /* the ADE stage's loading readout, at the line's centre; LOG-182 追記⑤: the simple / advanced switch sits beside the exit; LOG-183: and 再看一次教學 beside that (or 結束教學 in the switch's own slot while a lesson runs) */
       hint = $('.st-hint', head); hint.style.top = ((WV.baseY() || HOST.clientHeight * (PH ? PH_WAVE_Y : DESK_WAVE_Y)) - 34) + 'px';
       $('.st-exit', head).addEventListener('click', function () { stop(); });
       HOST.appendChild(el); HOST.appendChild(head);
+      /* ★ LOG-183 (the user: 桌面應用程式圖示絕對不能與舞台按鈕重疊). The 「-shaped icon column (LOG-167) reaches four tiles
+         across the top-left, and the stage's panel is centred - at 1280x720 the two boxes simply share pixels, whichever
+         stage is up. Nothing about the LAYOUT can be tuned out of that (the panel is centred by design and the column is
+         pinned to the corner by design), so the column STEPS ASIDE for as long as a .dstage is on the desktop, on the same
+         slide-left the shell already uses when it swaps pages (os.css .swap-out). It comes back on the way out, below. */
+      if (!PH) HOST.classList.add('dstage-up');
       var e1_ = el, h1_ = head;
       requestAnimationFrame(function () { if (e1_.isConnected) { e1_.classList.add('in'); h1_.classList.add('in'); } });   /* locals, guarded: a stop() racing in before the first frame must not throw on the nulled module vars */
       setTimeout(function () { if (active && el) { var pn = $('.ds-panel', el); if (pn) { pn.style.opacity = '1'; pn.style.transform = 'none'; } if (head) head.style.opacity = '1'; } }, 900);   /* an occluded tab freezes CSS transitions mid-flight — pin the landed state so the panel can never strand half-invisible. LOG-125: .stage-ui was left out of that, and it carries the EXIT BUTTON - come back to a stage whose entrance froze at 8% and the only way off it is invisible. */
@@ -5642,19 +6032,644 @@
       if (!tRaf) tRaf = requestAnimationFrame(paintTitle);
       fw = false; viaDoor = false;
       var tok = {}; runTok = tok;   /* 追記⑮: onBye/onExitDone are module functions shared across runs, and a PREVIOUS run's engine keeps its scheduled tail singing after finish() - its late two-bars-out bye must never reach into THIS run and stop it */
-      eng = makeSecPlayer('../' + d.path + '/', d.ver, $('.ds-sec', el), function () { if (runTok === tok) onBye(); });
-      if (!PH) { road = makeSecRoad(function () { return eng; }, function (form) { if (runTok === tok) onExitDone(form); }); road.start(); }   /* LOG-110: the night city under and over the line (its own canvas, its own rAF, the engine's audio clock) */
-      if (/[?&]debug/.test(location.search)) { window.__sec = eng; window.__road = road; }   /* ?debug: console access for testing (state / choose / toggle · road.tune); __grid() is exported separately, at load */
-      eng.onTrack(function (fromFrac) {   /* every section change: the outgoing fill dissolves in place while the new bar grows out STILL WEARING the old colour, easing into the new one over 3 s (the ADE amber-to-red logic); the caption flips */
-        if (!active) return;
-        var stN = eng.state();
-        if (stN.active && stN.color) { WV.ghost(fromFrac); WV.tint(hexRgb(stN.color), hexRgb(stN.color), 3000); caption.reset(); }
-      });
+      demoD = d;
+      /* LOG-182 (ADR-011): which face of the engine? The phone always gets the advanced one (FUTURE-8). On the desktop the visitor
+         is asked ONCE per browsing session (sessionStorage `sec_level`, the user's ruling) whether they know their way around a
+         piece's sections; the engine is only built inside THAT click, so the AudioContext is still born in a gesture (LOG-130). */
+      var lvl = PH ? 'adv' : level();
+      if (lvl) mount(lvl, tok); else ask(tok);
       watch = setInterval(function () {   /* first sign of the player: the bars rise again from ZERO, carrying only the section's own sound; gone inactive on its own (load failure, terminal end) -> leave the stage and bring the OS music back */
         if (!eng) return;
         var s2 = eng.state();
         if (s2.active) { if (!seen) { seen = true; WV.flush(); WV.squash(false); } } else if (seen && !fw) stop();
       }, 500);
+      if (!PH) { road = makeSecRoad(function () { return eng; }, function (form) { if (runTok === tok) onExitDone(form); }); road.start(); }   /* LOG-110: the night city under and over the line (its own canvas, its own rAF, the engine's audio clock) */
+      if (/[?&]debug/.test(location.search)) { window.__road = road; window.__stage = { mode: function () { return eng ? eng.mode() : null; }, tut: function () { return tut; }, asking: function () { return !!askEl; } }; }   /* ?debug: console access for testing (state / choose / toggle · road.tune); __grid() is exported separately, at load */
+    }
+    function hookTrack() {
+      eng.onTrack(function (fromFrac) {   /* every section change: the outgoing fill dissolves in place while the new bar grows out STILL WEARING the old colour, easing into the new one over 3 s (the ADE amber-to-red logic); the caption flips */
+        if (!active) return;
+        var stN = eng.state();
+        if (stN.active && stN.color) { WV.ghost(fromFrac); WV.tint(hexRgb(stN.color), hexRgb(stN.color), 3000); caption.reset(); }
+      });
+    }
+    /* LOG-183 (the user: 教學只在第一次觸發): the level and 'the lesson has been seen' both move to localStorage. A browsing
+       SESSION was the wrong unit - close the tab, come back tomorrow, and the whole lesson ran again at somebody who had
+       already sat through it. `tut_seen` is written the moment the lesson mounts; after that only the 再看一次教學 button
+       starts it. The first-visit question itself is unchanged - it simply now happens once ever rather than once a session. */
+    function level() { try { var v = localStorage.getItem('sec_level'); return v === 'simple' || v === 'adv' ? v : null; } catch (e) { return null; } }
+    function setLevel(v) { try { localStorage.setItem('sec_level', v); } catch (e) {} }
+    function tutSeen() { try { return localStorage.getItem('tut_seen') === '1'; } catch (e) { return false; } }
+    function mount(m, tok) {   /* LOG-182: build the engine with one face; the lesson rides the simple one */
+      if (!active || runTok !== tok || !el) return;
+      var host = $('.ds-sec', el); if (!host) return;
+      el.classList.toggle('simple', m === 'simple');   /* LOG-182 追記①: the simple stage's panel sits centred on a veil (os.css) */
+      seen = false; lastSec = null; aheadCol = '224,176,74'; lastTint = '224,176,74';
+      if (hint) { hint.classList.remove('gone'); hint.textContent = U.stage_loading_sec; }
+      var wantTut = m === 'simple' && !PH && (tutAgain || !tutSeen()); tutAgain = false;   /* LOG-183: the first time ever, or because the visitor asked for it again */
+      eng = makeSecPlayer('../' + demoD.path + '/', demoD.ver, host, function () { if (runTok === tok) onBye(); },
+        { mode: m, reveal: wantTut, on: function (t, i) { if (tut && runTok === tok) tut.on(t, i); } });   /* reveal (追記⑦): where a lesson will run, the line starts hidden and the lesson uncovers it - free simple play shows the whole line at once */
+      if (/[?&]debug/.test(location.search)) window.__sec = eng;
+      hookTrack();
+      if (wantTut) { try { localStorage.setItem('tut_seen', '1'); } catch (e) {} tut = makeTut(eng, function () { if (runTok === tok) headBtns(); }); }
+      else if (m === 'simple') eng.release();   /* 追記③: the hold on the opening is the LESSON's device (it waits for the visitor's press). Free simple play - a returning visitor, or 結束教學 - has nobody to press A, so the opening goes straight on to A2 and down the line, the way 結束教學 already lets it go */
+      headBtns();
+    }
+    /* ---- LOG-183 the head row. DURING the lesson there is no 進階版 button at all: the same slot carries 結束教學, which
+       drops straight into simple free play with the opening already released (the user: 點了就結束教學、直接回簡易模式自己操作).
+       In free simple play the slot goes back to 進階版 and 再看一次教學 stands beside it. */
+    function headBtns() {
+      if (!head) return;
+      var lv = $('.st-level', head), ag = $('.st-again', head); if (!lv || !ag) return;
+      if (PH || !eng) { lv.hidden = true; ag.hidden = true; return; }
+      var m = eng.mode(), teaching = !!tut, tok = runTok;
+      lv.hidden = false; lv.classList.toggle('st-end', teaching);
+      lv.textContent = teaching ? U.tut_end : (m === 'simple' ? U.sec_adv : U.sec_simple);   /* the switch names the OTHER stage */
+      lv.onclick = teaching
+        ? function () { if (runTok !== tok || !active) return; var t0 = tut; tut = null; if (t0) t0.end(); trail.log('tut', 'end'); headBtns(); }
+        : function () { if (runTok !== tok || !active) return; var to = m === 'simple' ? 'adv' : 'simple'; setLevel(to); trail.log('sec-level', to); remount(to, tok); };
+      ag.hidden = !(m === 'simple' && !teaching);
+      ag.textContent = U.tut_again;
+      ag.onclick = function () { if (runTok !== tok || !active) return; tutAgain = true; trail.log('tut', 'again'); remount('simple', tok); };   /* the opening loop cannot be re-entered mid-song, so the simple stage is rebuilt from its first bar - inside this click, so the context is still born in a gesture */
+    }
+    function remount(m, tok) {   /* the level switch: the surface is rebuilt in place, the stage (panel, road, line) stays up */
+      if (tut) { tut.stop(); tut = null; }
+      var g0 = eng; eng = null; if (g0) g0.stop();
+      var old = $('.ds-sec', el); if (old) { var ns = document.createElement('div'); ns.className = 'ds-sec'; old.parentNode.replaceChild(ns, old); }
+      WV.squash(true); caption.reset();
+      mount(m, tok);
+    }
+    function ask(tok) {   /* the first-visit question (the user: 第一次進入時詢問對方對於音樂的構造的理解程度) */
+      if (!head) return;
+      if (hint) hint.classList.add('gone');
+      askEl = document.createElement('div'); askEl.className = 'tut-ask'; askEl.setAttribute('role', 'dialog');
+      askEl.innerHTML = '<h3></h3><p></p><div class="row"><button type="button" class="go" data-lvl="simple"></button><button type="button" data-lvl="adv"></button></div>';
+      askRelabel();
+      askEl.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-lvl]'); if (!b || runTok !== tok) return;
+        var m = b.getAttribute('data-lvl'); setLevel(m); trail.log('sec-level', m + ' (asked)');
+        var a0 = askEl; askEl = null; a0.classList.remove('in'); setTimeout(function () { a0.remove(); }, 500);
+        mount(m, tok);   /* inside the click: the context is born in the gesture */
+      });
+      head.appendChild(askEl);
+      requestAnimationFrame(function () { if (askEl) askEl.classList.add('in'); });
+    }
+    function askRelabel() {
+      if (!askEl) return;
+      $('h3', askEl).textContent = U.tut_ask_t; $('p', askEl).textContent = U.tut_ask_sub;
+      $('[data-lvl="simple"]', askEl).textContent = U.tut_ask_simple; $('[data-lvl="adv"]', askEl).textContent = U.tut_ask_adv;
+    }
+    /* ---- LOG-183 THE LESSON, rebuilt on the user's own script (教學腳本草稿.md). Five things changed underneath it:
+       (1) THE CLOCK IS THE MUSIC'S. Every step, every typed character, every reveal, every demonstration move runs on
+           E.now() - the engine's ctx.currentTime - pumped by ONE rAF. Suspend the transport and that clock stops dead, so
+           the whole lesson freezes where it stands (the user: 按暫停 → 教學全部同步凍住) instead of talking over silence.
+           The old setTimeouts kept counting through a pause and the script walked off without the music.
+       (2) MOTION IS CONTINUOUS. The bubble and the spotlight are interpolated between two boxes every frame, LINEARLY, and
+           never re-anchored in one jump (the user: 泡泡／高光順著按鍵跑時連續從左到右滑，不一格一格).
+       (3) THE FOCUS IS LIT FROM ABOVE - a soft amber cone and a pool of light on the thing being talked about, the rest of
+           the line dimmed (the user: 高光「橋吊」- 由上打光把它吊出來).
+       (4) THE AUTHOR SPEAKS IN THE WISH POOL'S HAND. The opening greeting and the asides (steps 12 / 15 / 16) are
+           well.say() lines, not bubbles: the site already has a voice for "somebody is talking to you", and this is it.
+       (5) THE DEMONSTRATION IS REAL AUDIO. Step 9 plays A1 -> B1 -> A2 -> C1 -> C2 -> A1 through the engine on a
+           tutorial-only schedule (E.force), then hands the stage over and waits - indefinitely - for the visitor to press A.
+       Nothing here names an easter egg or the ending's forms (不劇透). */
+    var TUT_REVEAL_STEP = 0.16, TUT_REVEAL_SPAN = 1.44, TUT_SUB_HOLD = 3.4, TUT_SUB_FADE = 1.7, TUT_BUB_RESERVE = 110;   /* RESERVE: 18 px of stalk + three lines of .tut-bub - the deepest a bubble hanging under the order row can reach, so an aside placed below it never has to be measured against a bubble that has not appeared yet */   /* the nine tiles come out one per STEP; the bubble and the light travel A -> I over SPAN, one even glide */
+    function makeTut(E, onDone) {
+      var alive = true, bub = null, tx = null, curKey = null, lockedPhase = true, first = null, phase = 'wait',
+          t0 = null, raf = 0, q = [], bubJob = null, subs = [], frozen = false, done = {},
+          clipEl = null, graphEl = null, irisEl = null, iris = null, frames = [], bubTgt = null, bubSrc = null, bubSide = 'below', aPress = null, onRes = null;
+      var LINE = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
+
+      /* ---- the clock: seconds on the AUDIO clock, counted from the music's own downbeat */
+      function T() { return t0 == null ? 0 : E.now() - t0; }
+      function at(sec, fn) { q.push({ t: sec, fn: fn }); }                 /* absolute, from the downbeat */
+      function soon(sec, fn) { q.push({ t: T() + sec, fn: fn }); }         /* from now */
+      function rate(len, cap, per) { return Math.max(0.012, Math.min(per, cap / Math.max(1, len))); }   /* a long line types faster so no sentence outstays its step */
+      function txt(k) { return U[k] || k; }
+      function once(k, fn) { if (done[k]) return; done[k] = true; fn(); }
+
+      /* ---- geometry, all in HOST coordinates (the stage-ui is inset:0 over the desktop, so there is nothing to convert) */
+      function lineRect() { var y = WV.baseY() || HOST.clientHeight * DESK_WAVE_Y, x = HOST.clientWidth * 0.5; return { left: x - 1, right: x + 1, top: y - 2, bottom: y + 2, line: true }; }
+      function tickRect() {   /* 追記⑦ (the user: 教學教的 lock 點應該要指在 lock 標上): the tick as the line draws it - its x from the wave, 16 px tall with the little flag on top; falls back to the line's middle only if there is no tick yet */
+        var x = WV.markX(); if (x == null) { var st = E.state(); if (st && st.mark != null) x = HOST.clientWidth * st.mark; }
+        if (x == null) return lineRect();
+        var y = WV.baseY() || HOST.clientHeight * DESK_WAVE_Y; return { left: x - 5, right: x + 5, top: y - 16, bottom: y + 10, line: true };
+      }
+      function rectOf(t) {
+        if (!t) return null;
+        if (typeof t === 'function') return rectOf(t());
+        if (t.left != null) return t;
+        if (!t.getBoundingClientRect) return null;
+        var r = t.getBoundingClientRect(), h = HOST.getBoundingClientRect();
+        return { left: r.left - h.left, right: r.right - h.left, top: r.top - h.top, bottom: r.bottom - h.top };
+      }
+      function rowBox() { return rectOf(E.surface()) || { left: HOST.clientWidth * 0.28, right: HOST.clientWidth * 0.72, top: HOST.clientHeight * 0.30, bottom: HOST.clientHeight * 0.40 }; }
+      /* ★ LOG-183 追記① (the owner: 教學文字跡到畫面最上方，只看得到一半). THE ROW HAS NO SKY. `.ds-panel` sits at 8vh and the row is
+         its first thing, so the row's top is 71 px at the owner's 1920x889 and 58 px at 1280x720 - and the menubar owns the first
+         30 of those. Anything anchored ABOVE the row is either behind the menubar or off the screen, which is where the greeting
+         and the concept clip went. Every lesson element is now placed against these three, measured, never against a ratio:
+         safeTop (under the menubar), lineY (the spectrum line) and BUB_RESERVE (how deep a bubble hanging under the row reaches). */
+      function menuBottom() { var m = document.querySelector('.menubar'), r = m ? rectOf(m) : null; return (r && r.bottom) || 30; }
+      function safeTop() { return menuBottom() + 6; }
+      function lineY() { return WV.baseY() || HOST.clientHeight * DESK_WAVE_Y; }
+      function clampY(top, h) { return Math.round(Math.max(safeTop(), Math.min(HOST.clientHeight - 8 - h, top))); }
+      function zoneBox(z) { var s = E.surface(), e = s && s.querySelector('.zone[data-zone="' + z + '"] .zcols'); return e || s; }
+      function clipBox() { return clipEl ? rectOf(clipEl) : rowBox(); }
+      function graphBox() { return graphEl ? rectOf(graphEl) : rowBox(); }
+
+      /* ---- ★ 追記② the frames (the user, 2026-09-12: 白框不黃、不要聚光燈、不要按鈕中央光暈、按鈕用原色、動作要快). A thin white ring
+         drawn round the thing being talked about - one tile, a whole zone, the tick - and NOTHING else changes: no light, no dimming,
+         no glow on the letter. Frames come and go in a fifth of a second, several can stand at once (A and I together), and each is
+         re-measured every frame so it rides the tile's own bobbing. E wears its own colour (the user: 用按鈕的顏色). */
+      function frame(target, o) {
+        o = o || {}; if (!head) return null;
+        var el = document.createElement('div'); el.className = 'tut-frame' + (o.cls ? ' ' + o.cls : ''); el.setAttribute('aria-hidden', 'true');
+        if (o.color) el.style.setProperty('--fc', o.color);
+        head.appendChild(el);
+        var f = { el: el, get: function () { return rectOf(target); }, pad: o.pad == null ? 5 : o.pad };
+        frames.push(f); frameLay(f);
+        el.getBoundingClientRect();   /* 追記③: a style flush BEFORE .in, or the ring is born already 'in' and never fades (the user: 框瞬間出現) */
+        requestAnimationFrame(function () { if (el.isConnected) el.classList.add('in'); });
+        return f;
+      }
+      function frameLay(f) {
+        var r = f.get(); if (!r) return; var p = f.pad;
+        /* 追記③ (the user: 跟著漂浮的按鈕一格一格動): NO ROUNDING. The tile bobs on a transform in fractions of a pixel; a ring written
+           in whole pixels moves in one-pixel steps against it - that was the stepping. Fractional lengths follow it exactly. */
+        f.el.style.left = (r.left - p).toFixed(2) + 'px'; f.el.style.top = (r.top - p).toFixed(2) + 'px';
+        f.el.style.width = (r.right - r.left + 2 * p).toFixed(2) + 'px'; f.el.style.height = (r.bottom - r.top + 2 * p).toFixed(2) + 'px';
+      }
+      /* ★ 追記③ (the user: A 框快速向右、I 框快速向左，在 E 撞在一起後快速變成 E 的框色): a ring that TRAVELS to another box instead of
+         being replaced. .glide lends it a transition on its box; frameLay keeps writing the destination every frame, so it arrives on
+         the tile wherever the tile has bobbed to. After `dur` the glide comes off (so it follows crisply again) and the colour, if any,
+         goes on - box-shadow transitions, so the change of colour is itself a fade. */
+      function reframe(f, target, o) {
+        o = o || {}; if (!f || frames.indexOf(f) < 0) return;
+        f.el.classList.add('glide'); f.get = function () { return rectOf(target); };
+        if (o.pad != null) f.pad = o.pad; if (o.cls != null) f.el.classList.toggle('zone', o.cls === 'zone');   /* 追記④: the one ring that walks the five zones changes shape between a tile and a zone */
+        frameLay(f);
+        /* ★ 追記④ (the user: 兩框滑到大約 D／F 的位置就開始一起淡入 E 的顏色，撞在一起的瞬間已經是新顏色): the colour is set EARLY, at o.early,
+           and .glide's box-shadow transition (.22 s) carries it - the glide's curve is fast at the start, so by 0.1 s the rings are past
+           D and F, and by arrival (0.36 s) the change is complete. Without o.early the colour goes on at arrival, as before. */
+        if (o.color && o.early != null) soon(o.early, function () { f.el.style.setProperty('--fc', o.color); });
+        soon(o.dur == null ? 0.36 : o.dur, function () { f.el.classList.remove('glide'); if (o.color) f.el.style.setProperty('--fc', o.color); if (o.then) { try { o.then(f); } catch (e) {} } });
+      }
+      function dropFrame(f) { var i = frames.indexOf(f); if (i < 0) return; frames.splice(i, 1); f.el.remove(); }   /* gone at once - for a ring that sits exactly on another, where a fade would read as a flicker */
+      function unframe(f) { var i = frames.indexOf(f); if (i < 0) return; frames.splice(i, 1); f.el.classList.add('out'); setTimeout(function () { f.el.remove(); }, 320); }
+      function unframeAll() { frames.slice().forEach(unframe); }
+      function tileColor(g) { var b = E.btn(g); return b ? (getComputedStyle(b).getPropertyValue('--c') || '').trim() : ''; }
+      function zoneFrame(z) { return frame(zoneBox(z), { pad: 8, cls: 'zone' }); }
+
+      /* ---- ★ 追記② the iris (the user, step 6: 改成用陰影，唯獨刻度那邊一圈是正常亮度 - 縮圈進、圈放大移除陰影): a shade over the whole
+         stage with one clear circle in it. It closes in on the tick from the size of the screen, and when the line is done the circle
+         opens back out and takes the shade with it. The centre follows the tick every frame; the radius runs on the audio clock. */
+      function irisIn(target, r1) {
+        if (!head) return;
+        if (!irisEl) { irisEl = document.createElement('div'); irisEl.className = 'tut-iris'; irisEl.setAttribute('aria-hidden', 'true'); head.appendChild(irisEl); }
+        var R0 = Math.hypot(HOST.clientWidth, HOST.clientHeight);
+        iris = { get: function () { return rectOf(target); }, from: R0, to: r1 || 46, t0: T(), d: 0.7, out: false };
+        irisStep(); requestAnimationFrame(function () { if (irisEl) irisEl.classList.add('in'); });
+      }
+      function irisOut() {
+        if (!iris || !irisEl) return;
+        iris = { get: iris.get, from: irisRadius(), to: Math.hypot(HOST.clientWidth, HOST.clientHeight), t0: T(), d: 0.6, out: true };
+      }
+      function irisRadius() { if (!iris) return 0; var k = Math.max(0, Math.min(1, (T() - iris.t0) / iris.d)); k = iris.out ? k * k : 1 - Math.pow(1 - k, 3); return iris.from + (iris.to - iris.from) * k; }
+      function irisStep() {
+        if (!iris || !irisEl) return;
+        var r = iris.get(); if (r) { irisEl.style.setProperty('--x', ((r.left + r.right) / 2) + 'px'); irisEl.style.setProperty('--y', ((r.top + r.bottom) / 2) + 'px'); }
+        irisEl.style.setProperty('--r', irisRadius() + 'px');
+        if (iris.out && T() - iris.t0 >= iris.d) { var e = irisEl; irisEl = null; iris = null; e.classList.remove('in'); setTimeout(function () { e.remove(); }, 350); }
+      }
+
+      /* ---- ★ 追記② the arrow wave (the user, step 3: › 快速高亮從左到右波浪感亮起來): the arrows are all there at once, then a bright
+         ripple runs down them twice, one after another, so the eye reads the direction of travel */
+      function arrowsWave() {
+        var s; try { s = E.surface(); } catch (e) { return; } if (!s) return;
+        /* 追記④ (the user: 波浪由亮兩次改亮三次；按鈕也跟著箭頭的節奏發同樣感覺的光): three ripples, and .awave lights the TILES on the same
+           delay ladder as the arrows (os.css tuttile) so one wave runs tile, arrow, tile, arrow down the row */
+        for (var k = 0; k < 3; k++) { (function (k) { soon(k * 1.45, function () { s.classList.add('awave'); }); soon(k * 1.45 + 1.3, function () { s.classList.remove('awave'); }); })(k); }   /* 'awave', not 'wave': the shell's own .wave rule stretches whatever wears it (追記③ bug: the | lines ran to the foot of the panel) */
+      }
+
+      /* ---- the bubble */
+      function placeBox(r) {
+        if (!bub) return;
+        var W = HOST.clientWidth, bw = bub.offsetWidth || 260, bh = bub.offsetHeight || 60, cx = (r.left + r.right) / 2;
+        var left = Math.max(10, Math.min(Math.max(10, W - bw - 10), cx - 28));
+        bub.style.left = left + 'px'; bub.style.setProperty('--ax', Math.max(12, Math.min(bw - 24, cx - left - 7)) + 'px');
+        bub.classList.toggle('below', bubSide !== 'above'); bub.classList.toggle('above', bubSide === 'above');
+        bub.style.top = clampY(bubSide === 'above' ? r.top - 12 - bh : r.bottom + 18, bh) + 'px';   /* 追記①: never over the menubar, never off the bottom */
+      }
+      function show(key, target, o) {
+        o = o || {}; if (!alive || !head || (done[key] && !o.again)) return; done[key] = true; curKey = key;
+        if (!bub) { bub = document.createElement('div'); bub.className = 'tut-bub'; bub.setAttribute('role', 'status'); head.appendChild(bub); }
+        bub.innerHTML = '<span class="tx"></span>'; tx = $('.tx', bub);
+        /* ★ 追記②: a line written with '|' is spoken in pieces - the typing pauses a beat at each break and o.marks[k] fires there.
+           ★ 追記④ (the user, step 2: 一區一個獨立泡泡，隨白框一起往右移動，不要一格一格慢慢打字): o.piece picks ONE piece of such a line
+           to stand alone, o.instant puts it up whole (no typing), and o.slide keeps the same bubble and lets it TRAVEL to the new
+           anchor (.slide transitions left/top) instead of fading out and in. The '|' never reaches the screen or the measurement. */
+        var pieces = txt(key).split('|'), text, marks = [], acc = 0;
+        if (o.piece != null) { text = pieces[o.piece] || ''; pieces = [text]; } else text = pieces.join('');
+        for (var pi = 0; pi < pieces.length - 1; pi++) { acc += pieces[pi].length; marks.push({ n: acc, fn: o.marks && o.marks[pi + 1] }); }
+        bub.classList.toggle('slide', !!o.slide);
+        /* The full line first, so the bubble measures at its final size - and the box is PINNED there, or it would grow under the
+           typing and drag its own left edge along with every character (exactly the kind of motion the glide is supposed to own).
+           ★ THE PADDING HAS TO BE ADDED BACK. `width: max-content` resolves to the CONTENT's max-content size even under
+           box-sizing: border-box (measured in Chrome: a 113 px bubble re-pinned at 113 px wrapped onto two lines), so writing
+           offsetWidth straight back squeezes the content box by exactly the padding and border, and every short line broke in two. */
+        bub.style.width = ''; tx.textContent = text;
+        var cs = getComputedStyle(bub), pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+        bub.style.width = (bub.offsetWidth + (cs.boxSizing === 'border-box' ? pad : 0)) + 'px';   /* max-width is a border-box cap, so a genuinely long line still wraps - as it should */
+        bubSide = o.side === 'above' ? 'above' : 'below';
+        bubSrc = target; bubTgt = typeof target === 'function' ? target : rectOf(target); placeBox(bubTgt ? rectOf(bubTgt) : rowBox());   /* 追記②: the bubble simply appears at its new anchor and fades in (the user: 取消龜速位移，快速淡入淡出) - a live anchor (the tick) is followed, an element's box is taken once so the bubble does not bob with the tile */
+        if (o.instant) { tx.textContent = text; tx.classList.remove('cur'); bubJob = null; }
+        else {
+          tx.textContent = ''; tx.classList.add('cur');
+          bubJob = { t0: T(), per: rate(text.length, 3.0, 0.032), text: text, n: -1, marks: marks, pause: o.pause == null ? 0.55 : o.pause, pauseTo: null, hold: 0, lost: 0 };
+        }
+        if (o.marks && o.marks[0]) { try { o.marks[0](); } catch (e) {} }
+        if (o.slide && bub.classList.contains('in')) { /* 追記④: already up - it slides, it does not blink */ }
+        else { bub.classList.remove('in'); requestAnimationFrame(function () { if (bub && curKey === key) bub.classList.add('in'); }); }
+        if (o.hold) soon(o.hold, function () { if (curKey === key) hide(); });
+      }
+      function hide() { if (bub) bub.classList.remove('in'); curKey = null; bubJob = null; }
+
+      /* ---- ★ the author's own lines, in the wish pool's hand (well.say), centred just above where the order row lives */
+      function subLen(key) { var s = txt(key); return 0.25 + rate(s.length, 2.6, 0.055) * s.length + TUT_SUB_HOLD + TUT_SUB_FADE; }
+      /* ★ 追記①: the author's line lives in the BAND BETWEEN THE ROW AND THE LINE - the empty middle of the stage, near the
+         buttons it is talking about. 0.6 of the way down that band, then pushed clear of whatever a bubble hanging under the row
+         could reach (BUB_RESERVE), then held off the spectrum line itself. It only ever moves DOWN out of trouble, never back up
+         into the chrome. */
+      function asideTop(w, h, res) {
+        var r = rowBox(), ly = lineY();
+        /* 追記③ (the user: 開場字幕壓到音量條，白色看不清 → 稍微往上): 0.42 of the band, not 0.6 - the lower placing sat in the spectrum's
+           bars. The bubble reserve is owed by the asides spoken mid-lesson (a bubble follows them under the row); the greeting, spoken
+           before a single button exists, only keeps clear of the row's box. */
+        var top = r.bottom + (res == null ? TUT_BUB_RESERVE : res);   /* 追記③: measured at 1920x889 the spectrum's peaks reach ~190 px above the line; the free band is the one right under the row */
+        top = Math.min(top, ly - 14 - h);
+        return clampY(top, h);
+      }
+      function subtitle(key, o) {
+        o = o || {};
+        var text = txt(key); if (!text || !well || !well.say) return 0;
+        hide();   /* the author speaking is a moment of its own: no bubble is left hanging in the band the line is about to take */
+        var res = o.greet ? 8 : null;   /* 追記④ (the user: 開場字幕還要再高一點點，第二行仍碰到音量條): 36 -> 8 px under the row's box, the whole line 28 px higher */
+        /* 追記③ (the user: 第二句莫名截斷換行): the box is wide enough for the longest authored line, so the only breaks are the author's own (\n) */
+        var r = rowBox(), h = well.say(text, { cx: (r.left + r.right) / 2, width: Math.min(980, HOST.clientWidth - 120), depth: 0,
+                                               place: function (w0, h0) { return { top: asideTop(w0, h0, res) }; } });
+        if (!h) return 0;
+        subs.push({ h: h, t0: T(), per: rate(text.length, 2.6, 0.055), len: text.length, n: -1, out: 0, res: res });
+        return subLen(key);
+      }
+      function relay(keys, gap) {   /* step 16: several sentences, one after another, in the same spot */
+        var d = 0;
+        keys.forEach(function (k, i) {
+          if (!i) { d = subtitle(k); return; }
+          var w = d + (gap || 0.6); (function (kk) { soon(w, function () { subtitle(kk); }); })(k); d = w + subLen(k);
+        });
+      }
+
+      /* ---- ★ step 1's concept clip: one song drawn as ONE bar, which splits into the sections a song is usually made of.
+         Schematic on purpose - these are the names any piece wears, not this piece's letters (the user: 這條 clip 是概念示意，不是本曲). */
+      function wavePath(n, w, h) {   /* 追記② (the user: 一開始要一整條看起來像音頻範例): a deterministic little waveform, so the clip reads as an audio region in a DAW */
+        var d = '', s = 7, mid = h / 2;
+        for (var i = 0; i < n; i++) {
+          s = (s * 16807) % 2147483647; var u = s / 2147483647;
+          var env = 0.35 + 0.65 * Math.abs(Math.sin(i / n * Math.PI * 4.3 + 0.6)), amp = Math.max(1.2, mid * 0.86 * env * (0.4 + 0.6 * u)), x = (i + 0.5) * (w / n);
+          d += 'M' + x.toFixed(1) + ' ' + (mid - amp).toFixed(1) + 'V' + (mid + amp).toFixed(1);
+        }
+        return d;
+      }
+      function clipIn() {
+        if (!head || clipEl) return;
+        var parts = String(U.tut_clip_parts || '').split('|'), n = parts.length, path = wavePath(n * 22, n * 100, 40);
+        clipEl = document.createElement('div'); clipEl.className = 'tut-clip'; clipEl.setAttribute('aria-hidden', 'true');
+        /* ONE waveform, drawn once, and every block shows its own slice of it (viewBox) - so before the split the nine blocks read as
+           a single continuous region, and after it each block still carries the piece of the wave it was cut from */
+        clipEl.innerHTML = '<div class="cap"></div><div class="bar">' + parts.map(function (p, k) {
+          return '<i><svg viewBox="' + (k * 100) + ' 0 100 40" preserveAspectRatio="none"><path d="' + path + '"/></svg><span></span></i>';
+        }).join('') + '</div>';
+        head.appendChild(clipEl);
+        var sp = clipEl.querySelectorAll('.bar i span');
+        for (var k = 0; k < sp.length; k++) sp[k].textContent = parts[k] || '';
+        $('.cap', clipEl).textContent = U.tut_clip_song || '';
+        /* ★ 追記①: IN THE ROW'S OWN PLACE, not above it. The row is still hidden at this point, so the schematic occupies exactly
+           the box the letters are about to appear in - the blocks sit at the tiles' own height, and when the reveal starts each block
+           fades out where its letter fades in, so the diagram BECOMES the line rather than being replaced by it. */
+        clipLay();
+        requestAnimationFrame(function () { if (clipEl) clipEl.classList.add('in'); });
+      }
+      function clipLay() {
+        if (!clipEl) return;
+        var r = rowBox(), tEl = E.btn('A'), bar = $('.bar', clipEl);
+        clipEl.style.left = Math.round(r.left) + 'px';
+        clipEl.style.top = Math.round(r.top) + 'px';
+        clipEl.style.width = Math.round(r.right - r.left) + 'px';
+        clipEl.style.height = Math.round(r.bottom - r.top) + 'px';
+        /* the blocks take the tiles' LAYOUT box, never their painted one: a tile not yet revealed wears .col.hid { transform: scale(.8) }
+           and its column bobs on tfloat, so getBoundingClientRect() answers a smaller box in a moving place. layTop()/offsetHeight are transform-free. */
+        if (bar && tEl) {
+          var rowT = layTop(E.surface()), bt = Math.round(layTop(tEl) - rowT), bh = Math.round(tEl.offsetHeight || 46);
+          bar.style.top = bt + 'px'; bar.style.height = bh + 'px';
+          clipEl.style.setProperty('--bt', bt + 'px'); clipEl.style.setProperty('--bh', bh + 'px');   /* 追記③: the track name sits on the bar's own centre line, to its left */
+        }
+      }
+      function clipDrop(k) { if (!clipEl) return; var b = clipEl.querySelectorAll('.bar i')[k]; if (b) b.classList.add('gone'); }   /* 追記②: block k goes as letter k comes, same spot, same moment */
+      function clipSplit() { if (clipEl) clipEl.classList.add('split'); }
+      function clipOut() { if (!clipEl) return; var c = clipEl; clipEl = null; c.classList.add('out'); setTimeout(function () { c.remove(); }, 500); }
+
+      /* ---- ★ step 9's mini graph: the opening, and the two places it can go. The route lights when that hand-over is
+         actually queued, so what is drawn and what is about to be heard are the same event. */
+      /* 追記④ (the user: 按鈕變很小 → 演示圖節點放大): 56 px nodes on a 360 x 190 board. A (70,105), B (290,68), C (290,142); the two
+         routes run edge to edge with a small head; the two RETURN arcs (B -> A over the top, C -> A under the bottom) are drawn once,
+         invisible, and only ever lit by arcPre() / arcGo(); the spark is the dot of light that slides A -> B / A -> C along a route. */
+      var GN = { a: [70, 105], b: [290, 68], c: [290, 142] }, spark = null;
+      function graphIn() {
+        if (!head || graphEl) return;
+        graphEl = document.createElement('div'); graphEl.className = 'tut-graph'; graphEl.setAttribute('aria-hidden', 'true');
+        graphEl.innerHTML = '<svg viewBox="0 0 360 190">' +
+                              '<path class="rt rb" d="M99.6 100 L256.5 73.6 M247.4 79.8 L256.5 73.6 L245.8 70.8"/>' +
+                              '<path class="rt rc" d="M99.6 110 L256.5 136.4 M245.8 139.2 L256.5 136.4 L247.4 130.2"/>' +
+                              '<path class="arc ab" pathLength="1" d="M286 40 Q180 2 76 76 M86.9 73.9 L76 76 L81.5 66.5"/>' +
+                              '<path class="arc ac" pathLength="1" d="M286 170 Q180 208 76 134 M86.9 136.1 L76 134 L81.5 143.5"/>' +
+                              '<path class="arc acb" pathLength="1" d="M322 130 Q368 105 322 80 M328.1 89.2 L322 80 L333 80.1"/>' +   /* LOG-186 (the user: C 也可以到 B，畫相應的弧形箭頭): C -> B round the right-hand side, drawn from C so the wipe runs the way the music goes */
+                              '<circle class="spk" r="6" cx="70" cy="105"/>' +
+                            '</svg>' +
+                            '<i class="nd na">A</i><i class="nd nb">B</i><i class="nd nc">C</i>';
+        head.appendChild(graphEl);
+        graphLay();
+        requestAnimationFrame(function () { if (graphEl) graphEl.classList.add('in'); });
+      }
+      function graphLay() {
+        if (!graphEl) return; var r = rowBox();
+        graphEl.style.left = Math.round((r.left + r.right) / 2 - 180) + 'px';
+        graphEl.style.top = clampY((r.top + r.bottom) / 2 - 95, 190) + 'px';   /* 追記①: it stands where the row was, which is high on the stage - the narration hangs UNDER it, so this is the only edge to guard */
+      }
+      function route(which, on) { if (graphEl) graphEl.classList.toggle('lit-' + which, !!on); }
+      /* ★ 追記④ (the user: A 轉 B 時要看到 A 的光沿著線滑過去 B 上面把它照亮): the dot leaves A's centre, runs the route on the audio
+         clock (0.45 s, easing out) and `then` fires as it lands - that is where the node lights, so the light visibly ARRIVES */
+      function node(which) { return function () { var n = graphEl && graphEl.querySelector('.nd.n' + which); return n ? rectOf(n) : graphBox(); }; }   /* 追記④ (the user: 「這次換接到 C」泡泡沒有在 C 上): a live anchor on the graph's own node */
+      /* 追記④ (the user: 切換亮起來的速度慢了一拍): the spark is LAUNCHED FROM THE DECISION, timed so it lands on the node at the seam itself -
+         the engine's clock().endAt is the seam on the audio clock, and the decision falls seconds before it */
+      function sparkAtSeam(which) {
+        var c = null; try { c = E.clock(); } catch (e) {}
+        var seam = c && c.endAt != null ? c.endAt - t0 : T() + 0.45;
+        at(Math.max(T(), seam - 0.45), function () { sparkTo(which, function () { nodeNow(which); }); });
+      }
+      function sparkTo(which, then) {
+        if (!graphEl) { if (then) then(); return; }
+        spark = { from: GN.a, to: GN[which], t0: T(), d: 0.45, then: then };
+        var c = graphEl.querySelector('.spk'); if (c) { c.setAttribute('cx', GN.a[0]); c.setAttribute('cy', GN.a[1]); c.classList.add('on'); }
+      }
+      function sparkStep() {
+        if (!spark || !graphEl) return;
+        var k = Math.max(0, Math.min(1, (T() - spark.t0) / spark.d)); k = 1 - Math.pow(1 - k, 2.2);
+        var c = graphEl.querySelector('.spk'); if (c) { c.setAttribute('cx', (spark.from[0] + (spark.to[0] - spark.from[0]) * k).toFixed(1)); c.setAttribute('cy', (spark.from[1] + (spark.to[1] - spark.from[1]) * k).toFixed(1)); }
+        if (k >= 1) { var s = spark; spark = null; if (c) c.classList.remove('on'); if (s.then) { try { s.then(); } catch (e) {} } }
+      }
+      /* ★ 追記④ (the user: 示範 B 回到 A 時，上方出一個由右到左有弧度的箭頭快速閃幾下預告要回 A；回去那瞬間亮一下，箭頭也從右到左一起暗下去。到 C 與回來也相同):
+         arcPre blinks the arc three times at the DECISION (the return is now certain, the music has not turned yet); arcGo, at the turn,
+         flashes it once and wipes it out from its B (or C) end towards A (stroke-dashoffset on a pathLength of 1). */
+      function arcOf(which) { return graphEl ? graphEl.querySelector('.arc.a' + which) : null; }
+      function arcPre(which) { var a = arcOf(which); if (!a) return; a.classList.remove('go'); void a.getBoundingClientRect(); a.classList.add('pre'); }
+      function arcGo(which) { var a = arcOf(which); if (!a) return; a.classList.remove('pre'); void a.getBoundingClientRect(); a.classList.add('go'); }
+      function nodeNow(which) {   /* 追記③ (the user: 切到 B、回 A、到 C 的瞬間演示圖的該按鈕要亮): the node that is sounding, lit the instant it enters */
+        if (!graphEl) return;
+        var ns = graphEl.querySelectorAll('.nd'); for (var i = 0; i < ns.length; i++) ns[i].classList.toggle('now', ns[i].classList.contains('n' + which));
+      }
+      function graphOut() { if (!graphEl) return; var g = graphEl; graphEl = null; g.classList.add('out'); setTimeout(function () { g.remove(); }, 800); }
+      function demoLights(on) {
+        try { E.surface().classList.toggle('tut-away', !!on); } catch (e) {}
+        HOST.classList.toggle('tut-demo', !!on); if (head) head.classList.toggle('tut-demo', !!on);
+      }
+
+      /* ---- the hand-over: A is the one thing that can be pressed while the rest of the line is still locked */
+      function armA() {
+        var a = E.btn('A'); if (!a || aPress) return;
+        a.classList.add('tut-press'); a.setAttribute('role', 'button'); a.setAttribute('tabindex', '0');
+        aPress = function (ev) { if (ev) ev.preventDefault(); pressA(); };
+        a.addEventListener('click', aPress);
+      }
+      function disarmA() { var a = E.btn('A'); if (a) { a.classList.remove('tut-press'); a.removeAttribute('tabindex'); if (aPress) a.removeEventListener('click', aPress); } aPress = null; }
+      function pressA() {
+        if (phase !== 'hand') return;
+        /* 追記③ (the user: 按下瞬間要亮「排隊中」燈當點擊回饋): the press is answered AT the press - the tap ring and the queued hairline, both
+           the line's own vocabulary - even though A2 may be most of a pass away. The queued mark comes off when A2 actually sounds. */
+        var a = E.btn('A'); if (a) { a.classList.remove('tap'); void a.offsetWidth; a.classList.add('tap', 'queued'); }
+        phase = 'run'; disarmA(); hide(); unframeAll(); irisOut();   /* 追記④: the shade that left only A lit opens out at the press */
+        unlock();            /* ★ 待裁示 a (the user): the hand-over IS the press, so the line unlocks for dragging at exactly that moment */
+        E.release(true); trail.log('tut', 'press-A');   /* LOG-186: the press may cut straight into A2 (first half of a pass) - the queued mark then comes off at once, on A2's own 'enter' */
+      }
+      function unlock() { if (!lockedPhase) return; lockedPhase = false; E.lock(false); }
+      function nextOpen() { var l = E.line(); for (var i = 0; i < l.length; i++) if (E.movable(l[i])) return l[i]; return 'I'; }
+
+      /* ---- ★ THE SCRIPT. Times are seconds from the music's downbeat; an eight-bar pass of the opening loop is 13.24 s and
+         its decision falls 5.2 s before its end, so steps 1-8 simply have to be done before the pass step 9 aims at. There is
+         no 48 s deadline any more: the loop waits for the visitor's press, however long that takes (the user, step 9). */
+      function script() {
+        /* the opening, before a single button exists (the user: 音樂先出 → 按鈕還沒出現前，中央用許願池式字幕打招呼) */
+        at(1.0, function () { subtitle('tut_open1', { greet: true }); });
+        at(5.0, function () { subtitle('tut_open2', { greet: true }); });
+        /* ★ step 1: a piece is made of sections. 追記② (the user: 燈光出現時機、範例條消失時機跟左右位移時機都抓得很爛、太慢): no light, no
+           travelling - the letters come out fast, one every STEP, and each clip block goes the moment its letter arrives */
+        at(11.6, function () { clipIn(); show('tut_s1a', clipBox); });
+        at(14.2, function () { show('tut_s1a2', clipBox); clipSplit(); });   /* 追記③ (the user: 講到「它是由好幾個段落組成的」這句才切塊): its own sentence, and the one region breaks into the sections as it starts */
+        at(16.6, function () { show('tut_s1b', E.surface()); });
+        LINE.forEach(function (g, k) { at(17.2 + k * TUT_REVEAL_STEP, function () { clipDrop(k); E.reveal('tile', g); }); });
+        at(17.2 + TUT_REVEAL_SPAN + 0.4, clipOut);
+        /* ★ step 2: five zones. 追記④ (the user: 不要一格一格慢慢打字，改成獨立格 - 講到哪一區，對話框就跟圈起來的白框一起往右移動，並單獨顯示那一區的名稱):
+           the heading is typed once; then ONE ring walks A -> first half -> E -> second half -> I and ONE bubble, carrying only that zone's
+           name (a piece of tut_s2z), slides along with it - the same bubble, moved, not five bubbles blinking in and out */
+        at(21.0, function () { E.reveal('zones'); show('tut_s2a', E.surface()); });
+        var ZONES = [['A', 'tile'], ['pre', 'zone'], ['E', 'tile'], ['post', 'zone'], ['I', 'tile']], fZ = null;
+        ZONES.forEach(function (z, k) {
+          at(23.0 + k * 1.25, function () {
+            var tile = z[1] === 'tile', tgt = tile ? E.btn(z[0]) : zoneBox(z[0]);
+            if (!fZ || frames.indexOf(fZ) < 0) fZ = frame(tgt, { pad: tile ? 5 : 8, cls: tile ? '' : 'zone' });
+            else reframe(fZ, tgt, { dur: 0.34, pad: tile ? 5 : 8, cls: tile ? '' : 'zone' });
+            show('tut_s2z', tgt, { piece: k, instant: true, slide: k > 0, again: true });
+          });
+        });
+        var fA = null, fI = null;
+        at(29.6, function () { unframeAll(); show('tut_s2b', E.surface()); fA = frame(E.btn('A')); fI = frame(E.btn('I')); });   /* A and I ring together (the user: 兩顆按鈕同時框) */
+        at(34.2, function () {   /* 追記③ (the user): A's ring races right and I's races left, they meet on E, and the one ring left takes E's colour */
+          show('tut_s2b2', E.btn('E'));
+          var ec = tileColor('E'), e = E.btn('E');
+          /* 追記④: BOTH rings start turning E's colour a tenth of a second in (about D and F on the way), so they meet already in it */
+          if (fA && fI) { reframe(fI, e, { dur: 0.36, color: ec, early: 0.1 }); reframe(fA, e, { dur: 0.36, color: ec, early: 0.1, then: function () { dropFrame(fI); fI = null; } }); }
+          else { unframeAll(); frame(e, { color: ec }); }
+        });
+        at(38.8, function () { unframeAll(); show('tut_s2c', E.surface()); zoneFrame('pre'); zoneFrame('post'); });   /* the two zones between the | lines */
+        /* steps 3-8 */
+        at(44.0, function () { unframeAll(); E.reveal('arrows'); arrowsWave(); show('tut_s_order', E.surface()); });
+        at(49.0, function () { E.layer(true, 3.0); show('tut_s_hold', E.btn('A')); frame(E.btn('A')); });   /* 追記② (the user): the drums start creeping in from THIS line - a slow fade, ~9 s to full */
+        at(54.0, function () { show('tut_s_layer', E.btn('A')); });
+        at(59.0, function () { unframeAll(); irisIn(tickRect, 46); show('tut_s_tick', tickRect, { side: 'above' }); });   /* the shade closes in on the tick */
+        at(65.0, function () { irisOut(); hide(); });
+        /* 追記③ (the user: 步驟 7／8 合併 - 前段、後段兩個框同時出現、同時快速洗牌預覽): both halves framed at once, D and H shuffle to the front
+           together, then back; one line covers both zones */
+        /* 追記④ (the user: 才剛框好就馬上移動＝錯，要先講、再動；左右兩區的換位不要同步，要有交錯感): the rings go up and the line is spoken FIRST;
+           the moves start once 「像這樣把 D 和 H…」 has been typed (2.6 s in), the first half a beat ahead of the second, and they come back
+           in the opposite order - the second half first - so the two zones never move as one */
+        at(65.8, function () { zoneFrame('pre'); zoneFrame('post'); show('tut_s_swap_pre', E.surface()); });
+        at(68.4, function () { E.move('pre', 'D', 0); });
+        at(69.0, function () { E.move('post', 'H', 0); });
+        at(71.4, function () { E.move('post', 'H', 2); });
+        at(72.0, function () { E.move('pre', 'D', 2); });
+        at(73.6, function () { unframeAll(); hide(); });
+        /* ★ step 9: the continuation demonstration - real audio, on a schedule of its own.
+           追記③ (the user: 必須從 A2 → B1，到步驟 9 時就該已在播 A2): the opening is released HERE, during step 8 - the pass that is sounding
+           ends at 79.44 s and its decision falls at 74.24 s, so a force set now is the one that decision consumes, and A2 sets off at
+           79.44 s while the demonstration's first line is up. Forced rather than released: `holding` stays true, so after the
+           demonstration the opening loops again and waits for the visitor's own press. */
+        at(66.0, function () { E.force('A2'); });
+        at(74.2, demoStart);
+      }
+      var demoLeg = 0;   /* A2 is entered twice during the demonstration: 0 = not yet, 1 = the first A2 (before B), 2 = the second (before C), 3 = B1 has begun again, from C1 (LOG-186: C2 is out of the demonstration) */
+      function demoStart() {
+        if (phase !== 'wait') return;
+        phase = 'demo'; hide(); unframeAll(); demoLights(true);
+        soon(0.9, graphIn);
+        soon(1.7, function () { show('tut_s9a', graphBox); });
+        /* the first hand-over is queued from inside A2 (see on 'enter'); the route lights at the decision, the node at the switch */
+      }
+      function handBack() {
+        if (phase !== 'demo') return;
+        phase = 'hand'; hide(); graphOut(); demoLights(false);
+        /* ★ 追記④ (the user: 「換你了」改用刻度那種陰影聚焦 - 只留 A 亮，直到使用者點了才陰影淡出): the iris closes on A instead of a breathing ring,
+           and stays until pressA() opens it. Then the nudges (the user: 太久沒點出彩蛋催趕訊息, four of them, in order, the last one ends it):
+           each only if the stage is still waiting for the press. */
+        soon(1.3, function () { show('tut_s_turn', E.btn('A')); armA(); irisIn(E.btn('A'), 48); });
+        ['tut_nudge1', 'tut_nudge2', 'tut_nudge3', 'tut_nudge4'].forEach(function (k, n) { soon(1.3 + 11 * (n + 1), function () { if (phase === 'hand') show(k, E.btn('A'), { again: true }); }); });
+      }
+
+      /* ---- the engine's events */
+      function on(t, i) {
+        if (!alive) return;
+        if (t === 'ready') { first = E.firstGroup(); E.lock(true); return; }
+        if (t === 'begin') { t0 = (i && i.at != null) ? i.at : E.now(); if (!raf) raf = requestAnimationFrame(pump); script(); return; }
+        if (t === 'decide') {
+          if (phase === 'demo' && i.tut) {
+            if (i.id === 'B1' && demoLeg === 1) { route('b', true); show('tut_s9b', node('b')); sparkAtSeam('b'); }
+            else if (i.id === 'C1') { route('c', true); show('tut_s9d', node('c')); sparkAtSeam('c'); }
+            else if (i.id === 'B1' && demoLeg === 2) { arcPre('cb'); show('tut_s9f', node('c')); }   /* ★ LOG-186 (the user: 示範到 C1 時多一句「同時，C也是可以到B的」): C1 -> B1 is decided - the arc round the right blinks, the line says so, under C */
+            else if (i.id === 'A2' && demoLeg === 1) arcPre('b');   /* 追記④: the return to A is decided - the arc over the top blinks its warning */
+            else if (i.hold && demoLeg === 3) arcPre('b');           /* LOG-186: and the same for B1's return to the opening loop - the same arc over the top, a second time */
+            return;
+          }
+          if (phase === 'run' && i.line) show('tut_s_lock', tickRect, { side: 'above' });
+          return;
+        }
+        if (t === 'reorder') { if (!lockedPhase) show('tut_s_moved', E.btn(i.order[0]), { hold: 6, again: true }); return; }
+        if (t === 'refused') { if (!lockedPhase) show('tut_s_rule', E.btn(i.g), { hold: 8, again: true }); return; }
+        if (t !== 'enter') return;
+        if (i.id === 'A2') { var qa = E.btn('A'); if (qa) qa.classList.remove('queued'); }   /* 追記③: the press's queued mark comes off the moment A2 sounds */
+        if (demoLeg === 3 && i.id === 'A1') { demoLeg = 4; E.tutReset(); if (phase === 'demo') { nodeNow('a'); arcGo('b'); soon(0.9, handBack); } }   /* the opening is back after the demonstration: forget B and C were ever played. 追記④: the return is SHOWN (the arc lights and wipes towards A) and only then is the stage handed over - 換你了 waits for the last leg to end (LOG-186: that leg is B1, back from C1; it used to be C2) */
+        if (phase === 'demo') {   /* ★ 追記③ A2 -> B1 -> A2 -> C1 -> C2 (-> A1): each leg queued from inside the leg before it, so every hand-over is taken at a
+                                     real decision point; the route lights at the decision; 追記④: the node lights when A's SPARK arrives on it, the return arcs at the turn */
+          if (i.id === 'A2' && demoLeg === 0) { demoLeg = 1; nodeNow('a'); soon(2.0, function () { E.force('B1'); }); }
+          else if (i.id === 'B1' && demoLeg === 1) { if (!spark) nodeNow('b'); E.force('A2'); }   /* the spark launched at the decision lands here; if it somehow did not, light the node now */
+          else if (i.id === 'A2' && demoLeg === 1) { demoLeg = 2; nodeNow('a'); arcGo('b'); route('b', false); show('tut_s9c', node('a')); soon(3.6, function () { E.force('C1'); }); }
+          else if (i.id === 'C1') { if (!spark) nodeNow('c'); E.force('B1'); }   /* ★ LOG-186: C1 hands straight on to B1 - C2 is out of the demonstration */
+          else if (i.id === 'B1' && demoLeg === 2) { demoLeg = 3; nodeNow('b'); arcGo('cb'); route('c', false); show('tut_s9e', graphBox); E.force('A1'); }   /* LOG-186: B enters from C - the right-hand arc flashes and wipes C -> B, the closing line goes up, and the last leg is home */
+          return;
+        }
+        if (phase !== 'run') return;
+        if (first && i.id === first.id) { show('tut_s_seam', lineRect, { side: 'above' }); return; }
+        if (first && i.group === first.group && i.ver === 2) {   /* ★ steps 12 + 13: the author's aside, then the one rule the simple stage lives by */
+          subtitle('tut_s_pair');
+          /* BOTH have to land inside this half - it is eight bars (13.2 s) and its own decision falls 5.2 s before the end, so a
+             line that waited for the aside to finish fading would be talking about a tile that had already been locked in. They
+             overlap instead: the author's line sits above the row while the instruction points at the first tile still free. */
+          soon(5.5, function () { var g = nextOpen(); show('tut_s13a', E.btn(g)); frame(E.btn(g)); });
+          soon(10.0, function () { show('tut_s13b', zoneBox('post'), { hold: 14 }); });   /* 追記④ (the user: 亮這句時 C 已定型，所以這個泡泡要指後段): the letters still to arrange are the second half's */
+          soon(24.0, unframeAll);
+          return;
+        }
+        if (i.group === 'E' && i.ver === 1) { unframeAll(); show('tut_s_gate', E.btn('E'), { hold: 12 }); frame(E.btn('E'), { color: tileColor('E') }); soon(12, unframeAll); return; }   /* ★ step 14 */
+        if (i.outro) { hide(); unframeAll(); relay(['tut_s_end', 'tut_s_end2'], 0.8); return; }           /* ★ step 16 */
+        if (i.ver === 1 && 'FGH'.indexOf(i.group) >= 0) once('tut_s_post', function () { hide(); unframeAll(); subtitle('tut_s_post'); });   /* ★ step 15 */
+      }
+
+      /* ---- the one loop: the queue, the typers, the glides. Everything it reads is on the audio clock, so a suspended
+         context holds the lot exactly where it is; the .frozen class does the same for what CSS is animating. */
+      function pump() {
+        raf = alive ? requestAnimationFrame(pump) : 0;
+        if (!alive || t0 == null) return;
+        var fz = false; try { fz = !!E.frozen(); } catch (e) {}
+        if (fz !== frozen) { frozen = fz; if (head) head.classList.toggle('frozen', fz); try { E.surface().classList.toggle('frozen', fz); } catch (e) {} }
+        var t = T(), i;
+        for (i = 0; i < q.length; i++) if (q[i].t <= t) { var fn = q[i].fn; q.splice(i, 1); i--; try { fn(); } catch (e) { try { console.warn('tut step', e); } catch (e2) {} } }   /* 追記②: a step that throws is logged, never swallowed - a silent catch hid a broken bubble for a whole round */
+        if (bubJob && tx) {
+          var bj = bubJob, n;
+          /* the pause at a '|' break is time the typer does not count (lost), so the next character lands exactly where it left off */
+          if (bj.pauseTo != null && t < bj.pauseTo) n = bj.hold;
+          else { if (bj.pauseTo != null) { bj.lost += bj.pause; bj.pauseTo = null; } n = Math.max(0, Math.min(bj.text.length, Math.floor((t - bj.t0 - bj.lost) / bj.per))); }
+          if (bj.pauseTo == null && bj.marks.length && n >= bj.marks[0].n) { var mk = bj.marks.shift(); n = mk.n; bj.hold = n; bj.pauseTo = t + bj.pause; if (mk.fn) { try { mk.fn(); } catch (e) {} } }
+          if (n !== bj.n) { bj.n = n; tx.textContent = bj.text.slice(0, n); if (n >= bj.text.length && !bj.marks.length && bj.pauseTo == null) { tx.classList.remove('cur'); bubJob = null; } }
+        }
+        for (i = subs.length - 1; i >= 0; i--) {
+          var s = subs[i], el = t - s.t0, typed = s.per * s.len, sn = Math.max(0, Math.min(s.len, Math.floor(el / s.per)));
+          if (sn !== s.n) { s.n = sn; s.h.type(sn); }
+          if (!s.out && el > typed + TUT_SUB_HOLD) { s.out = 1; s.h.out(); }
+          else if (s.out && el > typed + TUT_SUB_HOLD + TUT_SUB_FADE) { s.h.remove(); subs.splice(i, 1); }
+        }
+        for (i = 0; i < frames.length; i++) frameLay(frames[i]);   /* 追記②: the rings ride the tiles' bobbing */
+        irisStep(); sparkStep();
+        if (bubTgt && bub) { var bb = rectOf(bubTgt); if (bb) placeBox(bb); }
+      }
+
+      function relabel() {
+        if (bub && curKey) { bubJob = null; if (tx) { tx.textContent = txt(curKey); tx.classList.remove('cur'); } }
+        if (clipEl) {
+          var parts = String(U.tut_clip_parts || '').split('|'), sp = clipEl.querySelectorAll('.bar i span'), c = $('.cap', clipEl);
+          for (var k = 0; k < sp.length; k++) sp[k].textContent = parts[k] || '';
+          if (c) c.textContent = U.tut_clip_song || '';
+        }
+      }
+      function end() {   /* ★ 結束教學 (the user): out now, straight into simple free play - the opening lets go on its own so the line plays on */
+        if (!alive) return;
+        unlock();
+        try { E.reveal('all'); E.tutReset(); E.release(); if (!E.holding()) E.layer(true); } catch (e) {}
+        stop();
+      }
+      function stop() {
+        if (!alive) return;
+        alive = false; if (raf) { cancelAnimationFrame(raf); raf = 0; }
+        q = []; bubJob = null;
+        subs.forEach(function (s) { try { s.h.remove(); } catch (e) {} }); subs = [];
+        disarmA();
+        if (onRes) { window.removeEventListener('resize', onRes); onRes = null; }
+        if (bub) { bub.remove(); bub = null; } tx = null; curKey = null;
+        frames.forEach(function (f) { f.el.remove(); }); frames = []; bubTgt = null; bubSrc = null;
+        if (irisEl) { irisEl.remove(); irisEl = null; iris = null; }
+        if (clipEl) { clipEl.remove(); clipEl = null; }
+        if (graphEl) { graphEl.remove(); graphEl = null; }
+        if (head) head.classList.remove('frozen', 'tut-demo');
+        HOST.classList.remove('tut-demo');
+        try { E.surface().classList.remove('tut-away', 'awave', 'frozen'); } catch (e) {}
+        try { E.reveal('all'); } catch (e) {}
+        if (onDone) { var f = onDone; onDone = null; try { f(); } catch (e) {} }
+      }
+      /* ★ 追記①: a resize RE-MEASURES. Every box the lesson draws is a pure function of the order row, the spectrum line and the
+         menubar, so the honest answer to "the window changed" is to work them out again. It used to hide the bubble and throw the
+         clip away - which hid the very thing a probe would have to look at to notice the boxes were wrong in the first place. */
+      function relayout() {
+        if (!alive) return;
+        clipLay(); graphLay();
+        if (bubSrc) bubTgt = typeof bubSrc === 'function' ? bubSrc : rectOf(bubSrc);
+        for (var fi = 0; fi < frames.length; fi++) frameLay(frames[fi]);
+        var bb = bubTgt && rectOf(bubTgt); if (bb && bub) placeBox(bb);
+        subs.forEach(function (sb) {
+          var el = sb.h && sb.h.el; if (!el) return;
+          var r = rowBox(), w = el.offsetWidth, h = el.offsetHeight, W = HOST.clientWidth;
+          sb.h.move(Math.round(Math.max(18, Math.min(Math.max(18, W - w - 18), (r.left + r.right) / 2 - w / 2))), asideTop(w, h, sb.res));
+        });
+      }
+      onRes = relayout;
+      window.addEventListener('resize', onRes);
+      return { on: on, relabel: relabel, stop: stop, end: end, key: function () { return curKey; }, locked: function () { return lockedPhase; },
+               phase: function () { return phase; }, at: function () { return t0 == null ? null : T(); }, frozen: function () { return frozen; } };
     }
     function onKey(e) {
       if (e.key === 'Escape') { stop(); return; }
@@ -5678,8 +6693,10 @@
       }
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('pointerdown', onDown, true);
+      if (!PH) { HOST.classList.remove('tut-demo'); stopTimers.push(setTimeout(function () { if (!active) HOST.classList.remove('dstage-up'); }, LEAVE_HOLD)); }   /* LOG-183: the icon column comes back as the surface finishes compressing - the stage leaves FIRST and the home follows (LOG-141's lesson), never both at once */
       if (watch) { clearInterval(watch); watch = 0; }
-      if (tRaf) { cancelAnimationFrame(tRaf); tRaf = 0; } clearTitle();   /* hand the caption back unpainted (leftover paint on it double-prints the glyphs) */
+      if (tRaf) { cancelAnimationFrame(tRaf); tRaf = 0; } clearTitle();
+      if (tut) { tut.stop(); tut = null; } askEl = null;   /* LOG-182: the bubbles live in `head`, removed with it below */   /* hand the caption back unpainted (leftover paint on it double-prints the glyphs) */
       WV.boost(1);
       var afterFw = fw, byDoor = viaDoor; fw = false; viaDoor = false;
       if (afterFw && (byDoor === 'keep' || byDoor === 'keeptail')) {
@@ -5715,7 +6732,7 @@
     return { start: start, stop: stop, active: function () { return active; }, src: function () { return eng; },
              veilMidi: function (v) { if (road) road.veilMidi(v); }, veil: function () { return road ? road.veil() : null; },   /* LOG-171: the well / pillar stage folds the road away */
              toggle: function () { if (eng) eng.toggle(); }, toggleMute: function () { if (eng) eng.toggleMute(); },   /* the transport routes here while the stage is up — the mute lands even before the engine's context exists */
-             relabel: function () { if (eng) eng.relabel(); if (head) { var x = $('.st-exit', head); if (x) x.textContent = U.stage_exit; if (hint && !hint.classList.contains('gone')) hint.textContent = U.stage_loading_sec; } } };
+             relabel: function () { if (eng) eng.relabel(); if (tut) tut.relabel(); askRelabel(); headBtns(); if (head) { var x = $('.st-exit', head); if (x) x.textContent = U.stage_exit; if (hint && !hint.classList.contains('gone')) hint.textContent = U.stage_loading_sec; } } };
   })();
   // a demo opens as a desktop window hosting its page in an iframe (same origin); ⛶ in the title bar goes real fullscreen
   function openDemo(id) {
@@ -6197,7 +7214,7 @@
   var WELL_DEPTHS = [{ fs: 19, a: 0.96, hold: 15000 }, { fs: 15.5, a: 0.70, hold: 12500 }, { fs: 13, a: 0.48, hold: 10500 }, { fs: 11.5, a: 0.32, hold: 9000 }],   /* near -> far: font size, opacity, how long a fully typed line stays */
       WELL_MAX_LIVE = 7, WELL_SPAWN_MS = [700, 1700], WELL_TYPE_MS = [26, 44], WELL_FADE_MS = 1500, WELL_RAIN_MS = [420, 1500], WELL_RIPPLE_S = 5.4, WELL_RIPPLE_SEGS = 72, WELL_MARGIN = 18, WELL_HOVER_BONUS_MS = 5000, WELL_HOVER_BONUS_MAX = 15000;   /* LOG-166: leaving a hovered line adds 5 s, never more than 15 s in all */
   var well = (function () {
-    var host = null, fxc = null, g = null, msgs = null, box = null, on = false, raf = 0, order = [], cursor = 0, live = [], nextSpawn = 0, nextRain = 0, lastT = 0, dpr = 1, W = 0, H = 0, yH = 0, yG = 0, waterK = 0, loaded = false, items = [];
+    var host = null, fxc = null, g = null, msgs = null, box = null, on = false, raf = 0, order = [], cursor = 0, live = [], nextSpawn = 0, nextRain = 0, lastT = 0, dpr = 1, W = 0, H = 0, yH = 0, yG = 0, waterK = 0, loaded = false, items = [], sayN = 0;   /* sayN (LOG-183): authored lines on screen that the well did not put there */
     var rnd = function (a, b) { return a + Math.random() * (b - a); };
     function geoUp() {
       if (!host) return;
@@ -6372,7 +7389,7 @@
         else if (L.out && t - L.outT > WELL_FADE_MS + 200) { L.el.remove(); live.splice(i, 1); }
       }
       drawWater(t, dt);
-      if (on || live.length || ripples.length || waterK > 0.001) raf = requestAnimationFrame(tick); else { fxc.hidden = true; msgs.hidden = true; }
+      if (on || live.length || ripples.length || waterK > 0.001) raf = requestAnimationFrame(tick); else { fxc.hidden = true; if (!sayN) msgs.hidden = true; }   /* LOG-183: an authored line (say) lives in the same layer but on the LESSON's clock - the water's housekeeping must not sweep it away */
     }
     /* ---- the water: drawn rings (追記③) with glints where crests meet (追記⑧), capped and never cascading (追記⑩). `waterK` fades the whole
        surface in (2.6 s, on opening) and out (0.9 s, on closing). */
@@ -6427,6 +7444,41 @@
         g.fillStyle = spot; g.beginPath(); g.ellipse(q.x, q.y, rad * 2.6, rad * 2.6 * (0.25 + 0.35 * q.kd), 0, 0, Math.PI * 2); g.fill();   /* the glint, flattened with the ground */
       }
     }
+    /* ---- LOG-183 (the user: 許願池式字幕，作者對話，不用泡泡): ONE AUTHORED LINE, in the well's own hand, without opening the well.
+       The wish pool's lines are the site's voice for "somebody is speaking to you" - the lesson's opening greeting and the author's
+       asides (steps 12 / 15 / 16) are that voice, not UI, so they must not arrive in a tutorial bubble. Everything the well does to
+       a line - the typeface, the depth's size and opacity, the shadow, the fade - is reused; only the two things that make it a
+       WISH are dropped: the quotation marks and the random keep-out placement (an aside has ONE place it belongs, which the caller
+       names). The caller owns the clock: it types by calling type(n) and fades by calling out(), so the lesson's audio-clock
+       schedule freezes it with everything else on a pause. PHONE is guarded exactly as open() is. */
+    function say(text, o) {
+      if (PHONE || !text) return null;
+      ensure(); o = o || {};
+      var depth = Math.max(0, Math.min(WELL_DEPTHS.length - 1, o.depth == null ? 0 : o.depth)), d = WELL_DEPTHS[depth];
+      W = host.clientWidth; H = host.clientHeight; msgs.hidden = false;
+      var m = document.createElement('div'); m.className = 'wm wsay note d' + depth;
+      m.style.fontSize = d.fs + 'px'; m.style.setProperty('--wa', d.a);
+      if (o.width) m.style.maxWidth = Math.round(o.width) + 'px';
+      var s = document.createElement('span'); s.className = 'wq'; s.textContent = text; m.appendChild(s);
+      m.style.visibility = 'hidden'; m.style.left = '0px'; m.style.top = '0px'; msgs.appendChild(m);
+      var w = m.offsetWidth, h = m.offsetHeight;
+      var cx = o.cx == null ? W / 2 : o.cx;
+      var left = Math.round(Math.max(WELL_MARGIN, Math.min(Math.max(WELL_MARGIN, W - w - WELL_MARGIN), cx - w / 2)));
+      var top = Math.round(o.bottom != null ? o.bottom - h : (o.cy == null ? H * 0.42 : o.cy) - h / 2);
+      /* LOG-183 追記①: the caller may only know where the line belongs ONCE it has been measured - a lesson aside has to be told
+         its own height before it can find a gap between the order row and the spectrum line. `place` is handed the measured box
+         and answers with the final corner; the clamp below still has the last word. */
+      if (typeof o.place === 'function') { var p = o.place(w, h, W, H) || {}; if (p.left != null) left = Math.round(p.left); if (p.top != null) top = Math.round(p.top); }
+      m.style.left = left + 'px'; m.style.top = Math.max(8, Math.min(H - h - 8, top)) + 'px';
+      s.textContent = ''; m.style.visibility = ''; m.classList.add('new'); requestAnimationFrame(function () { if (m.isConnected) m.classList.remove('new'); });
+      sayN++;
+      var gone = false;
+      return { el: m, len: text.length, rect: function () { return m.getBoundingClientRect(); },
+               move: function (x, y) { m.style.left = Math.round(x) + 'px'; m.style.top = Math.round(y) + 'px'; },   /* LOG-183 追記①: the caller re-places it when the window changes shape */
+               type: function (n) { s.textContent = text.slice(0, Math.max(0, Math.min(text.length, Math.floor(n)))); },
+               out: function () { m.classList.add('out'); },
+               remove: function () { if (gone) return; gone = true; m.remove(); sayN = Math.max(0, sayN - 1); if (!sayN && !on && !live.length && msgs) msgs.hidden = true; } };
+    }
     /* ---- +1 */
     function vote(m) {
       var id = m.dataset.id, L = live.filter(function (x) { return x.el === m; })[0]; if (!id || !L || L.e.mine || m.classList.contains('voted') || m.classList.contains('busy')) return;
@@ -6458,7 +7510,7 @@
     }
     function relabel() { if (!on) return; box.paint(box.hasFocus(), step); box.place(); live.forEach(function (L) { if (L.typing || L.e.note) return; var parts = strings(L.e).filter(function (p) { return p[0] !== 'br'; }); L.spans.forEach(function (s, i) { if (parts[i]) { s.full = parts[i][1]; s.el.textContent = s.full; } }); }); }
     document.addEventListener('keydown', function (e) { if (on && e.key === 'Escape') close(); });
-    return { open: open, close: close, toggle: function () { on ? close() : open(); }, isOpen: function () { return on; }, relabel: relabel,
+    return { open: open, close: close, toggle: function () { on ? close() : open(); }, isOpen: function () { return on; }, relabel: relabel, say: say,
              stats: function () { return { ripples: ripples.length, glints: glints.length, live: live.length, water: waterK }; } };
   })();
 

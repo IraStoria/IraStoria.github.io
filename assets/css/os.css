@@ -130,6 +130,12 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .np-cap .np-title .np-rest{font-weight:inherit;display:inline-block;transform-origin:50% 50%;backface-visibility:hidden}
 .hero-text{perspective:600px}
 .desktop.swap-out>.icons,.desktop.swap-out>.updates{transform:translateX(-140px);opacity:0}
+/* ★ LOG-183 (the user: 桌面應用程式圖示絕對不能與舞台按鈕重疊). The 「-shaped icon column reaches four tiles across the top-left
+   (LOG-167) and the stage's control surface is centred on the desktop - at 1280x720 they share pixels outright, and no amount
+   of tuning either box fixes that without breaking the shape one of them was given on purpose. So the column steps aside for
+   as long as ANY .dstage is up (os.js writes .dstage-up), on the same slide-left the page swap already uses, and comes back as
+   the surface compresses on the way out. Its own 3 s boot transition is overridden here or the icons take three seconds to leave. */
+.desktop.dstage-up>.icons{transform:translateX(-170px);opacity:0;pointer-events:none;transition:opacity .45s ease,transform .6s cubic-bezier(.2,.7,.2,1)}
 .desktop.swap-out>.dock{transform:translate(-50%,120px);opacity:0}   /* dock: same idea as the app column, but it drops out below and comes back from below */
 .desktop.swap-out .hero-text p{transform:rotateX(90deg);opacity:0}
 .desktop.swap-out .sticky-text{opacity:0}
@@ -572,7 +578,7 @@ body.tr-on #sticky{opacity:0;transform:translate(24px,-40px) rotate(-14deg);poin
 .ds-sky{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;opacity:0;transition:opacity .55s ease}   /* LOG-111 the letter layer the spectrum bars cannot cover: inserted AFTER #wave so it paints over the bars - still under .icons (5), .dstage (6), .windows (10), .menubar (50) and .dock (60) */
 .ds-sky.in{opacity:1}
 .dstage{position:absolute;inset:0;z-index:6;pointer-events:none;mask-image:var(--dsm,none);mask-composite:exclude;mask-repeat:no-repeat;mask-position:var(--dsp,0 0);mask-size:var(--dss,auto);-webkit-mask-image:var(--dsm,none);-webkit-mask-repeat:no-repeat;-webkit-mask-position:var(--dsp,0 0);-webkit-mask-size:var(--dss,auto)}   /* LOG-112 the outro exit: os.js writes --dsm/--dsp/--dss and the section buttons are simply NOT THERE where the letter's frame has already passed - the same cut #wave takes, in the same desktop coordinates (the stage layer is inset:0, so there is no offset to convert) */   /* above the icons/updates layers, UNDER .windows (10): an open window is never trapped behind the stage buttons */
-.dstage .ds-panel{position:absolute;left:max(110px,7vw);top:8vh;transform:translateY(26px) scale(.99);width:min(760px,72vw);height:min(430px,64vh);pointer-events:auto;opacity:0;transition:opacity .55s ease,transform .55s cubic-bezier(.2,.7,.2,1)}   /* no card: the frame is invisible — the demo's own buttons float straight on the wallpaper, in the empty upper-left, clear of the spectrum line */
+.dstage .ds-panel{position:absolute;left:calc(50% - min(380px,36vw));top:8vh;transform:translateY(26px) scale(.99);width:min(760px,72vw);height:min(430px,64vh);pointer-events:auto;opacity:0;transition:opacity .55s ease,transform .55s cubic-bezier(.2,.7,.2,1)}   /* no card: the frame is invisible — the demo's own buttons float straight on the wallpaper, in the empty upper-left, clear of the spectrum line */
 .dstage.in .ds-panel{opacity:1;transform:none}
 /* LOG-142 (the user: 我還是沒有看到按鈕消失縮小或淡出的動畫阿，直接消失了): LOG-141 faded the PANE and left the buttons standing still inside it -
    which is exactly what 'it just disappears' looks like, because the buttons are what you are looking at. The stage already owns a gesture for
@@ -629,6 +635,158 @@ body.tr-on #sticky{opacity:0;transform:translate(24px,-40px) rotate(-14deg);poin
 .ds-sec .zone.ctrl .seg{width:64px}
 .ds-sec .seg.outro{--c:#e8e8e4}   /* the bookends are white light (a touch grey) */
 .ds-sec .seg.random,.ds-sec .seg.seq{--c:var(--accent)}   /* Random and In-order flash the SAME colour */
+
+/* ---- LOG-182 the simple stage (feat.stage-tutorial · ADR-011): the play-order line (追記⑤), spent tiles, the locked demonstration, the lesson bubble and the first-visit question */
+.ds-sec .ds-secs{justify-content:center}   /* LOG-182 追記① (the user: 按鈕放中間): centred in the panel, both stages */
+.ds-secs.simple{position:relative;width:max-content;max-width:100%;margin:0 auto;padding:10px 12px;gap:0;align-items:stretch}
+/* LOG-183 (the user: 移除順序列底下的整排深陰影): the pooled dark behind the letters is GONE. It was a 32 px blur of 80% black
+   across the whole row - readable, but it read as a slab, and with the lesson now lighting one tile at a time from above the
+   row has to sit on the spectrum itself. Each tile keeps its own small box-shadow, which is what was doing the work. */
+.ds-secs.simple .zone{display:flex;flex-direction:column;gap:.4rem;padding:0 .6rem;align-items:center}
+.ds-secs.simple .zlab{min-height:1em;font-size:11px}
+.ds-secs.simple .zsep{align-self:stretch;width:1px;margin:15px 0 6px;background:rgba(255,255,255,.3);box-shadow:0 0 6px rgba(255,255,255,.18)}   /* 追記⑤: a clear | between the five zones, which are all one height */
+.ds-secs.simple .zcols{gap:.9rem}   /* 追記⑦: room between the tiles for the play-order arrows */
+.ds-secs.simple .col{position:relative;width:58px;border:0;padding:0;animation:tfloat 3.8s ease-in-out infinite;animation-delay:calc(var(--i,0) * -0.65s);--gap:.9rem}   /* 追記⑤ (the user: 按鈕有上下漂浮的感覺): each tile bobs on its own phase */
+.ds-secs.simple .zcols .col:last-child{--gap:calc(1.2rem + 1px)}   /* the last tile of a zone points across the zone padding and the | */
+.ds-secs.simple .col::after{content:'\203A';position:absolute;left:100%;top:50%;width:var(--gap);transform:translateY(-50%);text-align:center;font:600 22px/1 var(--font);color:rgba(255,255,255,.62);text-shadow:0 0 4px #000,0 0 8px #000;pointer-events:none;opacity:0;transition:opacity .5s ease;transition-delay:calc(var(--i,0) * .11s)}   /* 追記⑦ (the user: 出現箭頭表示播放順序): a › between every two tiles, appearing left to right when the lesson explains the order */
+.ds-secs.simple.arrows .col::after{opacity:1}
+.ds-secs.simple .zone[data-zone="I"] .col::after{display:none}
+.ds-secs.simple .seg.tile{transition:opacity .5s ease,transform .5s cubic-bezier(.2,.7,.2,1),box-shadow .3s ease,background-color .5s ease}   /* the reveal below and the step-aside during a drag both glide */
+.ds-secs.simple .col.hid .seg.tile{opacity:0;transform:scale(.8)}   /* 追記⑦ (the user: 按鈕不要馬上出現，隨著教學一步一步出現): hidden until the lesson uncovers it */
+.ds-secs.simple .zlab,.ds-secs.simple .zsep{transition:opacity .6s ease}
+.ds-secs.simple .zlab.hid,.ds-secs.simple .zsep.hid{opacity:0}
+.ds-sec .seg.tile.drag.bad{box-shadow:inset 0 0 0 1.5px rgba(255,96,96,.9),inset 0 1px 0 rgba(255,255,255,.3),0 0 12px rgba(255,80,80,.45),0 14px 28px rgba(0,0,0,.55)}   /* 追記⑦: over a spot the rules refuse the tile wears a red ring and the others do not step aside - it never LOOKS taken */
+.ds-sec .seg.tile.drag.bad .nm{color:rgba(255,150,150,.95)}
+@keyframes tfloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@media(prefers-reduced-motion:reduce){.ds-secs.simple .col{animation:none}}
+.ds-secs.simple.dragging .col{animation-play-state:paused}
+.ds-sec .seg.tile{cursor:default;user-select:none;-webkit-user-select:none;touch-action:none}
+.ds-sec .seg.tile:active{transform:none}
+.ds-sec .seg.tile.movable{cursor:grab}
+.ds-sec .seg.tile.drag{cursor:grabbing;z-index:3;transition:none!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.4),inset 0 1px 0 rgba(255,255,255,.3),0 14px 28px rgba(0,0,0,.55)}
+.ds-sec .seg.tile.playing{background:color-mix(in srgb,var(--c) 14%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--c) 70%,rgba(255,255,255,.4)),inset 0 1px 0 rgba(255,255,255,.34),0 0 14px color-mix(in srgb,var(--c) 45%,transparent),0 6px 16px rgba(0,0,0,.30)}   /* no droplet on floating tiles: the sounding one wears the ring itself */
+/* LOG-183 追記④ ⑨ (the user: 按鈕仍要漸變成該段落的顏色 … 我沒有說改變原有的亮法): the lit look above is UNCHANGED; what changes is the tile's
+   --c, which os.js renderLine() now sets to the sounding VERSION's colour (v2 = the deep shade), so the ring, glow and label shade
+   from light to deep on the 1 -> 2 hand-over exactly as the line does. A filled tile was tried and rejected. */
+.ds-sec .seg.tile .nm{font-size:17px;letter-spacing:.02em}
+.ds-sec .seg.tile.fixed{--c:#e8e8e4}
+.ds-sec .seg.done{opacity:.28;filter:grayscale(1);pointer-events:none}   /* forward only: a group already played is spent - greyed, never removed (same rule as .off) */
+.ds-secs.locked .seg{pointer-events:none;cursor:default}
+.ds-secs.locked .seg:not(.playing,.next,.queued){opacity:.55}   /* the demonstration: the line is not yours yet */
+.stage-ui .st-level{background:rgba(255,255,255,.06);border:1px solid rgba(224,176,74,.55);color:var(--fg);border-radius:999px;padding:.35rem .9rem;font:12px var(--mono);cursor:pointer}   /* 追記⑤: the simple / advanced switch, beside the exit */
+.stage-ui .st-level:hover{background:rgba(224,176,74,.16)}
+/* ============================================================ LOG-183 the lesson's own furniture (feat.stage-tutorial · 教學腳本草稿.md) */
+.stage-ui .st-again{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.22);color:var(--dim);border-radius:999px;padding:.35rem .9rem;font:12px var(--mono);cursor:pointer}   /* 再看一次教學: beside 進階版 in free simple play, quieter than it - it is the way BACK, not the way on */
+.stage-ui .st-again:hover{background:rgba(255,255,255,.14);color:var(--fg)}
+.stage-ui .st-level.st-end{border-color:rgba(224,176,74,.75);background:rgba(224,176,74,.16)}   /* 結束教學 stands in the switch's own slot while a lesson runs (the user: 教學途中沒有「進階版」鈕) */
+/* ★ 追記② the frames (the user, 2026-09-12: 白框不黃、不要聚光燈、不要按鈕中央光暈、按鈕用原色、快速淡入淡出). One thin white ring
+   round the thing being talked about; a hairline of dark outside it keeps it readable over the spectrum. In and out in a fifth of a
+   second. Position and size are written by os.js every frame, so a ring on a tile bobs with it. E's ring takes E's own colour. */
+/* ★ 追記③ THREE CLASSES ON EVERY RULE BELOW THAT DECLARES A TRANSITION. The shell-wide sweep (os.css:461, `.desktop *:not(...)`)
+   is (0,2,1) and it does not exclude the stage's children, so `.stage-ui .tut-frame` (0,2,0) lost its transition list to it and
+   every ring, the iris, the clip blocks and the graph routes were CUTTING (the user: 前段／後段框瞬間出現・A/I/E 瞬間消失／變亮). The
+   same lesson as .tut-bub (758) and .tr-tip (538): out-specify the sweep, do not fight it. */
+.desktop .stage-ui .tut-frame{position:absolute;left:0;top:0;z-index:2;pointer-events:none;border-radius:14px;box-shadow:inset 0 0 0 1.5px var(--fc,rgba(255,255,255,.92)),0 0 0 1px rgba(0,0,0,.38);opacity:0;transform:scale(1.06);transition:opacity .18s ease,transform .18s ease,box-shadow .3s ease}
+.desktop .stage-ui .tut-frame.zone{border-radius:18px}
+.desktop .stage-ui .tut-frame.in{opacity:1;transform:none}
+.desktop .stage-ui .tut-frame.out{opacity:0;transform:scale(1.04);transition:opacity .25s ease,transform .25s ease}
+.desktop .stage-ui .tut-frame.glide{transition:opacity .18s ease,transform .18s ease,box-shadow .22s ease,left .34s cubic-bezier(.3,.9,.3,1),top .34s cubic-bezier(.3,.9,.3,1),width .34s cubic-bezier(.3,.9,.3,1),height .34s cubic-bezier(.3,.9,.3,1),border-radius .34s ease}   /* 追記④: box-shadow .22 s so a colour set 0.1 s into the glide is complete on arrival (the rings meet on E already in E's colour) */   /* 追記③ (the user: A 框快速向右、I 框快速向左，在 E 撞在一起後變成 E 的框色): a ring on the move - os.js keeps writing the box every frame, the transition carries it there */
+.desktop .stage-ui .tut-frame.pulse.in{animation:tutbreath 1.8s ease-in-out infinite}   /* the hand-over: A's ring breathes until it is pressed */
+@keyframes tutbreath{0%,100%{opacity:1}50%{opacity:.45}}
+/* ★ 追記② the iris (the user, step 6: 用陰影，唯獨刻度那邊一圈是正常亮度): a shade over the whole stage with one clear circle cut out of it;
+   os.js writes the circle's centre and radius every frame (it closes in on the tick, then opens out and takes the shade with it) */
+.desktop .stage-ui .tut-iris{position:absolute;inset:0;z-index:1;pointer-events:none;background:rgba(2,3,6,.66);opacity:0;transition:opacity .35s ease;
+  -webkit-mask:radial-gradient(circle at var(--x,50%) var(--y,50%),transparent calc(var(--r,0px) - 1px),rgba(0,0,0,.55) calc(var(--r,0px) + 8px),#000 calc(var(--r,0px) + 26px));
+  mask:radial-gradient(circle at var(--x,50%) var(--y,50%),transparent calc(var(--r,0px) - 1px),rgba(0,0,0,.55) calc(var(--r,0px) + 8px),#000 calc(var(--r,0px) + 26px))}
+.desktop .stage-ui .tut-iris.in{opacity:1}
+/* ★ 追記② the arrow wave (the user, step 3: › 快速高亮從左到右波浪感亮起來): with .wave the arrows are simply there, and a bright ripple runs
+   down them left to right, 70 ms apart */
+.ds-secs.simple.arrows.awave .col::after{transition:none;animation:tutarrow .55s ease-out both;animation-delay:calc(var(--i,0) * .07s)}
+@keyframes tutarrow{0%{color:rgba(255,255,255,.62);transform:translateY(-50%) scale(1)}35%{color:#fff;text-shadow:0 0 10px #fff,0 0 4px #000;transform:translateY(-50%) scale(1.4)}100%{color:rgba(255,255,255,.62);transform:translateY(-50%) scale(1)}}
+/* 追記④ (the user: 按鈕也跟著箭頭的節奏發同樣感覺的光，連貫的波浪): the tile on the same rung of the delay ladder as its arrow brightens
+   with it - a white hairline ring and a lift in brightness, no fill and no centre glow (追記②'s ruling), gone as fast as the arrow's */
+.ds-secs.simple.arrows.awave .col .seg.tile{animation:tuttile .55s ease-out both;animation-delay:calc(var(--i,0) * .07s)}
+@keyframes tuttile{0%{filter:brightness(1)}35%{filter:brightness(1.45);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.95),inset 0 1px 0 rgba(255,255,255,.34),0 0 14px rgba(255,255,255,.40),0 6px 16px rgba(0,0,0,.30)}100%{filter:brightness(1)}}
+.ds-secs.simple.tut-away{opacity:0;pointer-events:none;transition:opacity .6s ease}   /* step 9: the order row is out of the way while the demonstration plays */
+.ds-secs.locked .seg.tile.tut-press{pointer-events:auto;cursor:pointer;opacity:1}   /* the hand-over: A is the one thing pressable while the rest of the line is still the lesson's */
+/* ★ (the user: 按暫停 → 教學全部同步凍住). The script itself runs on the audio clock, so a suspended context stops it dead;
+   this is the other half - everything CSS is animating holds its frame too. */
+.stage-ui.frozen *,.ds-secs.frozen,.ds-secs.frozen *{animation-play-state:paused!important}
+/* ★ step 1's concept clip (the user: 先出現一條完整的 clip＝一首歌；講到「好幾個段落」時 clip 分段裂開).
+   LOG-183 追記① (the owner: 教學文字跑到畫面最上方): it is drawn IN THE ORDER ROW'S OWN BOX - os.js writes left/top/width/height from
+   the row and puts the bar at the tiles' own height - so the schematic stands exactly where the letters are about to appear and fades
+   out as they fade in. Nothing of it reaches above the row, because above the row there is only the menubar. */
+.desktop .stage-ui .tut-clip{position:absolute;left:0;top:0;z-index:2;pointer-events:none;opacity:0}
+/* 追記③ (the user: 「一首歌」字壓到音軌): the name is the TRACK HEADER, the way a DAW writes it - to the LEFT of the region, on the
+   region's own centre line, never on top of it. os.js hands it the bar's top and height. */
+.desktop .stage-ui .tut-clip .cap{position:absolute;right:100%;margin-right:16px;top:var(--bt,0px);height:var(--bh,46px);display:flex;align-items:center;white-space:nowrap;font:12px/1 var(--font);letter-spacing:.12em;color:rgba(240,237,230,.66);text-shadow:0 0 10px rgba(0,0,0,.85)}
+.desktop .stage-ui .tut-clip .bar{position:absolute;left:0;right:0;top:0;display:flex;height:46px;border-radius:9px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.34);transition:box-shadow .4s ease}   /* 追記③ (the user: 一開始不要分割線): ONE region, so the edge belongs to the whole bar - the blocks have none of their own until the split */
+.desktop .stage-ui .tut-clip.split .bar{box-shadow:inset 0 0 0 1px rgba(255,255,255,0)}
+/* 追記② (the user: 一開始要一整條看起來像音頻範例，不要黃色): the region is cool white - a flat fill, a hairline edge and a waveform running the
+   whole length of it, one continuous piece; the nine blocks only show once it splits, each keeping the slice of wave it was cut from */
+.desktop .stage-ui .tut-clip .bar i{position:relative;flex:1 1 0;margin:0;border-radius:0;overflow:hidden;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.075);box-shadow:inset 0 0 0 1px rgba(255,255,255,0);transition:margin .55s cubic-bezier(.2,.7,.2,1),border-radius .55s ease,opacity .3s ease,box-shadow .4s ease}
+.desktop .stage-ui .tut-clip .bar i:first-child{border-radius:9px 0 0 9px}
+.desktop .stage-ui .tut-clip .bar i:last-child{border-radius:0 9px 9px 0}
+.desktop .stage-ui .tut-clip .bar i svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.desktop .stage-ui .tut-clip .bar i svg path{fill:none;stroke:rgba(255,255,255,.58);stroke-width:1.6;vector-effect:non-scaling-stroke;transition:opacity .5s ease}
+.desktop .stage-ui .tut-clip .bar i span{position:relative;padding:2px 5px;border-radius:6px;text-align:center;font:10px/1.3 var(--font);letter-spacing:.02em;white-space:nowrap;color:rgba(240,237,230,0);background:rgba(6,8,14,0);transition:color .45s ease,background-color .45s ease}   /* the section's name is written INSIDE its own block, on a dark pill so it reads over the wave (追記③: in the site's own face - the names are Chinese now) */
+.desktop .stage-ui .tut-clip.split .bar i{margin:0 3px;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.34)}   /* split, each block takes the tiles' own corner radius and its own edge - the diagram is already becoming the line */
+.desktop .stage-ui .tut-clip.split .bar i svg path{opacity:.45}
+.desktop .stage-ui .tut-clip.split .bar i span{color:rgba(240,237,230,.88);background:rgba(6,8,14,.72)}
+.desktop .stage-ui .tut-clip .bar i.gone{opacity:0}   /* 追記②: block k leaves as letter k arrives in the same spot */
+/* ★ step 9's mini graph: the opening and the two places it can go; a route lights when that hand-over is actually queued */
+/* 追記④ (the user: 按鈕變很小): a 360 x 190 board with 56 px nodes - the size of the tiles on the line - A (70,105), B (290,68), C (290,142) */
+.desktop .stage-ui .tut-graph{position:absolute;left:0;top:0;width:360px;height:190px;z-index:2;pointer-events:none;opacity:0}
+.desktop .stage-ui .tut-graph svg{position:absolute;inset:0;width:360px;height:190px;overflow:visible}
+.desktop .stage-ui .tut-graph .rt{fill:none;stroke:rgba(240,237,230,.20);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:stroke .5s ease,filter .5s ease}
+.desktop .stage-ui .tut-graph.lit-b .rb,.desktop .stage-ui .tut-graph.lit-c .rc{stroke:rgba(255,255,255,.95);filter:drop-shadow(0 0 4px rgba(255,255,255,.45))}   /* 追記②: white, not amber (the user) */
+/* 追記④ the spark (the user: A 的光沿著線滑過去 B 上面把它照亮): a white dot with a halo, moved along the route by os.js on the audio clock;
+   it runs UNDER the nodes (the svg is behind them) and the node lights the moment it lands */
+.desktop .stage-ui .tut-graph .spk{fill:#fff;opacity:0;filter:drop-shadow(0 0 6px rgba(255,255,255,.95)) drop-shadow(0 0 14px rgba(255,255,255,.55));transition:opacity .12s ease}
+.desktop .stage-ui .tut-graph .spk.on{opacity:1}
+/* 追記④ the return arcs (the user: 由右到左有弧度的箭頭快速閃幾下預告要回 A；回去那瞬間亮一下，箭頭也從右到左一起暗下去): drawn on a pathLength of 1,
+   so the wipe is a dash sliding off the B (or C) end towards A whatever the arc's real length */
+.desktop .stage-ui .tut-graph .arc{fill:none;stroke:rgba(255,255,255,.95);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1 1;stroke-dashoffset:0;opacity:0;filter:drop-shadow(0 0 4px rgba(255,255,255,.45))}
+.desktop .stage-ui .tut-graph .arc.pre{animation:tutarcpre 1.32s steps(1,end) both}
+.desktop .stage-ui .tut-graph .arc.go{animation:tutarcgo .75s ease-in both}
+@keyframes tutarcpre{0%,34%,68%{opacity:.9}17%,51%,85%,100%{opacity:0}}
+@keyframes tutarcgo{0%{opacity:1;stroke-dashoffset:0;filter:drop-shadow(0 0 8px #fff) drop-shadow(0 0 16px rgba(255,255,255,.7))}30%{opacity:1;stroke-dashoffset:0;filter:drop-shadow(0 0 4px rgba(255,255,255,.45))}100%{opacity:1;stroke-dashoffset:-1;filter:drop-shadow(0 0 4px rgba(255,255,255,.45))}}
+.desktop .stage-ui .tut-graph .nd{position:absolute;width:56px;height:56px;margin:-28px 0 0 -28px;display:flex;align-items:center;justify-content:center;border-radius:12px;font:600 19px/1 var(--font);font-style:normal;color:var(--fg);background:rgba(16,19,28,.55);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.28),0 6px 16px rgba(0,0,0,.40);transition:box-shadow .3s ease,background-color .3s ease,color .3s ease,transform .3s ease}
+.desktop .stage-ui .tut-graph .na{left:70px;top:105px}
+.desktop .stage-ui .tut-graph .nb{left:290px;top:68px}
+.desktop .stage-ui .tut-graph .nc{left:290px;top:142px}
+.desktop .stage-ui .tut-graph.lit-b .nb,.desktop .stage-ui .tut-graph.lit-c .nc{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.92),0 6px 16px rgba(0,0,0,.40)}   /* the route is QUEUED: the node it leads to gets its ring */
+/* 追記③ (the user: 切到 B、回 A、到 C 的瞬間演示圖的該按鈕要亮): the node that is PLAYING is lit - solid white, dark letter - the instant the
+   engine enters it, exactly as the tile on the line lights when its section starts */
+.desktop .stage-ui .tut-graph .nd.now{background:rgba(255,255,255,.94);color:#0b0d14;box-shadow:inset 0 0 0 1.5px #fff,0 0 18px rgba(255,255,255,.45),0 6px 16px rgba(0,0,0,.40);transform:scale(1.08)}
+.desktop .stage-ui .tut-clip.in,.desktop .stage-ui .tut-graph.in{animation:tutfin .6s ease forwards}
+.desktop .stage-ui .tut-clip.out,.desktop .stage-ui .tut-graph.out{animation:tutfout .65s ease forwards}   /* AFTER .in on purpose: the element wears both while it leaves, and the later rule is the one that plays */
+@keyframes tutfin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes tutfout{from{opacity:1}to{opacity:0}}
+/* ★ step 9's dimming (the user: 背景連同進度條、音量條稍微變暗一點點) - one scrim over everything under the stage chrome,
+   which is the wallpaper, the spectrum line, the night city and the now-playing transport; the dock and menubar stay lit. */
+.stage-ui::before{content:'';position:absolute;inset:0;background:#05050a;opacity:0;pointer-events:none;z-index:0;transition:opacity .8s ease}
+.stage-ui.tut-demo::before{opacity:.42}
+.desktop.tut-demo #np-desktop,.desktop.tut-demo #wave{filter:brightness(.72);transition:filter .8s ease}
+
+.stage-ui .tut-bub{position:absolute;left:0;top:0;width:max-content;max-width:300px;padding:.5rem .75rem;border-radius:10px;background:rgba(20,16,30,.92);border:1px solid rgba(224,176,74,.55);color:var(--fg);font:12.5px/1.55 var(--font);text-align:left;box-shadow:0 6px 24px rgba(0,0,0,.45);pointer-events:auto;opacity:0;transform:translateY(6px);z-index:3}
+.stage-ui .tut-bub.in{opacity:1;transform:none}
+.stage-ui .tut-bub::after{content:'';position:absolute;left:var(--ax,24px);border:7px solid transparent}
+.stage-ui .tut-bub.below::after{bottom:100%;border-bottom-color:rgba(224,176,74,.55)}
+.stage-ui .tut-bub.above::after{top:100%;border-top-color:rgba(224,176,74,.55)}
+.stage-ui .tut-bub .tx.cur::after{content:'\2590';margin-left:1px;color:var(--accent);animation:tutcaret 1s steps(1) infinite}
+@keyframes tutcaret{50%{opacity:0}}
+.stage-ui .tut-ask{position:absolute;left:50%;top:50%;width:min(440px,86vw);padding:1.1rem 1.25rem 1rem;border-radius:16px;background:rgba(20,16,30,.90);border:1px solid rgba(255,255,255,.18);box-shadow:0 12px 40px rgba(0,0,0,.5);color:var(--fg);font:13px/1.6 var(--font);pointer-events:auto;opacity:0;transform:translate(-50%,-50%) translateY(8px);z-index:4;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.stage-ui .tut-ask.in{opacity:1;transform:translate(-50%,-50%)}
+.stage-ui .tut-ask h3{margin:0 0 .35rem;font-size:16px;font-weight:600}
+.stage-ui .tut-ask p{margin:0 0 .9rem;color:var(--dim)}
+.stage-ui .tut-ask .row{display:flex;gap:.6rem;flex-wrap:wrap}
+.stage-ui .tut-ask button{flex:1 1 auto;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);color:var(--fg);border-radius:999px;padding:.5rem .9rem;font:13px var(--font);cursor:pointer}
+.stage-ui .tut-ask button:hover{background:rgba(255,255,255,.14)}
+.stage-ui .tut-ask button.go{border-color:rgba(224,176,74,.7);background:rgba(224,176,74,.14)}
+.desktop .stage-ui .tut-bub{transition:opacity .45s ease,transform .45s ease}
+.desktop .stage-ui .tut-bub.slide{transition:opacity .45s ease,transform .45s ease,left .32s ease,top .32s ease}   /* 追記⑦: while the tiles appear the bubble slides along under them (the user: 泡泡從左往右滑動) */   /* three classes: the shell-wide sweep (os.css:455) would flatten these to colour-only (the .tr-tip lesson, LOG-177 追記⑤) */
+.desktop .stage-ui .tut-ask,.desktop .stage-ui .tut-ask button{transition:opacity .45s ease,transform .45s ease,background-color .25s ease,border-color .25s ease}
 .ds-sec .hb2,.ds-sec .runbub{position:absolute;left:0;top:0;pointer-events:none;opacity:0;border-radius:12px;background:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22),inset 0 1px 0 rgba(255,255,255,.30);transition:opacity .4s ease;z-index:0}   /* the same pane of glass as .hovbub: a hairline ring and a top glint, nothing else; transform/size come from the JS spring (os.js droplet()) */
 .ds-sec .runbub{background:color-mix(in srgb,var(--c) 12%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c) 62%,rgba(255,255,255,.40)),inset 0 1px 0 rgba(255,255,255,.34);transition:opacity .4s ease,background-color .5s ease,box-shadow .5s ease}   /* ★ 進行框 = the pointer's droplet tinted with the part's colour: a faint wash and the hairline in the colour. No outer glow, no solid stroke - it should read as the same glass as the hover bubble, only coloured. The colour transitions, so a 1->2 hand-over shades from light to deep while it slides */
 /* ?debug only, built by __grid(): a naming grid over the whole viewport so a note can say "the smoke around F3" instead of
@@ -985,6 +1143,11 @@ body.owner .ph-status{background:linear-gradient(180deg,rgba(224,176,74,.34),rgb
 .wm.mine .ws{color:var(--accent)}
 .wm.note{cursor:default;color:rgba(240,237,230,.7)}
 .wm.note .wq{color:inherit}
+/* ★ LOG-183: the author's own lines borrow the wish pool's hand but not its shape - centred, unquoted, and brighter than
+   the well's own note (which is why they sit HERE, after .wm.note, rather than up with the lesson's furniture: same
+   specificity, later in the file, so this is the one that wins) */
+.wm.wsay{text-align:center;line-height:1.7;letter-spacing:.03em;color:rgba(244,241,234,.94)}
+.wm.wsay .wq{white-space:pre-line}   /* LOG-183 追記③ (the user: 第二句在「…形式」處莫名截斷換行): an authored line breaks where the AUTHOR put the break (a newline in site.json), never where the box happens to run out */
 .wm:hover:not(.voted):not(.mine):not(.note){opacity:1;text-shadow:0 0 18px rgba(224,176,74,.35),0 0 14px rgba(0,0,0,.75)}
 .wm.voted{cursor:default}
 .wm.d0 .wq{font-weight:500}

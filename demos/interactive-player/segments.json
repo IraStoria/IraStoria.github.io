@@ -2276,7 +2276,548 @@
         ]
       },
       "rules_note": "user 2026-08-29: pre-zone {B,C,D} -> E1 -> E2 -> post-zone {F,G,H,I_loop} -> I. E1 only to E2; pre may jump to E2; post never returns to E1/E2 or pre. Bans: B1!C2, C2!B1B2, D1!B1C1, D2!C1C2, F1!H2, F2 only from F1. Unnamed = allowed (incl. self-repeat).",
-      "version": "V1"
+      "version": "V1",
+      "transitions": [
+        {
+          "from": "A",
+          "to": "B2",
+          "layers": [
+            "DRUM"
+          ]
+        },
+        {
+          "from": "A",
+          "to": "C1",
+          "random": [
+            {
+              "layers": []
+            },
+            {
+              "layers": [
+                "TR"
+              ]
+            },
+            {
+              "layers": [
+                "TR",
+                "DRUM"
+              ]
+            },
+            {
+              "layers": [
+                "TR",
+                "DRUM"
+              ],
+              "noPre": true
+            }
+          ],
+          "note": "user: N/TR/TR+DRUM/TR+Drum 3/TR+DRUM 3+無pre (Random)",
+          "amended": "2026-09-12 「A到C1不+1」"
+        },
+        {
+          "from": "A",
+          "to": "C2",
+          "random": [
+            {
+              "layers": []
+            },
+            {
+              "layers": [
+                "TR"
+              ]
+            },
+            {
+              "layers": [
+                "TR",
+                "DRUM"
+              ]
+            },
+            {
+              "layers": [
+                "TR",
+                "DRUM",
+                "HIT1"
+              ]
+            }
+          ],
+          "note": "user: N/TR/TR+DRUM/TR+DRUM3 (Random)"
+        },
+        {
+          "from": "A",
+          "to": "D1",
+          "layers": [
+            "TR",
+            "DRUM"
+          ],
+          "mute": {
+            "TR": [
+              3
+            ]
+          },
+          "note": "user: TR+DRUM, TR第三個音不播"
+        },
+        {
+          "from": "A",
+          "to": "D2",
+          "layers": [
+            "TR",
+            "DRUM"
+          ],
+          "mute": {
+            "TR": [
+              3
+            ]
+          },
+          "note": "user: TR+DRUM, TR第三個音不播"
+        },
+        {
+          "from": "A",
+          "to": "E1",
+          "random": [
+            {
+              "layers": [
+                "TR"
+              ]
+            },
+            {
+              "layers": [
+                "TR",
+                "DRUM"
+              ]
+            }
+          ],
+          "note": "user: TR/TR+DRUM (Random)"
+        },
+        {
+          "from": "A",
+          "to": "E2",
+          "layers": [
+            "TR"
+          ]
+        },
+        {
+          "from": "B1",
+          "to": "A",
+          "layers": [
+            "TR"
+          ],
+          "amended": "2026-09-12 「B回A不+1, C回A不+1」"
+        },
+        {
+          "from": "B1",
+          "to": "C1",
+          "random": [
+            {
+              "layers": [
+                "TR"
+              ]
+            },
+            {
+              "layers": [
+                "TR"
+              ],
+              "noPre": true
+            }
+          ],
+          "note": "user: 無pre(random)"
+        },
+        {
+          "from": "B1",
+          "to": "D1",
+          "layers": [
+            "TR",
+            "DRUM"
+          ],
+          "mute": {
+            "TR": [
+              3
+            ]
+          },
+          "assumed": "note says TR+DRUM, drum box unticked - followed the note",
+          "note": "user: TR+DRUM, TR第三個音不播"
+        },
+        {
+          "from": "B1",
+          "to": "D2",
+          "layers": [
+            "TR",
+            "DRUM"
+          ],
+          "mute": {
+            "TR": [
+              3
+            ]
+          },
+          "assumed": "note says TR+DRUM, drum box unticked - followed the note",
+          "note": "user: TR+DRUM, TR第三個音不播"
+        },
+        {
+          "from": "B1",
+          "to": "E1",
+          "layers": [
+            "TR"
+          ]
+        },
+        {
+          "from": "B1",
+          "to": "E2",
+          "layers": [
+            "TR"
+          ]
+        },
+        {
+          "from": "B2",
+          "to": "A",
+          "layers": [
+            "TR"
+          ],
+          "amended": "2026-09-12 「B回A不+1, C回A不+1」"
+        },
+        {
+          "from": "B2",
+          "to": "C1",
+          "random": [
+            {
+              "layers": []
+            },
+            {
+              "layers": [],
+              "noPre": true
+            }
+          ],
+          "note": "user: 無PRE (RANDOM)"
+        },
+        {
+          "from": "B2",
+          "to": "E1",
+          "layers": [
+            "DRUM",
+            "HIT1"
+          ]
+        },
+        {
+          "from": "C1",
+          "to": "A",
+          "layers": [
+            "TR",
+            "DRUM"
+          ],
+          "amended": "2026-09-12 「B回A不+1, C回A不+1」"
+        },
+        {
+          "from": "C1",
+          "to": "B1",
+          "random": [
+            {
+              "layers": [],
+              "noPre": true
+            },
+            {
+              "layers": [],
+              "noTail": true,
+              "noPre": true
+            }
+          ],
+          "note": "user: 無TAIL(RANDOM)",
+          "amended": "2026-09-12 「C-B無pre」"
+        },
+        {
+          "from": "C1",
+          "to": "B2",
+          "random": [
+            {
+              "layers": [],
+              "noPre": true
+            },
+            {
+              "layers": [],
+              "noTail": true,
+              "noPre": true
+            }
+          ],
+          "note": "user: 無TAIL(RANDOM)",
+          "amended": "2026-09-12 「C-B無pre」"
+        },
+        {
+          "from": "C1",
+          "to": "C1",
+          "layers": [],
+          "noPre": true
+        },
+        {
+          "from": "C2",
+          "to": "C1",
+          "random": [
+            {
+              "layers": []
+            },
+            {
+              "layers": [],
+              "noPre": true
+            }
+          ],
+          "assumed": "special box unticked but the note says RANDOM - followed the note",
+          "note": "user: 無PRE(RANDOM)"
+        },
+        {
+          "from": "D1",
+          "to": "A",
+          "layers": [
+            "HIT1"
+          ]
+        },
+        {
+          "from": "D1",
+          "to": "B2",
+          "layers": [],
+          "noPre": true
+        },
+        {
+          "from": "D2",
+          "to": "A",
+          "layers": [
+            "TR",
+            "DRUM"
+          ]
+        },
+        {
+          "from": "D2",
+          "to": "B2",
+          "layers": [
+            "DRUM"
+          ]
+        },
+        {
+          "from": "D2",
+          "to": "D1",
+          "layers": [
+            "TR"
+          ],
+          "mute": {
+            "TR": [
+              3
+            ]
+          },
+          "note": "user: TR不播第三個音"
+        },
+        {
+          "from": "E2",
+          "to": "H2",
+          "layers": [
+            "HIT1"
+          ]
+        },
+        {
+          "from": "E2",
+          "to": "I_loop",
+          "layers": [
+            "HIT1"
+          ]
+        },
+        {
+          "from": "F1",
+          "to": "I_loop",
+          "layers": [
+            "HIT1"
+          ],
+          "noTail": true
+        },
+        {
+          "from": "F2",
+          "to": "F1",
+          "layers": [
+            "G1PRE"
+          ]
+        },
+        {
+          "from": "F2",
+          "to": "G2",
+          "layers": [
+            "G1PRE"
+          ]
+        },
+        {
+          "from": "F2",
+          "to": "H1",
+          "layers": [
+            "G1PRE"
+          ]
+        },
+        {
+          "from": "F2",
+          "to": "H2",
+          "layers": [
+            "HIT1",
+            "G1PRE"
+          ]
+        },
+        {
+          "from": "F2",
+          "to": "I_loop",
+          "layers": [
+            "HIT1",
+            "G1PRE"
+          ]
+        },
+        {
+          "from": "F2",
+          "to": "I",
+          "layers": [
+            "G1PRE"
+          ]
+        },
+        {
+          "from": "G1",
+          "to": "H2",
+          "layers": [
+            "HIT1"
+          ]
+        },
+        {
+          "from": "G1",
+          "to": "I_loop",
+          "layers": [
+            "HIT1"
+          ]
+        },
+        {
+          "from": "G2",
+          "to": "I_loop",
+          "layers": [
+            "HIT1"
+          ]
+        },
+        {
+          "from": "H1",
+          "to": "F1",
+          "layers": [
+            "G1PRE"
+          ]
+        },
+        {
+          "from": "H1",
+          "to": "I_loop",
+          "layers": [
+            "HIT1"
+          ]
+        },
+        {
+          "from": "H2",
+          "to": "G1",
+          "layers": [],
+          "noPre": true
+        },
+        {
+          "from": "I_loop",
+          "to": "F1",
+          "layers": [
+            "HIT1",
+            "G1PRE"
+          ]
+        },
+        {
+          "from": "I_loop",
+          "to": "G2",
+          "layers": [
+            "G1PRE"
+          ]
+        }
+      ],
+      "tutorial": {
+        "note": "LOG-182 追記③ (the user): the simple stage's opening. `hold` = A1 without drums: its first two beats are the OPENING's own pick-up, part of the pass, not a seam pick-up (追記④, the user: A1 loop只要tail不要pre-entry) - every pass plays from the file's head, a pass is 2 beats + 8 bars, and the tail rings under the next pass (or under A2) loops for as long as the lesson talks; `drums` = layer 2, exactly 8 bars (no pick-up, no tail), faded in as the lesson goes on; `release` = A2, the second half of the intro (no pick-up, 1-bar tail like A's own ending) - scheduled instead of another pass once the lesson is ready to demonstrate, and it hands over to B exactly as A did. durationSec = pick-up + 8 bars + tail at 145 BPM so the logical length is exactly 8 bars. 追記⑥ (the user: 我還是聽到A接A又出現開頭兩拍重複播放): `openBars` = the opening's two beats are heard ONCE, on the first pass only; every later pass starts after them and is exactly eight bars. LOG-184 (the user): the loop now has TWO renders - `firstFile` for the one pass that is heard from the top (the two opening beats included), `file` for every later pass, entered after `openBars`. The two files are the same length, the same head and the same grid (19.0955 s decoded = 2 beats + 8 bars + 3-bar tail @145; first sound 0.0231 s), so one set of bpm / preBars / tailBars / trimStart / durationSec / openBars covers both.",
+        "hold": {
+          "id": "A1",
+          "letter": "A",
+          "alias": "A",
+          "bookend": true,
+          "role": "hold",
+          "note": "LOG-184 (the user 2026-09-12): the FIRST pass - the one that plays the two opening beats - is `firstFile`; every later pass (which already enters after openBars) is `file`.",
+          "file": "audio/ThemeA_A1_0.5_3_NoDrumLoop.mp3",
+          "firstFile": "audio/ThemeA_A1_0.5_3_NoDrumLoop_1st.mp3",
+          "bpmIn": 145,
+          "bpmOut": 145,
+          "preBars": 0,
+          "tailBars": 3,
+          "trimStart": 0.025057,
+          "durationSec": 19.034483,
+          "openBars": 0.5
+        },
+        "drums": {
+          "id": "A1drums",
+          "file": "audio/ThemeA_A1_0_0_DrumLoop.mp3",
+          "bpmIn": 145,
+          "bpmOut": 145,
+          "preBars": 0,
+          "tailBars": 0,
+          "trimStart": 0.025057,
+          "durationSec": 13.241379,
+          "offsetBars": 0.5
+        },
+        "release": {
+          "id": "A2",
+          "letter": "A",
+          "alias": "A",
+          "bookend": true,
+          "role": "release",
+          "file": "audio/ThemeA_A2_0_1_none.mp3",
+          "bpmIn": 145,
+          "bpmOut": 145,
+          "preBars": 0,
+          "tailBars": 1,
+          "trimStart": 0.025057,
+          "durationSec": 14.896552
+        }
+      },
+      "seamLayers": {
+        "TR": {
+          "id": "L:TR",
+          "file": "audio/ThemeA_B1Transition_1_1_Stem_Synthwav.mp3",
+          "bpmIn": 145,
+          "preBars": 1,
+          "tailBars": 1,
+          "notes": [
+            0.808,
+            1.222,
+            1.636
+          ],
+          "note": "transitionB (the LOG-184 stem, now a layer any pair may call): 6.6207 s = 4 bars @145, first two beats silent, three notes at file 0.808 / 1.222 / 1.636 s (its beats 2/3/4 - the third IS the seam), then a dotted-eighth delay tail. `notes` = the onsets a rule's `mute` counts from (「第三個音」= notes[2]). Same batch as ThemeA_B1_1_1_none.mp3: no trimStart."
+        },
+        "DRUM": {
+          "id": "L:DRUM",
+          "file": "audio/ThemeA_B1Transition_1_1_Stem_Drums.mp3",
+          "bpmIn": 145,
+          "preBars": 1,
+          "tailBars": 1,
+          "note": "transition drum: the synth stem's drum twin (same folder, same encode, Info tag present) - two hits at file 0.808 / 1.222 s = the last two beats before the seam."
+        },
+        "HIT1": {
+          "id": "L:HIT1",
+          "file": "audio/ThemeA_B1Transition_1beat_Drum.mp3",
+          "bpmIn": 145,
+          "preBars": 1,
+          "trimStart": 0.025057,
+          "note": "+1: the single extra hit ON the seam's first beat (user 2026-09-12 15:21, Downloads \"B1Transition_1beat drum.mp3\", 2.142 s). Starts where the drum does (seam - 1 bar @145) and carries its own silence; no Xing/Info tag, so the encoder delay is skipped like every untagged file on the site. With DRUM it makes the 3-beat figure."
+        },
+        "G1PRE": {
+          "id": "L:G1PRE",
+          "file": "audio/ThemeA_G1preentry.mp3",
+          "bpmIn": 172,
+          "preBars": 1,
+          "trimStart": 0.027234,
+          "onlyFrom": [
+            "E2",
+            "F1",
+            "F2",
+            "G1",
+            "G2",
+            "H1",
+            "H2",
+            "I_loop"
+          ],
+          "note": "G1's pre-entry bar as a transition (user 2026-09-12, Downloads \"G1preentry.mp3\", 1.463 s): starts where G1's own pick-up would, seam - 1 bar @172. trimStart = the measured lag against G1's own pre-entry (cross-correlation, 27.2 ms), not the 25 ms rule. Post zone only (from E2 on) - a rule naming it from anywhere else is ignored by the engine and refused by test_build."
+        }
+      },
+      "transitions_note": "LOG-185 / ADR-012 (user 2026-09-12 16:35 「已經調好了，可以應用了」): one rule per (from, to) pair, generated from the Transition Lab checklist plan_final_0912_1636.json by _tools_transition/apply_plan.py - edit the plan or the script, not this list. `from` = a section id, or A for the intro AND A2 (both hand over like A); `to` = a section id, I for the outro, or A for any hand-back to A (A1 later pass / A2 - the simple stage only). `layers` = seamLayers keys, every one starting preBars before the seam on the audio clock, armed at the decision with the next section and taken back with it. `noPre` = the incoming section enters ON the seam at its logical start (its own pick-up is skipped); `noTail` = the outgoing section stops at the seam (its tail does not ring across); with both gone the 15 ms crossfade applies, as if the data said 0. `mute` = {layer: [note ordinals]} silenced from that onset (layer.notes) to the next listed onset or the end. `random` = the variants the user listed for that seam, one drawn per seam (an empty layers list = nothing). `assumed` marks the readings where the tick and the note disagreed."
     }
   ],
   "song": {

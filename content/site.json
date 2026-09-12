@@ -1255,6 +1255,202 @@
     "tr_auto_title": {
       "zh": "本機音訊輸出延遲，自動補償；對齊鈕調的是剩下的殘差",
       "en": "This machine's audio output latency, compensated automatically; Align adjusts what remains"
+    },
+    "sec_simple": {
+      "zh": "簡易版",
+      "en": "Simple"
+    },
+    "sec_adv": {
+      "zh": "進階版",
+      "en": "Advanced"
+    },
+    "tut_ask_t": {
+      "zh": "你熟悉音樂的段落構造嗎？",
+      "en": "Do you know your way around the sections of a piece of music?"
+    },
+    "tut_ask_sub": {
+      "zh": "不太熟就選簡易版：按鈕少一點，舞台會邊播邊教你怎麼玩。熟的話直接進進階版。之後隨時可以在舞台上切換。",
+      "en": "Not really? Take the simple stage: fewer buttons, and it teaches you as it plays. Familiar? Go straight to the advanced stage. You can switch on the stage at any time."
+    },
+    "tut_ask_simple": {
+      "zh": "不太熟，帶我玩",
+      "en": "Not really - show me"
+    },
+    "tut_ask_adv": {
+      "zh": "熟，直接進階版",
+      "en": "I am - go advanced"
+    },
+    "tut_s_order": {
+      "zh": "箭頭就是播放順序：音樂會從左往右，一塊接一塊，一路播到 I 結束。",
+      "en": "The arrows are the play order: the music goes left to right, block after block, all the way to I."
+    },
+    "tut_s_hold": {
+      "zh": "你現在聽到的是開頭 A。它先在原地繞圈等我們，還沒正式出發，所以還沒有亮起來。",
+      "en": "What you hear now is the opening, A. It circles in place while we talk - it has not set off yet, so nothing is lit."
+    },
+    "tut_s_tick": {
+      "zh": "看進度線上這個白色小刻度：音樂走到那裡，就決定下一塊是誰。",
+      "en": "See this small white tick on the line: when the music reaches it, the next block is decided."
+    },
+    "tut_s_lock": {
+      "zh": "到刻度了：下一組鎖定，這段播完就無縫接上。",
+      "en": "At the tick: the next group is locked in, and joins the moment this one ends."
+    },
+    "tut_s_seam": {
+      "zh": "接上了。接縫落在小節線上，所以聽不到縫。",
+      "en": "Joined. The seam lands on a bar line, so there is nothing to hear."
+    },
+    "tut_s_pair": {
+      "zh": "每個字母其實都有一到兩段。自由度雖然很高，但為了段落的完整性，目前統一整段播放。",
+      "en": "Each letter is really one or two sections. There is a lot of freedom here, but so that no section is cut short, they all play through whole for now."
+    },
+    "tut_s_gate": {
+      "zh": "這裡是整首音樂循環的中繼點。由於 tempo 加速，進了 E 段落之後就不能再回到之前了。",
+      "en": "This is the relay point of the whole loop. The tempo speeds up here, so once you are into E there is no returning to what came before."
+    },
+    "tut_s_post": {
+      "zh": "那這邊一樣，隨你喜歡吧～",
+      "en": "Same again over here - arrange it however you like."
+    },
+    "tut_s_end": {
+      "zh": "這是整首的結局，那教學就到此為止。想要更自由的話，可以使用進階版。",
+      "en": "This is where the whole piece lands, and that is the end of the lesson. If you want more freedom than this, the advanced stage is there."
+    },
+    "tut_s_layer": {
+      "zh": "聽，鼓進來了。開頭這八小節會一直繞，直到我們準備好往下走。",
+      "en": "Hear the drums come in. These eight opening bars keep going round until we are ready to move on."
+    },
+    "sec_zone_intro": {
+      "zh": "開頭",
+      "en": "opening"
+    },
+    "sec_zone_end": {
+      "zh": "結尾",
+      "en": "ending"
+    },
+    "tut_s_swap_pre": {
+      "zh": "前段的三個字母和後段的三個字母都可以拖著換位置，但只能在各自的區裡換。像這樣把 D 和 H 拉到最前面，它們就會先播。",
+      "en": "The three letters of the first half and the three of the second can be dragged into a new order, but only within their own zone. Like this: pull D and H to the front and they play first."
+    },
+    "tut_s_moved": {
+      "zh": "換好了，音樂會照新的順序接下去。",
+      "en": "Done. The music follows the new order."
+    },
+    "tut_s_rule": {
+      "zh": "這個順序音樂接不起來，所以彈回去了。換個位置試試。",
+      "en": "The music cannot join in that order, so it bounced back. Try another spot."
+    },
+    "tut_end": {
+      "zh": "結束教學",
+      "en": "End the lesson"
+    },
+    "tut_again": {
+      "zh": "再看一次教學",
+      "en": "Watch the lesson again"
+    },
+    "tut_open1": {
+      "zh": "安～這裡是Ira。",
+      "en": "Hey - Ira speaking."
+    },
+    "tut_open2": {
+      "zh": "考慮到並不是所有人都可以馬上理解這個互動媒體的使用方法或是這種音樂的形式，\n所以特此做這個教學。",
+      "en": "Not everyone picks up how this interactive thing works, or what this kind of music even is, straight away -\nso here is a short lesson."
+    },
+    "tut_s1a": {
+      "zh": "正常來說，一首有結構的音樂都不會是從頭到尾維持同一個構造跟旋律。",
+      "en": "A piece of music with any structure to it does not keep the same shape and melody from beginning to end."
+    },
+    "tut_s1a2": {
+      "zh": "它是由好幾個段落組成的。",
+      "en": "It is built out of several sections."
+    },
+    "tut_s1b": {
+      "zh": "這首音樂也不例外，可以分割成包含不同內容的部分，由字母代表所有的段落。",
+      "en": "This piece is no exception: it can be cut into parts that each hold something different, and a letter stands for every one of them."
+    },
+    "tut_clip_song": {
+      "zh": "一首歌",
+      "en": "one song"
+    },
+    "tut_clip_parts": {
+      "zh": "前奏|主歌|導歌|副歌|主歌二|副歌|橋段|最終副歌|尾奏",
+      "en": "Intro|Verse|Pre-Chorus|Chorus|Verse 2|Chorus|Bridge|Chorus (Final)|Outro"
+    },
+    "tut_s2a": {
+      "zh": "這些塊分成五區：",
+      "en": "The blocks fall into five zones:"
+    },
+    "tut_s2z": {
+      "zh": "開頭 A|前段三塊|中繼 E|後段三塊|結尾 I",
+      "en": "the opening A|the first half: three blocks|the bridge E|the second half: three blocks|the ending I"
+    },
+    "tut_s2b": {
+      "zh": "開頭 A 和結尾 I 的順序是固定的，不能改。",
+      "en": "A at the start and I at the end are fixed: their places cannot change."
+    },
+    "tut_s2b2": {
+      "zh": "中間的 E 是整首構造發生重大變換的地方，也不能動。",
+      "en": "E in the middle is where the whole piece changes shape, so it cannot move either."
+    },
+    "tut_s2c": {
+      "zh": "所以真正可以自由改動的，只有前段的三塊和後段的三塊。",
+      "en": "So what you can really rearrange is the three blocks of the first half and the three of the second."
+    },
+    "tut_s9a": {
+      "zh": "現在快速示範一下接續是怎麼運作的：先從開頭 A 出發，我會讓它接到不同的段落。注意聽接縫的地方。",
+      "en": "Here is a quick demonstration of how the hand-overs work: we set off from the opening A, and I will send it into different sections. Listen for the joins."
+    },
+    "tut_s9b": {
+      "zh": "開頭要接到 B 了——聽，中間沒有斷。",
+      "en": "The opening is handing over to B - listen, there is no break."
+    },
+    "tut_s9c": {
+      "zh": "再回到開頭 A。",
+      "en": "And back to the opening, A."
+    },
+    "tut_s9d": {
+      "zh": "這次換接到 C。",
+      "en": "This time it goes to C instead."
+    },
+    "tut_s9e": {
+      "zh": "全程沒有一個接縫聽得出來——音樂可以這樣很神奇地無縫接軌。",
+      "en": "Not one of those joins was audible - music really can be stitched together this seamlessly."
+    },
+    "tut_s9f": {
+      "zh": "同時，C也是可以到B的。",
+      "en": "And C can go to B as well."
+    },
+    "tut_s_turn": {
+      "zh": "換你了：按 A 開始體驗。",
+      "en": "Your turn: press A to set off."
+    },
+    "tut_nudge1": {
+      "zh": "好啦差不多可以點了",
+      "en": "Alright, you can press it now"
+    },
+    "tut_nudge2": {
+      "zh": "快一點我要等你學完我才可以下班",
+      "en": "Hurry up - I cannot clock off until you have finished the lesson"
+    },
+    "tut_nudge3": {
+      "zh": "拜託啦，快點按下去吧!",
+      "en": "Please, just press it!"
+    },
+    "tut_nudge4": {
+      "zh": "「我…去睡會兒」 - 《讓子彈飛》",
+      "en": "\"I'm... going to take a nap.\" - Let the Bullets Fly"
+    },
+    "tut_s13a": {
+      "zh": "簡易版採用線性式：做了選擇就不要回頭了。",
+      "en": "The simple stage runs in a straight line: once a choice is made, there is no going back."
+    },
+    "tut_s13b": {
+      "zh": "把還沒播的字母拖成你要的順序，然後就照順序播到 I。",
+      "en": "Drag the letters that have not played yet into the order you want, and it plays down that line to I."
+    },
+    "tut_s_end2": {
+      "zh": "最後感謝 Shiou Hsu 願意花時間接下這個高難度的委託。目前委託版本只到 V3，還在努力趕進度中；至於有沒有辦法真的出到 V6，現階段就真的只能看看囉～～～",
+      "en": "And thank you to Shiou Hsu for taking the time to accept a commission this difficult. The commissioned version only reaches V3 so far and is still catching up; whether it ever really gets to V6 is, at this point, anybody's guess."
     }
   },
   "about_body": {
