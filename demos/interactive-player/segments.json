@@ -2133,7 +2133,9 @@
           "bpmOut": 172,
           "preBars": 0,
           "tailBars": 0,
-          "loop": true
+          "loop": true,
+          "leadSec": 0.02909,
+          "leadNote": "LOG-190 追記⑫: this file's kick is at sample 0; every other file's (F1/G1/H1/H2, and I End after its trim) is 1283 samples = 29.09 ms after the bar line - start it that much later"
         }
       ],
       "allow": {
@@ -2287,35 +2289,6 @@
         },
         {
           "from": "A",
-          "to": "C1",
-          "random": [
-            {
-              "layers": []
-            },
-            {
-              "layers": [
-                "TR"
-              ]
-            },
-            {
-              "layers": [
-                "TR",
-                "DRUM"
-              ]
-            },
-            {
-              "layers": [
-                "TR",
-                "DRUM"
-              ],
-              "noPre": true
-            }
-          ],
-          "note": "user: N/TR/TR+DRUM/TR+Drum 3/TR+DRUM 3+無pre (Random)",
-          "amended": "2026-09-12 「A到C1不+1」"
-        },
-        {
-          "from": "A",
           "to": "C2",
           "random": [
             {
@@ -2406,23 +2379,13 @@
         {
           "from": "B1",
           "to": "C1",
-          "random": [
-            {
-              "layers": [
-                "TR"
-              ],
-              "noTail": true
-            },
-            {
-              "layers": [
-                "TR"
-              ],
-              "noPre": true,
-              "noTail": true
-            }
-          ],
           "assumed": "noTail ticked but the note only randomises pre - tail off in both variants",
-          "note": "user: 無pre(random)"
+          "note": "user: 無pre(random)",
+          "layers": [
+            "TR"
+          ],
+          "noTail": true,
+          "amended": "2026-09-13 「B1-C B要pre」"
         },
         {
           "from": "B1",
@@ -2493,19 +2456,33 @@
         {
           "from": "C1",
           "to": "B1",
+          "note": "user: 無TAIL(RANDOM)",
+          "amended": "2026-09-13 「C1-B1 關pre-entry, 開TR 3」",
           "random": [
             {
-              "layers": [],
+              "layers": [
+                "TR"
+              ],
+              "mute": {
+                "TR": [
+                  3
+                ]
+              },
               "noPre": true
             },
             {
-              "layers": [],
+              "layers": [
+                "TR"
+              ],
               "noTail": true,
+              "mute": {
+                "TR": [
+                  3
+                ]
+              },
               "noPre": true
             }
-          ],
-          "note": "user: 無TAIL(RANDOM)",
-          "amended": "2026-09-12 「C-B無pre」"
+          ]
         },
         {
           "from": "C1",

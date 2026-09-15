@@ -2499,7 +2499,7 @@
     var LOOKAHEAD = 0.25, TICK = 25;
     var FREEJUMP = /[?&]debug/.test(location.search);   /* 追記㉜ ?debug: choose()/key() may queue ANY section, allow list or not (A straight to I) - reviewing the outro meant walking the whole legal path every time. The pair rule steps aside for it too; the automatic flow (decide's own picks) still obeys every rule, so the show itself is unchanged */
     var CFG = null, TH = null, SEG = [], byId = {}, GROUPS = [], byGroup = {}, INTRO = null, OUTRO = null;
-    var ctx = null, master = null, analyser = null, mgain = null, buffers = {};
+    var ctx = null, master = null, analyser = null, mgain = null, duckG = null, duckLvl = 1, buffers = {};   /* duckG (LOG-190 追記⑯): the lesson's hand on the volume - after the analyser (the bars keep their size), before the mute */
     var running = false, timer = null, paused = false, muted = false, loadProg = null, dead = false;
     var stageLead = 0, stageT0 = null, startTimer = 0;   /* four 4/4 beats at the theme's tempo before the first entry — load time, like the ADE stage's count-in */
     /* ONE pending slot (LOG-123). It used to be two — `queued` (nothing locked yet) and `later` (a pick made after the
@@ -2707,7 +2707,7 @@
       src.buffer = buffers[bufKey(seg)]; src.connect(g); g.connect(master);
       var pre = r.noPre ? 0 : preSec(seg), post = (cur && !r.noTail) ? postSec(cur.seg) : 0, xf = (cur && pre <= 0 && !post) ? CFG.crossfadeMs / 1000 : 0;   /* tiny equal-power seam only when nothing overlaps - a pair rule that removes the overlap gets the crossfade, exactly as if the data said 0 */
       if (xf > 0) { g.gain.setValueAtTime(0, entry); g.gain.linearRampToValueAtTime(1, entry + xf); }
-      src.start(entry - pre, (seg.trimStart || 0) + (seg.skipBars ? seg.skipBars * barSec(seg.bpmIn || 120) : 0) + (r.noPre ? preSec(seg) : 0));   /* trimStart skips an mp3 encoder delay when the file carries no gapless tag; skipBars (追記⑥) enters a later pass of the opening loop after its two opening beats; noPre (LOG-185) enters ON the seam at the logical start - the pick-up bar of the file is simply never read */
+      src.start(entry - pre + (seg.leadSec || 0), (seg.trimStart || 0) + (seg.skipBars ? seg.skipBars * barSec(seg.bpmIn || 120) : 0) + (r.noPre ? preSec(seg) : 0));   /* ★ LOG-190 追記⑫-② leadSec (the user: 對得很準，就按照你這樣做): a file whose kicks sit EARLIER on its own grid than every other file's is started that much later - I_loop's kick is at sample 0, everyone else's 29.09 ms after the bar line (cross-correlated), and a trim cannot go negative. The grid (start / end / decisions) does not move; only the sound does. trimStart skips an mp3 encoder delay when the file carries no gapless tag; skipBars (追記⑥) enters a later pass of the opening loop after its two opening beats; noPre (LOG-185) enters ON the seam at the logical start - the pick-up bar of the file is simply never read */
       if (isHold(seg) && drumOn) drums(entry, 0, seg.skipBars ? 0 : null);   /* LOG-182: layer 2 rides every pass of the hold once it is on; nothing of it leaks past the pass */
       return { seg: seg, start: entry, end: entry + logicalSec(seg), audioStart: entry - pre, src: src, gain: g, rule: rule || null };
     }
@@ -2886,7 +2886,7 @@
     }
     function ensureCtx() {   /* LOG-130: the context is built (and resumed) HERE, synchronously inside the tap that opened the stage - see the call at the foot of makeSecPlayer */
       if (ctx || dead) return;
-      ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = 0.9; analyser = ctx.createAnalyser(); analyser.fftSize = 2048; analyser.minDecibels = -96; analyser.maxDecibels = 6; analyser.smoothingTimeConstant = 0.55; master.connect(analyser); mgain = ctx.createGain(); mgain.gain.value = muted ? 0.0001 : 1; analyser.connect(mgain); mgain.connect(ctx.destination);   /* mgain after the analyser: the bars keep moving while muted — and a mute requested before the context existed is honoured here */
+      ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = 0.9; analyser = ctx.createAnalyser(); analyser.fftSize = 2048; analyser.minDecibels = -96; analyser.maxDecibels = 6; analyser.smoothingTimeConstant = 0.55; master.connect(analyser); mgain = ctx.createGain(); mgain.gain.value = muted ? 0.0001 : 1; duckG = ctx.createGain(); duckG.gain.value = duckLvl; analyser.connect(duckG); duckG.connect(mgain); mgain.connect(ctx.destination);   /* mgain after the analyser: the bars keep moving while muted — and a mute requested before the context existed is honoured here */
       if (ctx.state === 'suspended') { try { var rp = ctx.resume(); if (rp && rp.then) rp.then(null, function () {}); } catch (e) {} }
     }
     function start() {
@@ -3048,15 +3048,22 @@
           var col = document.createElement('div'); col.className = 'col' + (opts.reveal ? ' hid' : ''); col.style.setProperty('--c', color); col.style.setProperty('--i', n++);   /* 追記⑦ (the user: 按鈕不要馬上出現，隨著教學一步一步出現): with a lesson to come, every tile, label and | starts hidden and the lesson reveals them one by one */
           var t = document.createElement('div'); t.className = 'seg tile' + (z.zone ? '' : ' fixed'); t.setAttribute('data-g', g); t.style.setProperty('--c', color);
           var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = g; t.appendChild(nm);
-          col.appendChild(t); cols.appendChild(col); segBtns[g] = t; colEls[g] = col;
+          col.appendChild(t);
+          if (g !== 'I') { var sh = document.createElement('i'); sh.className = 'shade'; sh.setAttribute('aria-hidden', 'true'); sh.innerHTML = '<span class="nm">' + g + '<sub>2</sub></span>'; col.appendChild(sh); col.classList.add('twin'); }   /* 追記⑯-② (the user: A, E 都有 2，為什麼沒有顯示): A (A1/A2) and E (E1/E2) have a second version too - only I stands alone; .twin marks the tiles that dim under .shade */   /* LOG-190 追記⑭ (the user: 每段都有兩個的那個地方在解釋時，在懸浮的按鈕後面多一排按鈕，概念類似陰影): the second version of each movable letter, a dimmer twin sitting BEHIND its tile (z 0 under the tile's z 1, in the same .col so it bobs with it), shown only while the surface wears .shade; the bookends have one version and no twin. Appended AFTER the tile: finGeo() reads .col's firstChild */
+          cols.appendChild(col); segBtns[g] = t; colEls[g] = col;
         });
+        if (z.zone) { var hn = document.createElement('span'); hn.className = 'hnt'; hn.setAttribute('aria-hidden', 'true'); hn.innerHTML = '<i>‹</i><i>›</i>'; cols.appendChild(hn); }   /* LOG-190 追記⑥ (the user: 改成三個共用一套，每個按鈕一個太多太亂): ONE ‹ › per movable zone, centred under its three tiles, shown only while the surface wears .hint */
         segsEl.appendChild(band);
       });
       segsEl.classList.add('simple'); segsEl.classList.toggle('locked', locked); segsEl.classList.toggle('arrows', !opts.reveal);   /* the arrows between the tiles (追記⑦: 出現箭頭表示播放順序) are part of the line; the lesson switches them on when it explains the order */
     }
+    function conceal(what) {   /* LOG-189: the lesson's hand the other way - 'seps' (the | lines) or 'zones' (the | lines and the labels) go back behind the curtain */
+      segsEl.querySelectorAll(what === 'seps' ? '.zsep' : '.zlab,.zsep').forEach(function (e) { e.classList.add('hid'); });
+    }
     function reveal(what, g) {   /* 追記⑦: the lesson's hand on the curtain - 'tile' + letter, 'zones' (labels and the |), 'arrows', or everything */
       if (what === 'tile') { var c = colEls[g]; if (c) c.classList.remove('hid'); return; }
       if (what === 'zones') { segsEl.querySelectorAll('.zlab.hid,.zsep.hid').forEach(function (e) { e.classList.remove('hid'); }); return; }
+      if (what === 'seps') { segsEl.querySelectorAll('.zsep.hid').forEach(function (e) { e.classList.remove('hid'); }); return; }   /* LOG-188: the | lines alone - the labels wait for step 2 */
       if (what === 'arrows') { segsEl.classList.add('arrows'); return; }
       segsEl.querySelectorAll('.hid').forEach(function (e) { e.classList.remove('hid'); }); segsEl.classList.add('arrows');
     }
@@ -3121,18 +3128,26 @@
        a blend of two aligned mixes, not the engine's 15 ms click-guard; the length is the one knob, to be tuned by ear). A press
        in the SECOND HALF lets the pass play out and A2 follows it at the seam, as before (release() below). Only the lesson's
        press asks for this - release(true); free simple play and 結束教學 keep the seam path. */
-    var RELEASE_XF_BEATS = 2;
+    var RELEASE_XF_BEATS = 5;   /* LOG-190 追記⑥ (the user: crossfading 太快了，要逐漸轉換變大聲的感覺): 2 -> 6 beats; 追記⑦: 5 beats (2.07 s at 145) so the lesson's cut, launched one crossfade ahead of the demonstration, begins at ≈20 % of the pass as asked. 追記⑨: this is now the VISITOR'S PRESS only - the lesson's demonstration passes its own XF_DEMO_BEATS (10) to releaseNow/xfSec; 7 beats is the bound that never crosses the next decision point (L/2 - 3.56 s) from a press at 49.9 % */
     function xfCurves(from) {   /* equal-power: the outgoing gain rides a cosine down from `from`, the incoming a sine up to 1 - the sum of squares stays 1, so the blend never dips */
-      var N = 65, dn = new Float32Array(N), up = new Float32Array(N);
-      for (var i = 0; i < N; i++) { var k = i / (N - 1) * Math.PI / 2; dn[i] = from * Math.cos(k); up[i] = Math.sin(k); }
+      var N = 129, dn = new Float32Array(N), up = new Float32Array(N);   /* 追記⑥: 129 points - 2.48 s at 65 would step every 38 ms */
+      for (var i = 0; i < N; i++) { var k = i / (N - 1) * Math.PI / 2; dn[i] = from * Math.cos(k); up[i] = Math.pow(Math.sin(k), 1.8); }   /* 追記⑥ (逐漸變大聲): the incoming side SWELLS - sin^1.8 holds it back through the first half and brings it up late; the outgoing still rides the cosine, so the sum of squares dips at most -0.7 dB at the middle, not the -3 dB a linear pair would */
       return { dn: dn, up: up };
     }
-    function releaseMid() {
-      if (!(running && ctx && cur && RELEASE && ready(RELEASE) && isHold(cur.seg)) || paused) return false;
-      var now = ctx.currentTime, bar = barSec(cur.seg.bpmIn || 120), L = logicalSec(RELEASE);
+    /* ★ LOG-190 追記④ (the user: A-B 那邊提前進入請做在進度 50% 前，跟「換你試試看」那邊的切換邏輯一樣): THE ONE 50 % RULE. Both callers -
+       the visitor's press (release(true)) and the lesson's demonstration (releaseNow) - ask this same function whether a cut-in is
+       allowed; there is no bypass. It returns the sounding pass's grid start (bar 1) when the cut may be made, else null. */
+    function midHalf() {
+      if (!(running && ctx && cur && RELEASE && ready(RELEASE) && isHold(cur.seg)) || paused) return null;
+      var bar = barSec(cur.seg.bpmIn || 120), L = logicalSec(RELEASE);
       var loopStart = cur.start + (cur.seg.skipBars ? 0 : (HOLD.openBars || 0) * bar);   /* the first pass carries the two opening beats before its bar 1; every later pass starts ON bar 1 */
-      if ((now - loopStart) / L >= 0.5) return false;   /* second half: the pass plays out, A2 follows at the seam */
-      var at = Math.max(now + 0.05, loopStart), pos = at - loopStart, xf = RELEASE_XF_BEATS * (60 / (RELEASE.bpmIn || 120));   /* a press during the opening beats waits for bar 1 - A2 then enters at ITS bar 1 */
+      if ((ctx.currentTime - loopStart) / L >= 0.5) return null;   /* second half: the pass plays out, A2 follows it at the seam */
+      return loopStart;
+    }
+    function releaseMid(beats) {   /* LOG-190 追記⑨ (the user: 提早並延長 crossfading 讓他聽起來不要像是瞬間轉換): the LENGTH is the caller's - the lesson's demonstration asks for a longer blend (XF_DEMO_BEATS) than the visitor's press (RELEASE_XF_BEATS); everything else - the 50 % rule, the grid, the curve - is the same for both */
+      var loopStart = midHalf(); if (loopStart == null) return false;
+      var now = ctx.currentTime, L = logicalSec(RELEASE);
+      var at = Math.max(now + 0.05, loopStart), pos = at - loopStart, xf = (beats || RELEASE_XF_BEATS) * (60 / (RELEASE.bpmIn || 120));   /* a press during the opening beats waits for bar 1 - A2 then enters at ITS bar 1 */
       if (nxt) {   /* another turn already scheduled: taken back exactly as retake() does - it has not sounded, and the seam it was armed for is not going to happen */
         var nat = nxt.start; try { nxt.src.stop(0); } catch (e) {}
         dropStem();
@@ -3153,7 +3168,7 @@
       primeSoon(); render();
       return true;
     }
-    function reorder(zone, order, silent) {   /* the new order is taken only if it is the same letters, keeps the ones already played / sounding / locked where they are, and every seam is legal */
+    function reorder(zone, order, silent, moved) {   /* the new order is taken only if it is the same letters, keeps the ones already played / sounding / locked where they are, and every seam is legal */
       var old = lineOrder[zone]; if (!old || old.length !== order.length) return false;
       if (old.join() === order.join()) return true;
       for (var i = 0; i < old.length; i++) { if (!movableKey(old[i]) && order[i] !== old[i]) return false; }
@@ -3161,7 +3176,7 @@
       if (!lineOk(zone, order)) return false;
       lineOrder[zone] = order.slice();
       if (nxt && !nxtForced && !isHold(nxt.seg) && cur && lineNext(cur.seg) !== nxt.seg) retake();   /* 追記③: the line no longer leads to the next that was locked - it has not sounded, so it is not too late */
-      if (!silent) emit('reorder', { zone: zone, order: order.slice() }); return true;
+      if (!silent) emit('reorder', { zone: zone, order: order.slice(), moved: moved || null }); return true;   /* LOG-190 追記㉒: moved = the tile the visitor dragged (the lesson points its bubble at it) */
     }
     function applyOrder(zone, animate) {   /* the DOM follows lineOrder; animate = FLIP, the tiles glide to their new places */
       var cols = segsEl.querySelector('.zone[data-zone="' + zone + '"] .zcols'); if (!cols) return;
@@ -3207,7 +3222,7 @@
       if (!drag || (e && e.pointerId !== drag.id)) return; var d = drag; drag = null;
       d.tile.classList.remove('drag'); d.tile.classList.remove('bad'); segsEl.classList.remove('dragging');
       var o = d.order.slice(); o.splice(d.i0, 1); o.splice(d.cur, 0, d.g);
-      var taken = d.cur !== d.i0 && reorder(d.zone, o, false);
+      var taken = d.cur !== d.i0 && reorder(d.zone, o, false, d.g);
       if (taken) {   /* the tiles already stand where they will land: swap the DOM under them and drop the transforms in the same frame */
         d.order.forEach(function (k) { segBtns[k].style.transition = 'none'; segBtns[k].style.transform = ''; });
         applyOrder(d.zone, false); void segsEl.offsetWidth; d.order.forEach(function (k) { segBtns[k].style.transition = ''; }); render();
@@ -3451,6 +3466,7 @@
       outroId: function () { return OUTRO ? OUTRO.id : null; },
       surface: function () { return segsEl; },   /* the whole line - the lesson's first bubble hangs under it so it covers none of what it points at */
       played: function () { var o = {}; for (var k in played) o[k] = true; return o; },
+      releaseNow: function (beats) { return !!releaseMid(beats); },   /* LOG-190 追記②＋追記④: the demonstration's cut to A2 - the same midHalf() 50 % rule and the same curve as the visitor's press; the one difference is that `holding` stays (the A1 the demonstration returns to must wait for the press). 追記⑨: and the blend may be given its own length in beats */
       release: function (mid) {   /* LOG-182 追記③: the next pass of the opening loop becomes A2 */   /* LOG-186: mid = the lesson's press - inside the first half of a pass A2 enters NOW, on the grid (releaseMid) */
         holding = false;
         if (mid && releaseMid()) return;
@@ -3467,7 +3483,15 @@
       holding: function () { return !!HOLD && holding; },
       line: lineOf, order: function (z) { return (lineOrder[z] || []).slice(); }, move: moveTile, movable: movableKey,   /* 追記⑤ */
       layer: drumLayer,
-      reveal: reveal   /* 追記⑦: the lesson draws the curtain piece by piece */
+      reveal: reveal,   /* 追記⑦: the lesson draws the curtain piece by piece */
+      conceal: conceal,   /* LOG-189: ...and draws it back over the | lines and the zone names */
+      cover: function (g) { var c = colEls[g]; if (c) c.classList.add('hid'); },   /* LOG-188: ...and draws it back over one tile (the letters return into the region) */
+      lit: function (g, on) { var t = segBtns[g]; if (t) t.classList.toggle('lit', !!on); },   /* LOG-190 追記⑦ (the user: 解說 A/I 跟 E 時，A 跟 I 要先亮，E 出現時 E 亮自己的顏色然後 A/I 變不亮): the lesson lights a tile the way the sounding one is lit (.lit shares .playing's look, in the tile's own --c) without playing it */
+      xfSec: function (beats) { return (beats || RELEASE_XF_BEATS) * (60 / (RELEASE && RELEASE.bpmIn || 120)); },   /* LOG-190 追記⑦: how long the mid-pass crossfade takes - the lesson starts it this far ahead of the demonstration so A2 is fully in as the graph appears. 追記⑨: with the same optional beats as releaseNow, so the script asks for the length it is about to use */
+      hint: function (on) { segsEl.classList.toggle('hint', !!on); },   /* LOG-190: the ‹ › under every movable tile - the lesson's "you can drag these" cue */
+      shade: function (on) { segsEl.classList.toggle('shade', !!on); },   /* LOG-190 追記⑭: the X₂ twins slide out from behind the six movable tiles while the lesson says every letter has two sections, and back in when it is done */
+      duck: function (lvl, tc) { duckLvl = lvl == null ? 1 : lvl; if (duckG && ctx) { duckG.gain.cancelScheduledValues(ctx.currentTime); duckG.gain.setTargetAtTime(Math.max(0.0001, duckLvl), ctx.currentTime, tc || 0.5); } },   /* LOG-190 追記⑯ (the user: 教學模式開始時音樂音量壓小，鼓進來時才轉大): the lesson holds the opening loop back as background and lets it up with the drums - a level and a time constant, remembered for a context not yet built */
+      duckLvl: function () { return duckG ? duckG.gain.value : duckLvl; }
     };
   }
   /* ---- ?debug: A REFERENCE GRID, purely so a change can be described by naming a cell instead of by pointing at a
@@ -6071,7 +6095,7 @@
         { mode: m, reveal: wantTut, on: function (t, i) { if (tut && runTok === tok) tut.on(t, i); } });   /* reveal (追記⑦): where a lesson will run, the line starts hidden and the lesson uncovers it - free simple play shows the whole line at once */
       if (/[?&]debug/.test(location.search)) window.__sec = eng;
       hookTrack();
-      if (wantTut) { try { localStorage.setItem('tut_seen', '1'); } catch (e) {} tut = makeTut(eng, function () { if (runTok === tok) headBtns(); }); }
+      if (wantTut) { try { localStorage.setItem('tut_seen', '1'); } catch (e) {} HOST.classList.add('tut-on'); tut = makeTut(eng, function () { if (runTok === tok) headBtns(); }); }   /* LOG-188 (the user: 教學途中隱藏最近更新／便條／dock): os.css hides the three on .tut-on */
       else if (m === 'simple') eng.release();   /* 追記③: the hold on the opening is the LESSON's device (it waits for the visitor's press). Free simple play - a returning visitor, or 結束教學 - has nobody to press A, so the opening goes straight on to A2 and down the line, the way 結束教學 already lets it go */
       headBtns();
     }
@@ -6133,12 +6157,13 @@
        (5) THE DEMONSTRATION IS REAL AUDIO. Step 9 plays A1 -> B1 -> A2 -> C1 -> C2 -> A1 through the engine on a
            tutorial-only schedule (E.force), then hands the stage over and waits - indefinitely - for the visitor to press A.
        Nothing here names an easter egg or the ending's forms (不劇透). */
-    var TUT_REVEAL_STEP = 0.16, TUT_REVEAL_SPAN = 1.44, TUT_SUB_HOLD = 3.4, TUT_SUB_FADE = 1.7, TUT_BUB_RESERVE = 110;   /* RESERVE: 18 px of stalk + three lines of .tut-bub - the deepest a bubble hanging under the order row can reach, so an aside placed below it never has to be measured against a bubble that has not appeared yet */   /* the nine tiles come out one per STEP; the bubble and the light travel A -> I over SPAN, one even glide */
+    var TUT_REVEAL_STEP = 0.16, TUT_REVEAL_SPAN = 1.44, TUT_SUB_HOLD = 3.4, TUT_SUB_FADE = 1.7, TUT_BUB_RESERVE = 110, TUT_DUCK = 0.8, TUT_DUCK_AT = 0.83, TUT_DUCK_TC = 1.6;   /* TUT_DUCK (LOG-190 追記⑯): the opening loop plays at this level under the concept lesson, as background, until the drums come in at L1 + 37.8. 追記⑲ (the user: 一開始要從100%走intro，然後才慢慢降低，大概80%左右): the INTRO is the user's word for A's two opening beats (0.5 bar at 145 = 0.828 s from the downbeat, t0 - the head of A1's firstFile, preBars 0) - full level through them, then let down on a slow curve (TUT_DUCK_TC - ~95 % of the way in 3 x TC) to 0.8 (~-2 dB) */   /* RESERVE: 18 px of stalk + three lines of .tut-bub - the deepest a bubble hanging under the order row can reach, so an aside placed below it never has to be measured against a bubble that has not appeared yet */   /* the nine tiles come out one per STEP; the bubble and the light travel A -> I over SPAN, one even glide */
     function makeTut(E, onDone) {
       var alive = true, bub = null, tx = null, curKey = null, lockedPhase = true, first = null, phase = 'wait',
           t0 = null, raf = 0, q = [], bubJob = null, subs = [], frozen = false, done = {},
-          clipEl = null, graphEl = null, irisEl = null, iris = null, frames = [], bubTgt = null, bubSrc = null, bubSide = 'below', aPress = null, onRes = null;
+          clipEl = null, graphEl = null, irisEl = null, iris = null, frames = [], bubTgt = null, bubSrc = null, bubSide = 'below', bubAlign = 'left', bubGap = 12, bubFree = false, aPress = null, onRes = null;
       var LINE = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
+      try { E.duck(1, 0.02); } catch (e) {}   /* LOG-190 追記⑲: the opening sounds at full level - set before the first note (the context exists, built in the tap that opened the stage), and script() lets it down at TUT_DUCK_AT */
 
       /* ---- the clock: seconds on the AUDIO clock, counted from the music's own downbeat */
       function T() { return t0 == null ? 0 : E.now() - t0; }
@@ -6250,15 +6275,19 @@
            delay ladder as the arrows (os.css tuttile) so one wave runs tile, arrow, tile, arrow down the row */
         for (var k = 0; k < 3; k++) { (function (k) { soon(k * 1.45, function () { s.classList.add('awave'); }); soon(k * 1.45 + 1.3, function () { s.classList.remove('awave'); }); })(k); }   /* 'awave', not 'wave': the shell's own .wave rule stretches whatever wears it (追記③ bug: the | lines ran to the foot of the panel) */
       }
+      function arrowsSweep() {   /* LOG-189 追記⑤ (the user: 交換停止後箭頭從左到右連續亮一次): the arrows light ONCE, left to right, out of nothing and back into it - .asweep is its own animation (os.css tutsweep); .arrows and .awave (step 3's) are not touched */
+        var s; try { s = E.surface(); } catch (e) { return; } if (!s) return;
+        s.classList.add('asweep'); soon(1.7, function () { s.classList.remove('asweep'); });
+      }
 
       /* ---- the bubble */
       function placeBox(r) {
         if (!bub) return;
         var W = HOST.clientWidth, bw = bub.offsetWidth || 260, bh = bub.offsetHeight || 60, cx = (r.left + r.right) / 2;
-        var left = Math.max(10, Math.min(Math.max(10, W - bw - 10), cx - 28));
+        var left = bubAlign === 'right' ? cx + 28 - bw : cx - 28; if (!bubFree) left = Math.max(10, Math.min(Math.max(10, W - bw - 10), left));   /* 追記㉙ round 5: bubFree = a line riding off the stage with its face is not held back */   /* LOG-190 追記㉔: align 'right' opens the bubble to the LEFT of its anchor (the arrow at its right end) - A's lines, on the face at A's lower left, must not reach C */
         bub.style.left = left + 'px'; bub.style.setProperty('--ax', Math.max(12, Math.min(bw - 24, cx - left - 7)) + 'px');
         bub.classList.toggle('below', bubSide !== 'above'); bub.classList.toggle('above', bubSide === 'above');
-        bub.style.top = clampY(bubSide === 'above' ? r.top - 12 - bh : r.bottom + 18, bh) + 'px';   /* 追記①: never over the menubar, never off the bottom */
+        bub.style.top = clampY(bubSide === 'above' ? r.top - bubGap - bh : r.bottom + 18, bh) + 'px';   /* 追記㉕: o.gap lifts a bubble further off its anchor (B's, off A's top) */   /* 追記①: never over the menubar, never off the bottom */
       }
       function show(key, target, o) {
         o = o || {}; if (!alive || !head || (done[key] && !o.again)) return; done[key] = true; curKey = key;
@@ -6280,14 +6309,15 @@
         bub.style.width = ''; tx.textContent = text;
         var cs = getComputedStyle(bub), pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
         bub.style.width = (bub.offsetWidth + (cs.boxSizing === 'border-box' ? pad : 0)) + 'px';   /* max-width is a border-box cap, so a genuinely long line still wraps - as it should */
-        bubSide = o.side === 'above' ? 'above' : 'below';
+        bubSide = o.side === 'above' ? 'above' : 'below'; bubAlign = o.align === 'right' ? 'right' : 'left'; bubGap = o.gap || 12; bubFree = false;
         bubSrc = target; bubTgt = typeof target === 'function' ? target : rectOf(target); placeBox(bubTgt ? rectOf(bubTgt) : rowBox());   /* 追記②: the bubble simply appears at its new anchor and fades in (the user: 取消龜速位移，快速淡入淡出) - a live anchor (the tick) is followed, an element's box is taken once so the bubble does not bob with the tile */
         if (o.instant) { tx.textContent = text; tx.classList.remove('cur'); bubJob = null; }
         else {
           tx.textContent = ''; tx.classList.add('cur');
-          bubJob = { t0: T(), per: rate(text.length, 3.0, 0.032), text: text, n: -1, marks: marks, pause: o.pause == null ? 0.55 : o.pause, pauseTo: null, hold: 0, lost: 0 };
+          bubJob = { t0: T(), per: o.dur ? o.dur / Math.max(1, text.length) : rate(text.length, 3.0, 0.032), text: text,   /* LOG-190 追記⑪: o.dur = the whole line typed over exactly that long (sayBySeam) */ n: -1, marks: marks, pause: o.pause == null ? 0.55 : o.pause, pauseTo: null, hold: 0, lost: 0 };
         }
         if (o.marks && o.marks[0]) { try { o.marks[0](); } catch (e) {} }
+        bub.classList.remove('qout');   /* LOG-190 追記⑳: a line that went out on a hand-over comes back at the ordinary pace */
         if (o.slide && bub.classList.contains('in')) { /* 追記④: already up - it slides, it does not blink */ }
         else { bub.classList.remove('in'); requestAnimationFrame(function () { if (bub && curKey === key) bub.classList.add('in'); }); }
         if (o.hold) soon(o.hold, function () { if (curKey === key) hide(); });
@@ -6295,7 +6325,7 @@
       function hide() { if (bub) bub.classList.remove('in'); curKey = null; bubJob = null; }
 
       /* ---- ★ the author's own lines, in the wish pool's hand (well.say), centred just above where the order row lives */
-      function subLen(key) { var s = txt(key); return 0.25 + rate(s.length, 2.6, 0.055) * s.length + TUT_SUB_HOLD + TUT_SUB_FADE; }
+      function subLen(key) { var s = txt(key).replace(/\|/g, ''); return 0.25 + rate(s.length, 2.6, 0.055) * s.length + TUT_SUB_HOLD + TUT_SUB_FADE; }   /* LOG-190 追記⑬: a '|' is a mark, never a character */
       /* ★ 追記①: the author's line lives in the BAND BETWEEN THE ROW AND THE LINE - the empty middle of the stage, near the
          buttons it is talking about. 0.6 of the way down that band, then pushed clear of whatever a bubble hanging under the row
          could reach (BUB_RESERVE), then held off the spectrum line itself. It only ever moves DOWN out of trouble, never back up
@@ -6311,22 +6341,23 @@
       }
       function subtitle(key, o) {
         o = o || {};
-        var text = txt(key); if (!text || !well || !well.say) return 0;
+        var raw = txt(key); if (!raw || !well || !well.say) return 0;
+        /* LOG-190 追記⑬ (the closing show): an author's line written with '|' fires o.marks[k] the moment the typer reaches break k, the
+           way show() does - 「只到 V3|，」 splits the row into three as V3 lands. The bar never reaches the screen. */
+        var pieces = raw.split('|'), text = pieces.join(''), marks = [], acc = 0;
+        for (var pi = 0; pi < pieces.length - 1; pi++) { acc += pieces[pi].length; marks.push({ n: acc, fn: o.marks && o.marks[pi + 1] }); }
         hide();   /* the author speaking is a moment of its own: no bubble is left hanging in the band the line is about to take */
+        subs.forEach(function (s) { if (!s.out) { s.out = 1; s.h.out(); } });   /* 追記⑥: and the line before it leaves as this one arrives - two never stand in the band together */
         var res = o.greet ? 8 : null;   /* 追記④ (the user: 開場字幕還要再高一點點，第二行仍碰到音量條): 36 -> 8 px under the row's box, the whole line 28 px higher */
         /* 追記③ (the user: 第二句莫名截斷換行): the box is wide enough for the longest authored line, so the only breaks are the author's own (\n) */
+        /* LOG-190 追記⑬: o.sky = the band ABOVE the row - it only exists once the row has slid down (.tut-down) for the closing show, and it is
+           the one place the six version rows growing under the row can never reach */
         var r = rowBox(), h = well.say(text, { cx: (r.left + r.right) / 2, width: Math.min(980, HOST.clientWidth - 120), depth: 0,
-                                               place: function (w0, h0) { return { top: asideTop(w0, h0, res) }; } });
+                                               place: function (w0, h0) { return { top: o.sky ? Math.max(safeTop() + 6, (fin.el && fin.spread ? fin.top : rowBox().top) - h0 - 16) : asideTop(w0, h0, res) }; } });   /* 追記⑯ (the user: 那邊字幕太高了，低一點靠近按鈕一點): the sky line sits 16 px over the row's box (the slid-down row = row V1 of the overlay), never above the safe top; 追記⑱-②: once the twins are laid out the overlay has climbed - 16 px over ITS top */
         if (!h) return 0;
-        subs.push({ h: h, t0: T(), per: rate(text.length, 2.6, 0.055), len: text.length, n: -1, out: 0, res: res });
+        subs.push({ h: h, t0: T(), per: rate(text.length, 2.6, 0.055), len: text.length, n: -1, out: 0, res: res, marks: marks, sky: !!o.sky });
+        if (o.marks && o.marks[0]) { try { o.marks[0](); } catch (e) {} }
         return subLen(key);
-      }
-      function relay(keys, gap) {   /* step 16: several sentences, one after another, in the same spot */
-        var d = 0;
-        keys.forEach(function (k, i) {
-          if (!i) { d = subtitle(k); return; }
-          var w = d + (gap || 0.6); (function (kk) { soon(w, function () { subtitle(kk); }); })(k); d = w + subLen(k);
-        });
       }
 
       /* ---- ★ step 1's concept clip: one song drawn as ONE bar, which splits into the sections a song is usually made of.
@@ -6377,6 +6408,47 @@
       function clipDrop(k) { if (!clipEl) return; var b = clipEl.querySelectorAll('.bar i')[k]; if (b) b.classList.add('gone'); }   /* 追記②: block k goes as letter k comes, same spot, same moment */
       function clipSplit() { if (clipEl) clipEl.classList.add('split'); }
       function clipOut() { if (!clipEl) return; var c = clipEl; clipEl = null; c.classList.add('out'); setTimeout(function () { c.remove(); }, 500); }
+      /* LOG-188 (the user: 按鈕類似泡泡吸在一起變回一開始的音訊預覽顯示條): the reveal run backwards. Each letter glides to the centre of the
+         block it replaced (the tile's own .5 s transform transition carries it), the blocks come back and the split is undone, so the
+         region closes into ONE bar again; a third of a second in the tiles are covered - .col.hid only fades them here, the inline
+         translate outranks its scale(.8) - and once they are gone the translate is cleared, so the second reveal finds every letter
+         back in its own place. */
+      function clipMerge() {
+        if (!clipEl) return;
+        var blocks = clipEl.querySelectorAll('.bar i');
+        /* 追記① (the user: 字母按鈕變成音訊條時也要彈入的 transition 特效): .bounce swaps the tiles' transform curve for an overshooting one -
+           the letters spring past the block centre and settle, and the bar itself pops (.whole) as it closes; the class stays on through
+           the re-cut, so the letters spring back in the same way, and comes off before step 2 */
+        try { E.surface().classList.add('bounce'); } catch (e) {}
+        clipEl.classList.remove('cut'); clipEl.classList.add('whole');
+        LINE.forEach(function (g, k) {
+          var t = E.btn(g), b = blocks[k]; if (!t || !b) return;
+          var tr = t.getBoundingClientRect(), br = b.getBoundingClientRect();
+          t.style.transform = 'translateX(' + ((br.left + br.width / 2) - (tr.left + tr.width / 2)).toFixed(2) + 'px)';
+        });
+        clipEl.classList.remove('split');
+        for (var k = 0; k < blocks.length; k++) blocks[k].classList.remove('gone');
+        soon(0.35, function () { LINE.forEach(function (g) { E.cover(g); }); });
+        soon(1.0, function () { LINE.forEach(function (g) { var t = E.btn(g); if (t) t.style.transform = ''; }); });
+      }
+      /* 追記① (the user: 我要音訊條直接切割並以彈回特效直接變回字母按鈕 - 不要再裁切成前奏／主歌那層內容): the second cut is .cut, not .split -
+         the blocks part (margins, corners, edges) but no name and no dimmed wave; each block then goes as its letter springs in */
+      /* 追記② (the user: 音訊條同時分割並變成按鈕 - 不是先分割、之後才變成按鈕): ONE moment. Each block parts from its neighbours AND
+         shrinks towards the letter that stands in its place (translate + scaleX to the tile's width, on the block's own .5 s transform
+         transition) while the nine letters spring in together; the blocks fade a beat later so the bar is seen turning into the row. */
+      function clipCut() {
+        if (!clipEl) return;
+        clipEl.classList.remove('whole'); clipEl.classList.add('cut');
+        var blocks = clipEl.querySelectorAll('.bar i');
+        LINE.forEach(function (g, k) {
+          var t = E.btn(g), b = blocks[k]; if (!t || !b) return;
+          var tr = t.getBoundingClientRect(), br = b.getBoundingClientRect(), tw = t.offsetWidth || 58;
+          b.style.transform = 'translateX(' + ((tr.left + tr.width / 2) - (br.left + br.width / 2)).toFixed(2) + 'px) scaleX(' + (tw / Math.max(1, br.width)).toFixed(3) + ')';
+        });
+        LINE.forEach(function (g, k) { E.reveal('tile', g); });
+        soon(0.15, function () { for (var k = 0; k < blocks.length; k++) blocks[k].classList.add('gone'); });
+      }
+      function unbounce() { try { E.surface().classList.remove('bounce'); } catch (e) {} }
 
       /* ---- ★ step 9's mini graph: the opening, and the two places it can go. The route lights when that hand-over is
          actually queued, so what is drawn and what is about to be heard are the same event. */
@@ -6393,17 +6465,35 @@
                               '<path class="arc ab" pathLength="1" d="M286 40 Q180 2 76 76 M86.9 73.9 L76 76 L81.5 66.5"/>' +
                               '<path class="arc ac" pathLength="1" d="M286 170 Q180 208 76 134 M86.9 136.1 L76 134 L81.5 143.5"/>' +
                               '<path class="arc acb" pathLength="1" d="M322 130 Q368 105 322 80 M328.1 89.2 L322 80 L333 80.1"/>' +   /* LOG-186 (the user: C 也可以到 B，畫相應的弧形箭頭): C -> B round the right-hand side, drawn from C so the wipe runs the way the music goes */
+                              /* LOG-189 (the user: 去程與回程的光動畫對調): the two routes get a lit twin each (.arc.lb / .arc.lc - the arc machinery, blink at the
+                                 decision and flash-then-wipe at the seam, drawn A -> B / A -> C so the wipe runs out from A), and each return arc gets a bare
+                                 rail (.rail - the curve alone, no arrowhead, no pathLength) for the spark to ride home on */
+                              '<path class="arc lb" pathLength="1" d="M99.6 100 L256.5 73.6 M247.4 79.8 L256.5 73.6 L245.8 70.8"/>' +
+                              '<path class="arc lc" pathLength="1" d="M99.6 110 L256.5 136.4 M245.8 139.2 L256.5 136.4 L247.4 130.2"/>' +
+                              '<path class="rail ab" d="M286 40 Q180 2 76 76"/>' +
+                              '<path class="rail ac" d="M286 170 Q180 208 76 134"/>' +
+                              '<path class="rail acb" d="M322 130 Q368 105 322 80"/>' +
                               '<circle class="spk" r="6" cx="70" cy="105"/>' +
                             '</svg>' +
                             '<i class="nd na">A</i><i class="nd nb">B</i><i class="nd nc">C</i>';
         head.appendChild(graphEl);
+        if (demoLeg === 1) nodeNow('a');   /* LOG-190 追記②: A2 was cut in before the board existed - light A now */
+        /* LOG-190 (the user: 行進中由白漸變成 B／C 的顏色，到達時節點以該色亮起): each outward twin and its node carry the tile's own colour (--c of B / C on the line) */
+        [['b', '.arc.lb', '.nd.nb'], ['c', '.arc.lc', '.nd.nc']].forEach(function (m) {
+          var c = tileColor(m[0].toUpperCase()); if (!c) return;
+          var a = graphEl.querySelector(m[1]), n = graphEl.querySelector(m[2]);
+          if (a) a.style.setProperty('--ac', c); if (n) n.style.setProperty('--nc', c);
+        });
         graphLay();
         requestAnimationFrame(function () { if (graphEl) graphEl.classList.add('in'); });
       }
       function graphLay() {
-        if (!graphEl) return; var r = rowBox();
-        graphEl.style.left = Math.round((r.left + r.right) / 2 - 180) + 'px';
-        graphEl.style.top = clampY((r.top + r.bottom) / 2 - 95, 190) + 'px';   /* 追記①: it stands where the row was, which is high on the stage - the narration hangs UNDER it, so this is the only edge to guard */
+        /* LOG-190 (the user: 演示圖移到畫面正中並放大): the board stands in the middle of the stage (the row is away while it plays), scaled up to
+           1.35 as a whole (--gs, see .tut-graph) - only a narrow stage brings it down toward 1 */
+        if (!graphEl) return; var W = HOST.clientWidth || window.innerWidth, H = HOST.clientHeight || window.innerHeight;
+        var s = Math.min(1.35, Math.max(1, (W - 32) / 360)); graphEl.style.setProperty('--gs', s.toFixed(3));
+        graphEl.style.left = Math.round(W / 2 - 180 * s) + 'px';
+        graphEl.style.top = clampY(Math.round(H / 2 - 95 * s), Math.round(190 * s)) + 'px';
       }
       function route(which, on) { if (graphEl) graphEl.classList.toggle('lit-' + which, !!on); }
       /* ★ 追記④ (the user: A 轉 B 時要看到 A 的光沿著線滑過去 B 上面把它照亮): the dot leaves A's centre, runs the route on the audio
@@ -6411,28 +6501,193 @@
       function node(which) { return function () { var n = graphEl && graphEl.querySelector('.nd.n' + which); return n ? rectOf(n) : graphBox(); }; }   /* 追記④ (the user: 「這次換接到 C」泡泡沒有在 C 上): a live anchor on the graph's own node */
       /* 追記④ (the user: 切換亮起來的速度慢了一拍): the spark is LAUNCHED FROM THE DECISION, timed so it lands on the node at the seam itself -
          the engine's clock().endAt is the seam on the audio clock, and the decision falls seconds before it */
-      function sparkAtSeam(which) {
-        var c = null; try { c = E.clock(); } catch (e) {}
+      /* LOG-189 (the user: 兩套對調 - 回程改成「接縫前 0.45 s 光點沿弧從 B／C 滑回、落點時 A 點亮」): the spark now rides a RAIL - the return arc's own
+         curve, followed with getPointAtLength - and `land` is the node it lights on arrival; the arc it rides is shown faintly (.dim) from the
+         decision and let go as the spark lands. sparkAtSeam(ride, land): ride = 'ab' | 'ac' | 'acb', land = 'a' | 'b' | 'c'. */
+      function sparkAtSeam(ride, land, dir, face) {   /* LOG-190 追記⑳: `dir` ('rl' | 'cb') = a hand-over the lesson is talking over - the line fades and a kaomoji rides the spark */
+        var c = null; try { c = E.clock(); } catch (e) { }
         var seam = c && c.endAt != null ? c.endAt - t0 : T() + 0.45;
-        at(Math.max(T(), seam - 0.45), function () { sparkTo(which, function () { nodeNow(which); }); });
+        /* ★ LOG-190 追記㉔: the face sets off KAO_LEAD before the spark does - from where it stands beside the node to the rail's start - so it is
+           on the rail, riding beside the spark, for the spark's own 0.45 s, and settles into its place beside the node it lands on */
+        if (dir) { var L = face && face.off ? kaoOffLegs() : face ? kaoCarryLegs(ride, land) : kaoHomeLegs(ride, land); at(Math.max(T(), seam - 0.45 - L.lead), function () { if (L.off) bubFree = true; else bubOut(); kaoRide(face || null, L); }); }   /* 追記㉙: the pair carries the spark home and stops at A's upper right to turn round; every other ride home stays one straight segment */   /* 追記㉕: C -> B has no lead - the face hops with the spark */   /* 追記㉗: `face` = { a, b } for the one ride the user gave the pair; null = the face it wears now rides */
+        at(Math.max(T(), seam - 0.45), function () { sparkTo(ride, function () { nodeNow(land); }); });   /* ★ LOG-190 追記⑪ (the user: ABC演示A-B A-C中間不要有預覽的灰箭頭): the return arc is no longer shown faintly (.dim) from the decision - the spark rides its invisible rail alone */
       }
-      function sparkTo(which, then) {
-        if (!graphEl) { if (then) then(); return; }
-        spark = { from: GN.a, to: GN[which], t0: T(), d: 0.45, then: then };
-        var c = graphEl.querySelector('.spk'); if (c) { c.setAttribute('cx', GN.a[0]); c.setAttribute('cy', GN.a[1]); c.classList.add('on'); }
+      function sparkTo(ride, then) {
+        var p = graphEl ? graphEl.querySelector('.rail.' + ride) : null, len = 0; try { len = p ? p.getTotalLength() : 0; } catch (e) { }
+        if (!p || !len) { if (then) then(); return; }
+        spark = { p: p, len: len, t0: T(), d: 0.45, then: then };
+        var c = graphEl.querySelector('.spk'), q = p.getPointAtLength(0); if (c) { c.setAttribute('cx', q.x.toFixed(1)); c.setAttribute('cy', q.y.toFixed(1)); c.classList.add('on'); }
       }
       function sparkStep() {
         if (!spark || !graphEl) return;
         var k = Math.max(0, Math.min(1, (T() - spark.t0) / spark.d)); k = 1 - Math.pow(1 - k, 2.2);
-        var c = graphEl.querySelector('.spk'); if (c) { c.setAttribute('cx', (spark.from[0] + (spark.to[0] - spark.from[0]) * k).toFixed(1)); c.setAttribute('cy', (spark.from[1] + (spark.to[1] - spark.from[1]) * k).toFixed(1)); }
-        if (k >= 1) { var s = spark; spark = null; if (c) c.classList.remove('on'); if (s.then) { try { s.then(); } catch (e) {} } }
+        var c = graphEl.querySelector('.spk'), q = null; try { q = spark.p.getPointAtLength(spark.len * k); } catch (e) { }
+        if (c && q) { c.setAttribute('cx', q.x.toFixed(1)); c.setAttribute('cy', q.y.toFixed(1)); }
+        if (k >= 1) { var s = spark; spark = null; if (c) c.classList.remove('on'); if (s.then) { try { s.then(); } catch (e) { } } }
       }
-      /* ★ 追記④ (the user: 示範 B 回到 A 時，上方出一個由右到左有弧度的箭頭快速閃幾下預告要回 A；回去那瞬間亮一下，箭頭也從右到左一起暗下去。到 C 與回來也相同):
-         arcPre blinks the arc three times at the DECISION (the return is now certain, the music has not turned yet); arcGo, at the turn,
-         flashes it once and wipes it out from its B (or C) end towards A (stroke-dashoffset on a pathLength of 1). */
-      function arcOf(which) { return graphEl ? graphEl.querySelector('.arc.a' + which) : null; }
-      function arcPre(which) { var a = arcOf(which); if (!a) return; a.classList.remove('go'); void a.getBoundingClientRect(); a.classList.add('pre'); }
-      function arcGo(which) { var a = arcOf(which); if (!a) return; a.classList.remove('pre'); void a.getBoundingClientRect(); a.classList.add('go'); }
+      /* ★ 追記④ (the user: 上方出一個有弧度的箭頭快速閃幾下預告；回去那瞬間亮一下，箭頭也一起暗下去) - LOG-189 (the user: 對調): this pair now belongs to the
+         OUTWARD legs. arcPre blinks the route's lit twin (.arc.lb / .arc.lc) three times at the DECISION; arcGo, at the seam, flashes it once and
+         wipes it out from A towards B (or C) - stroke-dashoffset on a pathLength of 1, the wipe running from the path's own start, which is A. */
+      function arcOf(key) { return graphEl ? graphEl.querySelector('.arc.' + key) : null; }   /* 'ab' | 'ac' | 'acb' | 'lb' | 'lc' */
+      function arcPre(key) { var a = arcOf(key); if (!a) return; a.classList.remove('go'); void a.getBoundingClientRect(); a.classList.add('pre'); }
+      function arcGo(key) { var a = arcOf(key); if (!a) return; a.classList.remove('pre'); void a.getBoundingClientRect(); a.classList.add('go'); }
+      /* LOG-190 追記① (the user: A-B 左到右的動畫太慢，B 都亮了箭頭還沒跑完): the line sets out ARC_LEAD before the seam and takes exactly ARC_LEAD to reach
+         B / C (tutarcgo's travel), so it ARRIVES as the node lights - the same clock trick sparkAtSeam uses. arcGoLate is the seam's own fallback: if the
+         clock could not be read at the decision, the line still goes at the enter. */
+      var ARC_LEAD = 0.32;
+      function atSeam(lead, fn) {   /* run fn `lead` seconds before the sounding section's seam (now, if that is already past) */
+        var c = null; try { c = E.clock(); } catch (e) { }
+        var seam = c && c.endAt != null ? c.endAt - t0 : T() + 3.56;
+        at(Math.max(T(), seam - lead), fn);
+      }
+      function arcGoAtSeam(key) { atSeam(ARC_LEAD, function () { arcGo(key); }); }
+      function arcGoLate(key) { var a = arcOf(key); if (a && !a.classList.contains('go')) arcGo(key); }
+      /* ★ LOG-190 追記⑲＋⑳ (the user: 泡泡放在目前播放的那格上而不是放在正中間 / 所有ABC滑動泡泡特效改成顏文字跟著滑動後消失 / 泡泡淡出，於B上方淡入 /
+         出發前瞬間出現，抵達後一秒瞬間消失): every line of the demonstration hangs on the node that is SOUNDING - under A and C, ABOVE B (arrow
+         down: B is the board's top corner, and under it a bubble would lie across the routes). A hand-over does not move the bubble: it fades
+         out where it is as the light sets off, a kaomoji rides the light (the same path, the same clock), waits 1 s where it lands and is
+         simply gone, and the next line fades in on the new node as that section enters. */
+      /* ★ LOG-190 追記㉔ (the user: 顏文字那邊改成全程都有顏文字(不消失)，但是移動時就換一個隨機的顏文字，泡泡的字都附在顏文字上且不遮擋abc的圖示):
+         the kaomoji is the demonstration's NARRATOR. From the first line it stands beside the node that is sounding - never on it - and every
+         line of the demonstration hangs on IT (sayOn: o.at = kaoBox). ★ 追記㉕ (the user: 位置不要跑來跑去，分別可以停留的位置為a的正上下，bc的左邊，b的上，c的下):
+         its places are ABOVE A, LEFT OF B and LEFT OF C (kaoDock) - exactly where the light's own path leaves it (the return rail's end
+         22 px up over A; the outward runs' ends under the line, 8 px short of B / C), so a ride ends and nothing moves again. The bubbles
+         open to the LEFT, away from the nodes: above the face over A and left of B (B's lifted 20 px, clear of A's top), below the face
+         left of C. On a hand-over the face sets off (追記㉖: one straight segment, place to place, on the light's own clock; C -> B hops
+         straight up the left while the spark runs round the right, where no place is allowed). The bubble fades as it sets off, and the next
+         line goes up on the face once it is there. It is only taken down with the board (handBack / end). */
+      /* ★ LOG-190 追記㉗ (the user: 取消隨機顏文字，改成我在每個台詞後面備註使用的顏文字): NO picking. Every line has the face the user wrote after it (KAO_LINE),
+         worn from the moment the line goes up - so the face changes with the lines, standing, and a ride keeps the face it sets off with
+         (sd2's to B, sd11's running face to C, sd14's round to B, s9g's running face home) - except the first ride home, which the user gave
+         the pair: (／・ω・)／ sets off from B and ＼(・ω・＼) lands over A and says sd7 (KAO_PAIR_RL). */
+      var KAO_LINE = { tut_sd1: '(ゝ∀･)', tut_sd2: '(*ﾟ∀ﾟ*)', tut_sd3: '(ゝ∀･)b', tut_sd4: '(*´･д･)?', tut_sd5: '(´・Å・`)', tut_sd6: '(ﾟ∀ﾟ)', tut_sd7: '(ﾟ∀。)', tut_sd8: '(ﾟ∀。)', tut_sd9: '(ﾟ∀。)', tut_sd10: '(ﾟ∀。)', tut_sd11: '(ﾟ∀。)', tut_sd12: '(ﾟ∀。)', tut_sd13: '(ﾟ∀。)', tut_sd14: '(*ﾟ∀ﾟ*)', tut_sd15: '(σ`∀´)σ', tut_s9e: '(ﾟ∀。)', tut_s9g: '(ﾟ∀。)' };   /* 追記㉙ round 5 (the user: ﾚ(ﾟ∀ﾟ;)ﾍ=З=З=З 跟 ε≡ﾍ( ´∀`)ﾉ 都是移動的顏文字，不可以以靜止的狀態存在): sd11 and s9g keep the face before them - the running faces are worn only on the run (KAO_RUN_C, KAO_RUN_OFF) */   /* the user's list (ABC演示_顏文字與台詞清單.md), as given */
+      var KAO_PAIR_RL = { a: '(／・ω・)／', b: '＼(・ω・＼)' };
+      var KAO_RUN_C = { a: 'ε≡ﾍ( ´∀`)ﾉ', b: KAO_LINE.tut_sd12 };   /* round 5: A -> C runs in ε≡ﾍ( ´∀`)ﾉ and lands already in sd12's face */
+      var KAO_RUN_OFF = { a: 'ﾚ(ﾟ∀ﾟ;)ﾍ=З=З=З', b: 'ﾚ(ﾟ∀ﾟ;)ﾍ=З=З=З', off: true };   /* round 5: the last ride home - ﾚ(ﾟ∀ﾟ;)ﾍ=З=З=З dashes off the stage's left edge with its line and is gone */   /* the first B -> A: the second sets off, the first lands (the user's 右→左 rule for the pair) */
+      var kao = null;
+      function sayOn(key, which, o) {   /* o.fresh = the first line on a node after a hand-over: faded in there, never slid in from where the bubble last stood */
+        o = o || {}; o.slide = false; o.align = 'right'; if (which === 'b') o.gap = 32; if (!o.at) o.at = kaoBox;   /* 追記㉕: never .slide - the anchor is the face, which stands still, and a right-aligned bubble that grows wider while its left is still in the .32 s transition sweeps across B (s25b: sd4, 4 samples) */   /* 追記㉕: above the face over A and left of B (B's 32 px up, clear of A's top - at 20 the probe found it 4.7 px into A), below the face left of C - all opening to the LEFT, away from the nodes */
+        var run = function () { if (phase === 'demo') { o.side = which === 'c' || kaoSlot === 'ab' ? 'below' : 'above'; kaoFace(KAO_LINE[key]); show(key, o.at, o); } };   /* 追記㉗: the line's own face first, then the line on it. 追記㉘: below the face when the face is below A (or left of C), above it otherwise - read as the line goes up, once the ride has landed */
+        if (kao && kao.moving) kao.then.push(run); else run();   /* a line that arrives while the face is still on its way waits for it - it goes up on a face that stands still */
+      }
+      function kaoFace(t) { if (kao && t && kao.el.textContent !== t) kao.el.textContent = t; }   /* 追記㉗: the standing face turns into the line's - in place (kaoStep re-centres it from its dock every frame) */
+      function sayBefore(lead, key, which) { atSeam(lead, function () { sayOn(key, which); }); }   /* up `lead` s before the sounding section's seam */
+      function bubOut() { if (!bub) return; bub.classList.add('qout'); hide(); bubTgt = null; bubSrc = null; }   /* a quick fade (.25 s, os.css .qout) - gone before the next line fades in on the seam. 追記㉔: let go of its anchor - the face it hung on is setting off, and the fading bubble stays where it is */
+      function svgPt(q) {   /* a point in the board's own viewBox, in the stage's coordinates (rectOf's) */
+        var svg = graphEl && graphEl.querySelector('svg'), m = svg && svg.getScreenCTM ? svg.getScreenCTM() : null; if (!m) return null;
+        var h = HOST.getBoundingClientRect(); return { x: m.a * q.x + m.c * q.y + m.e - h.left, y: m.b * q.x + m.d * q.y + m.f - h.top };
+      }
+      /* 追記㉔ had a KAO_LEAD (.3 s from the place to the light's start) and a settle; 追記㉕ dropped the settle, 追記㉖ the lead - a ride is one straight segment on the light's own clock */
+      function kaoMake(f) {   /* a new element (the old one goes) wearing f.a, turning to f.b as it lands; f null = the face it wears now (追記㉗: a ride keeps its face). It is placed by kaoStep every frame */
+        var t = kao ? kao.el.textContent : KAO_LINE.tut_sd1; kaoOff(); if (!head) return null;
+        if (!f) f = { a: t, b: t };
+        var el = document.createElement('i');
+        el.className = 'tut-kao'; el.setAttribute('aria-hidden', 'true'); el.textContent = f.a;
+        el.style.setProperty('transition', 'none', 'important');   /* it appears, moves and goes - nothing about it may ease, whatever the shell's sweep says */
+        head.appendChild(el);
+        kao = { el: el, b: f.b, t0: T(), legs: [], mainI: -1, turnI: -1, home: null, landed: false, moving: false, then: [] };
+        return kao;
+      }
+      function kaoStand(which) { if (!kaoMake({ a: KAO_LINE.tut_sd1, b: KAO_LINE.tut_sd1 })) return; kaoSlot = which; kao.home = kaoDock(which); kao.landed = true; kaoStep(); }   /* the narrator takes its place beside the first node, standing - in the first line's face (追記㉗) */
+      function kaoRide(f, legs) {   /* legs = [{ at(k) -> stage point, d, main? }] run back to back from the face's birth; the pair turns round as the MAIN leg (the light's own) ends; the last leg's end is where it lives from then on (kao.home) */
+        if (!kaoMake(f)) return;
+        kao.legs = legs.legs; kao.home = legs.home; kaoSlot = legs.slot; kao.moving = true; kao.off = !!legs.off;
+        for (var i = 0; i < kao.legs.length; i++) { if (kao.legs[i].main) kao.mainI = i; if (kao.legs[i].turn) kao.turnI = i; }
+        if (kao.turnI < 0) kao.turnI = kao.mainI;   /* 追記㉙: no leg marked = the pair turns as the main leg ends (as before) */
+        kaoStep();
+      }
+      function kaoStep() {
+        if (!kao) return;
+        var p = null, L = kao.legs;
+        if (L.length) {
+          var e = T() - kao.t0, acc = 0, i, k;
+          for (i = 0; i < L.length; i++) { if (e < acc + L[i].d || i === L.length - 1) break; acc += L[i].d; }
+          k = L[i].d > 0 ? Math.max(0, Math.min(1, (e - acc) / L[i].d)) : 1;
+          try { p = L[i].at(k); } catch (err) { }
+          if (!kao.landed && (i > kao.turnI || (i === kao.turnI && k >= 1))) { kao.landed = true; kao.el.textContent = kao.b; }   /* the pair turns round as its turn leg ends (追記㉙: standing at A's left; = the main leg's end when no leg is marked) */
+          if (kao.off && i === L.length - 1 && k >= 1) { bubOut(); kaoOff(); return; }   /* round 5: off the stage - the face and its line go together */
+          if (i === L.length - 1 && k >= 1) { kao.legs = []; kao.moving = false; var th = kao.then; kao.then = []; th.forEach(function (fn) { try { fn(); } catch (err) { } }); }   /* settled: the lines that waited go up now */
+        }
+        else if (kao.home) { try { p = kao.home(); } catch (err) { } }   /* standing: at its dock, wherever the board is now (a resize moves the board) */
+        if (p) kao.el.style.transform = 'translate(' + p.x.toFixed(1) + 'px,' + p.y.toFixed(1) + 'px) translate(-50%,-50%)';
+      }
+      function kaoOff() { if (kao) { kao.el.remove(); kao = null; } }
+      function linePts(key) { return key === 'lb' ? [{ x: 99.6, y: 100 }, { x: 256.5, y: 73.6 }] : [{ x: 99.6, y: 110 }, { x: 256.5, y: 136.4 }]; }   /* the route twins' own straight strokes (.arc.lb / .arc.lc without the arrowhead) */
+      var KAO_GAP = 10;   /* 追記㉑: px between the outward stroke and the top of the face under it */
+      function kaoBox() { return kao ? rectOf(kao.el) : node('a')(); }   /* 追記㉒: the face as a bubble anchor (A itself if it is somehow gone) */
+      function kaoWH() { return kao ? { w: kao.el.offsetWidth || 0, h: kao.el.offsetHeight || 0 } : { w: 0, h: 0 }; }
+      var KAO_PICK = 60 / 145;   /* 追記㉙ round 4 (the user: B-A之前最後一拍時就變(／・ω・)／，看起來像是搬起來然後跑): one beat - the pair turns up beside B and walks to the light's start over the beat before the spark sets off */
+      var KAO_A_GAP = 8, kaoSlot = 'a';   /* ★ 追記㉘ (the user: A上面太上面了，位移的時候壓到按鈕沒關係，停下來不要壓到就好): 8 px off A, top or bottom - a ride may cross a node, a standing face may not.
+                                              kaoSlot = the place the face stands at now ('a' above A, 'ab' below A, 'b', 'c'); (the user: 回到A搬運的那個顏文字讓他移到A下面) the rides home land BELOW A */
+      function kaoDock(which, sz) {   /* ★ 追記㉕ (the user: 位置不要跑來跑去，分別可以停留的位置為a的正上下，bc的左邊，b的上，c的下): the dock IS where the light's own path
+                                    leaves the face, so a ride ends and nothing moves again - ABOVE A (the return rail's end, 22 px up), LEFT OF B / LEFT OF C
+                                    (the outward runs' ends, under the line, 8 px short of the node). sz = the box of a face not worn yet (追記㉗: kaoAUp asks) */
+        /* ★ 追記㉖ (the user: 所有顏文字移動採直線，不要再像現在一樣有多次轉彎): every ride is ONE straight segment from place to place, so the places are
+           chosen so that no segment clips a node: above A (centred, kaoAUp up), left of B (the A -> B line's end, under it), left of C at C's TOP
+           edge (from above A the segment to C's lower left would clip A's top-right corner; to its top edge it passes 2 px clear) */
+        return function () {
+          var n = node(which === 'ab' || which === 'ar' ? 'a' : which)(), s = sz || kaoWH(); if (!n) return null;   /* 'ab' / 'ar' are A's own box (s28: node('ab') fell through to the whole board, and the face sat under the board's middle) */
+          if (which === 'a') return { x: (n.left + n.right) / 2, y: n.top - KAO_A_GAP - s.h / 2 };   /* 追記㉘: 8 px up (㉖'s 92 and ㉗'s kaoAUp kept the RIDE clear of A's corner - the user no longer wants that) */
+          if (which === 'ab') return { x: (n.left + n.right) / 2, y: n.bottom + KAO_A_GAP + s.h / 2 };   /* 追記㉘: below A - where the rides home land */
+          if (which === 'ar') return { x: n.right + KAO_A_GAP + s.w / 2, y: n.top };   /* 追記㉙ (the user: 停在右上方，看起來像是站在那裏把光點往A裡面丟): A's upper right - box 8 px off A's right edge, its middle at A's top edge - where the pair stops to turn round, never a place it lives */
+          if (which === 'c') return { x: n.left - 8 - s.w / 2, y: n.top + s.h / 2 + 2 };
+          return underLine('lb', s)(1);
+        };
+      }
+      function hop(p0, p1, eased) { return function (k) { var a = p0(), b = p1(); if (!a || !b) return null; var e = eased ? 1 - Math.pow(1 - k, 2.2) : k; return { x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e }; }; }   /* ONE straight segment, place to place - linear with the outward line, on the spark's own easing homeward */
+      function kaoOutLegs(key) {   /* 追記㉖: above A straight to left of B / left of C, on the line's own clock (ARC_LEAD, linear) - no lead, no turn */
+        var to = key === 'lb' ? 'b' : 'c';
+        return { legs: [{ at: hop(kaoDock(kaoSlot), kaoDock(to), false), d: ARC_LEAD, main: true }], home: kaoDock(to), slot: to, lead: 0 };   /* 追記㉘: from wherever it stands (above A the first time, below A after a ride home) */
+      }
+      function kaoHomeLegs(ride, land) {   /* 追記㉖: left of B straight to above A (ab), left of C straight up to left of B (acb) - the spark's 0.45 s and easing, no lead, no rail */
+        var from = ride === 'acb' ? 'c' : 'b';
+        var to = land === 'a' ? 'ab' : land;   /* 追記㉘: home is BELOW A */
+        return { legs: [{ at: hop(kaoDock(from), kaoDock(to), true), d: 0.45, main: true }], home: kaoDock(to), slot: to, lead: 0 };
+      }
+      function underSpark(ride) {   /* ★ 追記㉙ (the user: 顏文字移動回A時貼緊我們transition的那個光點的下面，像是顏文字搬著光點把他丟過去): the face right UNDER the spark -
+                                   on the spark's own rail, its own easing and 0.45 s (sparkStep's), the face's top edge 2 px below the spark's rim (r = 6, in the board's units) */
+        var p = graphEl ? graphEl.querySelector('.rail.' + ride) : null, len = 0; try { len = p ? p.getTotalLength() : 0; } catch (e) { }
+        return function (k) { if (!p || !len) return null; var q = p.getPointAtLength(len * (1 - Math.pow(1 - k, 2.2))), c = svgPt(q), r = svgPt({ x: q.x, y: q.y + 6 }); if (!c || !r) return null; return { x: c.x, y: r.y + 2 + kaoWH().h / 2 }; };
+      }
+      function elbow(p0, p1) {   /* 追記㉙: an L at one speed - the vertical arm first, then across (the one turn the user kept: from A's upper right down its right side, round its lower-right corner, along under A to its middle) */
+        return function (k) { var a = p0(), b = p1(); if (!a || !b) return null; var v = Math.abs(b.y - a.y), h = Math.abs(b.x - a.x), s = k * (v + h); return s <= v ? { x: a.x, y: a.y + (b.y - a.y) * (v ? s / v : 1) } : { x: a.x + (b.x - a.x) * (h ? (s - v) / h : 1), y: b.y }; };
+      }
+      var KAO_OFF_D = 0.8;
+      function kaoOffLegs() {   /* ★ 追記㉙ round 5 (the user: 這邊請讓這個顏文字跟泡泡跑出左邊的邊界消失): the last ride home - from beside B straight left, past A, off the stage's left edge,
+                                 the line still hanging on it (bubFree: placeBox stops clamping the bubble to the stage), and both are gone the moment it ends (kaoStep) */
+        var off = function () { var b = kaoDock('b')(), s = kaoWH(); if (!b) return null; return { x: -(s.w / 2 + 40), y: b.y }; };
+        return { legs: [{ at: hop(kaoDock('b'), off, false), d: KAO_OFF_D, main: true }], home: null, slot: 'b', lead: 0, off: true };
+      }
+      function carryIn(ride, stop) {   /* 追記㉙ (the user: 在移動到A時快速翻轉並停在A右上角，接上光球掉進A裡的瞬間): under the spark for the first 70 % of the rail, then peeling off to `stop` (smoothstep) so it is THERE, standing, the instant the spark drops into A */
+        var u = underSpark(ride);
+        return function (k) { var q = u(k), s = stop(); if (!q || !s) return q || s; var w = k <= 0.7 ? 0 : (k - 0.7) / 0.3; w = w * w * (3 - 2 * w); return { x: q.x + (s.x - q.x) * w, y: q.y + (s.y - q.y) * w }; };
+      }
+      function kaoCarryLegs(ride, land) {   /* ★ 追記㉙: the first ride home only (the pair, KAO_PAIR_RL) - ① carrying the spark: under it over the top, peeling off to A's upper right over the last 30 % (carryIn), the spark's own 0.45 s (main) -
+                                            and turns round (turn = the pair's ＼(・ω・＼)) the instant the spark drops into A ② stands there .4 s ③ .35 s the L down A's right side and along under A to below it,
+                                            where it lives (ab) - and sd7 goes up there in its own face, (ﾟ∀。), the instant it arrives (the user: 到了直接變) */
+        var ar = kaoDock('ar'), to = land === 'a' ? 'ab' : land, u = underSpark(ride), u0 = function () { return u(0); };
+        return { legs: [{ at: hop(kaoDock('b'), u0, false), d: KAO_PICK }, { at: carryIn(ride, ar), d: 0.45, main: true, turn: true }, { at: hop(ar, ar, false), d: 0.4 }, { at: elbow(ar, kaoDock(to)), d: 0.35 }], home: kaoDock(to), slot: to, lead: KAO_PICK };   /* round 4: ⓪ a beat early, already (／・ω・)／, from its place beside B to under the light's start - picking it up */
+      }
+      function underLine(key, sz) {   /* ★ LOG-190 追記㉑ (the user: A-B, A-C顏文字改在箭頭下方且不要壓到按鈕): the face hangs UNDER the stroke, its whole box kept between
+                                     A's right edge and the far node's left edge (8 px clear each side) - it crosses that span on the line's own clock, so it
+                                     never sits on a button, not while it rides and not for the second it waits. 追記㉖: only B's dock (k = 1) is placed by it now; sz = a face's box (追記㉗) */
+        var L = linePts(key), to = key === 'lb' ? 'b' : 'c';
+        return function (k) {
+          var p0 = svgPt(L[0]), p1 = svgPt(L[1]), a = node('a')(), b = node(to)(), s = sz || kaoWH(); if (!p0 || !p1 || !a || !b || !s.h) return null;
+          var w = s.w, h = s.h;
+          var x0 = a.right + 8 + w / 2, x1 = b.left - 8 - w / 2; if (x1 < x0) x0 = x1 = (a.right + b.left) / 2;
+          var x = x0 + (x1 - x0) * k, u = (x - p0.x) / ((p1.x - p0.x) || 1);
+          return { x: x, y: p0.y + (p1.y - p0.y) * u + KAO_GAP + h / 2 };
+        };
+      }
+      function goOut(key, dir) {   /* outward: the line is drawn A -> B / A -> C over ARC_LEAD, linearly - the kaomoji crosses under it (追記㉑), having set off KAO_LEAD earlier from A's dock (追記㉔) */
+        arcGoAtSeam(key);
+        atSeam(ARC_LEAD, function () { bubOut(); kaoRide(key === 'lc' ? KAO_RUN_C : null, kaoOutLegs(key)); });   /* round 5: the run to C in the running face, only while it runs */   /* 追記㉖: with the line, no lead. 追記㉗: in the face it wears (sd2's / sd11's) */
+      }
+      function sparkPath(ride) {   /* homeward: the spark's own rail, on sparkStep's own easing - the face beside the spark, never over it: 22 px above it home to A (ab), its box 8 px right of it round to B (acb, 追記㉔: the rail hugs B's and C's right edges, and a face above the spark would lie on B as it lands) */
+        var p = graphEl ? graphEl.querySelector('.rail.' + ride) : null, len = 0; try { len = p ? p.getTotalLength() : 0; } catch (e) { }
+        return function (k) { if (!p || !len) return null; var q = svgPt(p.getPointAtLength(len * (1 - Math.pow(1 - k, 2.2)))); if (!q) return null; if (ride === 'acb') q.x += kaoWH().w / 2 + 8; else q.y -= 22; return q; };
+      }
       function nodeNow(which) {   /* 追記③ (the user: 切到 B、回 A、到 C 的瞬間演示圖的該按鈕要亮): the node that is sounding, lit the instant it enters */
         if (!graphEl) return;
         var ns = graphEl.querySelectorAll('.nd'); for (var i = 0; i < ns.length; i++) ns[i].classList.toggle('now', ns[i].classList.contains('n' + which));
@@ -6441,6 +6696,220 @@
       function demoLights(on) {
         try { E.surface().classList.toggle('tut-away', !!on); } catch (e) {}
         HOST.classList.toggle('tut-demo', !!on); if (head) head.classList.toggle('tut-demo', !!on);
+      }
+
+      /* ---- ★ LOG-190 追記⑬ the closing show (the user: 結尾敘述 V6 跟 Shiou Hsu 那邊多一個演示). Once the visitor's line has played its
+         last section the lesson holds the music on the outro LOOP (I_loop, four bars @172; the engine lets a loop go after two passes, so
+         every pass re-forces it) and, over the row that has slid down out of the way, tells the commission's story in six lines in the
+         band the slide opened ABOVE the row: the row splits into three versions V1-V3 as 'V3' is typed; the three shuffle left and right
+         each on their own and come back to order; a random route threads the versions; three more rows split out for 'V6' and every
+         crossing there is lights up in one left-to-right sweep. Then the outro proper is forced and the last line is said in the usual
+         band. The rows are VISUAL COPIES living in the stage-ui - never the engine's tiles, which render() rewrites every tick - measured
+         once from the real row so V1 stands exactly where the row was, and scaled as a whole when six will not fit above the line. */
+      var FIN_DOWN = 64, FIN_ROW_GAP = 18, FIN_ROW_GAP_S = 12, FIN_ROWS = 6, FIN_BYE = 12.8, FIN_LEAVE = 19.0, FIN_V7 = 11.0, NS = 'http://www.w3.org/2000/svg';   /* 追記⑱ (the user: 展示 V3 時隨機左右切換時 1&2 維持現狀，要畫線圖時將 2 從陰影直接也鋪成按鈕，讓路線更多選擇性，然後以此構造鋪成 V6 後展示更龐大複雜的線路可能性 / 追記⑱-②: V6#2 的排列方法錯誤，A1 後面 A2 才 B1，不是排到下面 - 線性是 A1 → 其他版本 A2 的邏輯; V6 之後按鈕變超小，讓按鈕排列可以延展成在桌面上合理安排的距離; V6 箭頭也要指向那個按鈕可以接去的片段): as the fourth line opens every X₂ twin slides out from behind its tile to stand RIGHT AFTER it on the same line - A A₂ B B₂ … H H₂ I, the order the line is played in - and becomes a tile of its own (.spread); the overlay grows to the new width around the row's centre, climbs to just under the sky line and may run down over the wave to the now-playing block, so six versions keep a readable size; the route walks A1 → A2 → B1 → … → H2 → I with every step on a version drawn at random, and the web draws only what a tile can actually go to: X1 to every version's X2, X2 to every version's next X1, H2 to every I */   /* 追記⑰ (the user: 結尾出 I End 時間太久了，提前一個 loop 出去試試看): forced before the FOURTH pass's decision (~19.8) so the outro enters at 22.33; V6 / web / sweep / the sixth line are pulled forward under it (23.0 / 24.7 / 25.7 / 28.5), the seventh at I + 11 (33.3), bye ~36.3 */   /* 追記⑯ (the user: 結束畫面前不用再回到一串，V6 那堆那邊直接收場就好，音樂大概也抓那個長度): I is forced a pass earlier (before the fifth pass's decision at ~25.4) so the outro enters at 27.91 under the web and the sweep, the six rows stay to the end, the seventh line is said in the sky FIN_V7 s into the outro (after the sixth has stood), and the stage closes with the music (onBye two bars from the end, ~I + 14) */   /* FIN_LEAVE: I is forced before the sixth pass's decision (passes at 0, 5.58 … 27.91, 33.49; the decision falls 2.54 s in = 30.44), so the outro enters at 33.49 - 追記⑮ (the user: 在「再看看囉」那邊其實就可以切出去了): the sixth line is said at 31.0 over the loop's last bars and the outro comes in under it */
+      var fin = { on: false, leave: false, spread: false, el: null, svg: null, rows: [], geo: null, seen: {}, top: 0 };
+      function finX(k, v) { var g = fin.geo, t = g.tiles[k]; if (!fin.spread) return t.x; var x = t.x + g.tb[k] * g.step; return v === 2 ? x + g.step : x; }   /* 追記⑱-②: letter k's x on the line - laid out, every twin before it has pushed it one step right, and its own twin stands one step after it */
+      function finSepX(i) { var g = fin.geo; return fin.spread ? g.sepsS[i] : g.seps[i]; }
+      function finW() { var g = fin.geo; return g.width + (fin.spread ? g.twins * g.step : 0); }
+      function finY(r) { var g = fin.geo; return r * g.rowH + g.h / 2; }   /* the centre line of version row r */
+      function finNode(row, k, v) { return v === 2 && row.tiles[k].twin ? row.tiles[k].twin : row.tiles[k]; }
+      /* ★ LOG-190 追記㉓ (the user: V1-V6 的不同版本的按鈕顏色要稍微不一樣 - 漸層，從 V3 開始顯示時就要): every version row has its OWN shade of each
+         letter's colour - a small step round the hue and a touch lighter per row, so V1 is the tile's exact colour and V6 the far end of a short
+         gradient. Written at the row's birth (finRow), so V2 / V3 already differ as they split out; the arrows landing on a row take that row's shade. */
+      var FIN_HUE = 7, FIN_LIGHT = 0.03;   /* degrees round the hue and lightness (0-1) added per version row */
+      function finTint(c, r) {
+        if (!r || !/^#[0-9a-f]{6}$/i.test(c)) return c;
+        var R = parseInt(c.slice(1, 3), 16) / 255, G = parseInt(c.slice(3, 5), 16) / 255, B = parseInt(c.slice(5, 7), 16) / 255;
+        var mx = Math.max(R, G, B), mn = Math.min(R, G, B), l = (mx + mn) / 2, d = mx - mn, s = d ? d / (1 - Math.abs(2 * l - 1)) : 0, h = 0;
+        if (d) { h = mx === R ? ((G - B) / d) % 6 : mx === G ? (B - R) / d + 2 : (R - G) / d + 4; h = (h * 60 + 360) % 360; }
+        h = (h + FIN_HUE * r) % 360; l = Math.min(0.9, l + FIN_LIGHT * r);
+        var C = (1 - Math.abs(2 * l - 1)) * s, X = C * (1 - Math.abs((h / 60) % 2 - 1)), m = l - C / 2, r1 = 0, g1 = 0, b1 = 0;
+        if (h < 60) { r1 = C; g1 = X; } else if (h < 120) { r1 = X; g1 = C; } else if (h < 180) { g1 = C; b1 = X; } else if (h < 240) { g1 = X; b1 = C; } else if (h < 300) { r1 = X; b1 = C; } else { r1 = C; b1 = X; }
+        var q = function (u) { return Math.round((u + m) * 255); };
+        return '#' + ((1 << 24) + (q(r1) << 16) + (q(g1) << 8) + q(b1)).toString(16).slice(1);
+      }
+      function finPath(pts, rad) {   /* 追記㉓: a polyline with its corners rounded - each corner takes at most half of its shorter neighbour */
+        var d = 'M' + pts[0][0].toFixed(1) + ' ' + pts[0][1].toFixed(1), i;
+        for (i = 1; i < pts.length - 1; i++) {
+          var p = pts[i - 1], c = pts[i], n = pts[i + 1], l1 = Math.hypot(c[0] - p[0], c[1] - p[1]), l2 = Math.hypot(n[0] - c[0], n[1] - c[1]);
+          if (!l1 || !l2) { d += 'L' + c[0].toFixed(1) + ' ' + c[1].toFixed(1); continue; }
+          var r = Math.min(rad, l1 / 2, l2 / 2), ax = c[0] + (p[0] - c[0]) / l1 * r, ay = c[1] + (p[1] - c[1]) / l1 * r, bx = c[0] + (n[0] - c[0]) / l2 * r, by = c[1] + (n[1] - c[1]) / l2 * r;
+          d += 'L' + ax.toFixed(1) + ' ' + ay.toFixed(1) + 'Q' + c[0].toFixed(1) + ' ' + c[1].toFixed(1) + ' ' + bx.toFixed(1) + ' ' + by.toFixed(1);
+        }
+        var e = pts[pts.length - 1]; return d + 'L' + e[0].toFixed(1) + ' ' + e[1].toFixed(1);
+      }
+      function finTopMin() {   /* 追記⑱-②: how high the overlay may climb - the sky line keeps its 16 px over the top row (the user: 字幕低一點靠近按鈕一點), measured on the line that is up */
+        var sk = null; subs.forEach(function (s) { if (s.sky && !s.out && s.h && s.h.el) sk = s; }); var h0 = sk ? sk.h.el.offsetHeight : 48; return safeTop() + 6 + h0 + 16;
+      }
+      function finFloor(left, W) {   /* 追記⑱-②: how far down the rows may run - over the wave, but never into the now-playing block when they share its columns */
+        var np = document.getElementById('np-desktop'), r = np ? rectOf(np) : null, fl = HOST.clientHeight - 24;
+        if (r && r.top > 0 && r.left < left + W && r.right > left) fl = Math.min(fl, r.top - 12);
+        return fl;
+      }
+      function finIdx(tiles, gs) { return gs.map(function (g) { for (var k = 0; k < tiles.length; k++) if (tiles[k].g === g) return k; return -1; }).filter(function (k) { return k >= 0; }); }
+      function finGeo() {   /* the real row, measured: tile boxes and | positions relative to the row's box, the tiles' own colours */
+        var s = E.surface(), rb = rowBox(), zr = rectOf(zoneBox('pre')) || rb, cols = s.querySelectorAll('.col'), seps = s.querySelectorAll('.zsep'), tiles = [], sx = [], k;
+        for (k = 0; k < cols.length; k++) { var t = cols[k].firstChild, r = rectOf(cols[k]); if (!t || !r) continue; tiles.push({ g: t.getAttribute('data-g') || '', x: r.left - rb.left, w: r.right - r.left, c: t.style.getPropertyValue('--c') || '#e8e8e4' }); }
+        tiles.sort(function (a, b) { return a.x - b.x; });
+        for (k = 0; k < seps.length; k++) { var sr = rectOf(seps[k]); if (sr) sx.push(sr.left - rb.left); }
+        var h = zr.bottom - zr.top;
+        /* 追記⑱-②: the laid-out line - a twin's slot is one step (tile + the gap between two tiles of a zone) after its tile; tb[k] = twins before letter k, sepsS = the | lines pushed right by the twins to their left */
+        var gapS = tiles.length > 2 ? Math.max(6, tiles[2].x - tiles[1].x - tiles[1].w) : 12, step = (tiles[0] ? tiles[0].w : 58) + gapS, tb = [], twins = 0, sepsS = [];
+        for (k = 0; k < tiles.length; k++) { tb.push(twins); if (tiles[k].g !== 'I') twins++; }
+        for (k = 0; k < sx.length; k++) { var nb = 0, j; for (j = 0; j < tiles.length; j++) if (tiles[j].x < sx[k] && tiles[j].g !== 'I') nb++; sepsS.push(sx[k] + nb * step); }
+        return { left: rb.left, top: zr.top, width: rb.right - rb.left, h: h, rowH: h + FIN_ROW_GAP, tiles: tiles, seps: sx, gapS: gapS, step: step, tb: tb, twins: twins, sepsS: sepsS, pre: finIdx(tiles, E.order('pre')), post: finIdx(tiles, E.order('post')) };
+      }
+      function finLay() { if (!fin.el || !fin.geo) return; var rb = rowBox(), zr = rectOf(zoneBox('pre')) || rb; fin.geo.left = rb.left; fin.geo.top = zr.top; finFit(fin.rows.length); }   /* on resize: re-anchor to the row and re-fit */
+      function finRow(r, fromY) {   /* one version row: its label, the | lines, nine letter tiles at the real row's own x - born at fromY (the row it splits from) */
+        var g = fin.geo, row = document.createElement('div'), k; row.className = 'vrow'; row.style.height = g.h + 'px'; row.style.setProperty('--y', fromY + 'px');
+        var lb = document.createElement('i'); lb.className = 'vl'; lb.textContent = 'V' + (r + 1); row.appendChild(lb);
+        row.seps = [];
+        for (k = 0; k < g.seps.length; k++) { var b = document.createElement('b'); b.className = 'vs'; b.style.left = finSepX(k) + 'px'; b.style.height = g.h + 'px'; row.appendChild(b); row.seps.push(b); }
+        row.tiles = g.tiles.map(function (t, k) { var e = document.createElement('i'); e.className = 'vt'; e.textContent = t.g; e.style.left = finX(k, 1) + 'px'; e.style.width = t.w + 'px'; e.style.height = g.h + 'px'; e.style.setProperty('--c', finTint(t.c, r)); e.style.setProperty('--k', 2 * k);   /* --k: the place on the played line (tile 2k, twin 2k + 1) - the sweep's ladder */   /* 追記㉓: --c is this ROW'S shade of the letter's colour (finTint) */
+          if (t.g !== 'I') {   /* 追記⑯-②: every letter but I has a second version */ var sh = document.createElement('i'); sh.className = 'shade'; sh.innerHTML = '<span class="nm">' + t.g + '<sub>2</sub></span>'; sh.style.setProperty('--k', 2 * k + 1); e.appendChild(sh); e.twin = sh; }   /* LOG-190 追記⑯ (the user: 結尾 V6 那邊展示多排時要跟前面一樣的陰影): every movable letter on every version row wears its X₂ twin, out for the whole show (.shade on the overlay) */
+          row.appendChild(e); return e; });
+        row.r = r; fin.el.appendChild(row); fin.rows.push(row);
+        return row;
+      }
+      function finSplit(n) {   /* to n rows: the first call builds the overlay on top of the real row (which fades under it), later rows split out of the ones above and slide to their slots; the whole scales to fit above the line */
+        if (!head || !alive) return;
+        var g, r, fresh = [];
+        if (!fin.el) {
+          g = fin.geo = finGeo(); if (!g.tiles.length) return; fin.spread = false; fin.tm = 0;
+          fin.el = document.createElement('div'); fin.el.className = 'tut-vers'; fin.el.setAttribute('aria-hidden', 'true');
+          fin.el.style.left = g.left + 'px'; fin.el.style.top = g.top + 'px'; fin.el.style.width = g.width + 'px';   /* 追記⑱-②: born in place - left / top now glide, and finLay's rowBox() flushes style before finFit writes them (190y: V1 came sliding in from 0,0) */
+          fin.svg = document.createElementNS(NS, 'svg'); fin.el.appendChild(fin.svg);
+          head.appendChild(fin.el); finLay();
+          finRow(0, 0).classList.add('in');
+          fin.el.getBoundingClientRect();
+          requestAnimationFrame(function () { if (fin.el) fin.el.classList.add('in', 'shade'); });   /* 追記⑯: the twins slide out as the overlay fades in */
+          try { E.surface().classList.add('tut-away'); } catch (e) {}
+          demoLights(true);   /* 追記⑱-④ (the user: V6 那裡的陰影從最後展示 V3 就要有了): the stage dims as the row splits into V1-V3, not only at the spread */
+        }
+        g = fin.geo;
+        for (r = fin.rows.length; r < n; r++) fresh.push(finRow(r, (r >= 3 ? r - 3 : 0) * g.rowH));
+        finFit(n);
+      }
+      function finFit(n) {   /* n rows to their slots and the whole scaled to fit. Before the spread: on the row, growing down (the first split's V1 stands exactly on the real row). 追記⑱-② once laid out: the wider line is centred on the row's centre, the overlay climbs to just under the sky line and may run down to the floor (the now-playing block or the stage's foot), and only what still does not fit is scaled */
+        var g = fin.geo, W = finW(), left = g.left + (g.width - W) / 2, top = g.top, need = n * g.rowH - FIN_ROW_GAP, avail = lineY() - 16 - top, sc;
+        if (!fin.spread) sc = Math.max(0.35, Math.min(1, avail / need));
+        else {   /* 追記⑱-③ (the user: V6 那邊按鈕置中，不然字幕被推到超級上面): room for all FIN_ROWS versions is reserved from the spread - the full block is centred on the band from the row's top to the floor, never higher than 16 px under the sky line, scaled only if the band is shorter than the block; later splits fill it downward, so the sky line never has to move */
+          if (!fin.tm) fin.tm = finTopMin();   /* measured once, at the spread (190zb: re-measuring on every fit followed the height of whichever line was up - the top drifted 16 px at the six-row split) */
+          var fl = finFloor(left, W), tm = fin.tm, full = FIN_ROWS * g.rowH - FIN_ROW_GAP_S;
+          need = n * g.rowH - FIN_ROW_GAP_S; sc = Math.max(0.35, Math.min(1, (fl - tm) / full));
+          top = Math.max(tm, Math.min(g.top + (fl - g.top) / 2 - full * sc / 2, fl - full * sc));
+        }
+        if (fin.spread) {   /* 追記⑱-②: the wider line must not run under the brand title at the top right (190y: I sat on 'IraStoria') - slide the whole left, never under the stage's left edge */
+          var hero = document.querySelector('.hero-text h1') || document.querySelector('.hero-text'), hr = hero ? hero.getBoundingClientRect() : null, cx = left + W / 2, vw = W * sc;   /* the h1 itself: the section is zero-width, the title overflows it (190z) */
+          if (hr && hr.width > 0 && hr.bottom > top && hr.top < top + need * sc && cx + vw / 2 > hr.left - 16) cx = Math.max(16 + vw / 2, hr.left - 16 - vw / 2);
+          left = cx - W / 2;
+        }
+        fin.top = top; fin.el.style.left = left + 'px'; fin.el.style.top = top + 'px'; fin.el.style.width = W + 'px';
+        fin.el.style.height = need + 'px'; fin.svg.setAttribute('width', W); fin.svg.setAttribute('height', need);
+        fin.el.getBoundingClientRect();   /* a style flush: the new rows are born on the row they split from, and only then travel */
+        requestAnimationFrame(function () {
+          if (!fin.el) return;
+          fin.rows.forEach(function (w) { w.classList.add('in'); w.style.setProperty('--y', (w.r * g.rowH) + 'px'); });
+          fin.el.style.setProperty('--vs', sc.toFixed(3));
+        });
+      }
+      function finSpread() {   /* 追記⑱ (the user: 要畫線圖時將 2 從陰影直接也鋪成按鈕 / 追記⑱-②: A1 後面 A2 才 B1): the twins leave their tiles' shadows and stand right after them on the line - every tile glides to its new slot, the | lines with it, the overlay re-fits - and from here the route and the web count 1 and 2 as places of their own */
+        if (!fin.el || fin.spread) return; var g = fin.geo;
+        fin.spread = true; g.rowH = g.h + FIN_ROW_GAP_S;
+        fin.el.style.setProperty('--sub', g.gapS + 'px'); fin.el.classList.add('spread');
+        fin.rows.forEach(function (row) { row.tiles.forEach(function (e, k) { e.style.left = finX(k, 1) + 'px'; }); row.seps.forEach(function (b, i) { b.style.left = finSepX(i) + 'px'; }); });
+        finFit(fin.rows.length);
+      }
+      function finShuffle(dur) {   /* the user: 前端後端隨意左右轉換，看起來像自由度極高的同時不同步變換順序，最後回歸正常順序 - every row's first half and second half swap two tiles at their own random pace, and all come home together */
+        var g = fin.geo; if (!g) return;
+        fin.rows.forEach(function (row) {
+          [g.pre, g.post].forEach(function (idx) {
+            if (idx.length < 2) return;
+            var home = idx.map(function (k) { return g.tiles[k].x; }), perm = idx.slice();
+            function apply() { for (var p = 0; p < perm.length; p++) row.tiles[perm[p]].style.left = home[p] + 'px'; }
+            var tt = 0.1 + Math.random() * 0.5;
+            while (tt < dur) { soon(tt, function () { var a = Math.floor(Math.random() * perm.length), b = (a + 1 + Math.floor(Math.random() * (perm.length - 1))) % perm.length, x = perm[a]; perm[a] = perm[b]; perm[b] = x; apply(); }); tt += 0.55 + Math.random() * 0.45; }   /* 追記⑯ (the user: V3 那個隨機轉換的頻率太瘋狂了，冷靜一點點): .26-.56 s -> .55-1.0 s between swaps, so each .5 s glide lands before the next - about 5-6 swaps per half instead of 12 */
+            soon(dur + 0.3, function () { perm = idx.slice(); apply(); });
+          });
+        });
+      }
+      function finHop(grp, a, b, cls) {   /* one arrow: from the right edge of node a {k, r, v} to the left edge of node b - letter k, version row r, 1 or 2 (追記⑱) - straight along a line, an S across lines, always arriving level so the head points right */
+        var g = fin.geo, ta = g.tiles[a.k], tb = g.tiles[b.k], x1 = finX(a.k, a.v) + ta.w, y1 = finY(a.r), x2 = finX(b.k, b.v), y2 = finY(b.r), bend = Math.max(6, Math.min(40, Math.abs(y2 - y1) * 0.35, (x2 - x1) * 0.5));   /* 追記⑱-②: a tile and its twin are one gap apart - the S must not curl back on itself */
+        var p = document.createElementNS(NS, 'path'), hd = document.createElementNS(NS, 'polygon');
+        p.setAttribute('d', y1 === y2 ? 'M' + x1 + ' ' + y1 + 'L' + x2 + ' ' + y2 : 'M' + x1 + ' ' + y1 + 'C' + (x1 + bend) + ' ' + y1 + ',' + (x2 - bend) + ' ' + y2 + ',' + x2 + ' ' + y2);
+        p.setAttribute('pathLength', '1'); p.setAttribute('class', cls);
+        hd.setAttribute('points', '0,0 -9,-4.5 -9,4.5'); hd.setAttribute('transform', 'translate(' + x2 + ' ' + y2 + ')'); hd.setAttribute('class', cls + 'h');
+        var ac = finTint(tb.c, b.r);   /* 追記㉓: the landing row's own shade */
+        p.style.setProperty('--ac', ac); hd.style.setProperty('--ac', ac); p.style.setProperty('--k', a.k); hd.style.setProperty('--k', a.k);
+        grp.appendChild(p); grp.appendChild(hd);
+        return p;
+      }
+      function finVers(k) { return fin.spread && fin.geo.tiles[k].g !== 'I' ? [1, 2] : [1]; }   /* 追記⑱: the versions letter k offers once the twins are laid out - I has no second */
+      function finLine() { var g = fin.geo, out = [], k, i, vs; for (k = 0; k < g.tiles.length; k++) { vs = finVers(k); for (i = 0; i < vs.length; i++) out.push({ k: k, v: vs[i] }); } return out; }   /* 追記⑱-②: the played line as places - A1 A2 B1 B2 … H2 I (or A … I before the spread) */
+      function finRoute() {   /* the user: 箭頭指向三個版本隨機的一段，展示高隨機性的路線 - the played line walked from A to I with every place on a version drawn at random, one hop every .25 s, the landing tile lit in its colour. 追記⑱-②: A1 → A2 → B1 → … → H2 → I, so every twin is visited */
+        var g = fin.geo; if (!g || !fin.rows.length || !fin.svg) return;
+        var n = fin.rows.length, grp = document.createElementNS(NS, 'g'), path = finLine().map(function (p) { return { k: p.k, v: p.v, r: Math.floor(Math.random() * n) }; }), HOP = 0.25, k;
+        grp.setAttribute('class', 'vroute'); fin.svg.appendChild(grp);
+        finNode(fin.rows[path[0].r], path[0].k, path[0].v).classList.add('on');
+        for (k = 0; k < path.length - 1; k++) (function (k) {
+          soon(k * HOP, function () { if (!fin.el) return; var p = finHop(grp, path[k], path[k + 1], 'va'); p.classList.add('go'); if (p.nextSibling) p.nextSibling.classList.add('go'); });
+          soon(k * HOP + 0.42, function () { if (fin.el) finNode(fin.rows[path[k + 1].r], path[k + 1].k, path[k + 1].v).classList.add('on'); });
+        })(k);
+        soon((path.length - 1) * HOP + 1.6, function () { grp.classList.add('off'); fin.rows.forEach(function (row) { row.tiles.forEach(function (t) { t.classList.remove('on'); if (t.twin) t.twin.classList.remove('on'); }); }); soon(0.7, function () { grp.remove(); }); });
+      }
+      function finWeb() {   /* the user: 所有可以穿插的都出指向箭頭，比方說 V1A 指向 V1-V6B. 追記⑱-② (the user: V6 箭頭也要指向那個按鈕可以接去的片段): only what a place can go to - every place on the played line to the NEXT place on every version (X1 to every X2, X2 to every next X1, H2 to every I): 16 x 6 x 6 = 576 arrows at six versions */
+        var g = fin.geo; if (!g || !fin.svg) return; var n = fin.rows.length, grp = document.createElementNS(NS, 'g'), line = finLine(), k, r1, r2;
+        grp.setAttribute('class', 'vweb'); fin.svg.appendChild(grp);
+        for (k = 0; k < line.length - 1; k++) for (r1 = 0; r1 < n; r1++) for (r2 = 0; r2 < n; r2++) finHop(grp, { k: line[k].k, v: line[k].v, r: r1 }, { k: line[k + 1].k, v: line[k + 1].v, r: r2 }, 'vw');
+        /* 追記⑱-④ (the user: 沒有在 V6 那邊看到可以繞回先前段落的箭頭): the way back, as the demonstration showed it (C1 → B1, B1 → A2) - every X1 (and I) to the previous letter's X1 and X2 on every version, dipping under the line, head pointing left */
+        var j; for (k = 0; k < line.length; k++) { if (line[k].v !== 1 || line[k].k === 0) continue; for (j = 0; j < line.length; j++) { if (line[j].k !== line[k].k - 1) continue; for (r1 = 0; r1 < n; r1++) for (r2 = 0; r2 < n; r2++) finBack(grp, { k: line[k].k, v: 1, r: r1 }, { k: line[j].k, v: line[j].v, r: r2 }, 'vb'); } }
+        grp.getBoundingClientRect(); requestAnimationFrame(function () { grp.classList.add('in'); });
+      }
+      function finBack(grp, a, b, cls) {   /* 追記⑱-④: one arrow BACK - from the left edge of node a to the right edge of node b (an earlier letter), arriving level with the head pointing left.
+                                              ★ LOG-190 追記㉓ (the user: 結尾串聯 V6 的可能性箭頭不要壓到按鈕本身): it runs in the GUTTERS only - the column between two tiles and the
+                                              12 px channel between two version rows - never across a tile. To the previous letter's X₂ (whose right edge faces a across one column) it
+                                              is an S down that column; to its X₁ it leaves a's column into the channel under (or over) a's row, runs left under the X₂ and climbs the
+                                              column before it to b - rounded corners, the same dashed warm stroke as before (the old bow across the tiles is gone) */
+        var g = fin.geo, tb = g.tiles[b.k], tl = g.tiles[a.k - 1], x1 = finX(a.k, a.v), y1 = finY(a.r), x2 = finX(b.k, b.v) + tb.w, y2 = finY(b.r);
+        var c1 = (x1 + finX(a.k - 1, 2) + tl.w) / 2, c0 = x2 + g.gapS / 2, n = fin.rows.length, d;   /* c1: the column a's left edge opens on (past a | it is wider - its true middle); c0: the column after b */
+        if (b.v === 2) d = a.r === b.r ? 'M' + x1.toFixed(1) + ' ' + y1.toFixed(1) + 'L' + x2.toFixed(1) + ' ' + y2.toFixed(1) : 'M' + x1.toFixed(1) + ' ' + y1.toFixed(1) + 'C' + c1.toFixed(1) + ' ' + y1.toFixed(1) + ',' + c1.toFixed(1) + ' ' + y2.toFixed(1) + ',' + x2.toFixed(1) + ' ' + y2.toFixed(1);
+        else {
+          var below = b.r > a.r || (b.r === a.r && a.r < n - 1), cy = below ? y1 + g.h / 2 + FIN_ROW_GAP_S / 2 : y1 - g.h / 2 - FIN_ROW_GAP_S / 2;   /* the channel next to a's row on b's side (the last row's own turns over itself, not off the chart) */
+          d = finPath([[x1, y1], [c1, y1], [c1, cy], [c0, cy], [c0, y2], [x2, y2]], 5);
+        }
+        var p = document.createElementNS(NS, 'path'), hd = document.createElementNS(NS, 'polygon');
+        p.setAttribute('d', d); p.setAttribute('class', cls);   /* no pathLength: the dashes (os.css .vb, 3 3) are in px - on a pathLength of 1 the first dash covered the whole stroke */
+        hd.setAttribute('points', '0,0 9,-4.5 9,4.5'); hd.setAttribute('transform', 'translate(' + x2 + ' ' + y2 + ')'); hd.setAttribute('class', cls + 'h');
+        var ac = finTint(tb.c, b.r);   /* 追記㉓: the landing row's own shade */
+        p.style.setProperty('--ac', ac); hd.style.setProperty('--ac', ac); p.style.setProperty('--k', 2 * a.k); hd.style.setProperty('--k', 2 * a.k);
+        grp.appendChild(p); grp.appendChild(hd);
+        return p;
+      }
+      function finExit() {   /* 追記⑱-④ (the user: 結束時按鈕沒有退出 transition 就直接消失): the chart fades (the overlay's own .5 s) and the dim lifts FIN_BYE s into the outro, ahead of onBye - the row itself stays away (追記⑯) */
+        if (fin.el) fin.el.classList.remove('in');
+        HOST.classList.remove('tut-demo'); if (head) head.classList.remove('tut-demo');
+      }
+      function finSweep() { if (!fin.el) return; fin.el.classList.add('sw'); soon(3.0, function () { if (fin.el) fin.el.classList.remove('sw'); }); }   /* the user: 從左到右的箭頭燈光 - tiles and arrows light on the letter ladder (os.css tutvsw) */
+      function finOut() {
+        if (fin.el) { var e = fin.el; fin.el = null; fin.svg = null; fin.rows = []; e.classList.remove('in'); setTimeout(function () { e.remove(); }, 700); }
+        try { E.surface().classList.remove('tut-away'); } catch (e) {}
+      }
+      function finale() {   /* entered the outro loop for the first time: the show's own schedule, on the audio clock like everything else */
+        if (fin.on) return; fin.on = true;
+        hide(); unframeAll(); try { E.hint(false); E.surface().style.setProperty('--fdy', FIN_DOWN + 'px'); E.surface().classList.add('tut-down'); } catch (e) {}   /* the row slides down (the user: 那排按鈕會下滑) and the band it leaves above is where the lines are said */
+        soon(1.0, function () { subtitle('tut_s_v1', { sky: true }); });
+        soon(5.5, function () { subtitle('tut_s_v2', { sky: true, marks: [null, function () { finSplit(3); }] }); });
+        soon(10.5, function () { subtitle('tut_s_v3', { sky: true }); });
+        soon(11.2, function () { finShuffle(4.8); });
+        soon(17.5, function () { finSpread(); subtitle('tut_s_v4', { sky: true }); });   /* 追記⑱-③ (the user: V6 那邊要像展示 ABC 那邊一樣的畫面暗下來): the stage is dim under the chart (.tut-demo, from the V3 split since ⑱-④; finExit / end() lift it) */   /* 追記⑱: the twins step out beside their tiles as the line opens (spread first: the overlay's new top is where this sky line is placed over); the route (.5 s later) can land on them */
+        soon(18.0, finRoute);
+        soon(23.0, function () { subtitle('tut_s_v5', { sky: true, marks: [null, function () { finSplit(6); }] }); });   /* 追記⑰: 24.5 -> 23.0 */
+        soon(24.7, finWeb); soon(25.7, finSweep);   /* 追記⑰: 26.2 / 27.2 -> 24.7 / 25.7 */
+        soon(28.5, function () { subtitle('tut_s_v6', { sky: true }); });   /* 追記⑰: 31.0 -> 28.5, over the outro */
+        soon(FIN_LEAVE, function () { fin.leave = true; E.force('I'); });
+      }
+      function finEnd() {   /* the outro proper has entered under the six rows: nothing comes back up (追記⑯) - the last line is said in the sky once the sixth has stood, and onBye closes the stage two bars from the end */
+        hide(); unframeAll(); soon(FIN_V7, function () { subtitle('tut_s_v7', { sky: true }); }); soon(FIN_BYE, finExit);
       }
 
       /* ---- the hand-over: A is the one thing that can be pressed while the rest of the line is still locked */
@@ -6466,76 +6935,173 @@
       /* ---- ★ THE SCRIPT. Times are seconds from the music's downbeat; an eight-bar pass of the opening loop is 13.24 s and
          its decision falls 5.2 s before its end, so steps 1-8 simply have to be done before the pass step 9 aims at. There is
          no 48 s deadline any more: the loop waits for the visitor's press, however long that takes (the user, step 9). */
+      /* LOG-188: ONE PASS of the opening loop - 8 bars at 145 BPM (LOG-184 measured 13.241 s between passes). Step 1 grew by exactly that
+         much, so every time from step 2 on is written as L1 + <the old time>: the forced A2 still lands on a decision the same way, one
+         loop later, and the demonstration's own schedule is untouched. */
+      var L1 = 13.2414;
       function script() {
         /* the opening, before a single button exists (the user: 音樂先出 → 按鈕還沒出現前，中央用許願池式字幕打招呼) */
         at(1.0, function () { subtitle('tut_open1', { greet: true }); });
-        at(5.0, function () { subtitle('tut_open2', { greet: true }); });
+        at(5.6, function () { subtitle('tut_open2', { greet: true }); });   /* LOG-188 (the user): one short line now - 「現在開始概念及使用教學。」 追記⑥ (the user: 跟上一句會有短暫的重疊): the first line starts fading at 4.9 and narration now fades in .7 s (.wm.wsay.out) - this one enters once it is gone; its own tail (subLen 6.01) still ends before step 1 at 11.6 */
         /* ★ step 1: a piece is made of sections. 追記② (the user: 燈光出現時機、範例條消失時機跟左右位移時機都抓得很爛、太慢): no light, no
            travelling - the letters come out fast, one every STEP, and each clip block goes the moment its letter arrives */
+        at(TUT_DUCK_AT, function () { E.duck(TUT_DUCK, TUT_DUCK_TC); });   /* LOG-190 追記⑲: A's two opening beats (the intro) are over - the music starts stepping back, and is most of the way to TUT_DUCK by the time the greeting settles */
         at(11.6, function () { clipIn(); show('tut_s1a', clipBox); });
-        at(14.2, function () { show('tut_s1a2', clipBox); clipSplit(); });   /* 追記③ (the user: 講到「它是由好幾個段落組成的」這句才切塊): its own sentence, and the one region breaks into the sections as it starts */
-        at(16.6, function () { show('tut_s1b', E.surface()); });
-        LINE.forEach(function (g, k) { at(17.2 + k * TUT_REVEAL_STEP, function () { clipDrop(k); E.reveal('tile', g); }); });
-        at(17.2 + TUT_REVEAL_SPAN + 0.4, clipOut);
+        at(15.2, function () { show('tut_s1a2', clipBox); clipSplit(); });   /* LOG-188 (the user: 與上一句／下一句的時間都拉長): 2.6 s → 3.6 s on both sides */   /* 追記③ (the user: 講到「它是由好幾個段落組成的」這句才切塊): its own sentence, and the one region breaks into the sections as it starts */
+        at(18.8, function () { show('tut_s1b', E.surface()); });
+        LINE.forEach(function (g, k) { at(19.4 + k * TUT_REVEAL_STEP, function () { clipDrop(k); E.reveal('tile', g); }); });
+        /* LOG-188 (the user: 5 個按鈕類似泡泡吸在一起變回一開始的音訊預覽顯示條並顯示「大多數音樂都是採線性進行」→ 再度分裂成 A–I 並顯示中間 | 線 →
+           「但是這邊要展示音樂也可以有的隨機性」前後段兩邊依序快速洗牌內部的三個字母): the letters slide back into the blocks they came from and the
+           region closes into one bar - most music runs straight through; then it is cut a second time, the letters come back where they were,
+           the | lines appear between the zones (labels still hidden, step 2 names them), and each half shuffles its three letters once round -
+           D, C, B to the front in turn puts B C D back exactly - the first half first, the second half after it. The whole insert is one
+           pass of the opening loop long (L1), so the rest of the script simply moves down by L1. */
+        at(23.0, function () { clipMerge(); show('tut_s1c', clipBox); });   /* 追記③ (the user: 「大多數的音樂…」太快出現蓋過前一句): tut_s1b now stands 4.2 s, not 2.8 */
+        at(26.4, function () { hide(); clipCut(); });
+        at(27.3, function () { clipOut(); E.reveal('seps'); });   /* 追記②: the cut IS the reveal (clipCut), so the | lines follow it straight away */
+        at(28.0, function () { unbounce(); show('tut_s1d', E.surface()); });
+        /* LOG-189 追記⑤ (the user: 改成一前段一後段左右交錯): D, H, C, G, B, F - the halves take turns, and each is back to B C D / F G H after its three */
+        [['pre', 'D'], ['post', 'H'], ['pre', 'C'], ['post', 'G'], ['pre', 'B'], ['post', 'F']].forEach(function (m, k) { at(28.8 + k * 0.6, function () { E.move(m[0], m[1], 0); }); });
+        at(32.5, arrowsSweep);   /* LOG-189 追記⑤ (the user: 交換停止後播放方向箭頭從左到右連續亮一次): once, and gone again before step 2 - step 3 lights them for good */
+        at(33.6, function () { hide(); });
         /* ★ step 2: five zones. 追記④ (the user: 不要一格一格慢慢打字，改成獨立格 - 講到哪一區，對話框就跟圈起來的白框一起往右移動，並單獨顯示那一區的名稱):
            the heading is typed once; then ONE ring walks A -> first half -> E -> second half -> I and ONE bubble, carrying only that zone's
            name (a piece of tut_s2z), slides along with it - the same bubble, moved, not five bubbles blinking in and out */
-        at(21.0, function () { E.reveal('zones'); show('tut_s2a', E.surface()); });
+        at(L1 + 21.0, function () { E.reveal('zones'); show('tut_s2a', E.surface()); });
         var ZONES = [['A', 'tile'], ['pre', 'zone'], ['E', 'tile'], ['post', 'zone'], ['I', 'tile']], fZ = null;
         ZONES.forEach(function (z, k) {
-          at(23.0 + k * 1.25, function () {
+          at(L1 + 23.0 + k * 0.6, function () {   /* 追記④ (the user: 還是停太久): 0.6 s a zone, s2b 1.2 s after the last. 追記③ (the user: 分別展示開頭／前段／中繼／後段／結尾那邊拖太久): 1.25 s a zone -> 0.9 s, and s2b / s2b2 / s2c follow it up */
             var tile = z[1] === 'tile', tgt = tile ? E.btn(z[0]) : zoneBox(z[0]);
             if (!fZ || frames.indexOf(fZ) < 0) fZ = frame(tgt, { pad: tile ? 5 : 8, cls: tile ? '' : 'zone' });
             else reframe(fZ, tgt, { dur: 0.34, pad: tile ? 5 : 8, cls: tile ? '' : 'zone' });
-            show('tut_s2z', tgt, { piece: k, instant: true, slide: k > 0, again: true });
+            show('tut_s2z', tgt, { piece: k, instant: true, slide: true, again: true });   /* LOG-190 (the user: 跳到「開頭」沒有 transition): the bubble is still standing from tut_s2a, and show() without slide only dips it 2 % in one frame - so the first piece glides to A like the four after it */
           });
         });
-        var fA = null, fI = null;
-        at(29.6, function () { unframeAll(); show('tut_s2b', E.surface()); fA = frame(E.btn('A')); fI = frame(E.btn('I')); });   /* A and I ring together (the user: 兩顆按鈕同時框) */
-        at(34.2, function () {   /* 追記③ (the user): A's ring races right and I's races left, they meet on E, and the one ring left takes E's colour */
-          show('tut_s2b2', E.btn('E'));
-          var ec = tileColor('E'), e = E.btn('E');
-          /* 追記④: BOTH rings start turning E's colour a tenth of a second in (about D and F on the way), so they meet already in it */
-          if (fA && fI) { reframe(fI, e, { dur: 0.36, color: ec, early: 0.1 }); reframe(fA, e, { dur: 0.36, color: ec, early: 0.1, then: function () { dropFrame(fI); fI = null; } }); }
-          else { unframeAll(); frame(e, { color: ec }); }
+        /* ★ LOG-189 (the user, 追記④⑵: A 與 I 兩顆按鈕本體向 E 滑動，中間的按鈕與 | 線在被碰到之前消失；A、I 對稱各停一邊、中間留 E 的空位；
+           然後長出 E；A、I 滑回原位，滑過之處按鈕陸續顯現): the TILES move now, not rings. A glides to D's slot and I to F's - one slot each side
+           of E, E's own place left empty - and every tile in their way is covered before they reach it (B/H first, then C/G, then D/F, E
+           with them); the | lines and the zone names go with them. E is then born between the two from nothing (scale 0 on the bounce
+           curve), and on the way home the tiles pop back in one by one behind A and I, the | lines and names last. */
+        function slot(g) { var b = E.btn(g); return b && b.parentNode ? b.parentNode.getBoundingClientRect() : null; }   /* the column, which stays in the flow while its tile is hidden */
+        function slideBy(g, x, tr) {   /* the tile g glides x px along the row (every column floats on the same clock, so x is all that moves); `tr` = the transition, default the long glide */
+          var t = E.btn(g); if (!t) return;
+          t.style.transition = tr || 'transform 1.3s cubic-bezier(.45,.05,.3,1)'; void t.offsetWidth;
+          t.style.transform = 'translateX(' + x.toFixed(2) + 'px)';
+        }
+        function slideTo(g, over, tr) {   /* the tile g glides until its column centre sits on column `over` */
+          var a = slot(g), b = slot(over); if (!a || !b) return;
+          slideBy(g, (b.left + b.width / 2) - (a.left + a.width / 2), tr);
+        }
+        /* LOG-190 追記⑥ (the user: A 跟 I 縮進去那邊是直接縮到兩個在中間碰在一起，然後 E 出現之後把這兩個擠開的感覺): the pair MEETS on E's column
+           centre - A's right edge and I's left edge on the same line, half a tile each side of it - and E, growing there, pushes them out to D's and F's
+           columns. offsetWidth, not getBoundingClientRect().width: the latter is scaled by the tile's own transform */
+        function meetX(g, sign) {
+          var t = E.btn(g), a = slot(g), e = slot('E'); if (!t || !a || !e) return 0;
+          var w = t.offsetWidth || 58;
+          return ((e.left + e.width / 2) + sign * (w + MEET_GAP) / 2) - (a.left + a.width / 2);   /* 追記⑧ (the user: A 跟 I 聚中好像距離有點太近了): a row-gap's breath between them, not edge to edge */
+        }
+        var PUSH = 'transform .6s cubic-bezier(.34,1.56,.64,1)';   /* the push borrows E's own bounce - one motion, one overshoot */
+        var MEET_GAP = 14;   /* 追記⑧: the gap A and I keep when they meet - the row's own .9rem between tiles */
+        function slideHome(g) { var t = E.btn(g); if (!t) return; t.style.transition = 'transform 1.3s cubic-bezier(.45,.05,.3,1)'; void t.offsetWidth; t.style.transform = ''; soon(1.4, function () { t.style.transition = ''; }); }
+        at(L1 + 26.6, function () {
+          unframeAll(); show('tut_s2b', E.surface(), { slide: true });   /* LOG-190: same seam - the bubble is still up under I, let it glide back under the row */
+          E.lit('A', true); E.lit('I', true);   /* 追記⑦ (the user: A 跟 I 要先亮): the two the line is about light up in their own colour before they move */
+          E.conceal('zones');
+          [['B', 'H', 0], ['C', 'G', 0.15], ['E', null, 0.25], ['D', 'F', 0.35]].forEach(function (m) { soon(m[2], function () { E.cover(m[0]); if (m[1]) E.cover(m[1]); }); });
+          soon(0.35, function () { slideBy('A', meetX('A', -1)); slideBy('I', meetX('I', 1)); });   /* 追記⑥: to the meeting line, not to D / F. measured: A's edge reaches B's slot 0.16 s into the glide, C's at 0.32 s, D's at 0.55 s - starting 0.35 s after B/H are covered keeps every tile gone before it is touched (D / F and E are hidden by then too) */
         });
-        at(38.8, function () { unframeAll(); show('tut_s2c', E.surface()); zoneFrame('pre'); zoneFrame('post'); });   /* the two zones between the | lines */
-        /* steps 3-8 */
-        at(44.0, function () { unframeAll(); E.reveal('arrows'); arrowsWave(); show('tut_s_order', E.surface()); });
-        at(49.0, function () { E.layer(true, 3.0); show('tut_s_hold', E.btn('A')); frame(E.btn('A')); });   /* 追記② (the user): the drums start creeping in from THIS line - a slow fade, ~9 s to full */
-        at(54.0, function () { show('tut_s_layer', E.btn('A')); });
-        at(59.0, function () { unframeAll(); irisIn(tickRect, 46); show('tut_s_tick', tickRect, { side: 'above' }); });   /* the shade closes in on the tick */
-        at(65.0, function () { irisOut(); hide(); });
-        /* 追記③ (the user: 步驟 7／8 合併 - 前段、後段兩個框同時出現、同時快速洗牌預覽): both halves framed at once, D and H shuffle to the front
-           together, then back; one line covers both zones */
-        /* 追記④ (the user: 才剛框好就馬上移動＝錯，要先講、再動；左右兩區的換位不要同步，要有交錯感): the rings go up and the line is spoken FIRST;
-           the moves start once 「像這樣把 D 和 H…」 has been typed (2.6 s in), the first half a beat ahead of the second, and they come back
-           in the opposite order - the second half first - so the two zones never move as one */
-        at(65.8, function () { zoneFrame('pre'); zoneFrame('post'); show('tut_s_swap_pre', E.surface()); });
-        at(68.4, function () { E.move('pre', 'D', 0); });
-        at(69.0, function () { E.move('post', 'H', 0); });
-        at(71.4, function () { E.move('post', 'H', 2); });
-        at(72.0, function () { E.move('pre', 'D', 2); });
-        at(73.6, function () { unframeAll(); hide(); });
+        at(L1 + 29.6, function () {   /* E grows between them, from nothing, with the overshoot */
+          var e = E.btn('E'); show('tut_s2b2', e && e.parentNode ? e.parentNode : E.surface());
+          if (e) { e.style.transition = 'none'; e.style.transform = 'scale(0)'; void e.offsetWidth; e.style.transition = 'transform .6s cubic-bezier(.34,1.56,.64,1),opacity .45s ease'; }
+          E.reveal('tile', 'E'); if (e) { e.style.transform = ''; soon(0.7, function () { e.style.transition = ''; }); }
+          slideTo('A', 'D', PUSH); slideTo('I', 'F', PUSH);   /* 追記⑥: E grows on the line where A and I meet and shoves them apart, onto D's and F's columns, with its own bounce */
+          E.lit('E', true); E.lit('A', false); E.lit('I', false);   /* 追記⑦ (the user: E 出現時 E 亮自己的顏色然後 A/I 變不亮): the light passes to E as it appears */
+        });
+        at(L1 + 32.0, function () {   /* home: A and I slide back, the tiles they uncover pop in behind them (D/F, C/G, B/H), then the | lines and the names */
+          try { E.surface().classList.add('bounce'); } catch (e) {}
+          slideHome('A'); slideHome('I');
+          [['D', 'F', 0.45], ['C', 'G', 0.75], ['B', 'H', 1.1]].forEach(function (m) { soon(m[2], function () { E.reveal('tile', m[0]); E.reveal('tile', m[1]); }); });
+          soon(1.3, function () { E.reveal('zones'); }); soon(2.0, unbounce);
+        });
+        at(L1 + 33.4, function () { hide(); E.lit('E', false); });   /* 追記⑦: E's light goes out with the line about it */
+        /* steps 3-6. LOG-189: pulled 10.2 s forward (the A / I ring race and the old step-2 close are gone) and the tick's shade now sits over the
+           decision one pass EARLIER (L1 + 47.77 s, 2 s into the shade as before), so the whole tail moves up one pass of the opening loop */
+        at(L1 + 33.8, function () { unframeAll(); E.reveal('arrows'); arrowsWave(); show('tut_s_order', E.surface()); });
+        at(L1 + 37.8, function () { E.layer(true, 3.0); E.duck(1, 3.0); show('tut_s_hold', E.btn('A')); frame(E.btn('A')); });   /* LOG-190 追記⑯: the music comes up out of the background on the same slow curve as the drums */   /* 追記② (the user): the drums start creeping in from THIS line - a slow fade, ~9 s to full */
+        at(L1 + 41.8, function () { show('tut_s_layer', E.btn('A')); });
+        at(L1 + 45.8, function () { unframeAll(); irisIn(tickRect, 46); show('tut_s_tick', tickRect, { side: 'above' }); });   /* the shade closes in on the tick */
+        at(L1 + 51.4, function () { irisOut(); hide(); });
+        /* ★ LOG-189 (the user, 追記④⑵: s2c 與 swap_pre 合併成一段連續示範，縮短總時間): the old step-2 close 「所以真正可以自由改動的…」 and steps 7/8
+           are ONE demonstration now, after the tick - the two zone rings go up with s2c, stay up while swap_pre is spoken, and D and H are
+           pulled to the front and back under the same rings. 追記④ (the user: 先講、再動；兩區交錯): the moves start once 「像這樣把 D 和 H…」
+           is up, the first half a beat ahead of the second, and they come back in the opposite order */
+        /* LOG-190 (the user: 取消兩區白框，改藏 A／E／I 與四條 | 線到這段結束才淡回；講到「可以拖著換位」時六顆可動按鈕下方出現 ‹ ›): no rings -
+           the fixed letters and the zone marks go behind the curtain as in tut_s2b, so the six movable tiles are all that is left on the line,
+           and the drag hint (a ‹ › under each of them) fades in with tut_s_swap_pre and out with everything else at 58.2 (追記④) */
+        at(L1 + 51.6, function () { show('tut_s2c', E.surface()); E.conceal('zones'); E.cover('A'); E.cover('E'); E.cover('I'); });
+        /* LOG-190 追記④ (the user: A-B 那邊提前進入請做在進度 50% 前): the swap demonstration was pulled 2.4 s forward so that demoStart itself
+           landed inside the FIRST HALF of the sounding pass (L1+52.96 → L1+66.20, 50 % mark L1+59.58).
+           追記⑨ (the user: 檢查是否有因為 ABC 提早 crossfading 而提早結束前面可以互換的提示): that compression is WITHDRAWN. What has to obey the
+           50 % rule is the CUT, and the cut now runs a whole crossfade ahead of demoStart (see XF below) - it falls at L1+56.76, ≈23 % of the
+           pass as heard, so demoStart is free again and the demonstration gets back LOG-189's full length. The tick's shade (it ends at
+           L1+51.4) is still the hard floor below - s2c may not start before L1+51.6. */
+        at(L1 + 54.6, function () { show('tut_s_swap_pre', E.surface()); E.hint(true); });
+        at(L1 + 56.4, function () { E.move('pre', 'D', 0); });
+        at(L1 + 57.0, function () { E.move('post', 'H', 0); });
+        at(L1 + 59.2, function () { E.move('post', 'H', 2); });
+        at(L1 + 59.8, function () { E.move('pre', 'D', 2); });
+        /* 追記⑨ (the user: 解釋完前段後段可以隨機排列之後就可以直接隱藏，不用先重新顯現出全部的按鈕後再一起隱藏): the line is about to be taken away by
+           demoStart's .tut-away 0.3 s from now, so A / E / I and the zone marks are NOT brought back here just to be swept off with everything
+           else - they come back under the curtain, in handBack(), where the line returns for 「換你了」 */
+        at(L1 + 60.6, function () { hide(); E.hint(false); });
         /* ★ step 9: the continuation demonstration - real audio, on a schedule of its own.
-           追記③ (the user: 必須從 A2 → B1，到步驟 9 時就該已在播 A2): the opening is released HERE, during step 8 - the pass that is sounding
-           ends at 79.44 s and its decision falls at 74.24 s, so a force set now is the one that decision consumes, and A2 sets off at
-           79.44 s while the demonstration's first line is up. Forced rather than released: `holding` stays true, so after the
-           demonstration the opening loops again and waits for the visitor's own press. */
-        at(66.0, function () { E.force('A2'); });
-        at(74.2, demoStart);
+           追記③ (the user: 必須從 A2 → B1，到步驟 9 時就該已在播 A2): the opening is released HERE, during the swap demonstration - the pass that is
+           sounding ends at L1 + 66.20 s (LOG-189: one pass EARLIER than LOG-188 - the tail is a pass shorter) and its decision falls at L1 + 61.0 s,
+           so a force set now is the one that decision consumes, and A2 sets off at L1 + 66.20 s while the demonstration's first line is up.
+           Forced rather than released: `holding` stays true, so after the demonstration the opening loops again and waits for the visitor's own press. */
+        /* LOG-190 追記② (the user: 示範畫面出來前就用 A2 crossfade 切過去，不然又等一圈太久): no A2 queued for the seam any more - at demoStart the music
+           cuts to A2 at once (2-beat equal-power crossfade, same bar same beat, E.releaseNow), B1 already in the force slot so A2's own decision
+           (its end is still the pass's end, L1+66.20) takes it: B1 enters one whole pass earlier than LOG-189. If the cut cannot be made (A2
+           not decoded, paused) the old seam path stands in.
+           追記④: and the cut obeys the same midHalf() 50 % rule as the visitor's press; the E.force('A2') fallback is what runs if it ever does not. */
+        /* LOG-190 追記⑦ (the user: 要在切到 ABC 演示前就開始 crossfade，大概在那輪的 20-30% 的位置就開始慢慢 crossfade，直到 ABC 演示顯現出來之後完全切換): the cut to A2
+           STARTS one crossfade ahead of demoStart and is complete as the graph appears - the same midHalf() rule, the same curve, only launched
+           earlier. demoStart then finds A2 already in and B1 goes into the slot as before.
+           ★ 追記⑨ (the user: 提早並延長 crossfading 讓他聽起來不要像是瞬間轉換): the demonstration's blend is now TWICE the press's - XF_DEMO_BEATS = 10
+           beats (4.14 s at 145) against RELEASE_XF_BEATS = 5, so it is heard as a turn rather than a switch. It begins at L1 + 60.9 - 4.14 =
+           56.76 (28.7 % of the planned pass; the sounding pass starts ≈0.76 s later, so ≈23 % heard - still the first half, so midHalf() allows
+           it) and is complete exactly as the graph appears. The room: the cut enters at pos ≈3.04 s with 10.2 s of the pass left, the crossfade
+           ends at +4.16 s and A2's own decision point (the pass's end - 3.56 s) is at +6.64 s - 2.5 s of clearance. The drum layer rides the
+           same 4.1 s fade down, which is the length asked for. */
+        /* ★ LOG-190 追記⑩ (the user: ABC演示提前crossfade從當次循環就開始crossfade好了): the blend now starts at the TOP of the sounding pass and runs
+           all the way to demoStart - L1 + 54.0 is 0.27 s inside it (the pass is heard from L1 + 53.73: probe 190f, cut at 56.76 entered at pos 3.03),
+           so midHalf() allows it; one step earlier would be the previous pass at ~99 % and fall back to the seam. 6.9 s = 16.7 beats at 145; it
+           ends at demoStart as before, A2's decision point is 2.5 s later. The drum layer rides the same 6.9 s fade down. */
+        var XF_FROM = 54.0;
+        var XF_DEMO_BEATS = (60.9 - XF_FROM) / E.xfSec(1);   /* the demonstration's crossfade, in beats - the press keeps RELEASE_XF_BEATS */
+        var XF = E.xfSec(XF_DEMO_BEATS);
+        at(L1 + 60.9 - XF, function () { if (!E.releaseNow(XF_DEMO_BEATS)) E.force('A2'); });
+        at(L1 + 60.9, function () { demoStart(); E.force('B1'); });
       }
       var demoLeg = 0;   /* A2 is entered twice during the demonstration: 0 = not yet, 1 = the first A2 (before B), 2 = the second (before C), 3 = B1 has begun again, from C1 (LOG-186: C2 is out of the demonstration) */
       function demoStart() {
         if (phase !== 'wait') return;
         phase = 'demo'; hide(); unframeAll(); demoLights(true);
-        soon(0.9, graphIn);
-        soon(1.7, function () { show('tut_s9a', graphBox); });
+        if (demoLeg === 0 && E.clock().id === 'A2') demoLeg = 1;   /* 追記⑦: the crossfade began before this - A2's enter came in 'wait' and lit nothing; graphIn lights A itself when demoLeg is 1 */
+        soon(0.3, graphIn);   /* LOG-190 追記②: sooner - A2 is already sounding, and B1 is only 5.3 s away */
+        soon(0.5, function () { kaoStand('a'); });   /* ★ LOG-190 追記㉔: the narrator takes its place at A's lower left as the board comes in - and stays, in one face or another, until the board goes */
+        soon(0.9, function () { sayOn('tut_sd1', 'a', { fresh: true }); });   /* LOG-190 追記⑳ (the user: 這個泡泡最開始出現時請採用淡入): 「我們先從 A 開頭開始。」 fades in on the face beside A */
         /* the first hand-over is queued from inside A2 (see on 'enter'); the route lights at the decision, the node at the switch */
       }
       function handBack() {
         if (phase !== 'demo') return;
-        phase = 'hand'; hide(); graphOut(); demoLights(false);
+        phase = 'hand'; hide(); graphOut(); kaoOff();   /* 追記㉔: the narrator goes with the board */
+        /* LOG-190 追記⑨: the swap demonstration left A / E / I and the zone marks behind the curtain (nothing was revealed at L1+60.6 -
+           .tut-away was about to take the row away anyway). THE ROW COMES BACK HERE, so they are put back first - before demoLights(false)
+           lets it be seen - and the line the visitor is handed is whole. Named piece by piece rather than E.reveal(): the bare call would
+           also set .arrows, which belongs to the lesson's own step 3, not to this moment. */
+        E.reveal('tile', 'A'); E.reveal('tile', 'E'); E.reveal('tile', 'I'); E.reveal('zones');
+        demoLights(false);
         /* ★ 追記④ (the user: 「換你了」改用刻度那種陰影聚焦 - 只留 A 亮，直到使用者點了才陰影淡出): the iris closes on A instead of a breathing ring,
            and stays until pressA() opens it. Then the nudges (the user: 太久沒點出彩蛋催趕訊息, four of them, in order, the last one ends it):
            each only if the stage is still waiting for the press. */
@@ -6550,44 +7116,73 @@
         if (t === 'begin') { t0 = (i && i.at != null) ? i.at : E.now(); if (!raf) raf = requestAnimationFrame(pump); script(); return; }
         if (t === 'decide') {
           if (phase === 'demo' && i.tut) {
-            if (i.id === 'B1' && demoLeg === 1) { route('b', true); show('tut_s9b', node('b')); sparkAtSeam('b'); }
-            else if (i.id === 'C1') { route('c', true); show('tut_s9d', node('c')); sparkAtSeam('c'); }
-            else if (i.id === 'B1' && demoLeg === 2) { arcPre('cb'); show('tut_s9f', node('c')); }   /* ★ LOG-186 (the user: 示範到 C1 時多一句「同時，C也是可以到B的」): C1 -> B1 is decided - the arc round the right blinks, the line says so, under C */
-            else if (i.id === 'A2' && demoLeg === 1) arcPre('b');   /* 追記④: the return to A is decided - the arc over the top blinks its warning */
-            else if (i.hold && demoLeg === 3) arcPre('b');           /* LOG-186: and the same for B1's return to the opening loop - the same arc over the top, a second time */
+            /* LOG-189 (the user: 去程回程對調): OUT (A -> B, A -> C) - the route's lit twin blinks three times here, at the decision, and flashes-and-wipes
+               A -> B / A -> C at the seam (on 'enter'); BACK (B -> A, C -> B, B -> A) - the arc shows faintly and the spark rides it home 0.45 s
+               before the seam, lighting the node it lands on */
+            if (i.id === 'B1' && demoLeg === 1) {   /* LOG-190 追記②: after the cut this decision comes almost at once - the B route waits until 2.8 s before the seam */
+              atSeam(2.8, function () { route('b', true); arcPre('lb'); });
+              sayBefore(ARC_LEAD + 2.4, 'tut_sd2', 'a');   /* ★ LOG-190 追記⑳: 「A 段落結束的瞬間，」 under A - read before the light leaves */
+              goOut('lb', 'lr');
+            }
+            else if (i.id === 'C1') { route('c', true); arcPre('lc'); goOut('lc', 'lr'); }   /* 追記⑳: 「那這次就換到 C。」 is already up under A - it fades as the kaomoji sets off */
+            else if (i.id === 'B1' && demoLeg === 2) sparkAtSeam('acb', 'b', 'cb');   /* ★ LOG-186: C1 -> B1 is decided - the spark will ride the arc round the right (追記⑳: with a kaomoji) */
+            else if (i.id === 'A2' && demoLeg === 1) sparkAtSeam('ab', 'a', 'rl', KAO_PAIR_RL);    /* 追記㉗: the one ride the user gave the pair - (／・ω・)／ out, ＼(・ω・＼) lands and says sd7 */   /* 追記㉒→㉔: the face that rides home says 「也可以正常地返回 A。」 on A2's enter - as every face now says every line. 追記④: the return to A - the spark over the top (tut_s9h retired: 「也可以正常地返回 A。」 says it as A2 enters) */
+            else if (i.hold && demoLeg === 3) sparkAtSeam('ab', 'a', 'rl', KAO_RUN_OFF);   /* round 5: off the left edge, line and all */           /* LOG-186: and the same for B1's return to the opening loop, a second time */
             return;
           }
           if (phase === 'run' && i.line) show('tut_s_lock', tickRect, { side: 'above' });
           return;
         }
-        if (t === 'reorder') { if (!lockedPhase) show('tut_s_moved', E.btn(i.order[0]), { hold: 6, again: true }); return; }
+        if (t === 'reorder') { if (!lockedPhase) { var mv = i.moved || i.order[0]; show('tut_s_moved', function () { return rectOf(E.btn(mv)) || rowBox(); }, { hold: 6, again: true }); } return; }   /* ★ LOG-190 追記㉒ (the user: 這句話的泡泡永遠指向用戶拉動的那個方塊): the tile the visitor dragged - followed live, since the DOM is swapped under it right after this event */
         if (t === 'refused') { if (!lockedPhase) show('tut_s_rule', E.btn(i.g), { hold: 8, again: true }); return; }
         if (t !== 'enter') return;
         if (i.id === 'A2') { var qa = E.btn('A'); if (qa) qa.classList.remove('queued'); }   /* 追記③: the press's queued mark comes off the moment A2 sounds */
-        if (demoLeg === 3 && i.id === 'A1') { demoLeg = 4; E.tutReset(); if (phase === 'demo') { nodeNow('a'); arcGo('b'); soon(0.9, handBack); } }   /* the opening is back after the demonstration: forget B and C were ever played. 追記④: the return is SHOWN (the arc lights and wipes towards A) and only then is the stage handed over - 換你了 waits for the last leg to end (LOG-186: that leg is B1, back from C1; it used to be C2) */
+        if (demoLeg === 3 && i.id === 'A1') { demoLeg = 4; E.tutReset(); E.layer(true, 0.7); if (phase === 'demo') { if (!spark) nodeNow('a'); soon(0.9, handBack); } }   /* LOG-190 追記②: the cut took the drum layer down with the pass it left - bring it back with the opening */   /* the opening is back after the demonstration: forget B and C were ever played. 追記④: the return is SHOWN (LOG-189: the spark rides the arc home and lights A as it lands) and only then is the stage handed over - 換你了 waits for the last leg to end (LOG-186: that leg is B1, back from C1; it used to be C2) */
         if (phase === 'demo') {   /* ★ 追記③ A2 -> B1 -> A2 -> C1 -> C2 (-> A1): each leg queued from inside the leg before it, so every hand-over is taken at a
-                                     real decision point; the route lights at the decision; 追記④: the node lights when A's SPARK arrives on it, the return arcs at the turn */
-          if (i.id === 'A2' && demoLeg === 0) { demoLeg = 1; nodeNow('a'); soon(2.0, function () { E.force('B1'); }); }
-          else if (i.id === 'B1' && demoLeg === 1) { if (!spark) nodeNow('b'); E.force('A2'); }   /* the spark launched at the decision lands here; if it somehow did not, light the node now */
-          else if (i.id === 'A2' && demoLeg === 1) { demoLeg = 2; nodeNow('a'); arcGo('b'); route('b', false); show('tut_s9c', node('a')); soon(3.6, function () { E.force('C1'); }); }
-          else if (i.id === 'C1') { if (!spark) nodeNow('c'); E.force('B1'); }   /* ★ LOG-186: C1 hands straight on to B1 - C2 is out of the demonstration */
-          else if (i.id === 'B1' && demoLeg === 2) { demoLeg = 3; nodeNow('b'); arcGo('cb'); route('c', false); show('tut_s9e', graphBox); E.force('A1'); }   /* LOG-186: B enters from C - the right-hand arc flashes and wipes C -> B, the closing line goes up, and the last leg is home */
+                                     real decision point; LOG-189 (對調): OUT the route's twin flashes and wipes A -> B / A -> C here and the node lights with it;
+                                     BACK the node lights when the spark lands on it (launched at the decision) - if it somehow did not, light it now */
+          if (i.id === 'A2' && demoLeg === 0) { demoLeg = 1; nodeNow('a'); if (!i.mid) soon(2.0, function () { E.force('B1'); }); }   /* LOG-190 追記②: after the cut (mid) B1 is already in the slot - queue it only on the seam path */
+          else if (i.id === 'B1' && demoLeg === 1) { nodeNow('b'); arcGoLate('lb'); E.force('A2');   /* ★ LOG-190 追記⑳ (the user: 這三句間隔太久了): 「但是…」 and 「不但…到 B，」 sit close together, the second read just before the spark leaves */
+            sayOn('tut_sd3', 'b', { fresh: true }); soon(3.0, function () { sayOn('tut_sd4', 'b'); }); sayBefore(0.45 + 7.2, 'tut_sd5', 'b'); sayBefore(0.45 + 4.0, 'tut_sd6', 'b'); }   /* 追記㉙ (the user: 「蛤你說」太長 / 「因為基本範例」也有點太長 / 「不但可以正常地到 B」太晚出現導致太短): over B1's 13.24 s (12.79 to the bubble's fade): sd3 3.0, sd4 2.6, sd5 3.2, sd6 4.0 (were 3.5 / 5.9 / 1.7 / 1.7) */
+          else if (i.id === 'A2' && demoLeg === 1) { demoLeg = 2; if (!spark) nodeNow('a'); route('b', false); soon(3.6, function () { E.force('C1'); });   /* 追記⑳ (the user: 分兩句，時間抓好不要太長): 「也可以正常地返回 A。」 as A is back, then the two halves close behind it */
+            /* ★ LOG-190 追記㉒ (the user: 回到A時有一個泡泡，那個泡泡從顏文字上出現，說完顏文字才消失) → 追記㉔: the face that rode home is the one saying it -
+               and it no longer goes once it is said: it stands at A's lower left and A's lines follow on it, one after another */
+            sayOn('tut_sd7', 'a', { fresh: true });
+            soon(2.0, function () { sayOn('tut_sd8', 'a'); }); soon(3.4, function () { sayOn('tut_sd9', 'a'); });
+            soon(7.2, function () { sayOn('tut_sd10', 'a'); }); sayBefore(ARC_LEAD + 3.6, 'tut_sd11', 'a'); }   /* 追記㉗ (the user, on sd10: 這邊早點接下一句): sd11 3.9 s before the seam, not 2.7 - about 2.1 s after sd10 (A2's seam is ~13.2 s in, sd10 at 7.2), the same step as sd7 -> sd8 */   /* LOG-190 追記⑪: tut_s9c 「再回到開頭 A。」 is no longer put up here - tut_s9h has just finished saying it on the seam, and a new bubble now would take it down the instant it was complete */
+          else if (i.id === 'C1') { nodeNow('c'); arcGoLate('lc'); E.force('B1');   /* ★ LOG-186: C1 hands straight on to B1 - C2 is out of the demonstration */
+            sayOn('tut_sd12', 'c', { fresh: true }); soon(2.6, function () { sayOn('tut_sd13', 'c'); }); sayBefore(0.45 + 2.4, 'tut_sd14', 'c'); }
+          else if (i.id === 'B1' && demoLeg === 2) { demoLeg = 3; if (!spark) nodeNow('b'); route('c', false); E.force('A1');   /* LOG-190 追記⑲＋⑳: 「很好。」 and then the old closing lines - on B, where the music is */
+            sayOn('tut_sd15', 'b', { fresh: true }); soon(2.2, function () { sayOn('tut_s9e', 'b'); }); soon(8.0, function () { sayOn('tut_s9g', 'b'); });   /* round 5 (the user: 「這就是遊戲配樂常見的 branching」晚一點出現): 6.5 -> 8.0 s */ }   /* ★ LOG-190 追記⑩ (the user: 演示完 C-B 之後多一句「這個就是…branching 技巧」): the name of what was just shown, while B1 plays out - up ~9 s before A1 returns and handBack takes it down */   /* LOG-186: B enters from C - the spark has ridden the right-hand arc C -> B, the closing line goes up, and the last leg is home */
           return;
         }
         if (phase !== 'run') return;
-        if (first && i.id === first.id) { show('tut_s_seam', lineRect, { side: 'above' }); return; }
+        /* ★ LOG-190 追記⑬ the closing show: (1) the second version of the LAST group on the second half is the last section of the line - arm
+           the outro loop for the decision that would otherwise pick I; (2) every pass of that loop re-arms it (the engine lets a loop go after
+           two passes) until the show says leave; (3) the outro proper enters: the last line */
+        if (i.id === 'I_loop') { if (!fin.leave) E.force('I_loop'); finale(); return; }
+        if (i.outro) { finEnd(); return; }           /* ★ step 16 */
+        if (i.group && i.ver) { fin.seen[i.group] = (fin.seen[i.group] || 0) + 1; var po = E.order('post'); if (po.length && i.group === po[po.length - 1] && fin.seen[i.group] === 2) E.force('I_loop'); }
+        /* LOG-190 追記⑥ (the user: 「接上了」這句綁在接續 A 後面播放的段落，而不是綁在 B 上面): `first` used to be pinned at 'ready' to lineOrder.pre[0] - the
+           B of the unshuffled line - so the line waited for B1 however the visitor had arranged things. Now it is whichever section ACTUALLY follows the
+           opening: the first non-bookend (ver 1) entry of the run, and steps 12 + 13 below follow that same group's second version */
+        if (i.ver === 1 && !(first && first.seen)) { first = { group: i.group, id: i.id, seen: true }; show('tut_s_seam', lineRect, { side: 'above' }); return; }
         if (first && i.group === first.group && i.ver === 2) {   /* ★ steps 12 + 13: the author's aside, then the one rule the simple stage lives by */
-          subtitle('tut_s_pair');
+          /* LOG-190 追記⑭ (the user: 在懸浮的按鈕後面多一排按鈕…解釋完後收起來): the X₂ twins come out behind B-H and go back in as the aside
+             leaves (its typing + hold + fade, subLen) - not held to 24.0 with the frames, which belong to the instruction that follows.
+             追記⑯ (the user: 出現時機是顯示「有多個段落」的那段): they come out the moment the typer has said 「一到兩段。」 - the '|' mark in
+             tut_s_pair - and the six first-version tiles dim under .shade so the 2 is not covered (os.css) */
+          var pairLen = subtitle('tut_s_pair', { marks: [null, function () { try { E.shade(true); } catch (e) {} }] });
+          soon(pairLen || 7, function () { try { E.shade(false); } catch (e) {} });
           /* BOTH have to land inside this half - it is eight bars (13.2 s) and its own decision falls 5.2 s before the end, so a
              line that waited for the aside to finish fading would be talking about a tile that had already been locked in. They
              overlap instead: the author's line sits above the row while the instruction points at the first tile still free. */
-          soon(5.5, function () { var g = nextOpen(); show('tut_s13a', E.btn(g)); frame(E.btn(g)); });
-          soon(10.0, function () { show('tut_s13b', zoneBox('post'), { hold: 14 }); });   /* 追記④ (the user: 亮這句時 C 已定型，所以這個泡泡要指後段): the letters still to arrange are the second half's */
+          soon(7.0, function () { var g = nextOpen(); show('tut_s13a', E.btn(g)); frame(E.btn(g)); });   /* 追記⑯ (the user: 接續的泡泡太快出現了): 5.5 -> 7.0, once the aside's hold is over (5.85) and it is fading; still a second before this half's decision (8.0) locks the tile it points at */
+          soon(12.0, function () { show('tut_s13b', zoneBox('post'), { hold: 14 }); });   /* 追記⑯: 10.0 -> 12.0, so the line above stands its 5 s */   /* 追記④ (the user: 亮這句時 C 已定型，所以這個泡泡要指後段): the letters still to arrange are the second half's */
           soon(24.0, unframeAll);
           return;
         }
         if (i.group === 'E' && i.ver === 1) { unframeAll(); show('tut_s_gate', E.btn('E'), { hold: 12 }); frame(E.btn('E'), { color: tileColor('E') }); soon(12, unframeAll); return; }   /* ★ step 14 */
-        if (i.outro) { hide(); unframeAll(); relay(['tut_s_end', 'tut_s_end2'], 0.8); return; }           /* ★ step 16 */
         if (i.ver === 1 && 'FGH'.indexOf(i.group) >= 0) once('tut_s_post', function () { hide(); unframeAll(); subtitle('tut_s_post'); });   /* ★ step 15 */
       }
 
@@ -6610,17 +7205,18 @@
         }
         for (i = subs.length - 1; i >= 0; i--) {
           var s = subs[i], el = t - s.t0, typed = s.per * s.len, sn = Math.max(0, Math.min(s.len, Math.floor(el / s.per)));
+          while (s.marks && s.marks.length && sn >= s.marks[0].n) { var smk = s.marks.shift(); if (smk.fn) { try { smk.fn(); } catch (e) {} } }   /* LOG-190 追記⑬: the '|' marks of an author's line */
           if (sn !== s.n) { s.n = sn; s.h.type(sn); }
           if (!s.out && el > typed + TUT_SUB_HOLD) { s.out = 1; s.h.out(); }
           else if (s.out && el > typed + TUT_SUB_HOLD + TUT_SUB_FADE) { s.h.remove(); subs.splice(i, 1); }
         }
         for (i = 0; i < frames.length; i++) frameLay(frames[i]);   /* 追記②: the rings ride the tiles' bobbing */
-        irisStep(); sparkStep();
+        irisStep(); sparkStep(); kaoStep();
         if (bubTgt && bub) { var bb = rectOf(bubTgt); if (bb) placeBox(bb); }
       }
 
       function relabel() {
-        if (bub && curKey) { bubJob = null; if (tx) { tx.textContent = txt(curKey); tx.classList.remove('cur'); } }
+        if (bub && curKey) { bubJob = null; if (tx) { tx.textContent = txt(curKey).replace(/\|/g, ''); tx.classList.remove('cur'); } }   /* LOG-190 追記⑲: a '|' is a mark, never a character (tut_sd1) */
         if (clipEl) {
           var parts = String(U.tut_clip_parts || '').split('|'), sp = clipEl.querySelectorAll('.bar i span'), c = $('.cap', clipEl);
           for (var k = 0; k < sp.length; k++) sp[k].textContent = parts[k] || '';
@@ -6629,8 +7225,9 @@
       }
       function end() {   /* ★ 結束教學 (the user): out now, straight into simple free play - the opening lets go on its own so the line plays on */
         if (!alive) return;
-        unlock();
-        try { E.reveal('all'); E.tutReset(); E.release(); if (!E.holding()) E.layer(true); } catch (e) {}
+        unlock(); kaoOff();   /* LOG-190 追記⑳: a kaomoji caught mid-ride goes with the lesson */
+        try { E.reveal('all'); E.tutReset(); E.release(); if (!E.holding()) E.layer(true); E.duck(1, 0.5); } catch (e) {}   /* 追記⑯: and the volume comes back whatever step the lesson was on */
+        if (fin.on && !fin.leave) { fin.leave = true; try { E.force('I'); } catch (e) {} }   /* LOG-190 追記⑬: leaving the show mid-way lets the outro loop go to the outro, not back to F */
         stop();
       }
       function stop() {
@@ -6645,9 +7242,14 @@
         if (irisEl) { irisEl.remove(); irisEl = null; iris = null; }
         if (clipEl) { clipEl.remove(); clipEl = null; }
         if (graphEl) { graphEl.remove(); graphEl = null; }
+        if (fin.el) { fin.el.remove(); fin.el = null; fin.svg = null; fin.rows = []; }   /* LOG-190 追記⑬ */
         if (head) head.classList.remove('frozen', 'tut-demo');
         HOST.classList.remove('tut-demo');
-        try { E.surface().classList.remove('tut-away', 'awave', 'frozen'); } catch (e) {}
+        /* LOG-188: the updates panel, the sticky note and the dock come back; .tut-back carries their return transition for one beat (the
+           base rules have none, so without it they would snap into place) */
+        HOST.classList.remove('tut-on'); HOST.classList.add('tut-back'); setTimeout(function () { HOST.classList.remove('tut-back'); }, 900);
+        try { E.surface().classList.remove('tut-away', 'awave', 'frozen', 'bounce', 'tut-down', 'shade'); } catch (e) {}
+        HOST.classList.remove('tut-demo'); if (head) head.classList.remove('tut-demo');   /* 追記⑱-③: the closing show's dim (and a demonstration's, should the lesson end mid-way) lifts with everything else */
         try { E.reveal('all'); } catch (e) {}
         if (onDone) { var f = onDone; onDone = null; try { f(); } catch (e) {} }
       }
@@ -6663,8 +7265,9 @@
         subs.forEach(function (sb) {
           var el = sb.h && sb.h.el; if (!el) return;
           var r = rowBox(), w = el.offsetWidth, h = el.offsetHeight, W = HOST.clientWidth;
-          sb.h.move(Math.round(Math.max(18, Math.min(Math.max(18, W - w - 18), (r.left + r.right) / 2 - w / 2))), asideTop(w, h, sb.res));
+          sb.h.move(Math.round(Math.max(18, Math.min(Math.max(18, W - w - 18), (r.left + r.right) / 2 - w / 2))), sb.sky ? safeTop() + 6 : asideTop(w, h, sb.res));   /* LOG-190 追記⑬: a sky line stays in the sky */
         });
+        finLay();
       }
       onRes = relayout;
       window.addEventListener('resize', onRes);

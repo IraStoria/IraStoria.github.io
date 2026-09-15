@@ -1301,8 +1301,8 @@
       "en": "Joined. The seam lands on a bar line, so there is nothing to hear."
     },
     "tut_s_pair": {
-      "zh": "每個字母其實都有一到兩段。自由度雖然很高，但為了段落的完整性，目前統一整段播放。",
-      "en": "Each letter is really one or two sections. There is a lot of freedom here, but so that no section is cut short, they all play through whole for now."
+      "zh": "每個字母其實都有一到兩段。|自由度雖然很高，但為了段落的完整性，目前統一整段播放。",
+      "en": "Each letter is really one or two sections.| There is a lot of freedom here, but so that no section is cut short, they all play through whole for now."
     },
     "tut_s_gate": {
       "zh": "這裡是整首音樂循環的中繼點。由於 tempo 加速，進了 E 段落之後就不能再回到之前了。",
@@ -1312,9 +1312,33 @@
       "zh": "那這邊一樣，隨你喜歡吧～",
       "en": "Same again over here - arrange it however you like."
     },
-    "tut_s_end": {
-      "zh": "這是整首的結局，那教學就到此為止。想要更自由的話，可以使用進階版。",
-      "en": "This is where the whole piece lands, and that is the end of the lesson. If you want more freedom than this, the advanced stage is there."
+    "tut_s_v1": {
+      "zh": "最後感謝 Shiou Hsu 願意花時間接下這個高難度的委託。",
+      "en": "And finally, thank you to Shiou Hsu for taking the time to accept a commission this demanding."
+    },
+    "tut_s_v2": {
+      "zh": "目前委託版本只到 V3|，且仍在持續編寫中。",
+      "en": "The commissioned versions only reach V3| so far, and they are still being written."
+    },
+    "tut_s_v3": {
+      "zh": "且目前希望都可以像 V1 一樣可以左右隨機穿插。",
+      "en": "And the hope is that every one of them can shuffle left and right at random, the way V1 does."
+    },
+    "tut_s_v4": {
+      "zh": "甚至在版本中穿插。",
+      "en": "Even crossing between the versions."
+    },
+    "tut_s_v5": {
+      "zh": "至於 V6|嗎……",
+      "en": "As for V6|... well..."
+    },
+    "tut_s_v6": {
+      "zh": "現階段就再看看囉～～～",
+      "en": "For now, we will just have to wait and see~"
+    },
+    "tut_s_v7": {
+      "zh": "感謝觀看，本次教學瀏覽結束。",
+      "en": "Thanks for watching. That is the end of this lesson."
     },
     "tut_s_layer": {
       "zh": "聽，鼓進來了。開頭這八小節會一直繞，直到我們準備好往下走。",
@@ -1353,8 +1377,8 @@
       "en": "Hey - Ira speaking."
     },
     "tut_open2": {
-      "zh": "考慮到並不是所有人都可以馬上理解這個互動媒體的使用方法或是這種音樂的形式，\n所以特此做這個教學。",
-      "en": "Not everyone picks up how this interactive thing works, or what this kind of music even is, straight away -\nso here is a short lesson."
+      "zh": "現在開始概念及使用教學。",
+      "en": "Here begins a short lesson: the idea, and how to use it."
     },
     "tut_s1a": {
       "zh": "正常來說，一首有結構的音樂都不會是從頭到尾維持同一個構造跟旋律。",
@@ -1367,6 +1391,14 @@
     "tut_s1b": {
       "zh": "這首音樂也不例外，可以分割成包含不同內容的部分，由字母代表所有的段落。",
       "en": "This piece is no exception: it can be cut into parts that each hold something different, and a letter stands for every one of them."
+    },
+    "tut_s1c": {
+      "zh": "大多數的音樂都是採線性進行。",
+      "en": "Most music runs in a straight line, start to finish."
+    },
+    "tut_s1d": {
+      "zh": "但這裡想展示的，是音樂也可以有的隨機性。",
+      "en": "What this piece wants to show is that music can also leave something to chance."
     },
     "tut_clip_song": {
       "zh": "一首歌",
@@ -1396,29 +1428,73 @@
       "zh": "所以真正可以自由改動的，只有前段的三塊和後段的三塊。",
       "en": "So what you can really rearrange is the three blocks of the first half and the three of the second."
     },
-    "tut_s9a": {
-      "zh": "現在快速示範一下接續是怎麼運作的：先從開頭 A 出發，我會讓它接到不同的段落。注意聽接縫的地方。",
-      "en": "Here is a quick demonstration of how the hand-overs work: we set off from the opening A, and I will send it into different sections. Listen for the joins."
+    "tut_sd1": {
+      "zh": "我們先從 A 開頭開始。",
+      "en": "We start from the opening, A."
     },
-    "tut_s9b": {
-      "zh": "開頭要接到 B 了——聽，中間沒有斷。",
-      "en": "The opening is handing over to B - listen, there is no break."
+    "tut_sd2": {
+      "zh": "A 段落結束的瞬間，",
+      "en": "The instant A ends,"
     },
-    "tut_s9c": {
-      "zh": "再回到開頭 A。",
-      "en": "And back to the opening, A."
+    "tut_sd3": {
+      "zh": "B 會流暢地接手，沒有斷點。",
+      "en": "B takes over smoothly, without a break."
     },
-    "tut_s9d": {
-      "zh": "這次換接到 C。",
-      "en": "This time it goes to C instead."
+    "tut_sd4": {
+      "zh": "蛤？你說 A 到 B 本來就是理所當然？",
+      "en": "Huh? You're saying A to B was a given anyway?"
+    },
+    "tut_sd5": {
+      "zh": "因為基本範例要先示範才有特例阿",
+      "en": "Well, the basic case has to be shown before the special ones -"
+    },
+    "tut_sd6": {
+      "zh": "不但可以正常地到 B",
+      "en": "not only can it go on to B,"
+    },
+    "tut_sd7": {
+      "zh": "也可以正常地返回 A。",
+      "en": "it can come back to A just as naturally."
+    },
+    "tut_sd8": {
+      "zh": "順暢的接續，",
+      "en": "A smooth join,"
+    },
+    "tut_sd9": {
+      "zh": "主題又自然地返回 A。",
+      "en": "and the theme is home at A again."
+    },
+    "tut_sd10": {
+      "zh": "那既然 A 段落可以去 B，",
+      "en": "So if A can go to B,"
+    },
+    "tut_sd11": {
+      "zh": "那這次就換到 C。",
+      "en": "this time let's go to C."
+    },
+    "tut_sd12": {
+      "zh": "無縫銜接。",
+      "en": "Seamless."
+    },
+    "tut_sd13": {
+      "zh": "同時，既然 A 都可以到 C 了，",
+      "en": "And since A can go to C,"
+    },
+    "tut_sd14": {
+      "zh": "那 C 到 B 應該也沒什麼問題吧？",
+      "en": "C to B should be no problem either, right?"
+    },
+    "tut_sd15": {
+      "zh": "很好。",
+      "en": "Nice."
     },
     "tut_s9e": {
       "zh": "全程沒有一個接縫聽得出來——音樂可以這樣很神奇地無縫接軌。",
       "en": "Not one of those joins was audible - music really can be stitched together this seamlessly."
     },
-    "tut_s9f": {
-      "zh": "同時，C也是可以到B的。",
-      "en": "And C can go to B as well."
+    "tut_s9g": {
+      "zh": "這就是遊戲配樂常見的 branching（分支）技巧。",
+      "en": "This is branching - a technique game soundtracks use all the time."
     },
     "tut_s_turn": {
       "zh": "換你了：按 A 開始體驗。",
@@ -1447,10 +1523,6 @@
     "tut_s13b": {
       "zh": "把還沒播的字母拖成你要的順序，然後就照順序播到 I。",
       "en": "Drag the letters that have not played yet into the order you want, and it plays down that line to I."
-    },
-    "tut_s_end2": {
-      "zh": "最後感謝 Shiou Hsu 願意花時間接下這個高難度的委託。目前委託版本只到 V3，還在努力趕進度中；至於有沒有辦法真的出到 V6，現階段就真的只能看看囉～～～",
-      "en": "And thank you to Shiou Hsu for taking the time to accept a commission this difficult. The commissioned version only reaches V3 so far and is still catching up; whether it ever really gets to V6 is, at this point, anybody's guess."
     }
   },
   "about_body": {
