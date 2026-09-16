@@ -1012,6 +1012,11 @@ ok("LOG-191 (使用者: 最小化或失去焦點時再重新打開會有畫面�
        "for (var guard = 0; guard < 600; guard++) {",
        "for (i = 0; i < q.length; i++) if (q[i].t <= t && (bi < 0 || q[i].t < q[bi].t)) bi = i;",
        "visOff = VIS.on({", "if (visOff) { visOff(); visOff = null; }",
+       # LOG-191-② (使用者: 還是會慢…背景時還是會計算座標): the lesson keeps stepping on a timer while away, and lands synchronously on the way back
+       "awayT = setInterval(function () { try { step(); } catch (e) {} }, 250);",
+       "if (awayT) { clearInterval(awayT); awayT = 0; }",
+       "      function step() {", "raf = alive ? requestAnimationFrame(pump) : 0;", "        step();",
+       "VIS.on({ show: function () { if (raf) cancelAnimationFrame(raf); raf = 0; draw(); } });",
        # the transport: one tick straight away, because a hidden tab clamps its 25 ms poll to a second
        "VIS.on({ show: function () { try { if (!dead && running && ctx && cur) tick(); } catch (e) {} } });",
        # the boot terminal: whole lines while hidden, not one clamped second a character
@@ -1020,7 +1025,7 @@ ok("LOG-191 (使用者: 最小化或失去焦點時再重新打開會有畫面�
        # the closing chart: shuffle writes carry the layout they were made against
        "fin.spread = true; fin.gen = (fin.gen || 0) + 1;",
        "function apply() { if ((fin.gen || 0) !== gen) return;"))
-   and _js182.count("VIS.on(") == 6   # the lesson, the transport, the piano stage, the dock panels, the wishing well, the pillar
+   and _js182.count("VIS.on(") == 7   # the lesson, the transport, the wave/waterfall loop, the piano stage, the dock panels, the wishing well, the pillar
    and "q.splice(i, 1); i--; try { fn(); }" not in _js182   # the old insertion-order drain is gone
    and "byeTimer = setTimeout" not in _demo191 and "byeAt = cur.end - 2 * barSec(OUTRO.bpmOut);" in _demo191
    and "if (byeAt !== null && now >= byeAt) { byeAt = null; document.body.classList.add('bye'); }" in _demo191)

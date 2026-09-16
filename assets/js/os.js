@@ -689,6 +689,11 @@
     function ease(x) { return 1 - Math.pow(1 - x, 3); }
     function dk_dt(now, prev) { return prev ? Math.min(100, now - prev) : 16; }
     function lerpCol(a, b, t) { if (t <= 0) return a; if (t >= 1) return b; a = a.split(','); b = b.split(','); return a.map(function (v, i) { return Math.round(+v + (+b[i] - +v) * t); }).join(','); }
+    /* ★ LOG-191-②: the spectrum and the waterfall are painted from this loop, and rAF is dead while the page is away.
+       Their positions are all read from the audio clock, so one pass on the way back is all it takes to be current -
+       run it inside the visibilitychange handler, before the first paint, instead of waiting for rAF to come round again.
+       The pending frame is cancelled first so there is never a second loop. */
+    VIS.on({ show: function () { if (raf) cancelAnimationFrame(raf); raf = 0; draw(); } });
     function draw() {
       raf = requestAnimationFrame(draw); size();
       var now = performance.now(), dk = Math.pow(decayFactor(lastT ? now - lastT : 16), decayK), prevT = lastT; lastT = now;   /* decayK > 1: the bars fall faster, so each hit reads as its own bounce */
@@ -6187,7 +6192,7 @@
        Nothing here names an easter egg or the ending's forms (不劇透). */
     var TUT_REVEAL_STEP = 0.16, TUT_REVEAL_SPAN = 1.44, TUT_SUB_HOLD = 3.4, TUT_SUB_FADE = 1.7, TUT_BUB_RESERVE = 110, TUT_DUCK = 0.8, TUT_DUCK_AT = 0.83, TUT_DUCK_TC = 1.6;   /* TUT_DUCK (LOG-190 追記⑯): the opening loop plays at this level under the concept lesson, as background, until the drums come in at L1 + 37.8. 追記⑲ (the user: 一開始要從100%走intro，然後才慢慢降低，大概80%左右): the INTRO is the user's word for A's two opening beats (0.5 bar at 145 = 0.828 s from the downbeat, t0 - the head of A1's firstFile, preBars 0) - full level through them, then let down on a slow curve (TUT_DUCK_TC - ~95 % of the way in 3 x TC) to 0.8 (~-2 dB) */   /* RESERVE: 18 px of stalk + three lines of .tut-bub - the deepest a bubble hanging under the order row can reach, so an aside placed below it never has to be measured against a bubble that has not appeared yet */   /* the nine tiles come out one per STEP; the bubble and the light travel A -> I over SPAN, one even glide */
     function makeTut(E, onDone) {
-      var alive = true, visOff = null, bub = null, tx = null, curKey = null, lockedPhase = true, first = null, phase = 'wait',
+      var alive = true, visOff = null, awayT = 0, bub = null, tx = null, curKey = null, lockedPhase = true, first = null, phase = 'wait',
           t0 = null, raf = 0, q = [], bubJob = null, subs = [], frozen = false, done = {},
           clipEl = null, graphEl = null, irisEl = null, iris = null, frames = [], bubTgt = null, bubSrc = null, bubSide = 'below', bubAlign = 'left', bubGap = 12, bubFree = false, aPress = null, onRes = null;
       var LINE = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
@@ -7350,6 +7355,12 @@
          context holds the lot exactly where it is; the .frozen class does the same for what CSS is animating. */
       function pump() {
         raf = alive ? requestAnimationFrame(pump) : 0;
+        step();
+      }
+      /* ★ LOG-191-② (使用者: 有沒有辦法就切回的瞬間直接跟到當下應該在的位置? 或是背景時還是會計算座標): ONE PASS OF THE LESSON.
+         Split out of pump() so it can be run without a frame - from the timer that keeps the lesson moving while the page
+         is away, and synchronously the moment it comes back, so the FIRST painted frame is already where the music is. */
+      function step() {
         if (!alive || t0 == null) return;
         var fz = false; try { fz = !!E.frozen(); } catch (e) {}
         if (fz !== frozen) { frozen = fz; if (head) head.classList.toggle('frozen', fz); try { E.surface().classList.toggle('frozen', fz); } catch (e) {} }
@@ -7407,6 +7418,7 @@
         if (!alive) return;
         alive = false; if (raf) { cancelAnimationFrame(raf); raf = 0; }
         if (visOff) { visOff(); visOff = null; }   /* LOG-191: the lesson stops listening for the page coming back */
+        if (awayT) { clearInterval(awayT); awayT = 0; }   /* LOG-191-②: and the timer that kept it going while away */
         q = []; bubJob = null;
         subs.forEach(function (s) { try { s.h.remove(); } catch (e) {} }); subs = [];
         disarmA();
@@ -7453,11 +7465,21 @@
          hidden period out of phase. On the way back everything is re-measured; the backlog itself is caught up by pump()'s
          next frame, now in time order, which lands the lesson where the music already is. */
       visOff = VIS.on({
-        hide: function () { if (!alive) return; if (head) head.classList.add('frozen'); try { E.surface().classList.add('frozen'); } catch (e) {} },
+        /* ★ LOG-191-② (使用者: 還是會慢，尤其是顏文字的位移跟泡泡顯示 … 背景時還是會計算座標，不然每次感覺都慢).
+           LOG-191 froze the lesson's CSS while the page was away and let the backlog catch up on the first frame back,
+           and the catching up is what the visitor still felt. So: DO NOT FREEZE, KEEP GOING. rAF is dead while hidden,
+           but a timer is not (it is clamped to about a second, which is all this needs), so the queue keeps draining and
+           every dock, leg and anchor keeps being computed the whole time - there is no backlog left to work through.
+           Coming back then costs one synchronous pass, before the browser paints, so the first frame is already right. */
+        hide: function () {
+          if (!alive || awayT) return;
+          awayT = setInterval(function () { try { step(); } catch (e) {} }, 250);   /* hidden: clamped to ~1 s, and that is enough to keep the lesson level with the music */
+        },
         show: function (gap) {
+          if (awayT) { clearInterval(awayT); awayT = 0; }
           if (!alive) return;
-          if (head) head.classList.toggle('frozen', frozen); try { E.surface().classList.toggle('frozen', frozen); } catch (e) {}
-          if (gap > 0.35) { try { relayout(); } catch (e) {} }   /* a hidden page freezes CSS transitions mid-flight and the boxes they were measured against may have moved */
+          try { step(); } catch (e) {}                              /* land on the spot: this runs inside the visibilitychange handler, before the first paint */
+          if (gap > 0.35) { try { relayout(); } catch (e) {} try { step(); } catch (e) {} }   /* re-measured boxes, then placed against them in the same breath */
         }
       });
       return { on: on, relabel: relabel, stop: stop, end: end, key: function () { return curKey; }, locked: function () { return lockedPhase; },
