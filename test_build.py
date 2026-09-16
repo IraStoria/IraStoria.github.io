@@ -427,7 +427,7 @@ ok("LOG-190 追記30/31 (使用者: 一開始就站在下面、抖動小一點�
    and "soon(1.3 + 11 * (nudges.length + 1), rageStart);" in _js182
    and all(t in _js182 for t in ("function rageAt() {", "function ragePt() {", "function rageStart(force) {", "function rageThrow() {",
                                  "function rageEggLegs() {", "function rageRewLegs() {", "function rageRewind() {", "function rewSfx() {", "function aBack() {", "function rageEnd() {",
-                                 "mode: force || (eeTake('tt_rwd') ? 'rewind' : Math.random() < REW_ODDS ? 'rewind' : 'egg')",   # the draw, forceable for the probe and askable with --EE_tt_rwd
+                                 "mode: force || (Math.random() < REW_ODDS ? 'rewind' : 'egg')",   # the draw - forceable by the ?debug handle and the probe
                                  "kaoSlot = 'ab'; kao.home = ragePt; kao.landed = true; kaoStep();",   # 使用者: 一開始就站在下面 - and the shake rides kaoStep's per-frame home(), not CSS (.tut-kao is transition:none!important)
                                  "amp = 1.0 + 5.5 * k * k;",                                            # 使用者: 抖動小一點點
                                  "rage.frozen = rageAt(); rage.thrown = T();",                          # 使用者: 丟出去時顏文字站在原地
@@ -437,10 +437,8 @@ ok("LOG-190 追記30/31 (使用者: 一開始就站在下面、抖動小一點�
                                  "if (rage) { rage.pant = 0; rage.walk = T(); kaoFace(KAO_WALK); }",     # 喘氣 -> 往左走掉
                                  "if (phase === 'hand') show('tut_s_turn', E.btn('A'), { again: true });",  # 倒帶結局: 回到「按 A」等使用者自己按
                                  "aBack(); });   /* 追記⑰",                                              # V6 那句時 A 偷偷回來
-                                 "if (rage) rageEnd();",
-                                 "mode: force || (eeTake('tt_rwd') ? 'rewind' : Math.random() < REW_ODDS ? 'rewind' : 'egg')",   # LOG-190 追記32 (使用者: 開 rewind 彩蛋觸發為 --EE_tt_rwd): the flag asks for the rewind ending, and is spent when it fires
-                                 "tt_rwd: { once: 1 },"))
-   and "var REW_ODDS = 0.2" not in _js182 and "REW_ODDS = 0.2," in _js182   # one in five is the rewind, four in five the egg
+                                 "if (rage) rageEnd();"))
+   and "REW_ODDS = 0," in _js182 and "tt_rwd" not in _js182   # LOG-190 追記32-② (使用者: 取消 rewind 那條的觸發，先都用原版的): the odds are off and the EE_ key is gone - only the ?debug handle reaches the rewind now
    and ".desktop .ds-secs .seg.tile.tut-gone{visibility:hidden}" in _css182 and ".desktop .stage-ui .tut-rewfx{" in _css182 and "@keyframes tutrew{" in _css182 and "@keyframes tutrewband{" in _css182
    and site["ui"]["tut_s_turn"]["en"] == "Your turn: press A to start.")   # 使用者: your turn, press a to set of 改成 press a to start
 ok("LOG-183 追記④ as rewritten by LOG-190 追記⑲: the demonstration opens on A (我們先從 A 開頭開始) and its superseded lines are gone",
@@ -922,7 +920,7 @@ ok("LOG-190 追記㉗: no random face - each of the 17 demonstration lines wears
    and "function kaoFace(t) { if (kao && t && kao.el.textContent !== t) kao.el.textContent = t; }" in _js190r
    and "var KAO_PAIR_RL = { a: '(／・ω・)／', b: '＼(・ω・＼)' };" in _js190r and _js190r.count("sparkAtSeam('ab', 'a', 'rl', KAO_PAIR_RL)") == 1 and _js190r.count("sparkAtSeam('ab', 'a', 'rl', KAO_RUN_OFF);") == 1
    and "function kaoMake(f) {" in _js190r and "var t = kao ? kao.el.textContent : KAO_LINE.tut_sd1; kaoOff(); if (!head) return null;" in _js190r and "if (!f) f = { a: t, b: t };" in _js190r
-   and "Math.random" not in _js190r.split("var KAO_LINE", 1)[1][:9000] and "mode: force || (eeTake('tt_rwd') ? 'rewind' : Math.random() < REW_ODDS ? 'rewind' : 'egg')" in _js190r   # 追記㉛: the only draw in the lesson is which ending the tantrum gets - never which face a line wears
+   and "Math.random" not in _js190r.split("var KAO_LINE", 1)[1][:9000] and "mode: force || (Math.random() < REW_ODDS ? 'rewind' : 'egg')" in _js190r   # 追記㉛: the only draw in the lesson is which ending the tantrum gets - never which face a line wears
    and "sayBefore(ARC_LEAD + 3.6, 'tut_sd11', 'a');" in _js190r and "sayBefore(ARC_LEAD + 2.4, 'tut_sd11', 'a');" not in _js190r
    and "function kaoAUp" not in _js190r and "function kaoSize" not in _js190r and "kaoAUp()" not in _js190r   # 追記㉘: the ride-clearance height is gone - a ride may cross A, the standing face sits 8 px off it
    and site["ui"]["tut_sd4"]["en"].startswith("Huh?") and "ur right" in site["ui"]["tut_sd5"]["en"] and not _CJK.search(site["ui"]["tut_sd4"]["en"] + site["ui"]["tut_sd5"]["en"]))   # LOG-190 追記㉚: the author's own English (文法部分有一個 "ur" 這個留著)

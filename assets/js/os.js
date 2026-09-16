@@ -91,7 +91,6 @@
     hb:   { grp: 1 },
     st:   { grp: 1, once: 1 },
     '404': { grp: 1, once: 1 },   /* LOG-160追記⑬: the About prank (the ten broken pages) - forced on the next About opening */
-    tt_rwd: { once: 1 },   /* LOG-190 追記㉜ (使用者: 開 rewind 彩蛋觸發為 --EE_tt_rwd): the lesson's tantrum takes the rewind ending on purpose instead of the one-in-five draw - spent when it fires, so the rest of that visit is back to the odds */
     pool: {},   /* LOG-161 (ADR-009): opens the Wishing Well as the owner's panel for this visit; the panel only SHOWS - every write is checked by the Worker */
     v6:   { mode: 'basic', rank: 1 },
     v6_p: { mode: 'basic', rank: 1 },
@@ -7111,7 +7110,7 @@
       var KAO_RAGE = ['(#`皿´)', '( ╬ﾟ дﾟ )', '(ﾒ ﾟ皿ﾟ)ﾒ', 'ヽ(#`Д´)ﾉ'];
       var KAO_WALK = '(ﾟ皿ﾟﾒ)';   /* 追記㉛ 使用者: 在原地喘氣後用 (ﾟ皿ﾟﾒ) 像走路一樣往左邊移動消失 */
       var KAO_REW = [{ f: '( ´ﾟДﾟ`)', d: 2.0 }, { f: '(`へ´≠)', d: 4.0, pant: true }, { f: '<(￣ ﹌ ￣)>', d: 2.0 }, { f: '(´･_･`)', d: 2.0 }];   /* 追記㉛ 使用者原話: 顏文字會變成( ´ﾟДﾟ`)兩秒，(`へ´≠)在原地喘4秒，然後<(￣ ﹌ ￣)>2秒，(´･_･`)兩秒 */
-      var RAGE_STEP = 2.0, RAGE_OUT = 0.55, RAGE_PANT = 2.6, RAGE_WALK = 1.5, REW_ODDS = 0.2, rage = null, aGone = false, rewCtx = null;
+      var RAGE_STEP = 2.0, RAGE_OUT = 0.55, RAGE_PANT = 2.6, RAGE_WALK = 1.5, REW_ODDS = 0, rage = null, aGone = false, rewCtx = null;
       /* ★ 追記㉛ (使用者): ⑴ 抖動小一點點 ⑵ 一開始就站在 A 下面（㉚ 的「跑到 A 下面」那一趟退役）⑶ 丟出去時顏文字站在原地、A 不回來
          ⑷ 兩個結局抽籤：**4/5「A 鍵就直接消失然後直接開始播放，直到最後介紹 V6 構造時自己偷偷顯現回來」**（喘氣→(ﾟ皿ﾟﾒ) 走掉→音樂開始），
          **1/5 rewind**（四張臉演完→整個畫面與音效倒帶→回到「按 A」等使用者自己按）。 */
@@ -7130,7 +7129,7 @@
         if (phase !== 'hand' || rage) return;
         hide();   /* 使用者: 純動作，不要字 - the last nudge's bubble comes down and nothing takes its place */
         if (!kaoMake({ a: KAO_RAGE[0], b: KAO_RAGE[0] })) return;
-        rage = { t0: T(), mode: force || (eeTake('tt_rwd') ? 'rewind' : Math.random() < REW_ODDS ? 'rewind' : 'egg'), frozen: null, pant: 0, walk: 0, thrown: 0 };   /* 追記㉜: --EE_tt_rwd asks for the rewind; otherwise one in five */
+        rage = { t0: T(), mode: force || (Math.random() < REW_ODDS ? 'rewind' : 'egg'), frozen: null, pant: 0, walk: 0, thrown: 0 };   /* 追記㉜-② (使用者: 取消 rewind 那條的觸發，先都用原版的): REW_ODDS is 0, so every visitor gets the walk-off ending; `force` (the ?debug handle and the probe) still reaches the rewind, and putting the odds back to 0.2 is all it takes to bring it back */
         kaoSlot = 'ab'; kao.home = ragePt; kao.landed = true; kaoStep();   /* 使用者: 一開始就站在下面 */
         KAO_RAGE.forEach(function (f, n) {
           soon(RAGE_STEP * n, function () {
