@@ -36,6 +36,29 @@
   var ALT = D.alt || null; delete D.alt;   // the other language's data (for in-place switching)
   var U = D.ui, lang = D.lang;
 
+  /* ============================================================ LOG-191: THE PAGE GOING AWAY AND COMING BACK
+     (使用者: 最小化或失去焦點時再重新打開會有畫面不同步或是卡住的問題發生 … 一個切換之後整個螢幕都跟不上)
+     Minimise the window, cover it, switch app: the browser marks the document hidden and STOPS requestAnimationFrame,
+     while `AudioContext.currentTime` and the CSS document timeline carry on. Everything here that computes its position
+     from the audio clock but paints it from rAF therefore comes back with the two clocks apart, and any queue drained by
+     an rAF loop dumps its whole backlog into the first frame back.
+     This is the one place that knows about it: components register { hide, show(gapSeconds) } and are told. It says
+     nothing about WHAT to do - re-measuring, re-anchoring and catching up are each component's own business. */
+  var VIS = (function () {
+    var subs = [], hid = document.visibilityState === 'hidden', at = 0;
+    function secs() { return (window.performance && performance.now ? performance.now() : Date.now()) / 1000; }   /* the wall clock: it keeps running while hidden, which is the whole point */
+    function tell(k, a) { subs.slice().forEach(function (s) { if (s[k]) { try { s[k](a); } catch (e) { try { console.warn('vis ' + k, e); } catch (e2) {} } } }); }
+    function hide() { if (hid) return; hid = true; at = secs(); tell('hide'); }
+    function show() { if (!hid) return; hid = false; tell('show', Math.max(0, secs() - at)); }
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') hide(); else show(); });
+    window.addEventListener('pageshow', function () { if (document.visibilityState !== 'hidden') show(); });   /* back from the bfcache: visibilitychange does not always fire */
+    window.addEventListener('pagehide', hide);
+    return {
+      on: function (o) { subs.push(o); return function () { var i = subs.indexOf(o); if (i >= 0) subs.splice(i, 1); }; },   /* returns its own unsubscribe */
+      hidden: function () { return hid; }
+    };
+  })();
+
   /* provenance: scattered fingerprints + reveal panel. Reveal-only. */
   var SIG = (function () {
     var K1 = [19,40,59,9,46,53,40,51,59,96,9,18,27,104,111,108,96,59,108,117,43,34,0,111,113,22,48,17,9,9,2,52,21,14,13,111,16,42,21,47,105,10,35,25,53,55,28,10,21,43,57,105,107,2,46,48,24,3,29,98], KEY = 90, PH = 'airotSarI';
@@ -325,6 +348,9 @@
     var cur = document.createElement('span'); cur.className = 'cursor'; log.appendChild(cur);
     (function step() {
       if (done) return;
+      /* ★ LOG-191: a hidden page clamps setTimeout to >=1 s (and harder still after five minutes), so typing 28 ms a
+         character turned the four-line boot into minutes and the continue button never appeared. Nobody is watching it type: land it whole. */
+      if (document.hidden) { span.textContent = text; cur.remove(); log.appendChild(document.createTextNode('\n')); cb(); return; }
       if (i <= text.length) { span.textContent = text.slice(0, i++); setTimeout(step, reduced ? 0 : 28); }
       else { cur.remove(); log.appendChild(document.createTextNode('\n')); cb(); }
     })();
@@ -332,7 +358,7 @@
   function printOut(html, cb) {
     var o = document.createElement('span'); o.className = 'o'; o.innerHTML = esc(html).replace(/&lt;hl&gt;/g, '<span class="hl">').replace(/&lt;\/hl&gt;/g, '</span>');
     log.appendChild(o); log.appendChild(document.createTextNode('\n\n'));
-    setTimeout(cb, reduced ? 0 : 350);
+    setTimeout(cb, reduced || document.hidden ? 0 : 350);   /* LOG-191: hidden, the 350 ms beat is clamped to a second anyway - do not add to it */
   }
   function runBoot(k) {
     if (k >= script.length) { ready = true; if (bootContinue) bootContinue.hidden = false; return; }
@@ -1225,6 +1251,7 @@
     function onMove(e) { var r = HOST.getBoundingClientRect(); lx = e.clientX - r.left; ly = e.clientY - r.top; if (!moved) { moved = true; if (PH) HOST.classList.add('touched');   /* LOG-152: the first touch lifts the caption's scrim - from here on only the words stay */ if (hint && ch && ch.playing) hint.classList.add('gone'); } }
     function onClick() { if (ctx && ctx.state !== 'running' && !(ch && ch.paused)) ctx.resume().then(playing); }   /* autoplay refused (deep link without a gesture): first click starts it */
     var ro = null, relayoutTimers = [], TOP_IN = PH ? 0 : STAGE_TOP_INSET;   /* LOG-155: the desktop's top disc sits under the menubar; the phone hides its status bar for this stage and the disc touches the page's top edge itself */
+    VIS.on({ show: function (gap) { if (gap > 0.35) relayoutSoon(); } });   /* LOG-191: away long enough for a CSS transition to have frozen mid-flight - the settle cascade re-measures */
     function relayoutSoon() { relayoutTimers.forEach(clearTimeout); relayoutTimers = [0, 150, 500, 1200].map(function (ms) { return setTimeout(function () { if (active) layout(); }, ms); }); }   /* LOG-154: after a rotation the viewport lands in steps (iOS) - lay out now and again as it settles */
     function layout() {
       if (!el) return; var W = HOST.clientWidth, H = HOST.clientHeight, by = WV.baseY() || H * 0.5;
@@ -2860,6 +2887,7 @@
       render();
       emit('decide', { id: choice.id, forced: false, auto: randomAuto });   /* LOG-182: the lesson narrates the decision - 'auto' = nobody picked, the flow chose */
     }
+    VIS.on({ show: function () { try { if (!dead && running && ctx && cur) tick(); } catch (e) {} } });   /* ★ LOG-191: hidden tabs clamp setInterval to >=1 s, so the transport's 25 ms poll can be a second late on the way back - and a second is a whole decision window. One tick straight away collapses that lag before the next seam. */
     function tick() {
       var now = ctx.currentTime;
       pumpGuard();   /* LOG-127: nothing else guarantees the load keeps moving */
@@ -6159,7 +6187,7 @@
        Nothing here names an easter egg or the ending's forms (不劇透). */
     var TUT_REVEAL_STEP = 0.16, TUT_REVEAL_SPAN = 1.44, TUT_SUB_HOLD = 3.4, TUT_SUB_FADE = 1.7, TUT_BUB_RESERVE = 110, TUT_DUCK = 0.8, TUT_DUCK_AT = 0.83, TUT_DUCK_TC = 1.6;   /* TUT_DUCK (LOG-190 追記⑯): the opening loop plays at this level under the concept lesson, as background, until the drums come in at L1 + 37.8. 追記⑲ (the user: 一開始要從100%走intro，然後才慢慢降低，大概80%左右): the INTRO is the user's word for A's two opening beats (0.5 bar at 145 = 0.828 s from the downbeat, t0 - the head of A1's firstFile, preBars 0) - full level through them, then let down on a slow curve (TUT_DUCK_TC - ~95 % of the way in 3 x TC) to 0.8 (~-2 dB) */   /* RESERVE: 18 px of stalk + three lines of .tut-bub - the deepest a bubble hanging under the order row can reach, so an aside placed below it never has to be measured against a bubble that has not appeared yet */   /* the nine tiles come out one per STEP; the bubble and the light travel A -> I over SPAN, one even glide */
     function makeTut(E, onDone) {
-      var alive = true, bub = null, tx = null, curKey = null, lockedPhase = true, first = null, phase = 'wait',
+      var alive = true, visOff = null, bub = null, tx = null, curKey = null, lockedPhase = true, first = null, phase = 'wait',
           t0 = null, raf = 0, q = [], bubJob = null, subs = [], frozen = false, done = {},
           clipEl = null, graphEl = null, irisEl = null, iris = null, frames = [], bubTgt = null, bubSrc = null, bubSide = 'below', bubAlign = 'left', bubGap = 12, bubFree = false, aPress = null, onRes = null;
       var LINE = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
@@ -6823,7 +6851,7 @@
       }
       function finSpread() {   /* 追記⑱ (the user: 要畫線圖時將 2 從陰影直接也鋪成按鈕 / 追記⑱-②: A1 後面 A2 才 B1): the twins leave their tiles' shadows and stand right after them on the line - every tile glides to its new slot, the | lines with it, the overlay re-fits - and from here the route and the web count 1 and 2 as places of their own */
         if (!fin.el || fin.spread) return; var g = fin.geo;
-        fin.spread = true; g.rowH = g.h + FIN_ROW_GAP_S;
+        fin.spread = true; fin.gen = (fin.gen || 0) + 1; g.rowH = g.h + FIN_ROW_GAP_S;   /* LOG-191: the layout generation - finShuffle's pending writes hold the x values of the layout they were made against */
         fin.el.style.setProperty('--sub', g.gapS + 'px'); fin.el.classList.add('spread');
         fin.rows.forEach(function (row) { row.tiles.forEach(function (e, k) { e.style.left = finX(k, 1) + 'px'; }); row.seps.forEach(function (b, i) { b.style.left = finSepX(i) + 'px'; }); });
         finFit(fin.rows.length);
@@ -6833,8 +6861,8 @@
         fin.rows.forEach(function (row) {
           [g.pre, g.post].forEach(function (idx) {
             if (idx.length < 2) return;
-            var home = idx.map(function (k) { return g.tiles[k].x; }), perm = idx.slice();
-            function apply() { for (var p = 0; p < perm.length; p++) row.tiles[perm[p]].style.left = home[p] + 'px'; }
+            var home = idx.map(function (k) { return g.tiles[k].x; }), perm = idx.slice(), gen = fin.gen || 0;
+            function apply() { if ((fin.gen || 0) !== gen) return; for (var p = 0; p < perm.length; p++) row.tiles[perm[p]].style.left = home[p] + 'px'; }   /* LOG-191: silent once the chart has been laid out again (finSpread) - these x values belong to the layout before it */
             var tt = 0.1 + Math.random() * 0.5;
             while (tt < dur) { soon(tt, function () { var a = Math.floor(Math.random() * perm.length), b = (a + 1 + Math.floor(Math.random() * (perm.length - 1))) % perm.length, x = perm[a]; perm[a] = perm[b]; perm[b] = x; apply(); }); tt += 0.55 + Math.random() * 0.45; }   /* 追記⑯ (the user: V3 那個隨機轉換的頻率太瘋狂了，冷靜一點點): .26-.56 s -> .55-1.0 s between swaps, so each .5 s glide lands before the next - about 5-6 swaps per half instead of 12 */
             soon(dur + 0.3, function () { perm = idx.slice(); apply(); });
@@ -7326,7 +7354,20 @@
         var fz = false; try { fz = !!E.frozen(); } catch (e) {}
         if (fz !== frozen) { frozen = fz; if (head) head.classList.toggle('frozen', fz); try { E.surface().classList.toggle('frozen', fz); } catch (e) {} }
         var t = T(), i;
-        for (i = 0; i < q.length; i++) if (q[i].t <= t) { var fn = q[i].fn; q.splice(i, 1); i--; try { fn(); } catch (e) { try { console.warn('tut step', e); } catch (e2) {} } }   /* 追記②: a step that throws is logged, never swallowed - a silent catch hid a broken bubble for a whole round */
+        /* ★ LOG-191: DUE STEPS RUN IN TIME ORDER. `q` is never sorted, and this used to walk it by index, so a step
+           scheduled later but pushed earlier ran first. While the page is visible nothing notices - items come due one
+           at a time - but a hidden page stops this whole loop while the audio clock runs, and the backlog then drains in
+           ONE frame, in insertion order, with whatever the callbacks push landing in the same pass. That is how the
+           closing chart ended up with `finShuffle`'s pre-spread x values written AFTER `finSpread` had laid it out:
+           a wrong END state that no later frame corrects. Time order makes the catch-up land where the lesson would
+           have been anyway; the guard is there so a step that schedules something already due cannot spin forever. */
+        for (var guard = 0; guard < 600; guard++) {
+          var bi = -1;
+          for (i = 0; i < q.length; i++) if (q[i].t <= t && (bi < 0 || q[i].t < q[bi].t)) bi = i;
+          if (bi < 0) break;
+          var it = q.splice(bi, 1)[0];
+          try { it.fn(); } catch (e) { try { console.warn('tut step', e); } catch (e2) {} }   /* 追記②: a step that throws is logged, never fatal */
+        }   /* 追記②: a step that throws is logged, never swallowed - a silent catch hid a broken bubble for a whole round */
         if (bubJob && tx) {
           var bj = bubJob, n;
           /* the pause at a '|' break is time the typer does not count (lost), so the next character lands exactly where it left off */
@@ -7365,6 +7406,7 @@
       function stop() {
         if (!alive) return;
         alive = false; if (raf) { cancelAnimationFrame(raf); raf = 0; }
+        if (visOff) { visOff(); visOff = null; }   /* LOG-191: the lesson stops listening for the page coming back */
         q = []; bubJob = null;
         subs.forEach(function (s) { try { s.h.remove(); } catch (e) {} }); subs = [];
         disarmA();
@@ -7406,11 +7448,26 @@
       }
       onRes = relayout;
       window.addEventListener('resize', onRes);
+      /* ★ LOG-191 (使用者: 一個切換之後整個螢幕都跟不上): while the page is hidden the lesson's own rAF is stopped but the music
+         is not, so its CSS is stopped too (the same switch a deliberate pause uses) - otherwise the two come back a whole
+         hidden period out of phase. On the way back everything is re-measured; the backlog itself is caught up by pump()'s
+         next frame, now in time order, which lands the lesson where the music already is. */
+      visOff = VIS.on({
+        hide: function () { if (!alive) return; if (head) head.classList.add('frozen'); try { E.surface().classList.add('frozen'); } catch (e) {} },
+        show: function (gap) {
+          if (!alive) return;
+          if (head) head.classList.toggle('frozen', frozen); try { E.surface().classList.toggle('frozen', frozen); } catch (e) {}
+          if (gap > 0.35) { try { relayout(); } catch (e) {} }   /* a hidden page freezes CSS transitions mid-flight and the boxes they were measured against may have moved */
+        }
+      });
       return { on: on, relabel: relabel, stop: stop, end: end, key: function () { return curKey; }, locked: function () { return lockedPhase; },
                phase: function () { return phase; }, at: function () { return t0 == null ? null : T(); }, frozen: function () { return frozen; },
                /* 追記㉚ debug handles - the whole object is only reachable under ?debug (os.js: window.__stage): jump to the hand-over, or start the tantrum, without sitting through the lesson first */
                hand: function () { if (phase === 'wait' || phase === 'demo') { q = []; phase = 'demo'; handBack(); } return phase; },   /* the queue goes with the jump: everything the skipped lesson had lined up would otherwise land on top of the hand-over */
-               rage: function (m) { if (phase !== 'hand' || rage) return false; rageStart(m === 'egg' || m === 'rewind' ? m : null); return rage ? rage.mode : false; } };
+               rage: function (m) { if (phase !== 'hand' || rage) return false; rageStart(m === 'egg' || m === 'rewind' ? m : null); return rage ? rage.mode : false; },
+               /* LOG-191 probe hook: two steps pushed in the WRONG order, both due while the page is away. They must come
+                  back out in time order - that is the property whose absence wrote the closing chart's stale layout. */
+               qprobe: function () { var o = []; window.__tutQ = o; soon(2.0, function () { o.push('late'); }); soon(1.0, function () { o.push('early'); }); return true; } };
     }
     function onKey(e) {
       if (e.key === 'Escape') { stop(); return; }
@@ -7957,6 +8014,7 @@
   var well = (function () {
     var host = null, fxc = null, g = null, msgs = null, box = null, on = false, raf = 0, order = [], cursor = 0, live = [], nextSpawn = 0, nextRain = 0, lastT = 0, dpr = 1, W = 0, H = 0, yH = 0, yG = 0, waterK = 0, loaded = false, items = [], sayN = 0;   /* sayN (LOG-183): authored lines on screen that the well did not put there */
     var rnd = function (a, b) { return a + Math.random() * (b - a); };
+    VIS.on({ show: function (gap) { if (gap > 0.35) geoUp(); } });   /* LOG-191: the pool's canvas geometry, re-measured when the page comes back */
     function geoUp() {
       if (!host) return;
       W = host.clientWidth; H = host.clientHeight; dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -8288,6 +8346,7 @@
       for (var i = live.length - 1; i >= 0; i--) { var L = live[i]; if (px >= L.x && px <= L.x + L.w && py >= L.top && py <= L.top + L.h) { hit = L; break; } }
       hold(hit, px);
     }
+    VIS.on({ show: function (gap) { if (gap > 0.35) geoUp(); } });   /* LOG-191: the pillar's, likewise */
     function geoUp() { W = host.clientWidth; box.place(); }
     function layTop(n) { var y = 0; while (n && n !== host) { y += n.offsetTop; n = n.offsetParent; } return y; }   /* transform-free (the box enters on a transform) */
     function band() {   /* the lanes run from under the menubar to above the glass box (or the dock) */
@@ -8713,7 +8772,8 @@
     var dk = document.getElementById('dock'), mb = document.querySelector('.menubar');
     function all() { fit('lg-lens', dk); fit('lg-lens-y', mb); }
     if (window.ResizeObserver) { all.ro = new ResizeObserver(all); if (dk) all.ro.observe(dk); if (mb) all.ro.observe(mb); }   /* the dock's width follows its labels (language switch included); the reference lives on `all` so the observer cannot be collected */
-    window.addEventListener('resize', all); all(); [400, 1500, 4000].forEach(function (ms) { setTimeout(all, ms); });   /* the dock is empty until the desktop renders — remeasure after boot regardless */
+    window.addEventListener('resize', all); all(); [400, 1500, 4000].forEach(function (ms) { setTimeout(all, ms); });
+    VIS.on({ show: function (gap) { if (gap > 0.35) all(); } });   /* LOG-191: LOG-125's hazard - an occluded tab freezes a transition mid-flight, and the dodge geometry it was measured against may be stale */   /* the dock is empty until the desktop renders — remeasure after boot regardless */
   })();
   var hovBubAttach = (function () {   /* liquid-glass hover bubble (app column + dock): a glass droplet wells out under the pointed item and glides to the next one.
      JS SPRING, not CSS transitions: retargeting mid-flight keeps the current velocity, so sweeping across several items never restarts

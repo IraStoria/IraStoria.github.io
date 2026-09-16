@@ -60,7 +60,7 @@
   var TICK = 25;
 
   /* scheduler state */
-  var running = false, timer = null, paused = false, muted = false, mgain = null, byeTimer = null, loadProg = null;   /* loadProg {d,t}: fetch+decode progress while the stage loads (the OS shows it at the line, like the ADE stage) */   /* paused = ctx.suspend(): the clock freezes, so the whole schedule freezes with it; muted drives mgain (after the analyser — the bars keep moving); byeTimer: the outro's panel collapse */
+  var running = false, timer = null, paused = false, muted = false, mgain = null, byeAt = null, loadProg = null;   /* byeAt: the farewell's moment on the AUDIO clock (LOG-191; it was a wall-clock setTimeout, which kept counting while a suspended context stood still - os.js fixed the same bug long ago and this copy was never back-ported) */   /* loadProg {d,t}: fetch+decode progress while the stage loads (the OS shows it at the line, like the ADE stage) */   /* paused = ctx.suspend(): the clock freezes, so the whole schedule freezes with it; muted drives mgain (after the analyser — the bars keep moving); byeAt: the outro's panel collapse, on the audio clock */
   var stageLead = 0, stageT0 = null;   /* stage mode: four 4/4 beats at the theme's tempo before the first entry — load time, like the ADE stage's count-in */
   var cur = null;        /* { seg, start, end, src, gain } */
   var nxt = null;        /* scheduled next: same shape */
@@ -254,6 +254,7 @@
       if (now >= cur.end + postSec(cur.seg) + 0.05) { stop(); return; }
       renderProgress(); return;
     }
+    if (byeAt !== null && now >= byeAt) { byeAt = null; document.body.classList.add('bye'); }   /* LOG-191 */
     if (!nxt && now >= cur.end - decisionLead()) decide();
     if (nxt && now >= cur.end) {           /* hand-over */
       lastId = cur.seg.id; cur = nxt; nxt = null; fireTrack(1);
@@ -261,7 +262,7 @@
       markPair(cur.seg);
       if (later) { queued = later; later = null; }
       history.push(cur.seg.id);
-      if (STAGE_HOST && cur.seg === OUTRO && !byeTimer) byeTimer = setTimeout(function () { document.body.classList.add('bye'); }, Math.max(0, (cur.end - ctx.currentTime - 2 * barSec(OUTRO.bpmOut)) * 1000));   /* TWO bars before the outro's logical end: the surface compresses and the OS line retracts — the desktop player runs straight back out under the closing bars */
+      if (STAGE_HOST && cur.seg === OUTRO && byeAt === null) byeAt = cur.end - 2 * barSec(OUTRO.bpmOut);   /* LOG-191: armed on the audio clock and read by this same tick - a pause (or a hidden page, which clamps timers) can no longer close the stage while the music stands still */   /* TWO bars before the outro's logical end: the surface compresses and the OS line retracts — the desktop player runs straight back out under the closing bars */
       render();
     }
     renderProgress();
@@ -289,7 +290,7 @@
   }
   function stop() {
     running = false; clearInterval(timer);
-    if (byeTimer) { clearTimeout(byeTimer); byeTimer = null; }
+    byeAt = null;
     if (paused) { paused = false; try { ctx.resume(); } catch (e) {} }   /* never leave the context suspended: the fade-out below needs a running clock */
     [cur, nxt].forEach(function (it) { if (it) { try { it.gain.gain.cancelScheduledValues(0); it.gain.gain.setValueAtTime(it.gain.gain.value, ctx.currentTime); it.gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1); it.src.stop(ctx.currentTime + 0.12); } catch (e) {} } });
     cur = nxt = null; queued = later = null; randomAuto = false; render(); fireTrack(0);

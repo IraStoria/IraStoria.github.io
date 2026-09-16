@@ -814,7 +814,7 @@ ok("LOG-190 追記⑱ / ⑱-② (the user: A1 後面 A2 才 B1，不是排到下
    and "function finX(k, v) { var g = fin.geo, t = g.tiles[k]; if (!fin.spread) return t.x; var x = t.x + g.tb[k] * g.step; return v === 2 ? x + g.step : x; }" in _js190r
    and "var gapS = tiles.length > 2 ? Math.max(6, tiles[2].x - tiles[1].x - tiles[1].w) : 12, step = (tiles[0] ? tiles[0].w : 58) + gapS, tb = [], twins = 0, sepsS = [];" in _js190r
    and "function finW() { var g = fin.geo; return g.width + (fin.spread ? g.twins * g.step : 0); }" in _js190r
-   and "fin.spread = true; g.rowH = g.h + FIN_ROW_GAP_S;" in _js190r and "fin.el.style.setProperty('--sub', g.gapS + 'px'); fin.el.classList.add('spread');" in _js190r
+   and "fin.spread = true; fin.gen = (fin.gen || 0) + 1; g.rowH = g.h + FIN_ROW_GAP_S;" in _js190r   # LOG-191: the layout generation - finShuffle's pending writes carry the x values of the layout they were made against, and must go quiet once the chart is laid out again and "fin.el.style.setProperty('--sub', g.gapS + 'px'); fin.el.classList.add('spread');" in _js190r
    and "fin.rows.forEach(function (row) { row.tiles.forEach(function (e, k) { e.style.left = finX(k, 1) + 'px'; }); row.seps.forEach(function (b, i) { b.style.left = finSepX(i) + 'px'; }); });\n        finFit(fin.rows.length);" in _js190r
    and "e.style.left = finX(k, 1) + 'px';" in _js190r and "b.style.left = finSepX(k) + 'px';" in _js190r and "e.style.setProperty('--k', 2 * k);" in _js190r and "sh.style.setProperty('--k', 2 * k + 1); e.appendChild(sh); e.twin = sh; }" in _js190r
    and "g = fin.geo = finGeo(); if (!g.tiles.length) return; fin.spread = false; fin.tm = 0;" in _js190r)
@@ -1000,6 +1000,31 @@ ok("LOG-188 (the user: 教學途中隱藏最近更新／便條／dock): os.js we
 
 
 # ---- report
+_demo191 = (ROOT / "demos" / "interactive-player" / "demo.js").read_text(encoding="utf-8")
+ok("LOG-191 (使用者: 最小化或失去焦點時再重新打開會有畫面不同步或是卡住…一個切換之後整個螢幕都跟不上): one place knows the page went away, the lesson's backlog comes back in TIME order, and nothing waits on a wall clock",
+   "var VIS = (function () {" in _js182
+   and all(t in _js182 for t in (
+       "document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') hide(); else show(); });",
+       "window.addEventListener('pageshow', function () { if (document.visibilityState !== 'hidden') show(); });",
+       "window.addEventListener('pagehide', hide);",
+       "on: function (o) { subs.push(o); return function () { var i = subs.indexOf(o); if (i >= 0) subs.splice(i, 1); }; },",
+       # the lesson: due steps in time order, with a guard against a step that schedules something already due
+       "for (var guard = 0; guard < 600; guard++) {",
+       "for (i = 0; i < q.length; i++) if (q[i].t <= t && (bi < 0 || q[i].t < q[bi].t)) bi = i;",
+       "visOff = VIS.on({", "if (visOff) { visOff(); visOff = null; }",
+       # the transport: one tick straight away, because a hidden tab clamps its 25 ms poll to a second
+       "VIS.on({ show: function () { try { if (!dead && running && ctx && cur) tick(); } catch (e) {} } });",
+       # the boot terminal: whole lines while hidden, not one clamped second a character
+       "if (document.hidden) { span.textContent = text; cur.remove();",
+       "setTimeout(cb, reduced || document.hidden ? 0 : 350);",
+       # the closing chart: shuffle writes carry the layout they were made against
+       "fin.spread = true; fin.gen = (fin.gen || 0) + 1;",
+       "function apply() { if ((fin.gen || 0) !== gen) return;"))
+   and _js182.count("VIS.on(") == 6   # the lesson, the transport, the piano stage, the dock panels, the wishing well, the pillar
+   and "q.splice(i, 1); i--; try { fn(); }" not in _js182   # the old insertion-order drain is gone
+   and "byeTimer = setTimeout" not in _demo191 and "byeAt = cur.end - 2 * barSec(OUTRO.bpmOut);" in _demo191
+   and "if (byeAt !== null && now >= byeAt) { byeAt = null; document.body.classList.add('bye'); }" in _demo191)
+
 fails = [r for r in results if not r[0]]
 for okk, name, msg in results:
     print(("PASS  " if okk else "FAIL  ") + name + (f"  — {msg}" if msg and not okk else ""))
