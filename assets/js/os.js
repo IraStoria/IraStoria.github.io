@@ -91,6 +91,7 @@
     hb:   { grp: 1 },
     st:   { grp: 1, once: 1 },
     '404': { grp: 1, once: 1 },   /* LOG-160追記⑬: the About prank (the ten broken pages) - forced on the next About opening */
+    tt_rwd: { once: 1 },   /* LOG-190 追記㉜ (使用者: 開 rewind 彩蛋觸發為 --EE_tt_rwd): the lesson's tantrum takes the rewind ending on purpose instead of the one-in-five draw - spent when it fires, so the rest of that visit is back to the odds */
     pool: {},   /* LOG-161 (ADR-009): opens the Wishing Well as the owner's panel for this visit; the panel only SHOWS - every write is checked by the Worker */
     v6:   { mode: 'basic', rank: 1 },
     v6_p: { mode: 'basic', rank: 1 },
@@ -6306,14 +6307,21 @@
            ★ THE PADDING HAS TO BE ADDED BACK. `width: max-content` resolves to the CONTENT's max-content size even under
            box-sizing: border-box (measured in Chrome: a 113 px bubble re-pinned at 113 px wrapped onto two lines), so writing
            offsetWidth straight back squeezes the content box by exactly the padding and border, and every short line broke in two. */
-        bub.style.width = ''; tx.textContent = text;
+        /* ★ 追記㉛ (使用者: 英文泡泡會有換行切換的問題(換行時會突然閃爍)): THE CARET IS PART OF THE LINE. The width was pinned with
+           `.cur` off, so the caret's ▐ plus its margin (≈9 px) was never measured - and the pinned box has zero slack. In English,
+           where a line can only break at a space, the caret pushed the whole last WORD onto the next line and the next character
+           pulled it straight back up: down and up inside two frames, at every line boundary. Measured with the caret on, that
+           cannot happen (nor when `.cur` comes off at the end). The height is pinned with it: placeBox() re-reads offsetHeight
+           every frame and anchors an 'above' bubble by its BOTTOM, so one reflowed line used to teleport the whole text 21.7 px. */
+        bub.style.width = ''; bub.style.height = ''; tx.classList.add('cur'); tx.textContent = text;
         var cs = getComputedStyle(bub), pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
         bub.style.width = (bub.offsetWidth + (cs.boxSizing === 'border-box' ? pad : 0)) + 'px';   /* max-width is a border-box cap, so a genuinely long line still wraps - as it should */
+        bub.style.height = bub.offsetHeight + 'px';   /* 追記㉛: the final height, reserved before the first character - the box never grows a line mid-typing */
         bubSide = o.side === 'above' ? 'above' : 'below'; bubAlign = o.align === 'right' ? 'right' : 'left'; bubGap = o.gap || 12; bubFree = false;
         bubSrc = target; bubTgt = typeof target === 'function' ? target : rectOf(target); placeBox(bubTgt ? rectOf(bubTgt) : rowBox());   /* 追記②: the bubble simply appears at its new anchor and fades in (the user: 取消龜速位移，快速淡入淡出) - a live anchor (the tick) is followed, an element's box is taken once so the bubble does not bob with the tile */
-        if (o.instant) { tx.textContent = text; tx.classList.remove('cur'); bubJob = null; }
+        if (o.instant) { tx.textContent = text; tx.classList.remove('cur'); bub.style.height = ''; bubJob = null; }   /* 追記㉛: nothing is typed, so nothing needs reserving - let it hug the text */
         else {
-          tx.textContent = ''; tx.classList.add('cur');
+          tx.textContent = '';   /* 追記㉛: `.cur` went on before the measurement, above */
           bubJob = { t0: T(), per: o.dur ? o.dur / Math.max(1, text.length) : rate(text.length, 3.0, 0.032), text: text,   /* LOG-190 追記⑪: o.dur = the whole line typed over exactly that long (sayBySeam) */ n: -1, marks: marks, pause: o.pause == null ? 0.55 : o.pause, pauseTo: null, hold: 0, lost: 0 };
         }
         if (o.marks && o.marks[0]) { try { o.marks[0](); } catch (e) {} }
@@ -6326,6 +6334,7 @@
 
       /* ---- ★ the author's own lines, in the wish pool's hand (well.say), centred just above where the order row lives */
       function subLen(key) { var s = txt(key).replace(/\|/g, ''); return 0.25 + rate(s.length, 2.6, 0.055) * s.length + TUT_SUB_HOLD + TUT_SUB_FADE; }   /* LOG-190 追記⑬: a '|' is a mark, never a character */
+      function bubLen(key) { var s = txt(key).replace(/\|/g, ''); return rate(s.length, 3.0, 0.032) * s.length; }   /* ★ 追記㉛ (使用者: 有一句英文根本還沒顯示完就切下一句了): how long a bubble takes to TYPE - the same rate show() uses. English runs 3-4x longer than the Chinese on the same schedule, so the lines that follow one another are spaced by this, not by a number picked off the Chinese */
       /* ★ 追記①: the author's line lives in the BAND BETWEEN THE ROW AND THE LINE - the empty middle of the stage, near the
          buttons it is talking about. 0.6 of the way down that band, then pushed clear of whatever a bubble hanging under the row
          could reach (BUB_RESERVE), then held off the spectrum line itself. It only ever moves DOWN out of trouble, never back up
@@ -6567,7 +6576,7 @@
       var kao = null;
       function sayOn(key, which, o) {   /* o.fresh = the first line on a node after a hand-over: faded in there, never slid in from where the bubble last stood */
         o = o || {}; o.slide = false; o.align = 'right'; if (which === 'b') o.gap = 32; if (!o.at) o.at = kaoBox;   /* 追記㉕: never .slide - the anchor is the face, which stands still, and a right-aligned bubble that grows wider while its left is still in the .32 s transition sweeps across B (s25b: sd4, 4 samples) */   /* 追記㉕: above the face over A and left of B (B's 32 px up, clear of A's top - at 20 the probe found it 4.7 px into A), below the face left of C - all opening to the LEFT, away from the nodes */
-        var run = function () { if (phase === 'demo') { o.side = which === 'c' || kaoSlot === 'ab' ? 'below' : 'above'; kaoFace(KAO_LINE[key]); show(key, o.at, o); } };   /* 追記㉗: the line's own face first, then the line on it. 追記㉘: below the face when the face is below A (or left of C), above it otherwise - read as the line goes up, once the ride has landed */
+        var run = function () { if (phase === 'demo') { o.side = which === 'c' || kaoSlot === 'ab' ? 'below' : 'above'; kaoFace(KAO_LINE[key]); show(key, o.at, o); if (o.then) o.then(); } };   /* 追記㉛: o.then fires when the line ACTUALLY goes up - a line held back by a ride (kao.then) starts its own successor's clock from there, not from the seam */   /* 追記㉗: the line's own face first, then the line on it. 追記㉘: below the face when the face is below A (or left of C), above it otherwise - read as the line goes up, once the ride has landed */
         if (kao && kao.moving) kao.then.push(run); else run();   /* a line that arrives while the face is still on its way waits for it - it goes up on a face that stands still */
       }
       function kaoFace(t) { if (kao && t && kao.el.textContent !== t) kao.el.textContent = t; }   /* 追記㉗: the standing face turns into the line's - in place (kaoStep re-centres it from its dock every frame) */
@@ -6903,7 +6912,7 @@
         soon(11.2, function () { finShuffle(4.8); });
         soon(17.5, function () { finSpread(); subtitle('tut_s_v4', { sky: true }); });   /* 追記⑱-③ (the user: V6 那邊要像展示 ABC 那邊一樣的畫面暗下來): the stage is dim under the chart (.tut-demo, from the V3 split since ⑱-④; finExit / end() lift it) */   /* 追記⑱: the twins step out beside their tiles as the line opens (spread first: the overlay's new top is where this sky line is placed over); the route (.5 s later) can land on them */
         soon(18.0, finRoute);
-        soon(23.0, function () { subtitle('tut_s_v5', { sky: true, marks: [null, function () { finSplit(6); }] }); });   /* 追記⑰: 24.5 -> 23.0 */
+        soon(23.0, function () { subtitle('tut_s_v5', { sky: true, marks: [null, function () { finSplit(6); }] }); aBack(); });   /* 追記⑰: 24.5 -> 23.0 */   /* 追記㉛: 「至於 V6 嗎……」 - and while everyone is looking at the chart, the A that was thrown off the stage fades quietly back into the row (使用者: 直到最後介紹V6構造時自己偷偷顯現回來) */
         soon(24.7, finWeb); soon(25.7, finSweep);   /* 追記⑰: 26.2 / 27.2 -> 24.7 / 25.7 */
         soon(28.5, function () { subtitle('tut_s_v6', { sky: true }); });   /* 追記⑰: 31.0 -> 28.5, over the outro */
         soon(FIN_LEAVE, function () { fin.leave = true; E.force('I'); });
@@ -6924,6 +6933,7 @@
         if (phase !== 'hand') return;
         /* 追記③ (the user: 按下瞬間要亮「排隊中」燈當點擊回饋): the press is answered AT the press - the tap ring and the queued hairline, both
            the line's own vocabulary - even though A2 may be most of a pass away. The queued mark comes off when A2 actually sounds. */
+        if (rage) rageEnd();   /* 追記㉚: pressed in the middle of the tantrum - the face goes and A drops straight back into place */
         var a = E.btn('A'); if (a) { a.classList.remove('tap'); void a.offsetWidth; a.classList.add('tap', 'queued'); }
         phase = 'run'; disarmA(); hide(); unframeAll(); irisOut();   /* 追記④: the shade that left only A lit opens out at the press */
         unlock();            /* ★ 待裁示 a (the user): the hand-over IS the press, so the line unlocks for dragging at exactly that moment */
@@ -7093,6 +7103,119 @@
         soon(0.9, function () { sayOn('tut_sd1', 'a', { fresh: true }); });   /* LOG-190 追記⑳ (the user: 這個泡泡最開始出現時請採用淡入): 「我們先從 A 開頭開始。」 fades in on the face beside A */
         /* the first hand-over is queued from inside A2 (see on 'enter'); the route lights at the decision, the node at the switch */
       }
+      /* ---- 追記㉚ (使用者: 顏文字會開始憤怒的抖動，每過兩秒切換成下一個，然後抖動越來越誇張，到 (ﾒ ﾟ皿ﾟ)ﾒ 時跑到 A 下面，切換到 ヽ(#`Д´)ﾉ 動作時 A 按鈕會往右上方旋轉飛出，像是被丟出去了一樣):
+         THE TANTRUM. The nudges run out of words, and the narrator comes back to do it itself - wordless (使用者: 純動作，不要字): four faces
+         RAGE_STEP s apart, the shake growing with each. The third runs round A's right side to stand under it; on the fourth A is thrown out
+         to the upper right, comes back, and presses itself (使用者: 3. 飛出去→回來→自動按下, 先試試看目前這樣跑可不可行，可以再繼續往下加).
+         graphOut() took the board with it at the hand-over, so kaoDock() / node() are meaningless here - every point is measured off A itself. */
+      var KAO_RAGE = ['(#`皿´)', '( ╬ﾟ дﾟ )', '(ﾒ ﾟ皿ﾟ)ﾒ', 'ヽ(#`Д´)ﾉ'];
+      var KAO_WALK = '(ﾟ皿ﾟﾒ)';   /* 追記㉛ 使用者: 在原地喘氣後用 (ﾟ皿ﾟﾒ) 像走路一樣往左邊移動消失 */
+      var KAO_REW = [{ f: '( ´ﾟДﾟ`)', d: 2.0 }, { f: '(`へ´≠)', d: 4.0, pant: true }, { f: '<(￣ ﹌ ￣)>', d: 2.0 }, { f: '(´･_･`)', d: 2.0 }];   /* 追記㉛ 使用者原話: 顏文字會變成( ´ﾟДﾟ`)兩秒，(`へ´≠)在原地喘4秒，然後<(￣ ﹌ ￣)>2秒，(´･_･`)兩秒 */
+      var RAGE_STEP = 2.0, RAGE_OUT = 0.55, RAGE_PANT = 2.6, RAGE_WALK = 1.5, REW_ODDS = 0.2, rage = null, aGone = false, rewCtx = null;
+      /* ★ 追記㉛ (使用者): ⑴ 抖動小一點點 ⑵ 一開始就站在 A 下面（㉚ 的「跑到 A 下面」那一趟退役）⑶ 丟出去時顏文字站在原地、A 不回來
+         ⑷ 兩個結局抽籤：**4/5「A 鍵就直接消失然後直接開始播放，直到最後介紹 V6 構造時自己偷偷顯現回來」**（喘氣→(ﾟ皿ﾟﾒ) 走掉→音樂開始），
+         **1/5 rewind**（四張臉演完→整個畫面與音效倒帶→回到「按 A」等使用者自己按）。 */
+      function rageAt() { var r = rectOf(E.btn('A')), s = kaoWH(); return r ? { x: (r.left + r.right) / 2, y: r.bottom + KAO_A_GAP + s.h / 2 } : null; }   /* its dock: under A, the 'ab' slot's own geometry - read straight off A, because the board went with graphOut() */
+      function ragePt() {   /* where the face is this frame - the shake / the panting / the walk are all mixed in here, so kaoStep does them for free */
+        if (!rage) return null;
+        var p = rage.frozen || rageAt(); if (!p) return null;   /* frozen at the throw: A leaves, the face stays exactly where it stood (使用者: 丟出去時顏文字站在原地) */
+        var t = T(), x = p.x, y = p.y;
+        if (rage.walk) { var w = Math.max(0, Math.min(1, (t - rage.walk) / RAGE_WALK)); x = p.x - w * w * (p.x + 160); y = p.y + Math.sin(t * 9) * 2.6; }   /* out past the left edge, bobbing on each step */
+        else if (rage.pant) { x = p.x + Math.sin((t - rage.pant) * 1.2) * 1.4; y = p.y + Math.sin((t - rage.pant) * 3.4) * 3.2; }   /* shoulders going, in place */
+        else { var k = Math.max(0, Math.min(1, (t - rage.t0) / (RAGE_STEP * KAO_RAGE.length))), amp = 1.0 + 5.5 * k * k;   /* 使用者: 抖動小一點點 (㉚ 是 1.5 + 9k²) */
+               x += Math.sin(t * 47 * 1.7) * amp; y += Math.sin(t * 47 * 2.6) * amp * 0.7; }
+        return { x: x, y: y };
+      }
+      function rageStart(force) {   /* force = 'egg' / 'rewind' for the ?debug handle and the probe; otherwise the draw */
+        if (phase !== 'hand' || rage) return;
+        hide();   /* 使用者: 純動作，不要字 - the last nudge's bubble comes down and nothing takes its place */
+        if (!kaoMake({ a: KAO_RAGE[0], b: KAO_RAGE[0] })) return;
+        rage = { t0: T(), mode: force || (eeTake('tt_rwd') ? 'rewind' : Math.random() < REW_ODDS ? 'rewind' : 'egg'), frozen: null, pant: 0, walk: 0, thrown: 0 };   /* 追記㉜: --EE_tt_rwd asks for the rewind; otherwise one in five */
+        kaoSlot = 'ab'; kao.home = ragePt; kao.landed = true; kaoStep();   /* 使用者: 一開始就站在下面 */
+        KAO_RAGE.forEach(function (f, n) {
+          soon(RAGE_STEP * n, function () {
+            if (phase !== 'hand' || !rage) return;
+            kaoFace(f);
+            if (n === 3) rageThrow();   /* ヽ(#`Д´)ﾉ: and out A goes */
+          });
+        });
+      }
+      function rageThrow() {
+        var a = E.btn('A'); if (!a) return;
+        rage.frozen = rageAt(); rage.thrown = T();   /* the dock is A's own box and A is about to leave - freeze it first */
+        var dx = rage.dx = Math.max(220, HOST.clientWidth * 0.26), dy = rage.dy = Math.max(240, HOST.clientHeight * 0.42);
+        a.style.transition = 'transform ' + RAGE_OUT + 's cubic-bezier(.35,.06,.7,.5), opacity ' + RAGE_OUT + 's ease-in';
+        a.style.transform = 'translate(' + dx.toFixed(0) + 'px,' + (-dy).toFixed(0) + 'px) rotate(540deg) scale(.35)';
+        a.style.opacity = '0';
+        soon(RAGE_OUT + 0.1, function () {   /* 使用者: 不要回來 - it keeps its place in the row (visibility, not display), so nothing reflows */
+          if (!rage) return;
+          a.classList.add('tut-gone'); aGone = true;
+          a.style.transition = 'none'; a.style.transform = ''; a.style.opacity = '';
+        });
+        if (rage.mode === 'rewind') rageRewLegs(); else rageEggLegs();
+      }
+      function rageEggLegs() {   /* 4/5 - 使用者: 有機率A鍵就直接消失然後直接開始播放，直到最後介紹V6構造時自己偷偷顯現回來 */
+        var t = RAGE_OUT + 0.2;
+        soon(t, function () { if (rage) { rage.pant = T(); kaoFace(KAO_RAGE[3]); } });                              /* 原地喘氣 */
+        soon(t + RAGE_PANT, function () { if (rage) { rage.pant = 0; rage.walk = T(); kaoFace(KAO_WALK); } });      /* (ﾟ皿ﾟﾒ) 往左邊走 */
+        soon(t + RAGE_PANT + RAGE_WALK + 0.2, function () {
+          if (phase !== 'hand' || !rage) return;
+          rage = null; kaoOff();   /* off the left edge, gone */
+          pressA();                /* 直接開始播放 - with A still missing from the row, until finSplit(6) lets it back (aBack) */
+        });
+      }
+      function rageRewLegs() {   /* 1/5 - the four faces, then the whole picture and the sound rewind to 「按 A」 */
+        var t = RAGE_OUT + 0.2;
+        KAO_REW.forEach(function (s) {
+          var at = t; soon(at, function () { if (!rage) return; kaoFace(s.f); rage.pant = s.pant ? T() : 0; }); t += s.d;   /* (`へ´≠) is the one that pants in place, 4 s */
+        });
+        soon(t, function () { if (phase === 'hand' && rage) rageRewind(); });
+      }
+      function rageRewind() {
+        var a = E.btn('A'), fx = document.createElement('i'), dx = rage.dx, dy = rage.dy;
+        fx.className = 'tut-rewfx'; fx.setAttribute('aria-hidden', 'true'); if (head) head.appendChild(fx);   /* 畫面倒轉特效: scanlines, a band running UP the screen, the whole overlay juddering (os.css) */
+        rewSfx();                                                                                            /* 音樂倒帶音效 */
+        var back = KAO_REW.map(function (s) { return s.f; }).reverse().concat(KAO_RAGE.slice().reverse());    /* its own tape, run backwards, fast */
+        back.forEach(function (f, i) { soon(i * 0.09, function () { if (rage) kaoFace(f); }); });
+        soon(0.3, function () {   /* the throw, played backwards: A comes flying back in from the upper right */
+          if (!rage || !a) return;
+          a.classList.remove('tut-gone'); aGone = false;
+          a.style.transition = 'none'; a.style.transform = 'translate(' + dx.toFixed(0) + 'px,' + (-dy).toFixed(0) + 'px) rotate(540deg) scale(.35)'; a.style.opacity = '0';
+          void a.offsetWidth;
+          a.style.transition = 'transform .55s cubic-bezier(.2,.85,.3,1), opacity .35s ease-out'; a.style.transform = ''; a.style.opacity = '';
+        });
+        soon(1.4, function () {
+          if (rage) { rage = null; kaoOff(); }
+          if (a) { a.style.transition = ''; a.style.transform = ''; a.style.opacity = ''; }
+          fx.remove();
+          if (phase === 'hand') show('tut_s_turn', E.btn('A'), { again: true });   /* back where it started - and it waits (使用者: 就等到用戶自己按) */
+        });
+      }
+      function rewSfx() {   /* a tape rewind on its own context: band-passed noise falling in pitch - the lesson's music is the engine's and is left alone */
+        try {
+          var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+          var ctx = rewCtx || (rewCtx = new AC()); if (ctx.state === 'suspended') ctx.resume();
+          var n = Math.floor(ctx.sampleRate * 1.4), buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0), i;
+          for (i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * 0.7;
+          var src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), g = ctx.createGain(), t0 = ctx.currentTime;
+          src.buffer = buf; bp.type = 'bandpass'; bp.Q.value = 7;
+          bp.frequency.setValueAtTime(3400, t0); bp.frequency.exponentialRampToValueAtTime(300, t0 + 1.2);
+          src.playbackRate.setValueAtTime(1.7, t0); src.playbackRate.exponentialRampToValueAtTime(0.55, t0 + 1.2);
+          g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.14, t0 + 0.07); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.3);
+          src.connect(bp); bp.connect(g); g.connect(ctx.destination); src.start(t0); src.stop(t0 + 1.35);
+        } catch (e) { }
+      }
+      function aBack() {   /* 使用者: 直到最後介紹 V6 構造時自己偷偷顯現回來 - no announcement, it is simply there again */
+        if (!aGone) return; var a = E.btn('A'); aGone = false; if (!a) return;
+        a.classList.remove('tut-gone');
+        a.style.transition = 'opacity 1.4s ease'; a.style.opacity = '0'; void a.offsetWidth; a.style.opacity = '';
+        soon(1.6, function () { a.style.transition = ''; });
+      }
+      function rageEnd() {   /* the visitor pressing mid-tantrum: the face goes and A is left exactly as it was found (before the throw - after it, A is gone on purpose) */
+        var a = E.btn('A'); if (a) { a.style.transition = ''; a.style.transform = ''; a.style.opacity = ''; }
+        rage = null; kaoOff();
+      }
+
       function handBack() {
         if (phase !== 'demo') return;
         phase = 'hand'; hide(); graphOut(); kaoOff();   /* 追記㉔: the narrator goes with the board */
@@ -7106,7 +7229,9 @@
            and stays until pressA() opens it. Then the nudges (the user: 太久沒點出彩蛋催趕訊息, four of them, in order, the last one ends it):
            each only if the stage is still waiting for the press. */
         soon(1.3, function () { show('tut_s_turn', E.btn('A')); armA(); irisIn(E.btn('A'), 48); });
-        ['tut_nudge1', 'tut_nudge2', 'tut_nudge3', 'tut_nudge4'].forEach(function (k, n) { soon(1.3 + 11 * (n + 1), function () { if (phase === 'hand') show(k, E.btn('A'), { again: true }); }); });
+        var nudges = lang === 'zh' ? ['tut_nudge1', 'tut_nudge2', 'tut_nudge3', 'tut_nudge4'] : ['tut_nudge1', 'tut_nudge2', 'tut_nudge3'];   /* 追記㉚ (使用者: 移除英文版讓子彈飛的梗直接接續這個。中文版在讓子彈飛後新增這個): the film quote is a Chinese joke, so English runs out of words one line earlier and goes straight to the tantrum */
+        nudges.forEach(function (k, n) { soon(1.3 + 11 * (n + 1), function () { if (phase === 'hand') show(k, E.btn('A'), { again: true }); }); });
+        soon(1.3 + 11 * (nudges.length + 1), rageStart);   /* 追記㉚: out of words - the narrator comes back and loses its temper */
       }
 
       /* ---- the engine's events */
@@ -7147,11 +7272,19 @@
           else if (i.id === 'A2' && demoLeg === 1) { demoLeg = 2; if (!spark) nodeNow('a'); route('b', false); soon(3.6, function () { E.force('C1'); });   /* 追記⑳ (the user: 分兩句，時間抓好不要太長): 「也可以正常地返回 A。」 as A is back, then the two halves close behind it */
             /* ★ LOG-190 追記㉒ (the user: 回到A時有一個泡泡，那個泡泡從顏文字上出現，說完顏文字才消失) → 追記㉔: the face that rode home is the one saying it -
                and it no longer goes once it is said: it stands at A's lower left and A's lines follow on it, one after another */
-            sayOn('tut_sd7', 'a', { fresh: true });
-            soon(2.0, function () { sayOn('tut_sd8', 'a'); }); soon(3.4, function () { sayOn('tut_sd9', 'a'); });
+            /* ★ 追記㉛ (使用者: B回A後在下面的文字切換太快了，有一句英文根本還沒顯示完就切下一句了): sd7 waits for the carry home to land
+               (sayOn defers it on kao.then, ~0.75 s past the seam) while sd8 / sd9 sat on soon() from the seam itself - so the English
+               sd7, which needs 1.6 s to type, had 1.25 s. sd8 / sd9 now hang off the line before them and are spaced by its own typing
+               length, floored at the old Chinese spacing (2.0 / 1.4), so zh is unchanged and en simply gets the room it needs.
+               sd10 (soon 7.2) and sd11 (sayBefore) keep their own clocks - nothing pinned to the music moves. */
+            sayOn('tut_sd7', 'a', { fresh: true, then: function () {
+              soon(Math.max(2.0, bubLen('tut_sd7') + 0.55), function () {
+                sayOn('tut_sd8', 'a', { then: function () { soon(Math.max(1.4, bubLen('tut_sd8') + 0.55), function () { sayOn('tut_sd9', 'a'); }); } });
+              });
+            } });
             soon(7.2, function () { sayOn('tut_sd10', 'a'); }); sayBefore(ARC_LEAD + 3.6, 'tut_sd11', 'a'); }   /* 追記㉗ (the user, on sd10: 這邊早點接下一句): sd11 3.9 s before the seam, not 2.7 - about 2.1 s after sd10 (A2's seam is ~13.2 s in, sd10 at 7.2), the same step as sd7 -> sd8 */   /* LOG-190 追記⑪: tut_s9c 「再回到開頭 A。」 is no longer put up here - tut_s9h has just finished saying it on the seam, and a new bubble now would take it down the instant it was complete */
           else if (i.id === 'C1') { nodeNow('c'); arcGoLate('lc'); E.force('B1');   /* ★ LOG-186: C1 hands straight on to B1 - C2 is out of the demonstration */
-            sayOn('tut_sd12', 'c', { fresh: true }); soon(2.6, function () { sayOn('tut_sd13', 'c'); }); sayBefore(0.45 + 2.4, 'tut_sd14', 'c'); }
+            sayOn('tut_sd12', 'c', { fresh: true }); soon(5.5, function () { sayOn('tut_sd13', 'c'); }); sayBefore(0.45 + 2.4, 'tut_sd14', 'c'); }   /* 追記㉛ (使用者: 這句顯示太長了): sd13 comes up later, not earlier - sd14 is pinned to C1's seam, so the only way to make sd13 stand for less time is to start it later (2.6 -> 5.5 = about 4.5 s standing, was ~7.4) */
           else if (i.id === 'B1' && demoLeg === 2) { demoLeg = 3; if (!spark) nodeNow('b'); route('c', false); E.force('A1');   /* LOG-190 追記⑲＋⑳: 「很好。」 and then the old closing lines - on B, where the music is */
             sayOn('tut_sd15', 'b', { fresh: true }); soon(2.2, function () { sayOn('tut_s9e', 'b'); }); soon(8.0, function () { sayOn('tut_s9g', 'b'); });   /* round 5 (the user: 「這就是遊戲配樂常見的 branching」晚一點出現): 6.5 -> 8.0 s */ }   /* ★ LOG-190 追記⑩ (the user: 演示完 C-B 之後多一句「這個就是…branching 技巧」): the name of what was just shown, while B1 plays out - up ~9 s before A1 returns and handBack takes it down */   /* LOG-186: B enters from C - the spark has ridden the right-hand arc C -> B, the closing line goes up, and the last leg is home */
           return;
@@ -7236,6 +7369,9 @@
         q = []; bubJob = null;
         subs.forEach(function (s) { try { s.h.remove(); } catch (e) {} }); subs = [];
         disarmA();
+        rage = null; aGone = false;   /* ★ 追記㉛: the lesson can be ended while A is still off the stage (thrown, waiting for the V6 moment) - it always comes back with the lesson, at once and without a fade, because the queue is gone by now */
+        var ta = E.btn('A'); if (ta) { ta.classList.remove('tut-gone'); ta.style.transition = ''; ta.style.transform = ''; ta.style.opacity = ''; }
+        var tfx = head && head.querySelector('.tut-rewfx'); if (tfx) tfx.remove();
         if (onRes) { window.removeEventListener('resize', onRes); onRes = null; }
         if (bub) { bub.remove(); bub = null; } tx = null; curKey = null;
         frames.forEach(function (f) { f.el.remove(); }); frames = []; bubTgt = null; bubSrc = null;
@@ -7272,7 +7408,10 @@
       onRes = relayout;
       window.addEventListener('resize', onRes);
       return { on: on, relabel: relabel, stop: stop, end: end, key: function () { return curKey; }, locked: function () { return lockedPhase; },
-               phase: function () { return phase; }, at: function () { return t0 == null ? null : T(); }, frozen: function () { return frozen; } };
+               phase: function () { return phase; }, at: function () { return t0 == null ? null : T(); }, frozen: function () { return frozen; },
+               /* 追記㉚ debug handles - the whole object is only reachable under ?debug (os.js: window.__stage): jump to the hand-over, or start the tantrum, without sitting through the lesson first */
+               hand: function () { if (phase === 'wait' || phase === 'demo') { q = []; phase = 'demo'; handBack(); } return phase; },   /* the queue goes with the jump: everything the skipped lesson had lined up would otherwise land on top of the hand-over */
+               rage: function (m) { if (phase !== 'hand' || rage) return false; rageStart(m === 'egg' || m === 'rewind' ? m : null); return rage ? rage.mode : false; } };
     }
     function onKey(e) {
       if (e.key === 'Escape') { stop(); return; }

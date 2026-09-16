@@ -1270,7 +1270,7 @@
     },
     "tut_ask_sub": {
       "zh": "不太熟就選簡易版：按鈕少一點，舞台會邊播邊教你怎麼玩。熟的話直接進進階版。之後隨時可以在舞台上切換。",
-      "en": "Not really? Take the simple stage: fewer buttons, and it teaches you as it plays. Familiar? Go straight to the advanced stage. You can switch on the stage at any time."
+      "en": "Not really? Take the simple stage: fewer buttons, and it teaches you as it plays. Familiar? Go straight to the advanced stage. You can switch between them on the stage at any time."
     },
     "tut_ask_simple": {
       "zh": "不太熟，帶我玩",
@@ -1278,7 +1278,7 @@
     },
     "tut_ask_adv": {
       "zh": "熟，直接進階版",
-      "en": "I am - go advanced"
+      "en": "I do - go advanced"
     },
     "tut_s_order": {
       "zh": "箭頭就是播放順序：音樂會從左往右，一塊接一塊，一路播到 I 結束。",
@@ -1302,7 +1302,7 @@
     },
     "tut_s_pair": {
       "zh": "每個字母其實都有一到兩段。|自由度雖然很高，但為了段落的完整性，目前統一整段播放。",
-      "en": "Each letter is really one or two sections.| There is a lot of freedom here, but so that no section is cut short, they all play through whole for now."
+      "en": "Each letter is really one or two sections.| There is a lot of freedom here, but so that no section is cut short, they all play in full for now."
     },
     "tut_s_gate": {
       "zh": "這裡是整首音樂循環的中繼點。由於 tempo 加速，進了 E 段落之後就不能再回到之前了。",
@@ -1314,11 +1314,11 @@
     },
     "tut_s_v1": {
       "zh": "最後感謝 Shiou Hsu 願意花時間接下這個高難度的委託。",
-      "en": "And finally, thank you to Shiou Hsu for taking the time to accept a commission this demanding."
+      "en": "And finally, a special thanks to Shiou Hsu for taking the time to accept a commission this demanding."
     },
     "tut_s_v2": {
       "zh": "目前委託版本只到 V3|，且仍在持續編寫中。",
-      "en": "The commissioned versions only reach V3| so far, and they are still being written."
+      "en": "The commissioned versions only reach V3| with my current budget now :/ and they are still in progress."
     },
     "tut_s_v3": {
       "zh": "且目前希望都可以像 V1 一樣可以左右隨機穿插。",
@@ -1354,7 +1354,7 @@
     },
     "tut_s_swap_pre": {
       "zh": "前段的三個字母和後段的三個字母都可以拖著換位置，但只能在各自的區裡換。像這樣把 D 和 H 拉到最前面，它們就會先播。",
-      "en": "The three letters of the first half and the three of the second can be dragged into a new order, but only within their own zone. Like this: pull D and H to the front and they play first."
+      "en": "The three letters of the first half and the three of the second can be dragged into a new order, but only within their own zones. Like this: pull D and H to the front and they play first."
     },
     "tut_s_moved": {
       "zh": "換好了，音樂會照新的順序接下去。",
@@ -1362,7 +1362,7 @@
     },
     "tut_s_rule": {
       "zh": "這個順序音樂接不起來，所以彈回去了。換個位置試試。",
-      "en": "The music cannot join in that order, so it bounced back. Try another spot."
+      "en": "The music cannot join up in that order, so it bounced back. Try another spot."
     },
     "tut_end": {
       "zh": "結束教學",
@@ -1374,15 +1374,15 @@
     },
     "tut_open1": {
       "zh": "安～這裡是Ira。",
-      "en": "Hey - Ira speaking."
+      "en": "Hi - Ira here."
     },
     "tut_open2": {
       "zh": "現在開始概念及使用教學。",
-      "en": "Here begins a short lesson: the idea, and how to use it."
+      "en": "Here begins a tutorial for this audio \"player\"."
     },
     "tut_s1a": {
       "zh": "正常來說，一首有結構的音樂都不會是從頭到尾維持同一個構造跟旋律。",
-      "en": "A piece of music with any structure to it does not keep the same shape and melody from beginning to end."
+      "en": "Normally, a piece of music with any structure to it does not keep the same shape of melody from beginning to end."
     },
     "tut_s1a2": {
       "zh": "它是由好幾個段落組成的。",
@@ -1390,15 +1390,15 @@
     },
     "tut_s1b": {
       "zh": "這首音樂也不例外，可以分割成包含不同內容的部分，由字母代表所有的段落。",
-      "en": "This piece is no exception: it can be cut into parts that each hold something different, and a letter stands for every one of them."
+      "en": "Same with this one: it can be cut into parts that each hold something different, and a letter stands for every one of them."
     },
     "tut_s1c": {
       "zh": "大多數的音樂都是採線性進行。",
-      "en": "Most music runs in a straight line, start to finish."
+      "en": "The music plays from the beginning to the end."
     },
     "tut_s1d": {
       "zh": "但這裡想展示的，是音樂也可以有的隨機性。",
-      "en": "What this piece wants to show is that music can also leave something to chance."
+      "en": "and I am just here to show that music can actually go in a different order."
     },
     "tut_clip_song": {
       "zh": "一首歌",
@@ -1410,7 +1410,7 @@
     },
     "tut_s2a": {
       "zh": "這些塊分成五區：",
-      "en": "The blocks fall into five zones:"
+      "en": "I have separated this music into 5 different zones:"
     },
     "tut_s2z": {
       "zh": "開頭 A|前段三塊|中繼 E|後段三塊|結尾 I",
@@ -1418,15 +1418,15 @@
     },
     "tut_s2b": {
       "zh": "開頭 A 和結尾 I 的順序是固定的，不能改。",
-      "en": "A at the start and I at the end are fixed: their places cannot change."
+      "en": "The beginning of A and the end of I are unchangeable."
     },
     "tut_s2b2": {
       "zh": "中間的 E 是整首構造發生重大變換的地方，也不能動。",
-      "en": "E in the middle is where the whole piece changes shape, so it cannot move either."
+      "en": "E in the middle is where the music makes an obvious change, also unchangeable."
     },
     "tut_s2c": {
       "zh": "所以真正可以自由改動的，只有前段的三塊和後段的三塊。",
-      "en": "So what you can really rearrange is the three blocks of the first half and the three of the second."
+      "en": "So what you can really control are the sections between those \"checkpoints\"."
     },
     "tut_sd1": {
       "zh": "我們先從 A 開頭開始。",
@@ -1434,31 +1434,31 @@
     },
     "tut_sd2": {
       "zh": "A 段落結束的瞬間，",
-      "en": "The instant A ends,"
+      "en": "At the end of the A section,"
     },
     "tut_sd3": {
       "zh": "B 會流暢地接手，沒有斷點。",
-      "en": "B takes over smoothly, without a break."
+      "en": "B takes over instantly and smoothly, without you noticing."
     },
     "tut_sd4": {
       "zh": "蛤？你說 A 到 B 本來就是理所當然？",
-      "en": "Huh? You're saying A to B was a given anyway?"
+      "en": "Huh? You're saying A was always supposed to go to B?"
     },
     "tut_sd5": {
-      "zh": "因為基本範例要先示範才有特例阿",
-      "en": "Well, the basic case has to be shown before the special ones -"
+      "zh": "因為基本範例要先示範才有特例啊",
+      "en": "uhhh... yes ur right, cuz I have to show you this works normally before something odd -"
     },
     "tut_sd6": {
       "zh": "不但可以正常地到 B",
-      "en": "not only can it go on to B,"
+      "en": "Yes, of course it can go to letter B,"
     },
     "tut_sd7": {
       "zh": "也可以正常地返回 A。",
-      "en": "it can come back to A just as naturally."
+      "en": "But it can also go back to A without you noticing."
     },
     "tut_sd8": {
       "zh": "順暢的接續，",
-      "en": "A smooth join,"
+      "en": "A smooth transition,"
     },
     "tut_sd9": {
       "zh": "主題又自然地返回 A。",
@@ -1466,7 +1466,7 @@
     },
     "tut_sd10": {
       "zh": "那既然 A 段落可以去 B，",
-      "en": "So if A can go to B,"
+      "en": "So yes, it can go from A to B,"
     },
     "tut_sd11": {
       "zh": "那這次就換到 C。",
@@ -1477,12 +1477,12 @@
       "en": "Seamless."
     },
     "tut_sd13": {
-      "zh": "同時，既然 A 都可以到 C 了，",
+      "zh": "同時既然 A 都可以到 C 了，",
       "en": "And since A can go to C,"
     },
     "tut_sd14": {
       "zh": "那 C 到 B 應該也沒什麼問題吧？",
-      "en": "C to B should be no problem either, right?"
+      "en": "Let's try C to B?"
     },
     "tut_sd15": {
       "zh": "很好。",
@@ -1494,11 +1494,11 @@
     },
     "tut_s9g": {
       "zh": "這就是遊戲配樂常見的 branching（分支）技巧。",
-      "en": "This is branching - a technique game soundtracks use all the time."
+      "en": "and this is called branching - a technique game soundtracks use all the time."
     },
     "tut_s_turn": {
       "zh": "換你了：按 A 開始體驗。",
-      "en": "Your turn: press A to set off."
+      "en": "Your turn: press A to start."
     },
     "tut_nudge1": {
       "zh": "好啦差不多可以點了",
@@ -1506,11 +1506,11 @@
     },
     "tut_nudge2": {
       "zh": "快一點我要等你學完我才可以下班",
-      "en": "Hurry up - I cannot clock off until you have finished the lesson"
+      "en": "Bruhhhh... hit it!!!"
     },
     "tut_nudge3": {
       "zh": "拜託啦，快點按下去吧!",
-      "en": "Please, just press it!"
+      "en": "Please, just let me go!!!"
     },
     "tut_nudge4": {
       "zh": "「我…去睡會兒」 - 《讓子彈飛》",
@@ -1522,7 +1522,7 @@
     },
     "tut_s13b": {
       "zh": "把還沒播的字母拖成你要的順序，然後就照順序播到 I。",
-      "en": "Drag the letters that have not played yet into the order you want, and it plays down that line to I."
+      "en": "Drag the letters that have not played yet into the order you want, and it will play through in that order, all the way to I."
     }
   },
   "about_body": {

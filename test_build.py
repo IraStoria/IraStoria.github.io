@@ -374,7 +374,7 @@ ok("LOG-183 追記②: no other lesson line carries a stray '|'",
    not any("|" in site["ui"][k].get("zh", "") for k in _s183 if k not in ("tut_s2a", "tut_clip_parts", "tut_s_v2", "tut_s_v5", "tut_s_pair")))   # LOG-190 追記⑬: v2 / v5 carry the split marks (V3 / V6); 追記⑯: tut_s_pair marks where the twins come out
 ok("LOG-190 追記㉒ (the user: 回到A時有一個泡泡，那個泡泡從顏文字上出現，說完顏文字才消失 / 換好了這句話的泡泡永遠指向用戶拉動的那個方塊): the face that rides home to A stays (KAO_TALK) and 「也可以正常地返回 A。」 hangs above it, then face and bubble go together and A's lines follow on A; the reorder event names the dragged tile and tut_s_moved follows that tile live",
    "KAO_TALK" not in _js182 and "function kaoBox() { return kao ? rectOf(kao.el) : node('a')(); }" in _js182   # 追記㉔: the face no longer goes after its line - it stands, and every line is on it
-   and "sayOn('tut_sd7', 'a', { fresh: true });" in _js182 and "soon(1.7, function () { kaoOff(); bubOut(); });" not in _js182
+   and "sayOn('tut_sd7', 'a', { fresh: true, then: function () {" in _js182   # LOG-190 追記㉛: sd8 / sd9 now hang off sd7 actually going up, spaced by bubLen() and "soon(1.7, function () { kaoOff(); bubOut(); });" not in _js182
    and "function reorder(zone, order, silent, moved) {" in _js182 and "emit('reorder', { zone: zone, order: order.slice(), moved: moved || null });" in _js182
    and "reorder(d.zone, o, false, d.g);" in _js182
    and "var mv = i.moved || i.order[0]; show('tut_s_moved', function () { return rectOf(E.btn(mv)) || rowBox(); }, { hold: 6, again: true });" in _js182
@@ -397,7 +397,7 @@ ok("LOG-190 追記⑲＋⑳ (the user: 泡泡放在目前播放的那格上 / �
    and "var q = svgPt(p.getPointAtLength(len * (1 - Math.pow(1 - k, 2.2))));" in _js182 and "k = 1 - Math.pow(1 - k, 2.2);" in _js182.split("function sparkStep() {", 1)[1][:400]   # the kaomoji and the spark on ONE curve - change both together
    and "sayOn('tut_sd1', 'a', { fresh: true });" in _js182 and "sayBefore(ARC_LEAD + 2.4, 'tut_sd2', 'a');" in _js182
    and "soon(3.0, function () { sayOn('tut_sd4', 'b'); }); sayBefore(0.45 + 7.2, 'tut_sd5', 'b'); sayBefore(0.45 + 4.0, 'tut_sd6', 'b');" in _js182   # 追記㉙: sd3 3.0 / sd4 2.6 / sd5 3.2 / sd6 4.0 s (were 3.5 / 5.9 / 1.7 / 1.7)
-   and "soon(2.0, function () { sayOn('tut_sd8', 'a'); }); soon(3.4, function () { sayOn('tut_sd9', 'a'); });" in _js182   # 追記㉔: sd8 follows sd7 on the same face - no fresh fade needed
+   and "soon(Math.max(2.0, bubLen('tut_sd7') + 0.55), function () {" in _js182 and "soon(Math.max(1.4, bubLen('tut_sd8') + 0.55), function () { sayOn('tut_sd9', 'a'); });" in _js182   # LOG-190 追記㉛ (使用者: 有一句英文根本還沒顯示完就切下一句了): spaced by the line's own typing length, floored at the old Chinese spacing
    and ".desktop .stage-ui .tut-bub.qout{transition:opacity .25s ease,transform .25s ease}" in _css182 and ".desktop .stage-ui .tut-kao{position:absolute;" in _css182
    and not any("|" in site["ui"][k]["zh"] or "|" in site["ui"][k]["en"] for k in ("tut_sd1", "tut_sd2"))
    and site["ui"]["tut_sd4"]["zh"].startswith("蛤") and "基本範例" in site["ui"]["tut_sd5"]["zh"]   # 追記㉗: the user's rewrite of sd4 / sd5 (我猜 / 地方 retired)
@@ -417,9 +417,32 @@ ok("LOG-183 追記④: the graph has 56 px nodes on a 360 x 190 board, a spark t
                                   "@keyframes tutarcpre", "@keyframes tutarcgo", "stroke-dashoffset:1;")))   # LOG-190: the wipe runs the other way - drawn from A (1 -> 0), no longer erased (0 -> -1)
 ok("LOG-183 追記④ (the user: 換你了改用 iris 只留 A 亮，太久沒點出四句催趕): the hand-over closes the iris on A, the press opens it, four nudges in order, 13b points at the second half",
    "irisIn(E.btn('A'), 48)" in _js182 and "unframeAll(); irisOut();" in _js182
-   and "['tut_nudge1', 'tut_nudge2', 'tut_nudge3', 'tut_nudge4'].forEach" in _js182 and "if (phase === 'hand') show(k, E.btn('A'), { again: true });" in _js182
+   and "var nudges = lang === 'zh' ? ['tut_nudge1', 'tut_nudge2', 'tut_nudge3', 'tut_nudge4'] : ['tut_nudge1', 'tut_nudge2', 'tut_nudge3'];" in _js182   # LOG-190 追記㉚: the film quote is Chinese-only; English goes to the tantrum one line earlier
+   and "nudges.forEach(function (k, n) { soon(1.3 + 11 * (n + 1), function () { if (phase === 'hand') show(k, E.btn('A'), { again: true }); }); });" in _js182
    and all(isinstance(site["ui"].get(k), dict) and site["ui"][k].get("zh") and site["ui"][k].get("en") and not _CJK.search(site["ui"][k]["en"]) for k in ("tut_nudge1", "tut_nudge2", "tut_nudge3", "tut_nudge4"))
    and "讓子彈飛" in site["ui"]["tut_nudge4"]["zh"] and "show('tut_s13b', zoneBox('post'), { hold: 14 });" in _js182)
+ok("LOG-190 追記30/31 (使用者: 一開始就站在下面、抖動小一點點、丟出去時顏文字站在原地、A 不要回來；4/5 走掉直接開播、1/5 倒帶回按 A): the tantrum, its two endings and the draw between them",   # the name stays cp950-printable: no circled numbers, no kaomoji
+   "var KAO_RAGE = ['(#`皿´)', '( ╬ﾟ дﾟ )', '(ﾒ ﾟ皿ﾟ)ﾒ', 'ヽ(#`Д´)ﾉ'];" in _js182
+   and "var KAO_WALK = '(ﾟ皿ﾟﾒ)';" in _js182 and "var KAO_REW = [{ f: '( ´ﾟДﾟ`)', d: 2.0 }, { f: '(`へ´≠)', d: 4.0, pant: true }, { f: '<(￣ ﹌ ￣)>', d: 2.0 }, { f: '(´･_･`)', d: 2.0 }];" in _js182
+   and "soon(1.3 + 11 * (nudges.length + 1), rageStart);" in _js182
+   and all(t in _js182 for t in ("function rageAt() {", "function ragePt() {", "function rageStart(force) {", "function rageThrow() {",
+                                 "function rageEggLegs() {", "function rageRewLegs() {", "function rageRewind() {", "function rewSfx() {", "function aBack() {", "function rageEnd() {",
+                                 "mode: force || (eeTake('tt_rwd') ? 'rewind' : Math.random() < REW_ODDS ? 'rewind' : 'egg')",   # the draw, forceable for the probe and askable with --EE_tt_rwd
+                                 "kaoSlot = 'ab'; kao.home = ragePt; kao.landed = true; kaoStep();",   # 使用者: 一開始就站在下面 - and the shake rides kaoStep's per-frame home(), not CSS (.tut-kao is transition:none!important)
+                                 "amp = 1.0 + 5.5 * k * k;",                                            # 使用者: 抖動小一點點
+                                 "rage.frozen = rageAt(); rage.thrown = T();",                          # 使用者: 丟出去時顏文字站在原地
+                                 "a.classList.add('tut-gone'); aGone = true;",                          # 使用者: A 不要回來
+                                 "a.style.transform = 'translate(' + dx.toFixed(0) + 'px,' + (-dy).toFixed(0) + 'px) rotate(540deg) scale(.35)';",
+                                 "rage = null; kaoOff();   /* off the left edge, gone */",
+                                 "if (rage) { rage.pant = 0; rage.walk = T(); kaoFace(KAO_WALK); }",     # 喘氣 -> 往左走掉
+                                 "if (phase === 'hand') show('tut_s_turn', E.btn('A'), { again: true });",  # 倒帶結局: 回到「按 A」等使用者自己按
+                                 "aBack(); });   /* 追記⑰",                                              # V6 那句時 A 偷偷回來
+                                 "if (rage) rageEnd();",
+                                 "mode: force || (eeTake('tt_rwd') ? 'rewind' : Math.random() < REW_ODDS ? 'rewind' : 'egg')",   # LOG-190 追記32 (使用者: 開 rewind 彩蛋觸發為 --EE_tt_rwd): the flag asks for the rewind ending, and is spent when it fires
+                                 "tt_rwd: { once: 1 },"))
+   and "var REW_ODDS = 0.2" not in _js182 and "REW_ODDS = 0.2," in _js182   # one in five is the rewind, four in five the egg
+   and ".desktop .ds-secs .seg.tile.tut-gone{visibility:hidden}" in _css182 and ".desktop .stage-ui .tut-rewfx{" in _css182 and "@keyframes tutrew{" in _css182 and "@keyframes tutrewband{" in _css182
+   and site["ui"]["tut_s_turn"]["en"] == "Your turn: press A to start.")   # 使用者: your turn, press a to set of 改成 press a to start
 ok("LOG-183 追記④ as rewritten by LOG-190 追記⑲: the demonstration opens on A (我們先從 A 開頭開始) and its superseded lines are gone",
    site["ui"]["tut_sd1"]["zh"].startswith("我們先從 A 開頭開始") and "C2 開播時就繼續教學" not in _js182
    and not any(k in site["ui"] for k in ("tut_s9a", "tut_s9b", "tut_s9c", "tut_s9d", "tut_s9f", "tut_s9h")))
@@ -729,7 +752,7 @@ ok("LOG-190 追記⑬: the author's line learned '|' marks and the sky (subtitle
    and "while (s.marks && s.marks.length && sn >= s.marks[0].n) { var smk = s.marks.shift();" in _js190
    and "return { top: o.sky ? Math.max(safeTop() + 6, (fin.el && fin.spread ? fin.top : rowBox().top) - h0 - 16) : asideTop(w0, h0, res) };" in _js190   # 追記⑯: 16 px over the row, not at the safe top; 追記⑱-②: over the climbed overlay once laid out
    and "subtitle('tut_s_v2', { sky: true, marks: [null, function () { finSplit(3); }] });" in _js190
-   and "subtitle('tut_s_v5', { sky: true, marks: [null, function () { finSplit(6); }] }); });   /* 追記⑰" in _js190
+   and "subtitle('tut_s_v5', { sky: true, marks: [null, function () { finSplit(6); }] }); aBack(); });   /* 追記⑰" in _js190   # 追記㉛: the thrown A fades back in here
    and all("subtitle('tut_s_v%d', { sky: true });" % n in _js190 for n in (1, 3, 4, 6))
    and "function subLen(key) { var s = txt(key).replace(/\\|/g, '');" in _js190)
 ok("LOG-190 追記⑬: the version rows are copies in the stage-ui measured from the real row (never the engine's tiles), born on the row they split from, scaled as a whole to fit above the line; shuffle / route / web / sweep / out are all there",
@@ -861,7 +884,7 @@ ok("LOG-190 追記㉔ ①: the kaomoji is the demonstration's narrator - it stan
    and "if (which === 'a') return { x: (n.left + n.right) / 2, y: n.top - KAO_A_GAP - s.h / 2 };" in _js190r and "if (which === 'ab') return { x: (n.left + n.right) / 2, y: n.bottom + KAO_A_GAP + s.h / 2 };" in _js190r and "var KAO_A_GAP = 8, kaoSlot = 'a';" in _js190r and "var n = node(which === 'ab' || which === 'ar' ? 'a' : which)(), s = sz || kaoWH(); if (!n) return null;" in _js190r   # 追記㉙: 'ar' = A's upper right, a stop, not a place it lives   # 追記㉘ (the user: A上面太上面了，位移的時候壓到按鈕沒關係，停下來不要壓到就好 / 回到A搬運的那個顏文字讓他移到A下面): 8 px off A, a second place below it   # 追記㉕→㉖ (the user: 位置不要跑來跑去 / 移動採直線): above A / left of B (the line's end) / left of C at its top edge
    and "if (which === 'c') return { x: n.left - 8 - s.w / 2, y: n.top + s.h / 2 + 2 };" in _js190r and "return underLine('lb', s)(1);" in _js190r
    and "else if (kao.home) { try { p = kao.home(); } catch (err) { } }" in _js190r and "phase = 'hand'; hide(); graphOut(); kaoOff();" in _js190r and "unlock(); kaoOff();" in _js190r
-   and _js190r.count("kaoOff()") == 5)   # round 5: + kaoStep (the last ride runs off the stage)   # kaoMake (the old face goes as the new one comes), kaoOff itself, handBack, end - nowhere else: nothing on a timer takes it
+   and _js190r.count("kaoOff()") == 8)   # 追記㉚: + rageEnd (the tantrum's face goes with it, however it ends)   # round 5: + kaoStep (the last ride runs off the stage)   # kaoMake (the old face goes as the new one comes), kaoOff itself, handBack, end - nowhere else: nothing on a timer takes it
 ok("LOG-190 追記㉔ ②: a ride is three legs back to back - dock -> the light's start (KAO_LEAD), the light's own run (main: under the line on ARC_LEAD, or beside the spark on 0.45 s and its easing), the far node round into its dock (KAO_SETTLE) - the pair turns round as the main leg ends, and a line that arrives mid-ride waits for the face to settle",
    "function kaoOutLegs(key) {" in _js190r and "function kaoHomeLegs(ride, land) {" in _js190r and "poly([dA" not in _js190r and "corner(u0" not in _js190r and "corner(dB" not in _js190r and "ptAt(" not in _js190r   # 追記㉖ (poly([0, 2, 4, 0] at ~1669 is the boot screen's own, unrelated) (the user: 所有顏文字移動採直線，不要再像現在一樣有多次轉彎): no polylines, no elbows
    and "function hop(p0, p1, eased) {" in _js190r
@@ -895,14 +918,14 @@ _kl = re.search(r"var KAO_LINE = \{ (.*?) \};", _js190r)
 _kl_js = dict(re.findall(r"(tut_\w+): '([^']+)'", _kl.group(1))) if _kl else {}
 ok("LOG-190 追記㉗: no random face - each of the 17 demonstration lines wears the face the user wrote after it (KAO_LINE, exactly the list), put on as the line goes up (kaoFace before show); a ride keeps its face (kaoRide(null, …)) except the first B -> A, which the user gave the pair - (／・ω・)／ out, ＼(・ω・＼) on landing (KAO_PAIR_RL); the narrator stands in sd1's face; sd11 follows sd10 sooner (3.9 s before the seam, the user: 這邊早點接下一句); A's place is as low as the rides allow (kaoAUp over the four riding faces)",
    _kl_js == _KAO_LINE and all(k in site["ui"] for k in _KAO_LINE)
-   and "var run = function () { if (phase === 'demo') { o.side = which === 'c' || kaoSlot === 'ab' ? 'below' : 'above'; kaoFace(KAO_LINE[key]); show(key, o.at, o); } };" in _js190r
+   and "var run = function () { if (phase === 'demo') { o.side = which === 'c' || kaoSlot === 'ab' ? 'below' : 'above'; kaoFace(KAO_LINE[key]); show(key, o.at, o); if (o.then) o.then(); } };" in _js190r
    and "function kaoFace(t) { if (kao && t && kao.el.textContent !== t) kao.el.textContent = t; }" in _js190r
    and "var KAO_PAIR_RL = { a: '(／・ω・)／', b: '＼(・ω・＼)' };" in _js190r and _js190r.count("sparkAtSeam('ab', 'a', 'rl', KAO_PAIR_RL)") == 1 and _js190r.count("sparkAtSeam('ab', 'a', 'rl', KAO_RUN_OFF);") == 1
    and "function kaoMake(f) {" in _js190r and "var t = kao ? kao.el.textContent : KAO_LINE.tut_sd1; kaoOff(); if (!head) return null;" in _js190r and "if (!f) f = { a: t, b: t };" in _js190r
-   and "Math.random" not in _js190r.split("var KAO_LINE", 1)[1][:6000]
+   and "Math.random" not in _js190r.split("var KAO_LINE", 1)[1][:9000] and "mode: force || (eeTake('tt_rwd') ? 'rewind' : Math.random() < REW_ODDS ? 'rewind' : 'egg')" in _js190r   # 追記㉛: the only draw in the lesson is which ending the tantrum gets - never which face a line wears
    and "sayBefore(ARC_LEAD + 3.6, 'tut_sd11', 'a');" in _js190r and "sayBefore(ARC_LEAD + 2.4, 'tut_sd11', 'a');" not in _js190r
    and "function kaoAUp" not in _js190r and "function kaoSize" not in _js190r and "kaoAUp()" not in _js190r   # 追記㉘: the ride-clearance height is gone - a ride may cross A, the standing face sits 8 px off it
-   and site["ui"]["tut_sd4"]["en"].startswith("Huh?") and "basic case" in site["ui"]["tut_sd5"]["en"] and not _CJK.search(site["ui"]["tut_sd4"]["en"] + site["ui"]["tut_sd5"]["en"]))
+   and site["ui"]["tut_sd4"]["en"].startswith("Huh?") and "ur right" in site["ui"]["tut_sd5"]["en"] and not _CJK.search(site["ui"]["tut_sd4"]["en"] + site["ui"]["tut_sd5"]["en"]))   # LOG-190 追記㉚: the author's own English (文法部分有一個 "ur" 這個留著)
 # ---- LOG-190 追記⑫-② (the user: LOOP 出去接 END 聽到兩個 kick → 對得很準，就按照你這樣做)
 _iloop = next((s for s in _tu_all_segs if s.get("id") == "I_loop"), None) if (_tu_all_segs := [s for t in json.loads((ROOT / "demos" / "interactive-player" / "segments.json").read_text(encoding="utf-8"))["themes"] for s in t.get("segments", [])]) else None
 ok("LOG-190 追記⑫-②: I_loop starts leadSec = 0.02909 s late (its kick is at sample 0, every other file's 29.09 ms after the bar line) and schedule() adds it to the source's start only - the grid stays",
@@ -916,7 +939,7 @@ ok("LOG-190 追記⑪ as superseded by 追記⑲: tut_s9h (and sayBySeam, its on
 # ---- LOG-190 追記⑩ (the user: 演示完 C-B 之後多一句「這個就是…branching 技巧」)
 ok("LOG-190 追記⑩ (＋追記⑲: under B, after 很好 / tut_s9e): after C -> B the lesson names what it showed - tut_s9g goes up 6.5 s into the B1 that came from C, only while the demonstration is still on, bilingual, and says branching",
    "soon(8.0, function () { sayOn('tut_s9g', 'b'); });" in _js190 and _js190.count("'tut_s9g'") == 1
-   and "kaoFace(KAO_LINE[key]); show(key, o.at, o); } };" in _js190   # 追記㉔: on the face; 追記㉗: in the line's own face
+   and "kaoFace(KAO_LINE[key]); show(key, o.at, o); if (o.then) o.then(); } };" in _js190   # 追記㉔: on the face; 追記㉗: in the line's own face; 追記㉛: o.then = the line actually went up (a line held by a ride starts its successor from there)
    and isinstance(site["ui"].get("tut_s9g"), dict) and "branching" in site["ui"]["tut_s9g"]["zh"]
    and "branching" in site["ui"]["tut_s9g"]["en"] and not _CJK.search(site["ui"]["tut_s9g"]["en"]))
 # ---- LOG-190 追記⑨ (the user: 提早並延長 crossfading 讓他聽起來不要像是瞬間轉換 / 解釋完前段後段可以隨機排列之後就可以直接隱藏)
