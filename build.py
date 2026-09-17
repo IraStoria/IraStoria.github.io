@@ -148,7 +148,7 @@ def backend_url(site):
 
 
 def load_updates():
-    """content/updates.json (optional): [{date, zh, en}] → validated, newest first."""
+    """content/updates.json (optional): [{date, title{zh,en}, sub{zh,en}, zh, en}] → validated, newest first."""
     fp = CONTENT / "updates.json"
     updates = read_json(fp) if fp.exists() else []
     if not isinstance(updates, list):
@@ -157,6 +157,8 @@ def load_updates():
         if not isinstance(u, dict) or not u.get("date"):
             raise BuildError(f"updates.json[{i}]: 'date' required")
         bilingual({"zh": u.get("zh"), "en": u.get("en")}, f"updates.json[{i}]")
+        bilingual(u.get("title") or {}, f"updates.json[{i}].title")
+        bilingual(u.get("sub") or {}, f"updates.json[{i}].sub")   # LOG-196: one short line under the headline   # LOG-195: the panel shows the headline only, the window the whole entry
     return sorted(updates, key=lambda u: u["date"], reverse=True)
 
 
@@ -695,7 +697,7 @@ def build_pages(site, works, demos, articles):
             "ui": {k: v[lang] for k, v in site["ui"].items()},
             "fx": {name: {k: (local_versioned(v) if k in ("video", "sound") and v else v) for k, v in f.items() if not k.startswith("_")} for name, f in (site.get("fx") or {}).items()},
             "works": [loc(w, lang) for w in works],
-            "updates": [{"date": u["date"], "text": u[lang]} for u in load_updates()],
+            "updates": [{"date": u["date"], "title": u["title"][lang], "sub": u["sub"][lang], "text": u[lang]} for u in load_updates()],
             "demos": [{"path": rel, "title": m["title"][lang], "desc": m["desc"][lang], "platform": m["platform"], "year": m.get("year", ""), "ver": demo_ver(rel), "native": m.get("native", ""), "stage_ui": bool(m.get("stage_ui")),   # stage_ui: the desktop presents this iframe demo on the desktop itself (?stage=1), not in a window
 
                        "pieces": [{"id": p["id"], "title": p["title"][lang], "stems": p["stems"], "veil": p.get("veil", []), "notes": local_versioned(p["notes"]) if p.get("notes") else "", "count_in": p.get("count_in")} for p in m.get("pieces", [])]} for rel, m in demos.items()],

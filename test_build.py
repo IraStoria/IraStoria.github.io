@@ -102,8 +102,8 @@ for k in ("type_transcription", "tr_open", "tr_desktop_only", "tr_notice", "tr_n
 ok("the notice names the contact app by a placeholder, never an email address", "{contact}" in site["ui"]["tr_notice"]["zh"] and "{contact}" in site["ui"]["tr_notice"]["en"] and "@" not in site["ui"]["tr_notice"]["zh"] and "@" not in site["ui"]["tr_notice"]["en"])
 
 # ---- 2. demo contract (ADR-004)
-dj = ROOT / "demos" / "transition" / "demo.json"
-orig = dj.read_text(encoding="utf-8")
+dj = ROOT / "demos" / "interactive-player" / "demo.json"
+orig_b = dj.read_bytes(); orig = orig_b.decode("utf-8")   # bytes: write_text would turn LF into CRLF on Windows and dirty the tree
 try:
     d = json.loads(orig); d["concept_level_checked"] = False
     dj.write_text(json.dumps(d), encoding="utf-8")
@@ -112,7 +112,7 @@ try:
     dj.write_text(json.dumps(d), encoding="utf-8")
     expect_refused("demo missing en title refused", lambda: B.load_demos(works), "missing or empty 'en'")
 finally:
-    dj.write_text(orig, encoding="utf-8")
+    dj.write_bytes(orig_b)
 
 # ---- 3. articles: reviewed + pairing (ADR-002)
 adir = ROOT / "content" / "articles"

@@ -1,42 +1,106 @@
 [
   {
     "date": "2026-09-10",
+    "title": {
+      "zh": "採譜對照舞台新增第二首",
+      "en": "A second piece on the compare stage"
+    },
+    "sub": {
+      "zh": "新曲目上架，對照面板也能拖了",
+      "en": "A new piece, and the panels can now be dragged"
+    },
     "zh": "採譜對照舞台多了第二首：Oliver Dragojević 的《Kad u te nestane mi vire》（A l'Olympia 現場，客席 Matija Dedić），2024 私人委託案例，鋼琴與電鋼琴兩軌。這首的影片不開放嵌入，所以以自載音檔對照；舞台換上桃紅×橘紅的亮色配色，鋼琴軌畫高八度好分辨。桌面上的面板現在可以拖，不拖時照開啟順序往上疊；採譜影片框按住任何地方就拖、快速點按＝播放暫停、靠邊自動吸附。切「左右分耳」會先跳出提醒。離開舞台時顏色慢慢淡回桌面，曲子播完不再重落一次音符。",
     "en": "The compare stage has a second piece: Oliver Dragojević's \"Kad u te nestane mi vire\" (live at L'Olympia, with Matija Dedić), a 2024 private commission transcribed as piano and e-piano. Its video cannot be embedded, so the comparison uses a hosted copy; the stage wears a bright peach-pink / orange-red palette and draws the piano an octave up. Desktop panels can be dragged and otherwise stack upward in the order opened; the video box drags from anywhere, a quick tap plays or pauses, and it snaps to an edge when released near one. Split ears now opens with a note. Leaving the stage, the colours fade back to the desktop, and a finished piece no longer drops its notes a second time."
   },
   {
     "date": "2026-09-09",
+    "title": {
+      "zh": "許願池與恥辱柱改在桌面上演",
+      "en": "The Wishing Well and the Pillar now play on the desktop"
+    },
+    "sub": {
+      "zh": "不再開視窗，願望與名冊直接浮在桌面",
+      "en": "No more windows: wishes and the roster float on the desktop"
+    },
     "zh": "桌面版的「許願池」與「恥辱柱」不再開視窗，直接在桌面上演：許願池是 dock 上方一格清玻璃對話框，一次問一句，願望像片尾字幕一樣在畫面各處逐字浮出，地平線下是會起漣漪的水面；許願時可以留 email（選填、不公開），願望有進展會寄信通知你。恥辱柱的名冊改成從左往右飄過的彈幕，已伏法的淺綠、還在逃的紅，滑鼠停上去那一則會停下來讓你看清楚。",
     "en": "On the desktop the Wishing Well and the Pillar of Shame no longer open windows - they play out on the desktop itself. The well is a clear-glass prompt above the dock, one question at a time; wishes surface across the screen like end credits, typed out letter by letter, over water that ripples below the horizon. You may leave an email with a wish (optional, never shown) and get a note when it moves. The pillar's roster now streams left to right like bullet comments - executed ones in pale green, the ones still at large in red - and a line stops under your pointer so you can read it."
   },
   {
     "date": "2026-09-09",
+    "title": {
+      "zh": "新增三個應用程式",
+      "en": "Three new apps"
+    },
+    "sub": {
+      "zh": "恥辱柱、許願池、合作聯絡",
+      "en": "The Pillar, the Wishing Well and Contact"
+    },
     "zh": "新增三個應用程式：「恥辱柱」把被抓到過的 bug 全釘上去（修好的標「已伏法」），回報通道開挖中；「許願池」的願望牆先開，投稿稍後開放；「合作聯絡」是一張名片，四種合作項目各有一顆「寫信」。手機主畫面同步上架。",
     "en": "Three new apps: the Pillar of Shame nails up every bug that has been caught (fixed ones are marked executed) while its reporting channel is being dug; the Wishing Well opens its wall first, with wishing to follow; Work With Me is a card with a Write button for each of four kinds of work. All three are on the phone's home screen too."
   },
   {
     "date": "2026-09-02",
+    "title": {
+      "zh": "介面更新：液態玻璃按鈕",
+      "en": "Interface: liquid-glass buttons"
+    },
+    "sub": {
+      "zh": "按鈕換上玻璃質感，面板會自動讓路",
+      "en": "Glass buttons, and a panel that steps aside"
+    },
     "zh": "介面更新：全站按鈕換上液態玻璃質感（透光、不反光），滑鼠靠近會有玻璃泡泡回應；「最近更新」面板學會自動讓路，不再擋住視窗與圖示。段落播放器的路面字母也多了一點自己的脾氣，親自開一輪看看。",
     "en": "UI refresh: every button in the shell now wears liquid glass (translucent, no glare) with a glass-droplet hover; the updates panel steps aside for windows and icons on its own. The road letters in the Section Player picked up a temper of their own, too - run a set and see."
   },
   {
     "date": "2026-09-03",
+    "title": {
+      "zh": "段落播放器：夜城演出上線",
+      "en": "Section Player: the night-city show"
+    },
+    "sub": {
+      "zh": "段落有了自己的畫面、過場與收尾",
+      "en": "Sections get their own visuals, transitions and endings"
+    },
     "zh": "互動式段落播放器：夜城演出上線——段落字母有了自己的顯示方式，跑道上跑著 MIDI 音符與 tempo 讀數，各段落也有了自己的過場與收尾。桌面版「設計」內開始展示。",
     "en": "Interactive Section Player: the night-city show is live — the section letters have their own ways of appearing, MIDI notes and the tempo run along the road, and each section carries its own transitions and endings. Start it under Design (desktop)."
   },
   {
     "date": "2026-08-31",
-    "zh": "新設計上線：「四鋼琴環繞 - 非和諧不等式」——ADE 第 1 樂章《前奏》與第 2 樂章《過飽和》，前後左右四台鋼琴同時演奏，桌面就是場地、滑鼠就是你，走到哪聽到哪。在「設計」裡開始展示（桌面版）。",
-    "en": "New design: Asymmetric Dissonant for Four Pianos — ADE movements I (Prelude) and II (Supersaturated). Four pianos play at once around you; the desktop is the hall and the pointer is you. Start it under Design (desktop only)."
+    "title": {
+      "zh": "新設計上線：四鋼琴環繞",
+      "en": "New design: Four Pianos in Surround"
+    },
+    "sub": {
+      "zh": "桌面就是場地，滑鼠就是你",
+      "en": "The desktop is the hall and the pointer is you"
+    },
+    "zh": "新設計上線：「四鋼琴環繞」——前後左右四台鋼琴同時演奏，桌面就是場地、滑鼠就是你，走到哪聽到哪。在「設計」裡開始展示（桌面版）。",
+    "en": "New design: Four Pianos in Surround. Four pianos play at once around you; the desktop is the hall and the pointer is you. Start it under Design (desktop only)."
   },
   {
     "date": "2026-08-28",
+    "title": {
+      "zh": "上架三首曲目",
+      "en": "Three tracks added"
+    },
+    "sub": {
+      "zh": "開機隨機起播，全程不重複",
+      "en": "Random start at boot, no repeats"
+    },
     "zh": "上架三首曲目：elcirtnev>、Summer -《立夏》、Rainbow -《虹》；開機隨機起播、全程隨機不重複。",
     "en": "Three tracks are up: elcirtnev>, Summer – 立夏, Rainbow – 虹. Boot picks one at random; playback shuffles without repeats."
   },
   {
     "date": "2026-08-28",
-    "zh": "互動式段落播放器（測試版）與 Transition 概念展示可在「互動展示」試玩。",
-    "en": "The Interactive Section Player (test build) and the Transition demo are playable under Demos."
+    "title": {
+      "zh": "段落播放器（測試版）開放試玩",
+      "en": "Section Player (test build) is playable"
+    },
+    "sub": {
+      "zh": "在「設計」裡就能試",
+      "en": "Try it under Design"
+    },
+    "zh": "互動式段落播放器（測試版）可在「互動展示」試玩。",
+    "en": "The Interactive Section Player (test build) is playable under Demos."
   }
 ]

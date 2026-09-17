@@ -436,6 +436,14 @@
       "zh": "關閉",
       "en": "Close"
     },
+    "dock_close": {
+      "zh": "關閉視窗",
+      "en": "Close window"
+    },
+    "updates_more": {
+      "zh": "查看詳細 ›",
+      "en": "Details ›"
+    },
     "win_min": {
       "zh": "最小化",
       "en": "Minimize"
@@ -447,6 +455,10 @@
     "spot_placeholder": {
       "zh": "搜尋或輸入指令…",
       "en": "Search or type a command…"
+    },
+    "spot_locked": {
+      "zh": "教學中無法使用",
+      "en": "Unavailable during the lesson"
     },
     "spot_app": {
       "zh": "應用程式",
@@ -511,6 +523,22 @@
     "start_stage": {
       "zh": "開始展示",
       "en": "Start"
+    },
+    "stage_leave_title": {
+      "zh": "確定要離開舞台？",
+      "en": "Leave the stage?"
+    },
+    "stage_leave_msg": {
+      "zh": "目前的演出會停下來，回到桌面。",
+      "en": "The performance stops and the desktop comes back."
+    },
+    "stage_leave_ok": {
+      "zh": "離開",
+      "en": "Leave"
+    },
+    "stage_leave_cancel": {
+      "zh": "取消",
+      "en": "Cancel"
     },
     "stage_exit": {
       "zh": "離開舞台",
@@ -1107,6 +1135,10 @@
     "boot_cmd_armed": {
       "zh": "已就位，重新開機中…",
       "en": "armed, rebooting…"
+    },
+    "boot_cmd_unknown": {
+      "zh": "'{c}' 不是內部或外部命令、可執行的程式或批次檔。",
+      "en": "'{c}' is not recognized as an internal or external command,\noperable program or batch file."
     },
     "wish_totp_title": {
       "zh": "輸入驗證碼",

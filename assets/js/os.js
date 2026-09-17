@@ -84,8 +84,7 @@
     }
     var buf = '';
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') { var p = document.getElementById('sig-panel'); if (p) p.remove(); return; }
-      if (e.key.length !== 1) return; buf = (buf + e.key).slice(-PH.length); if (buf === PH) { buf = ''; show(); }
+      if (e.key.length !== 1) return;   /* LOG-193: Escape now comes through escLayer (ESC_SIG), so the same press can no longer also close a stage */ buf = (buf + e.key).slice(-PH.length); if (buf === PH) { buf = ''; show(); }
     });
     if (location.hash === '#sig') setTimeout(show, 0);
     return { show: show, is: function (s) { return (s || '').trim() === PH; } };
@@ -94,6 +93,87 @@
   var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   var isMobile = function () { return window.matchMedia('(max-width: 699px)').matches; };
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /* ============================================================ LOG-193: the Escape layers
+     (the user: 尋找中esc只關尋找，退出後在舞台中按esc新增確定退出媽確認視窗，以防誤觸)
+     Every overlay used to hang its OWN Escape listener on `document` and none of them stopped the others, so one press closed two
+     layers at once - the Find overlay AND the stage under it, the wishing pool AND the stage, the lesson's Find AND the lesson.
+     They register here instead and the press is spent on the topmost open layer alone. `field` marks a layer that still answers
+     Escape while the focus sits in a text box; everything else leaves the key to the field (the compare stage checked nothing at all). */
+  var escLayer = (function () {
+    var L = [];
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      var t = e.target, inField = !!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable));
+      for (var i = 0; i < L.length; i++) {
+        var o = L[i], up = false;
+        try { up = !!o.isOpen(); } catch (err) {}
+        if (!up) continue;
+        if (inField && !o.field) return;
+        e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        o.close(); return;
+      }
+    }, true);
+    return { add: function (rank, o) { o.rank = rank; L.push(o); L.sort(function (a, b) { return b.rank - a.rank; }); } };
+  })();
+  var ESC_MENU = 100, ESC_SIG = 90, ESC_FIND = 80, ESC_CONFIRM = 70, ESC_POOL = 60, ESC_STAGE = 50;   /* top of the pile first */
+  /* the iOS-style alert the phone shell has always used, lifted out of it so the desktop can ask too (LOG-193). Same markup, same
+     stylesheet; the desktop copy only takes a higher layer (.os-alert-ov) so it sits over a stage and its dimmed room. Enter = the
+     confirming button; Escape belongs to escLayer, which closes this before anything under it. */
+  function osAsk(title, msg, okLabel, cancelLabel, danger, cb, host) {
+    host = host || (desktop || document.body);
+    var ov = document.createElement('div'); ov.className = 'ph-alert-ov' + (host === desktop ? ' os-alert-ov' : '');
+    ov.innerHTML = '<div class="ph-alert" role="alertdialog" aria-modal="true"><h3></h3><p></p><div class="ph-alert-btns"><button type="button" class="no"></button><button type="button" class="yes"></button></div></div>';
+    $('h3', ov).textContent = title; $('p', ov).textContent = msg; $('.no', ov).textContent = cancelLabel; $('.yes', ov).textContent = okLabel;
+    if (danger) $('.yes', ov).classList.add('danger');
+    host.appendChild(ov); requestAnimationFrame(function () { ov.classList.add('in'); });
+    var alive = true;
+    var onKey = function (e) { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); done(true); } };
+    var done = function (v) { if (!alive) return; alive = false; document.removeEventListener('keydown', onKey, true); ov.classList.remove('in'); setTimeout(function () { ov.remove(); }, reduced ? 0 : 200); cb(v); };
+    document.addEventListener('keydown', onKey, true);
+    $('.no', ov).addEventListener('click', function () { done(false); });
+    $('.yes', ov).addEventListener('click', function () { done(true); });
+    ov.addEventListener('click', function (e) { if (e.target === ov) done(false); });   /* tapping the dimmed backdrop = cancel */
+    return { el: ov, close: done, open: function () { return alive; } };
+  }
+  /* ---- LOG-193: one stage at a time owns the desktop's sound and its chrome
+     (the user: 一次能播放的內容就只有一個，切換舞台後能控制的東西也會跟著切換，前一個舞台會自動變成false / 要繼承相關資訊，否則這就是個bug)
+     `stageHold` covers the handover itself: the outgoing stage releases the music inside its stop(), and without the hold the
+     background track surfaced for a beat under the stage that was just opening. While it is held - or while any stage is up -
+     player.unduck() is refused and the player's sounding entries are silent, so no path (a closing demo window, a delayed timer,
+     the inline .ap bar, the player window, Find's `play`) can put the music back under a show. The LAST stage to leave hands it back. */
+  var stageHold = 0;
+  function stageUp() { return (typeof stage !== 'undefined' && stage.active()) || (typeof secStage !== 'undefined' && secStage.active()) || (typeof trStage !== 'undefined' && trStage.active()); }
+  function stageOwns() { return stageHold > 0 || stageUp(); }
+  function stageSwap(fn) { stageHold++; try { fn(); } finally { stageHold--; } }
+  function stageStopAll(keep) {   /* every stage but `keep` leaves, with the music held down across the swap */
+    stageSwap(function () {
+      if (keep !== 'tr' && typeof trStage !== 'undefined' && trStage.active()) trStage.stop(true);
+      if (keep !== 'sec' && typeof secStage !== 'undefined' && secStage.active()) secStage.stop();
+      if (keep !== 'ade' && typeof stage !== 'undefined' && stage.active()) stage.stop();
+    });
+  }
+  var stageBackT = 0, stageAsk = null;
+  function stageChrome() {   /* (the user: 所有舞台演出中都會自動隱藏便條紙以及最近更新): they step aside for ANY stage, on the lesson's own curve (os.css .stage-on / .stage-back) */
+    if (PHONE || !desktop) return;
+    var up = stageUp(), had = desktop.classList.contains('stage-on');
+    if (!up && stageAsk) stageAsk.close(false);   /* the show ended on its own while the question was still on screen */
+    if (up === had) return;
+    desktop.classList.toggle('stage-on', up);
+    clearTimeout(stageBackT);
+    if (!up) { desktop.classList.add('stage-back'); stageBackT = setTimeout(function () { desktop.classList.remove('stage-back'); }, 900); }
+  }
+  function stageLeaveAsk() {   /* (the user: 在舞台中按esc新增確定退出嗎確認視窗，以防誤觸): Escape asks; the 「離開舞台」button still leaves at once */
+    if (stageAsk || !stageUp()) return;
+    stageAsk = osAsk(U.stage_leave_title, U.stage_leave_msg, U.stage_leave_ok, U.stage_leave_cancel, true, function (go) {
+      stageAsk = null; if (!go) return;
+      if (typeof trStage !== 'undefined' && trStage.active()) trStage.stop();
+      else if (typeof secStage !== 'undefined' && secStage.active()) secStage.stop();
+      else if (typeof stage !== 'undefined' && stage.active()) stage.stop();
+    });
+  }
+  escLayer.add(ESC_SIG, { field: true, isOpen: function () { return !!document.getElementById('sig-panel'); }, close: function () { var p = document.getElementById('sig-panel'); if (p) p.remove(); } });
+  escLayer.add(ESC_CONFIRM, { field: true, isOpen: function () { return !!stageAsk; }, close: function () { if (stageAsk) stageAsk.close(false); } });
+  escLayer.add(ESC_STAGE, { isOpen: stageUp, close: stageLeaveAsk });
   // shell: phone (iOS-like) vs desktop. Width is the primary signal; ?shell= overrides for previews.
   var shellOverride = (/[?&]shell=(phone|desktop)/.exec(location.search) || [])[1];
   try { if (shellOverride) sessionStorage.setItem('shellpref', shellOverride); else shellOverride = sessionStorage.getItem('shellpref') || ''; } catch (e) {}   /* the phone's「電腦版」switch survives in-visit navigation (session only); an explicit ?shell= always wins and resets it */
@@ -203,6 +283,7 @@
   function applyLang(nd) {
     var od = D; D = nd; ALT = od; U = D.ui; lang = D.lang;
     trail.log('lang', lang);
+    if (typeof dockMenu !== 'undefined') dockMenu.hide();
     try { localStorage.setItem('lang', lang); } catch (e) {}
     var other = lang === 'zh' ? 'en' : 'zh';
     document.documentElement.lang = lang === 'zh' ? 'zh-Hant' : 'en'; document.body.setAttribute('data-lang', lang);
@@ -223,7 +304,7 @@
     var st = $('#sticky .sticky-text'); if (st) st.textContent = U.sticky;
     var uh = $('#updates .upd-head span'); if (uh) uh.innerHTML = '<span class="wg">' + ICON.updates + '</span> ' + esc(U.app_updates);
     var ub = $('#upd-hide'); if (ub) { ub.title = U.updates_hide; ub.setAttribute('aria-label', U.updates_hide); }
-    var ul = $('#upd-log'); if (ul) ul.innerHTML = (D.updates || []).length ? D.updates.map(function (u) { return '<div class="msg"><time>' + esc(u.date) + '</time><p>' + esc(u.text) + '</p></div>'; }).join('') : '<p class="note">' + esc(U.updates_empty) + '</p>';
+    var ul = $('#upd-log'); if (ul) ul.innerHTML = (D.updates || []).length ? updBrief(D.updates) : '<p class="note">' + esc(U.updates_empty) + '</p>';
     document.querySelectorAll('.np-cap .np-lbl').forEach(function (l) { var stt = l.querySelector('.np-state'); l.textContent = U.player_now + (stt ? ' · ' : ''); if (stt) l.appendChild(stt); });
     if (typeof secStage !== 'undefined' && secStage && secStage.active()) secStage.relabel();
     if (typeof trStage !== 'undefined' && trStage && trStage.active()) trStage.relabel();   /* LOG-172: the compare stage's labels, section names and notice */   /* the native section stage follows an in-place language switch (zone labels, mode buttons, exit) */
@@ -970,6 +1051,7 @@
         else if (canSlide && tEl.textContent !== title) slideTitle(tEl, title);   // track change: old name slides off left, new one in from the right
         else { tEl.textContent = title; if (!sliding) document.body.classList.toggle('hb-t', hbNow); }   /* no slide (boot / same title): the title colour follows at once */
         el.classList.toggle('show', !!title); el.classList.toggle('playing', st.playing);
+        el.classList.toggle('nostep', typeof secStage !== 'undefined' && secStage.active());   /* LOG-193 (the user: 如果當下舞台不支持上下曲切換時，那兩個按鍵會被隱藏): the section stage has no previous/next piece - the four-piano stage steps through its pieces and the compare stage through its sections, so both keep them */
         var stt = el.querySelector('.np-state'); if (stt) stt.textContent = st.playing ? U.ph_now : U.ph_paused;
         var mu = el.querySelector('.np-mute'); if (mu) mu.classList.toggle('on', st.muted);   /* the icons are SVG pairs switched by .playing / .on */
       });
@@ -984,7 +1066,7 @@
       if (pv) pv.addEventListener('click', function () { if (trStage.active()) trStage.prev(); else if (stage.active()) stage.prev(); else if (!secStage.active() && !ext.api()) player.prev(); refresh(); });
       if (nx) nx.addEventListener('click', function () { if (trStage.active()) trStage.next(); else if (stage.active()) stage.next(); else if (!secStage.active() && !ext.api()) player.next(); refresh(); });
       var mu = el.querySelector('.np-mute'); if (mu) mu.addEventListener('click', function () { if (trStage.active()) trStage.toggleMute(); else if (stage.active()) stage.toggleMute(); else if (secStage.active()) secStage.toggleMute(); else { var ax2 = ext.api(); if (ax2 && ax2.toggleMute) ax2.toggleMute(); else player.toggleMute(); } refresh(); });   /* on the stage the speaker silences the four stems; an active section player takes the mute the same way (the OS music is already ducked) */
-      var t = el.querySelector('.np-title'); if (t) t.addEventListener('click', function () { openApp('player'); });
+      var t = el.querySelector('.np-title'); if (t) t.addEventListener('click', function () { if (stageOwns()) return; openApp('player'); });   /* LOG-193 (the user: 舞台中點選曲名時會跳出原先應用程式的音樂播放器): while a stage runs the caption is the STAGE's, and it opens nothing */
     });
     function arm() { player.prepare(); els.forEach(function (el) { el.style.transitionDuration = CONNECT_MS + 'ms'; }); if (!timer) timer = setInterval(refresh, 400); refresh(); }
     /* split caption for the section player: <tag> | <rest>; a changed tag flips over its horizontal axis (down, swap, up) */
@@ -1101,27 +1183,32 @@
      and silently reloads - the page is still on the boot screen, so the flags are read at load and that boot fires them; no `restart` to type.
      `login` goes straight to the Worker's GitHub sign-in. Anything else reads as an unknown command (the syntax is never hinted). */
   var bootCmd = (function () {
-    var el = null, msgEl = null, lastTap = 0;
+    var el = null, msgEl = null, lastTap = 0, PS = PHONE ? '>' : 'C:\\IraStoria>';   /* LOG-197 (the user: 提示符要更像 cmd) */
     function open(container) {
       if (el) { var q0 = $('.bc-q', el); if (q0) q0.focus(); return; }
       el = document.createElement('div'); el.className = 'boot-cmd';
-      el.innerHTML = '<div class="bc-box"><span class="bc-ps">\u203a</span><input class="bc-q" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="' + esc(U.boot_cmd_placeholder) + '" aria-label="' + esc(U.boot_cmd_placeholder) + '"><span class="bc-msg"></span></div>';
+      /* LOG-197 (the user: \u986f\u793a\u5728\u5de6\u908a\uff0c\u4e0d\u8981\u6709\u5916\u6846\u53ea\u8981\u4e00\u500b>\uff0c\u770b\u8d77\u4f86\u8ddfcmd\u4f7f\u7528\u4e00\u6a23\u7684\u6587\u5b57\u8f38\u5165): the desktop's bar is a bare prompt line - no placeholder either; the phone keeps its boxed field (os.css .phone .bc-box) */
+      el.innerHTML = '<div class="bc-box"><pre class="bc-log"></pre><span class="bc-ps">' + esc(PS) + '</span><input class="bc-q" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="' + (PHONE ? esc(U.boot_cmd_placeholder) : '') + '" aria-label="' + esc(U.boot_cmd_placeholder) + '"><span class="bc-msg"></span></div>';
       (container || document.body).appendChild(el);
       var q = $('.bc-q', el); msgEl = $('.bc-msg', el);
-      q.addEventListener('keydown', function (e) { e.stopPropagation(); if (e.key === 'Escape') close(); else if (e.key === 'Enter') { e.preventDefault(); say(run(q.value)); } });
+      q.addEventListener('keydown', function (e) { e.stopPropagation(); if (e.key === 'Escape') close(); else if (e.key === 'Enter') { e.preventDefault(); if (PHONE) say(run(q.value)); else { log(q.value, run(q.value)); q.value = ''; } } });
       el.addEventListener('click', function (e) { e.stopPropagation(); if (e.target === el) close(); });
       setTimeout(function () { q.focus(); }, 30);
     }
     function close() { if (el) { el.remove(); el = null; msgEl = null; } }
+    /* LOG-197 (the user: 跑到左上角，如果無效會顯示「'輸入內容' 不是內部或外部命令…」，如果有效內容則會跟一般指令輸入成功一樣換行的概念): the desktop's bar
+       is a console - each Enter moves the typed line (and its answer, then a blank line, as cmd does) into the scrollback above a fresh prompt */
+    function unk(c) { return PHONE || !U.boot_cmd_unknown ? U.term_unknown + c : U.boot_cmd_unknown.replace('{c}', c); }
+    function log(c, m) { var l = el && $('.bc-log', el); if (!l) return; var rows = (l.textContent + PS + c + '\n' + (m ? m + '\n\n' : '')).split('\n'); l.textContent = rows.slice(-31).join('\n'); }
     function say(m) { if (msgEl) msgEl.textContent = m || ''; }
     function run(c) {
       var toks = c.trim().split(/\s+/).map(function (t) { return t.replace(/^-+/, ''); }).filter(function (t) { return t && t.toLowerCase() !== 'restart'; }), a = (toks[0] || '').toLowerCase();
       if (!a) return '';
       if (a === 'login') { if (!pool.on()) return U.wish_offline; pool.start(); return '\u2026'; }
       var eggs = toks.filter(function (t) { return /^EE_/i.test(t); }).map(function (t) { return t.replace(/^EE_/i, '').toLowerCase(); });
-      if (!eggs.length || eggs.length !== toks.length) return U.term_unknown + c.trim();
+      if (!eggs.length || eggs.length !== toks.length) return unk(c.trim());
       if (eggs.indexOf('@') >= 0) { eggs = eggs.filter(function (k) { return k !== '@'; }); eeGroup().forEach(function (k) { if (eggs.indexOf(k) < 0) eggs.push(k); }); }
-      var ok = eeKeys(); if (eggs.some(function (k) { return ok.indexOf(k) < 0; })) return U.term_unknown + c.trim();
+      var ok = eeKeys(); if (eggs.some(function (k) { return ok.indexOf(k) < 0; })) return unk(c.trim());
       try { sessionStorage.setItem('ee', eggs.join(',')); } catch (e) {}
       setTimeout(function () { location.reload(); }, 600);
       return '\u2192 EE_' + eggs.join(' + EE_') + ' \u00b7 ' + U.boot_cmd_armed;
@@ -1165,8 +1252,9 @@
     var upd = $('#updates'), updLog = $('#upd-log');
     if (upd && updLog) {
       var list = D.updates || [];
-      updLog.innerHTML = list.length ? list.map(function (u) { return '<div class="msg"><time>' + esc(u.date) + '</time><p>' + esc(u.text) + '</p></div>'; }).join('') : '<p class="note">' + esc(U.updates_empty) + '</p>';
+      updLog.innerHTML = list.length ? updBrief(list) : '<p class="note">' + esc(U.updates_empty) + '</p>';
       $('#upd-hide').addEventListener('click', function () { upd.hidden = true; });
+      updLog.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('.msg, .upd-more')) openUpdates(true); });   /* LOG-195 (the user: 詳細資訊要打開視窗版才會顯示): the panel carries headlines; a click opens the whole log */
       /* LOG-116追記③ (the user: 高度調低·畫面縮小時優先壓縮·盡量不要與尋找重疊): the panel's height is CAPPED at
          runtime so its top edge always clears the app column's last icon (尋找) - when the viewport shrinks it is
          the updates panel that gives up its space first, never the icons. Floor of 72px keeps the header usable. */
@@ -1188,6 +1276,11 @@
       var b = document.createElement('button'); b.setAttribute('data-app', a); b.innerHTML = '<span>' + (ICON[a] || GLYPH[a]) + '</span>' + esc(TITLES[a]);
       b.addEventListener('click', function () { var w = wins[a]; if (w && !w.classList.contains('minimized') && w.classList.contains('focus')) minimize(a); else openApp(a); });
       dock.appendChild(b);
+    });
+    dock.addEventListener('contextmenu', function (e) {   /* LOG-192 (the user: dock 中顯示開啟的應用程式可以直接右鍵關閉視窗): delegated, so the buttons applyLang repaints keep it */
+      var b = e.target.closest ? e.target.closest('button[data-app]') : null; if (!b) return;
+      e.preventDefault();
+      if (b.classList.contains('open') || (b.getAttribute('data-app') === 'terminal' && spot.isOpen())) dockMenu.show(b); else dockMenu.hide();
     });
     makeDraggable($('#sticky'), $('#sticky'));
     // deep link ?app=works
@@ -1273,7 +1366,10 @@
     }
     function start(d, keepEntry) {   /* keepEntry: the phone's demos panel has already rewritten its own history entry to point here */
       if (/[?&]debug/.test(location.search)) window.__ade = { veil: function () { return mwfVeil; }, anim: function () { return mwfAnim ? mwfAnim.mode : null; }, midi: function () { return midiForm && !!(ch && ch.mwf); }, active: function () { return active; }, state: function () { return { playing: !!(ch && ch.playing), paused: !!(ch && ch.paused), ctx: ctx ? ctx.state : null, mwf: !!(ch && ch.mwf), midiForm: midiForm, anim: mwfAnim ? mwfAnim.mode : null, old: !!mwfOld }; } };   /* ?debug: the MIDI form's veil, for the probe (LOG-171) */
-      if (active) stop(true); active = true; moved = false; lx = ly = -1; demo = d; vis = {}; ann = {}; lastT = 0; redHold = null; flS = 0; trails = false; trailT0 = 0; midiForm = false; midiT0 = 0; sparks = []; mwfOld = null; mwfAnim = null; smuted = false;   /* the third form is rolled per piece in load() (the MIDI egg's flag forces the first roll); a fresh stage always starts audible */
+      if (active && demo && d && demo.path === d.path) return;   /* LOG-193 (the user: 舞台不可以重複進入): the same stage again is not a re-entry - no rebuild, no second count-in */
+      if (active) stageSwap(function () { stop(true); });   /* a DIFFERENT shell-native stage: this one's immediate exit hands the music straight back, so it goes under the hold too */
+      stageStopAll('ade');   /* LOG-193: whichever other stage is up leaves first, and the music stays down across the swap */
+      active = true; moved = false; lx = ly = -1; demo = d; vis = {}; ann = {}; lastT = 0; redHold = null; flS = 0; trails = false; trailT0 = 0; midiForm = false; midiT0 = 0; sparks = []; mwfOld = null; mwfAnim = null; smuted = false;   /* the third form is rolled per piece in load() (the MIDI egg's flag forces the first roll); a fresh stage always starts audible */
       var carry = false; if (exitPending) { exitPending.timers.forEach(clearTimeout); if (exitPending.e0) exitPending.e0.remove(); carry = exitPending.wasDucked; exitPending = null; WV.reflowCancel(); }   /* re-entered mid-exit: drop the pending restore; the music stays ducked and is released by this run's exit */
       pieces = d.pieces || []; idx = -1; WV.sweep(true, player.state().frac || 0); WV.squash(true); WV.centre(true); build(d);
       if (PH) {   /* LOG-148: the phone's own choreography, the same one the section stage uses - the tiles, the name, the dock and the language switch step aside and the stage IS the screen */
@@ -1283,10 +1379,10 @@
         phPop = function () { phPop = null; stop(false); };   /* the system back gesture leaves the stage */
         window.addEventListener('popstate', phPop);
       } var runId = ++startSeq; setTimeout(function () { if (active && startSeq === runId) WV.tint(STAGE_ECL_LINE, STAGE_ECL_COL); }, STAGE_TINT_AT_MS);   /* LOG-151: WV, not wave - on the phone this reddened the DESKTOP's line and the phone's stayed amber */   /* the line stays amber while the music's played part sweeps off; it turns red once it is on the stage */   /* the music's played part (line and bars) sweeps off from where it was, like a track change */   /* centre first: layout() reads the line's target height */
-      if (player.isPlaying()) { ducked = true; player.duck(true); } else if (carry) ducked = true;
-      document.addEventListener('keydown', onKey); next();
+      if (player.isPlaying()) { ducked = true; player.duck(true); } else if (carry || player.isDucked()) ducked = true;   /* LOG-193: isDucked - the stage that just handed over left the music down, and this run now owes it back */
+      stageChrome();
+      next();
     }
-    function onKey(e) { if (e.key === 'Escape') stop(); }
     function next() {
       var was = ch; if (was && was.playing) { WV.sweep(true, src.state().frac); redHold = { x: redHold ? redHold.x : WV.head(), t0: performance.now(), k0: redHold ? redK() : 1 }; }   /* same as a desktop track change: the played line sweeps off right-to-left from where it was */
       if (midiForm && was && was.mwf && was.playing && ctx) { mwfOld = { mw: was.mwf, tp: ctx.currentTime - was.t0 + was.mwf.off, lead: was.lead || STAGE_LEAD_S }; mwfAnim = { mode: 'out', t0: performance.now(), ms: STAGE_MWF_OUT_MS }; }   /* the old notes keep their clock and run back down their corridors — the square collects them */
@@ -1849,7 +1945,8 @@
       if (!active) return; active = false; var exitFrac = src.state().frac || 0; if (immediate) WV.tint(null);   /* the choreographed exit keeps the red until the line has slid back out */ var tEl0 = document.querySelector('#np-desktop .np-title'); if (tEl0) { [tEl0].concat(Array.prototype.slice.call(tEl0.querySelectorAll('.np-tag, .np-rest'))).forEach(function (e_) { e_.style.color = ''; e_.style.textShadow = ''; e_.style.backgroundImage = ''; e_.style.webkitBackgroundClip = ''; e_.style.backgroundClip = ''; }); }
       if (midiForm && !immediate && ch && ch.mwf && ch.playing && ctx) { mwfOld = { mw: ch.mwf, tp: ctx.currentTime - ch.t0 + ch.mwf.off, lead: ch.lead || STAGE_LEAD_S }; mwfAnim = { mode: 'exit', t0: performance.now(), ms: STAGE_MWF_EXIT_MS }; }   /* leaving the stage: each corridor scatters outward along its own direction while the discs shrink */
       unload(); if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; master = null; }
-      document.removeEventListener('keydown', onKey); window.removeEventListener('resize', layout); window.removeEventListener('orientationchange', relayoutSoon); if (window.visualViewport) visualViewport.removeEventListener('resize', layout); if (ro) { ro.disconnect(); ro = null; } relayoutTimers.forEach(clearTimeout); relayoutTimers = []; HOST.removeEventListener('pointermove', onMove); HOST.removeEventListener('click', onClick);
+      stageChrome();   /* LOG-193: Escape is handled by escLayer now, so this stage no longer keeps a key listener of its own */
+      window.removeEventListener('resize', layout); window.removeEventListener('orientationchange', relayoutSoon); if (window.visualViewport) visualViewport.removeEventListener('resize', layout); if (ro) { ro.disconnect(); ro = null; } relayoutTimers.forEach(clearTimeout); relayoutTimers = []; HOST.removeEventListener('pointermove', onMove); HOST.removeEventListener('click', onClick);
       if (PH) {   /* LOG-148/141: the stage leaves first, the home follows - the two crossing is what reads as a cut (see PH_EXIT_LEAD in the section stage) */
         HOST.classList.remove('settled');
         setTimeout(function () {
@@ -2297,9 +2394,9 @@
     /* ---- open / close */
     function start(id) {
       var w = D.works.filter(function (x) { return x.id === id && x.type === 'transcription'; })[0]; if (!w || PHONE) return;
+      if (active && wid === id) return;   /* LOG-193 (the user: 舞台不可以重複進入): the same comparison again is not a re-entry */
       if (active) stop(true);
-      if (typeof stage !== 'undefined' && stage.active()) stage.stop();
-      if (typeof secStage !== 'undefined' && secStage.active()) secStage.stop();
+      stageStopAll('tr');   /* LOG-193: one stage at a time, and the music stays down across the swap */
       trail.log('tr', id);
       active = true; runSeq++; wid = id; started = false; preT0 = performance.now(); playing = false; pausedAt = 0; pendingT = null; dur = 0; muted = false; split = false; mix = 0.5;
       yt = null; ytReady = false; ytFailed = false; ytBuf = false; ytPend = false; ytWarm = 0; ytT = 0; ytAt = performance.now(); cached = false; tipShown = false; lrAck = false;
@@ -2321,15 +2418,14 @@
       if (canYT) loadYT();
       WV.sweep(true, player.state().frac || 0);
       var carry = false; if (exitPend) { clearTimeout(exitPend); exitPend = null; carry = true; }   /* re-entered before the last exit released the music: keep it ducked, this run's exit releases it */
-      if (player.isPlaying()) { ducked = true; player.duck(true); } else if (carry) ducked = true;
-      document.addEventListener('keydown', onKey);
+      if (player.isPlaying()) { ducked = true; player.duck(true); } else if (carry || player.isDucked()) ducked = true;   /* LOG-193: isDucked - inherited from the stage that just handed over */
+      stageChrome();
       if (/[?&]debug/.test(location.search)) window.__trLine = function () { return WV.splitInfo(); };   /* survives stop(): the probe checks the line was handed back */
       if (/[?&]debug/.test(location.search)) window.__tr = { state: function () { return src.state(); }, mode: function () { return mode; }, setMode: function (m) { setMode(m, false); }, mix: function (v) { if (v != null) { mix = v; if (ui) ui.querySelector('.tr-mix').value = Math.round((1 - v) * 1000); applyMix(); } return mix; }, split: function (v) { if (v != null && mode === 'local') { split = !!v; paintModes(); applyMix(); } return split; }, seek: seek, toggle: toggle, ytFail: function () { ytFail('probe'); }, lag: function (v) { if (v != null) setLag(v); return mode === 'yt' ? ytLag : loLag; }, cached: function (v) { if (v != null) setCached(v); return cached; }, vol: function (side, v) { if (v != null) { if (side === 't') volT = v; else volO = v; if (ui) { ui.querySelector(side === 't' ? '.tr-volt' : '.tr-volo').value = Math.round(v * 1000); } applyMix(); } return side === 't' ? volT : volO; }, debug: debug };
     }
-    function onKey(e) { if (e.key === 'Escape') stop(false); }
     function stop(immediate) {
-      if (!active) return; active = false;
-      clearTimeout(ytReadyTimer); clearTimeout(ytPlayTimer); clearTimeout(toastTimer); clearTimeout(resumeTimer); clearTimeout(tipTimer); document.removeEventListener('keydown', onKey);
+      if (!active) return; active = false; stageChrome();   /* LOG-193: Escape comes through escLayer now - no key listener of this stage's own (and no more closing on Escape typed into a field) */
+      clearTimeout(ytReadyTimer); clearTimeout(ytPlayTimer); clearTimeout(toastTimer); clearTimeout(resumeTimer); clearTimeout(tipTimer);
       playing = false; stopCh(orig); stopCh(tr);
       if (yt) { try { yt.destroy(); } catch (e) {} yt = null; } ytReady = false;
       if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; master = null; mgain = null; }
@@ -2369,13 +2465,36 @@
     if (app === 'about') return openAbout();
     if (app === 'wishpool' && !pool.admin() && !(pool.pre() && !pool.info())) return well.toggle();   /* LOG-162: no window - the composer, the well and the wishes on the desktop itself */
     if (app === 'pillar') return pillar.toggle();   /* LOG-164: its own stage - the roster streams across the desktop (no window) */
+    if (app === 'updates') return openUpdates();   /* LOG-193: the corner panel first, a centred window only once it has been put away */
     var w = wins[app];
     if (!w) { w = createWindow(app); wins[app] = w; }
     w.classList.remove('minimized');
     focus(w);
     updateDock();
   }
-  var ABOUT_PRANK_CHANCE = 0.50, ABOUT_STEP_MS = 120, ABOUT_STEP_K = 1, ABOUT_STEP_MIN = 70, ABOUT_LEFT = 160, ABOUT_CAT_COOLDOWN_MS = 10000, ABOUT_CASCADE = [34, 26],   /* STEP_MS: the gap between windows; STEP_K 1 = constant pace (追記④, the user: 連續開啟速度等速) - < 1 would make the stumble speed up, down to STEP_MIN. LEFT: the cascade starts this much left of centre */ ABOUT_W = { about: 500, resume: 580 }, ABOUT_H = 560, PRANK_SIZE = [460, 340], aboutRun = false, lastPrank = false;
+  /* LOG-193 (the user: 將最近更新視窗化置中，update僅在左下角update被手動關閉時使用會跳出視窗化置中update, 置中視窗關閉後他會回歸左下角半透明update開啟直到用戶手動關閉)
+     Find's「最近更新」row used to go through openApp -> createWindow, which has no size for an app that never had a window: a TypeError.
+     With the corner panel still up there is nothing to open - Find steps out of the way and the panel answers with one bright beat.
+     Once the visitor has put it away with its ×, the same row opens the updates CENTRED as a window; closing that window brings the
+     translucent corner panel back, and only its × takes it away again. No dock key: it is not one of the nine. */
+  var UPDATES_WIN = [520, 420];
+  function updBrief(list) { return list.map(function (u) { return '<div class="msg"><time>' + esc(u.date) + '</time><p>' + esc(u.title || u.text) + '</p>' + (u.sub ? '<span class="sub">' + esc(u.sub) + '</span>' : '') + '</div>'; }).join('') + '<button type="button" class="upd-more">' + esc(U.updates_more || '') + '</button>'; }   /* LOG-195: headline only */
+  function openUpdates(fromPanel) {
+    var up = document.getElementById('updates');
+    if (up && !up.hidden && !fromPanel) {
+      if (typeof spot !== 'undefined') spot.close();
+      up.classList.remove('flash'); void up.offsetWidth; up.classList.add('flash');
+      clearTimeout(openUpdates.t); openUpdates.t = setTimeout(function () { up.classList.remove('flash'); }, 1100);
+      return;
+    }
+    var w = wins.updates;
+    if (!w) {
+      var vw = window.innerWidth, vh = window.innerHeight - 30, W = Math.min(UPDATES_WIN[0], vw - 24), H = Math.min(UPDATES_WIN[1], vh - 100);
+      w = wins.updates = createWindow('updates', { size: UPDATES_WIN, pos: { x: Math.round((vw - W) / 2), y: Math.max(8, Math.round((vh - H) / 2 - 20)), w: W, h: H } });
+    }
+    w.classList.remove('minimized'); focus(w); updateDock();
+  }
+  var ABOUT_PRANK_CHANCE = 0.50, ABOUT_STEP_MS = 120, ABOUT_STEP_K = 1, ABOUT_STEP_MIN = 70, ABOUT_LEFT = 160, ABOUT_CAT_COOLDOWN_MS = 10000, ABOUT_CASCADE = [34, 26],   /* STEP_MS: the gap between windows; STEP_K 1 = constant pace (追記④, the user: 連續開啟速度等速) - < 1 would make the stumble speed up, down to STEP_MIN. LEFT: the cascade starts this much left of centre */ ABOUT_W = { about: 500, resume: 580 }, ABOUT_H = 560, PRANK_SIZE = [460, 340], aboutRun = false, aboutTok = 0, lastPrank = false;
   try { lastPrank = sessionStorage.getItem('about_prank') === '1'; } catch (e) {}   /* 追記⑪ (the user: 這個彩蛋不會連續觸發): the prank never fires twice in a row - remembered across a reload */
   function prankDraw(n) {   /* 追記⑦/⑩/⑪: n fake pages, HALF serious and HALF silly (content/site.json, already in this language); every silly page marked always:true (the riddle) is in each draw.
      Order (the user: 第10個attempts必為正經，第9個必為惡搞): the last fake is serious, the one before it silly, the rest shuffled */
@@ -2413,11 +2532,12 @@
       }
     } else seq = [{ k: 'about' }, { k: 'resume' }];
     var x0 = Math.max(120, Math.round(vw / 2 - 250 - (seq.length - 1) * ABOUT_CASCADE[0] / 2) - ABOUT_LEFT), y0 = 44, at = 0, gap = ABOUT_STEP_MS;
-    aboutRun = true;
+    aboutRun = true; var tok = ++aboutTok;
     if (prank) fx.warm();
     seq.forEach(function (st, idx) {
       var when = at; at += gap; gap = Math.max(ABOUT_STEP_MIN, gap * ABOUT_STEP_K);
       setTimeout(function () {
+        if (tok !== aboutTok) return;   /* LOG-192: closed from the dock mid-cascade - the rest of the row never opens */
         if (!desktop || desktop.hidden) return;
         var pos = { x: x0 + idx * ABOUT_CASCADE[0], y: y0 + idx * ABOUT_CASCADE[1] };
         if (st.page) {
@@ -2464,7 +2584,36 @@
     updateDock();
   }
   function minimize(app) { var w = wins[app]; if (w) { trail.log('min', app); w.classList.add('minimized'); w.classList.remove('focus'); } updateDock(); }
-  function closeApp(app) { var w = wins[app]; if (!w) return; trail.log('close', app); w.remove(); delete wins[app]; if (w.dataset.duck || /^demo-/.test(app)) player.unduck(); updateDock(); }   /* unduck is a no-op unless the music was ducked (by a hook or by an iOS interruption) */   // closing the player window never stops the music
+  function closeApp(app) { var w = wins[app]; if (!w) return; trail.log('close', app); w.remove(); delete wins[app]; if (w.dataset.duck || /^demo-/.test(app)) player.unduck(); if (app === 'updates') { var up = document.getElementById('updates'); if (up) { up.hidden = false; updDodge(); } }   /* LOG-193: the centred window goes, the corner panel comes back until its × is pressed again */ updateDock(); }   /* unduck is a no-op unless the music was ducked (by a hook or by an iOS interruption) */   // closing the player window never stops the music
+  /* LOG-192: what "close" means for each dock key - About is a pair (and, mid-prank, a dozen), the well and the pillar are stages, Find is an overlay */
+  function dockShut(a) {
+    if (a === 'about') { aboutTok++; aboutRun = false; if (Object.keys(wins).some(function (k) { return /^prank-/.test(k); })) closePranks(); closeApp('resume'); closeApp('about'); }
+    else if (a === 'wishpool') { if (well.isOpen()) well.close(); closeApp('wishpool'); }
+    else if (a === 'pillar') { if (pillar.isOpen()) pillar.close(); closeApp('pillar'); }
+    else if (a === 'terminal') spot.close();
+    else closeApp(a);
+    updateDock();
+  }
+  var dockMenu = (function () {   /* one line above the dock key; gone on any press elsewhere, Escape (which stops here - it must not also close a stage), a resize, a language switch */
+    var el = null;
+    function hide() { if (el) { el.remove(); el = null; } }
+    function show(b) {
+      hide();
+      var a = b.getAttribute('data-app'), r = b.getBoundingClientRect(), h = desktop.getBoundingClientRect();
+      el = document.createElement('div'); el.className = 'dockmenu'; el.setAttribute('role', 'menu');
+      el.innerHTML = '<button type="button" role="menuitem">' + esc(U.dock_close || 'Close window') + '</button>';
+      desktop.appendChild(el);
+      var w = el.offsetWidth, x = Math.max(8, Math.min(h.width - w - 8, r.left - h.left + r.width / 2 - w / 2));
+      el.style.left = Math.round(x) + 'px'; el.style.bottom = Math.round(h.bottom - r.top + 10) + 'px';
+      el.firstChild.addEventListener('click', function () { hide(); dockShut(a); });
+      el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    }
+    document.addEventListener('pointerdown', function (e) { if (el && !el.contains(e.target)) hide(); }, true);
+    escLayer.add(ESC_MENU, { field: true, isOpen: function () { return !!el; }, close: hide });   /* LOG-193: the top of the pile, where its own capture listener used to put it */
+    window.addEventListener('resize', hide); window.addEventListener('blur', hide);
+    return { show: show, hide: hide, isOpen: function () { return !!el; } };
+  })();
+  if (/[?&]debug/.test(location.search)) window.__os = { open: function (a) { openApp(a); }, close: function (a) { closeApp(a); }, shut: function (a) { dockShut(a); }, minimize: function (a) { minimize(a); }, demo: function (p) { openDemo(p); }, wins: function () { return Object.keys(wins); }, aboutRun: function () { return aboutRun; }, confirming: function () { return !!stageAsk; } };   /* LOG-192: the app x app probe drives the windows through this */   /* LOG-193: confirming - is the 離開舞台 question on screen */
   function focus(w) {
     Object.keys(wins).forEach(function (k) { wins[k].classList.remove('focus'); });
     w.classList.add('focus'); w.style.zIndex = ++z;
@@ -6046,14 +6195,15 @@
       WV.lineAt(Math.max(bot + PH_MARK_UP, Math.min(capTop - PH_MARK_DOWN, (bot + capTop) / 2)) / H);   /* centred in the gap, but clamped by the DECISION TICK's own reach, and the button side wins: a short landscape viewport (844x330 on a real phone with Chrome's toolbar) leaves barely 22 px between the panel and the caption, and the tick needs 40 - so it gives way to the caption rather than climbing back onto the buttons, which is what the user reported in the first place */
     }
     function start(d, keepEntry) {   /* keepEntry: the caller already owns a history entry (the demos panel's) and has rewritten it to point here - do not add a second one */
-      if (active) return;
-      if (stage.active()) stage.stop();   /* the ADE stage and a demo stage never share the desktop */
+      if (active) return;   /* (the user: 舞台不可以重複進入) - already so here */
+      stageStopAll('sec');   /* LOG-193: the ADE stage and the compare stage both leave, and the music stays down across the swap */
       active = true; seen = false;
       stopTimers.forEach(clearTimeout); stopTimers = [];
       if (pendEl) { pendEl.e0.remove(); pendEl.h0.remove(); pendEl = null; }   /* the previous surface was still sinking out: gone NOW (its removal timers were just cancelled) */
       var carry = unduckPending; unduckPending = false;   /* re-entered before the previous exit unducked: the music stays ducked and is released by THIS run's exit */
       WV.sweep(true, player.state().frac || 0); WV.squash(true);   /* ADE-style entrance: the music's played part sweeps off and the bars sink into the line; they rise again with the section spectrum once the player is up */
-      ducked = player.isPlaying(); if (ducked) player.duck(true); else if (carry) ducked = true;   /* ADE-style duck: the stage owns the desktop from the first moment (no watchAudio — there is no frame to watch) */
+      ducked = player.isPlaying(); if (ducked) player.duck(true); else if (carry || player.isDucked()) ducked = true;   /* ADE-style duck: the stage owns the desktop from the first moment (no watchAudio — there is no frame to watch) */   /* LOG-193: isDucked - inherited from the stage that just handed over */
+      stageChrome();
       el = document.createElement('div'); el.className = 'dstage' + (PH ? ' ph' : ''); el.setAttribute('aria-label', d.title);
       el.innerHTML = '<div class="ds-panel"><div class="ds-sec"></div></div>';
       head = document.createElement('div'); head.className = 'stage-ui';
@@ -7492,13 +7642,13 @@
                qprobe: function () { var o = []; window.__tutQ = o; soon(2.0, function () { o.push('late'); }); soon(1.0, function () { o.push('early'); }); return true; } };
     }
     function onKey(e) {
-      if (e.key === 'Escape') { stop(); return; }
+      if (e.key === 'Escape') return;   /* LOG-193: Escape belongs to escLayer - it asks before it leaves, and it never also closes the Find overlay on top */
       var t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;   /* Spotlight typing must not queue sections */
       if (eng) eng.key(e.key);
     }
     function onDown() { if (eng) eng.poke(); }
     function stop() {
-      if (!active) return; active = false;
+      if (!active) return; active = false; stageChrome();
       if (PH) {
         if (lsHome) { var lsB = $('#ph-ls'); if (lsB) lsHome.parent.insertBefore(lsB, lsHome.next); lsHome = null; }   /* home before the stage chrome fades: the head element is removed a second later */
         if (lineRO) { try { lineRO.disconnect(); } catch (e) { } lineRO = null; }
@@ -7559,9 +7709,9 @@
     trail.log('demo', id);
     if (PHONE) return phone.openDemo(id);
     var d = D.demos.filter(function (x) { return x.path === id; })[0]; if (!d) return;
-    if (trStage.active()) trStage.stop(true);   /* LOG-172: one stage at a time - the compare stage leaves before another opens */
-    if (d.native === 'stage') { minimize('demos'); if (secStage.active()) secStage.stop(); return stage.start(d); }   /* shell-native: the desktop itself is the stage, no iframe */
+    if (d.native === 'stage') { minimize('demos'); return stage.start(d); }   /* shell-native: the desktop itself is the stage, no iframe */   /* LOG-193: whatever else is up is dropped by start() itself (stageStopAll), inside the hold that keeps the music down across the swap - the stops that stood here released it for a beat under the incoming stage */
     if (d.stage_ui) { minimize('demos'); return secStage.start(d); }   /* stage-capable iframe demo: presented on the desktop instead of a window (the phone keeps its panel) */
+    if (stageUp()) stageStopAll(null);   /* an ordinary iframe demo is no stage: whatever show is running leaves before its window opens */
     var key = 'demo-' + id.replace(/[^a-z0-9-]/gi, '-'), w = wins[key];
     if (!w) {
       w = createWindow(key, { title: d.title, glyph: ICON.demos, size: [900, 640], page: '../' + d.path + '/', render: function (body, win) {
@@ -7586,13 +7736,14 @@
     opts = opts || {};
     var title = opts.title || TITLES[app], glyph = opts.glyph || ICON[app] || GLYPH[app];
     var w = document.createElement('section'); w.className = 'win'; w.setAttribute('data-app', app); w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', title);
-    var size = opts.size || { works: [560, 520], demos: [520, 420], player: [480, 620], articles: [480, 380], about: [520, 460], resume: [580, 560], terminal: [560, 380], pillar: [540, 600], wishpool: [560, 620], contact: [500, 560] }[app];
+    var size = opts.size || { works: [560, 520], demos: [520, 420], player: [480, 620], articles: [480, 380], about: [520, 460], resume: [580, 560], terminal: [560, 380], pillar: [540, 600], wishpool: [560, 620], contact: [500, 560], updates: [520, 420] }[app];   /* LOG-193: 最近更新 has a window now (Find opens it centred once the corner panel is away) */
     var vw = window.innerWidth, vh = window.innerHeight - 30;
     var W = Math.min(size[0], vw - 24), H = Math.min(size[1], vh - 100);
     var x = Math.max(110, Math.min(vw - W - 20, 140 + (spawn % 5) * 40)), y = Math.max(8, Math.min(vh - H - 90, 30 + (spawn % 5) * 32)); spawn++;
     if (opts.pos) { x = opts.pos.x; y = opts.pos.y; if (opts.pos.w) W = Math.min(opts.pos.w, vw - 24); if (opts.pos.h) H = Math.min(opts.pos.h, vh - 100); }   /* LOG-159: a caller that lays windows out side by side names the place */
     w.style.cssText = 'left:' + x + 'px;top:' + y + 'px;width:' + W + 'px;height:' + H + 'px;z-index:' + (++z);
-    var dots = '<span class="dots"><button class="close" title="' + esc(U.win_close) + '"></button><button class="min" title="' + esc(U.win_min) + '"></button><button class="max"></button></span>';
+    var onlyClose = /^prank-/.test(app);   /* LOG-193 (the user: 假視窗移除最小化及最大化按鈕，僅留紅點(關閉)): the fake error pages and their dialog - the real 關於 / 履歷 keep all three */
+    var dots = '<span class="dots' + (onlyClose ? ' only-close' : '') + '"><button class="close" title="' + esc(U.win_close) + '"></button>' + (onlyClose ? '' : '<button class="min" title="' + esc(U.win_min) + '"></button><button class="max"></button>') + '</span>';
     if (opts.safari) {   /* LOG-159: the About pair looks like Safari - traffic lights, back/forward, the address field in the middle, share + tabs on the right. The address is written by the renderer (it carries the language) */
       w.classList.add('safari');
       w.innerHTML = '<div class="win-bar">' + dots + '<span class="sf-nav" aria-hidden="true"><b>\u2039</b><b>\u203a</b></span><span class="addr" title="' + esc(title) + '"><span class="wg">' + ICON.lock + '</span><span class="addr-url"></span></span><span class="sf-tools" aria-hidden="true">' + ICON.share + ICON.tabs + '</span></div><div class="win-body"></div>';
@@ -7601,8 +7752,8 @@
         '<span class="win-title">' + '<span class="wg">' + glyph + '</span> ' + esc(title) + '</span></div><div class="win-body"></div>';
     }   /* LOG-116追記⑨: the "open as page" footer is gone (the user: 移除視窗「以整頁開啟」的選項) - the window IS the app; the static pages stay reachable by URL and for crawlers */
     $('.close', w).addEventListener('click', function () { closeApp(app); });
-    $('.min', w).addEventListener('click', function () { minimize(app); });
-    $('.max', w).addEventListener('click', function () { w.classList.toggle('maxed'); if (w.classList.contains('maxed')) { w.dataset.prev = w.style.cssText; w.style.cssText = 'left:8px;top:8px;width:' + (vw - 16) + 'px;height:' + (vh - 90) + 'px;z-index:' + (++z); } else { w.style.cssText = w.dataset.prev; } updDodge(); });
+    if ($('.min', w)) $('.min', w).addEventListener('click', function () { minimize(app); });
+    if ($('.max', w)) $('.max', w).addEventListener('click', function () { w.classList.toggle('maxed'); if (w.classList.contains('maxed')) { w.dataset.prev = w.style.cssText; w.style.cssText = 'left:8px;top:8px;width:' + (vw - 16) + 'px;height:' + (vh - 90) + 'px;z-index:' + (++z); } else { w.style.cssText = w.dataset.prev; } updDodge(); });
     w.addEventListener('pointerdown', function () { focus(w); });
     makeDraggable(w, $('.win-bar', w));
     makeResizable(w);
@@ -7966,9 +8117,20 @@
   /* ---- shared by the two desktop stages */
   var room = (function () {   /* the room lights: dimmed to a tenth while a stage is up, rising on a clock as the pointer nears */
     var SEL = '.icons,.hero-text,.updates,.sticky', NEAR = 120, IN_S = 0.9, OUT_S = 1.4, dim = false, wired = false;
+    /* LOG-193 (the user: 舞台中不要出現應用程式圖示(僅使用dock)，所以可以開許願池，但是許願池觸發後不應該有圖示回來，因為還在舞台中):
+       a stage puts things away with a class (.dstage-up for the icon column, .stage-on / .tut-on for the updates panel and the sticky note);
+       the room lights write an INLINE opacity, which outranks any of them. So the lights simply skip whatever a stage is holding away -
+       the whole class of collisions, not the one the pool happened to expose. */
+    function stowed(el) {
+      var d = desktop.classList;
+      if (el.classList.contains('icons')) return d.contains('dstage-up') || d.contains('stage-on');
+      if (el.classList.contains('updates') || el.classList.contains('sticky')) return d.contains('stage-on') || d.contains('tut-on');
+      return false;
+    }
     function lights(e) {
       if (!dim) return; var px = e.clientX, py = e.clientY;
       [].forEach.call(desktop.querySelectorAll(SEL), function (el) {
+        if (stowed(el)) { if (el.dataset.lit) { el.style.opacity = ''; el.style.transition = ''; delete el.dataset.lit; } return; }
         var r = el.getBoundingClientRect(), dx = Math.max(r.left - px, 0, px - r.right), dy = Math.max(r.top - py, 0, py - r.bottom), near = Math.sqrt(dx * dx + dy * dy) < NEAR ? '1' : '0';
         if (el.dataset.lit === near) return; el.dataset.lit = near;
         el.style.transition = 'opacity ' + (near === '1' ? IN_S : OUT_S) + 's ease'; el.style.opacity = near === '1' ? '1' : '0.10';   /* inline: the desktop's entrance rule (os.css:47, 3 s) would otherwise set the pace */
@@ -8330,7 +8492,7 @@
       updateDock();
     }
     function relabel() { if (!on) return; box.paint(box.hasFocus(), step); box.place(); live.forEach(function (L) { if (L.typing || L.e.note) return; var parts = strings(L.e).filter(function (p) { return p[0] !== 'br'; }); L.spans.forEach(function (s, i) { if (parts[i]) { s.full = parts[i][1]; s.el.textContent = s.full; } }); }); }
-    document.addEventListener('keydown', function (e) { if (on && e.key === 'Escape') close(); });
+    escLayer.add(ESC_POOL, { field: true, isOpen: function () { return on; }, close: function () { close(); } });   /* LOG-193: one press, one layer - Escape here no longer also leaves the stage underneath */
     return { open: open, close: close, toggle: function () { on ? close() : open(); }, isOpen: function () { return on; }, relabel: relabel, say: say,
              stats: function () { return { ripples: ripples.length, glints: glints.length, live: live.length, water: waterK }; } };
   })();
@@ -8509,7 +8671,7 @@
       updateDock();
     }
     function relabel() { if (!on) return; box.paint(box.hasFocus(), step); box.place(); live.forEach(function (L) { var parts = strings(L.e); [].forEach.call(L.el.querySelectorAll('.dmi > span'), function (s, i) { if (parts[i]) s.textContent = parts[i][1]; }); L.w = L.el.offsetWidth; }); }
-    document.addEventListener('keydown', function (e) { if (on && e.key === 'Escape') close(); });
+    escLayer.add(ESC_POOL, { field: true, isOpen: function () { return on; }, close: function () { close(); } });   /* LOG-193: one press, one layer - Escape here no longer also leaves the stage underneath */
     return { open: open, close: close, toggle: function () { on ? close() : open(); }, isOpen: function () { return on; }, relabel: relabel, refresh: refresh,
              stats: function () { return { live: live.length, lanes: lanes.filter(Boolean).length, band: layer ? band() : null }; } };
   })();
@@ -8544,6 +8706,10 @@
     return h;
   }
   var RENDER = {
+    updates: function (body) {   /* LOG-193: the same lines the corner panel carries, in a window - applyLang re-runs this like any other app's renderer */
+      var list = D.updates || [];
+      body.innerHTML = list.length ? '<div class="upd-log">' + list.map(function (u) { return '<div class="msg"><time>' + esc(u.date) + '</time><p>' + esc(u.text) + '</p></div>'; }).join('') + '</div>' : '<p class="note">' + esc(U.updates_empty) + '</p>';
+    },
     works: function (body) {
       /* the transcriptions app: music lives in the player, demos in the design app — only the remaining work types are listed here */
       var items = D.works.filter(function (w) { return !w.secret && w.type !== 'music' && w.type !== 'demo' && !(w.media && w.media.demo); });
@@ -8553,7 +8719,7 @@
       apWire(body);
       body.addEventListener('click', function (e) {
         var f = e.target.closest('[data-f]'); if (f) { body.querySelectorAll('[data-f]').forEach(function (b) { b.classList.toggle('on', b === f); }); body.querySelectorAll('.list li').forEach(function (li) { li.hidden = !(f.dataset.f === 'all' || li.dataset.type === f.dataset.f); }); }
-        var p = e.target.closest('[data-play]'); if (p) { openApp('player'); player.playId(p.dataset.play); }
+        var p = e.target.closest('[data-play]'); if (p && !stageOwns()) { openApp('player'); player.playId(p.dataset.play); }   /* LOG-193: 聆聽 under a running stage would open a player that cannot sound - it opens nothing instead */
         var b = e.target.closest('[data-demo]'); if (b) openDemo(b.dataset.demo);
         var tb = e.target.closest('[data-tr]'); if (tb) { minimize('works'); trStage.start(tb.dataset.tr); }   /* LOG-172 */
       });
@@ -8588,7 +8754,7 @@
     contact: function (body) { body.innerHTML = contactHTML(); wireContact(body); },
     player: function (body) { player.mount(body); },
     terminal: function (body) { terminal.mount(body); },
-    updates: function (body) { var list = D.updates || []; body.innerHTML = '<div class="upd-log">' + (list.length ? list.map(function (u) { return '<div class="msg"><time>' + esc(u.date) + '</time><p>' + esc(u.text) + '</p></div>'; }).join('') : '<p class="note">' + esc(U.updates_empty) + '</p>') + '</div>'; }
+    updates: function (body) { var list = D.updates || []; body.innerHTML = '<div class="upd-log full">' + (list.length ? list.map(function (u) { return '<div class="msg"><time>' + esc(u.date) + '</time>' + (u.title ? '<h4>' + esc(u.title) + '</h4>' : '') + '<p>' + esc(u.text) + '</p></div>'; }).join('') : '<p class="note">' + esc(U.updates_empty) + '</p>') + '</div>'; }
   };
 
   // ============================================================ music player (concept)
@@ -8657,6 +8823,7 @@
     }
     function play() {
       var t = list[cur]; if (!t) return;
+      if (stageOwns()) return;   /* LOG-193 (the user: 舞台中不應該出現舞台以外可以發出聲音的內容，尤其是播放器/背景音樂的重疊播放): the ONE gate every sounding path goes through - the transport, the player window, a work's 聆聽, the inline .ap bar, Find's `play`, a resumed track */
       ensureCtx();
       if (t.synth) { startSynth(); }
       else if (t.media && t.media.local) {
@@ -8674,7 +8841,7 @@
     // duck: another window started making sound -> pause (fade, position kept); unduck: that window closed -> resume from where we stopped
     var ducked = false;
     function duck(immediate) { if (playing) { ducked = true; stopAll(!!immediate); if (immediate && actx) { try { actx.suspend(); } catch (e) {} } } }   /* immediate: a demo just started making sound — no 3 s fade, no overlap; the context is suspended so iOS gives the hardware to the demo's context cleanly */
-    function unduck() { if (ducked) { ducked = false; rebuildAudio(); if (!playing) play(); } }
+    function unduck() { if (!ducked || stageOwns()) return; ducked = false; rebuildAudio(); if (!playing) play(); }   /* LOG-193: while a stage owns the desktop NOTHING gives the music back - not a closing demo window, not an exit timer left over from the stage that just handed over. The last stage to leave calls this itself */
     /* after another AudioContext (a demo) has run, iOS may bring the old context back at a different hardware sample rate: a media element wired through
        the old MediaElementSource then plays a few semitones sharp (or stutters). A MediaElementSource cannot be re-created on the same element, so the
        element is replaced too: same src, same position; the graph is rebuilt on a fresh context (volume / mute carried over by ensureCtx). */
@@ -8688,7 +8855,7 @@
       if (actx) { try { actx.close(); } catch (e) {} actx = null; analyser = null; master = null; out = null; }
       ensureCtx();
     }
-    function playId(id) { var i = list.findIndex(function (t) { return t.id === id; }); if (i >= 0) { remember(i); load(i, true); } }
+    function playId(id) { if (stageOwns()) return; var i = list.findIndex(function (t) { return t.id === id; }); if (i >= 0) { remember(i); load(i, true); } }   /* LOG-193: a work's 聆聽 must not even swap the track out from under a running stage */
     // Placeholder: a gentle generative pad so the player is demonstrable before real tracks exist.
     function startSynth() {
       var g = actx.createGain(); g.gain.value = 0.0001; g.connect(analyser);
@@ -8774,10 +8941,10 @@
       return pool.length ? pool[Math.floor(Math.random() * pool.length)] : 0;
     }
     function remember(i) { history.push(i); if (history.length > 8) history.shift(); }
-    function prev() { var i = pickRandom(); remember(i); load(i, true); }
-    function next() { var i = pickRandom(); remember(i); load(i, true); }
+    function prev() { if (stageOwns()) return; var i = pickRandom(); remember(i); load(i, true); }   /* LOG-193: the desktop transport already routes these to the stage that owns it; the player WINDOW's own buttons are stopped here */
+    function next() { if (stageOwns()) return; var i = pickRandom(); remember(i); load(i, true); }
     return { seek: function (sec) { if (audio && !list[cur].synth) { audio.currentTime = sec; if (pausedAt !== null) pausedAt = sec; } }, onTrack: function (fn) { trackListeners.push(fn); }, duck: duck, unduck: unduck, unlock: unlock, mount: mount, playId: playId, stop: stopAll, toggle: toggle, state: state, autoplay: autoplay, prepare: prepare, restore: restore, prev: prev, next: next, toggleMute: toggleMute, setVolume: setVolume,
-             analyser: function () { return analyser; }, isPlaying: function () { return playing; },
+             analyser: function () { return analyser; }, isPlaying: function () { return playing; }, isDucked: function () { return ducked; },   /* LOG-193: a stage opening on top of another inherits the duty to give the music back from it - isPlaying() is already false by then */
              debug: function () { return { stage: stage.debug(), ctx: actx ? actx.state : '-', playing: playing, started: started, ducked: ducked, muted: muted, vol: vol, cur: cur, unlocked: !!(audio && audio._unlocked), wired: !!(audio && audio._wired),
                paused: audio ? audio.paused : '-', rs: audio ? audio.readyState : '-', ns: audio ? audio.networkState : '-', t: audio ? audio.currentTime.toFixed(1) : '-', err: audio && audio.error ? audio.error.code : 0, gain: master ? master.gain.value.toFixed(3) : '-', out: out ? out.gain.value.toFixed(2) : '-' }; } };
   })();
@@ -8863,18 +9030,27 @@
   // Undocumented forcing flags: stored, the page reloads, and that boot fires them. Any malformed attempt reads as an unknown command.
   var terminal = (function () {
     var APP_KEYS = ['works', 'demos', 'player', 'articles', 'updates', 'about', 'pillar', 'wishpool', 'contact', 'lang'];
+    var leaving = false;   /* LOG-197: the last run() is taking the page away (reload / sign-in / language / shell swap) - the command line keeps such a line where it is instead of floating it off */
     var hooks = {};   /* LOG-154: hooks.desktop - the phone registers its「電腦版」switch here; it is reachable only by typing (the home's chip is gone) */
     function label(k) { return k === 'lang' ? (U.lang_switch || 'Language') : (TITLES[k] || k); }
     function glyph(k) { return ICON[k] || GLYPH[k] || ''; }
+    /* LOG-193 (the user: 教學中尋找仍可由 // 開啟，但結果清單中只有「許願池」「恥辱柱」可選，其餘顯示不可用): the lesson keeps the desktop,
+       so everything that would open a window, swap the language or leave the page is greyed out while it runs. The two desktop stages
+       the lesson explicitly allows stay live. Hidden commands (the eggs, the provenance panel) are not listed and are not touched. */
+    var LESSON_OK = ['wishpool', 'pillar'];
+    function lessonOn() { return !PHONE && !!desktop && desktop.classList.contains('tut-on'); }
+    function locked(r) { return lessonOn() && !(r.t === 'app' && LESSON_OK.indexOf(r.k) >= 0); }
     function results(q) {
       q = q.trim().toLowerCase(); var out = [];
       if (!q || q.charAt(0) === '-') return out;
       APP_KEYS.forEach(function (k) { var l = label(k); if (l.toLowerCase().indexOf(q) >= 0 || k.indexOf(q) >= 0) out.push({ t: 'app', k: k, g: glyph(k), l: l, sub: U.spot_app }); });
       if (hooks.desktop && q.length >= 2 && ((U.pc_tile || '').toLowerCase().indexOf(q) >= 0 || 'desktop'.indexOf(q) === 0)) out.push({ t: 'pc', k: 'pc', g: ICON.pc || '', l: U.pc_tile, sub: U.spot_app });
       (D.works || []).forEach(function (w) { if (!w.secret && (w.title || '').toLowerCase().indexOf(q) >= 0) out.push({ t: 'work', k: w.id, g: w.type === 'music' ? ICON.music : ICON.demos, l: w.title, sub: w.year + ' · ' + w.type }); });
-      return out.slice(0, 7);
+      out = out.slice(0, 7);
+      out.forEach(function (r) { if (locked(r)) { r.dis = true; r.sub = U.spot_locked; } });
+      return out;
     }
-    function pick(r) { if (r.t === 'app') { if (r.k === 'lang') switchLang(); else openApp(r.k); } else if (r.t === 'work') { openApp('works'); } else if (r.t === 'pc' && hooks.desktop) { hooks.desktop(); } }
+    function pick(r) { if (!r || r.dis) return; if (r.t === 'app') { if (r.k === 'lang') switchLang(); else openApp(r.k); } else if (r.t === 'work') { openApp('works'); } else if (r.t === 'pc' && hooks.desktop) { hooks.desktop(); } }
     // returns a message string (or '' for silent), and may navigate away
     function run(c) {
       var toks = c.trim().split(/\s+/).map(function (t) { return t.replace(/^-+/, ''); }).filter(function (t) { return t; }), a = (toks[0] || '').toLowerCase();   /* leading dashes are decoration */
@@ -8886,20 +9062,21 @@
         var bad = eggs.filter(function (k) { return ok.indexOf(k) < 0; });
         if (bad.length || !wantRestart) return U.term_unknown + c.trim();   /* never hint at the syntax: malformed = unknown command */
         try { if (eggs.length) sessionStorage.setItem('ee', eggs.join(',')); } catch (e) {}
-        setTimeout(function () { location.reload(); }, 150);
+        leaving = true; setTimeout(function () { location.reload(); }, 150);
         return (eggs.length ? '→ EE_' + eggs.join(' + EE_') + ' · ' : '') + U.spot_restarting;
       }
-      if (SIG.is(c)) { SIG.show(); return ''; }
+      if (SIG.is(c)) { SIG.show(); return ''; }   /* the provenance string is not a listed command and is never locked */
+      if (lessonOn() && /^(works|ls|demos|about|whoami|play|lang|desktop|pc)$/.test(a)) return U.spot_locked;   /* LOG-193: typing the command is the same door as picking the row */
       if (a === 'help') return U.term_help;
       if (a === 'works' || a === 'ls') { openApp('works'); return (D.works || []).filter(function (w) { return !w.secret; }).map(function (w) { return '  ' + w.year + '  [' + w.type + ']  ' + w.title; }).join('\n'); }
       if (a === 'demos') { openApp('demos'); return ''; }
       if (a === 'about' || a === 'whoami') { openApp('about'); return '> ' + D.author + ' — ' + D.tagline; }
-      if (a === 'play') { openApp('player'); player.toggle(); return ''; }
-      if (a === 'lang') { switchLang(); return ''; }
-      if (a === 'login') { if (!pool.on()) return U.wish_offline; pool.start(); return '\u2026'; }   /* 追記③ */
-      if ((a === 'desktop' || a === 'pc') && hooks.desktop) { hooks.desktop(); return ''; }
+      if (a === 'play') { if (stageOwns()) return ''; openApp('player'); player.toggle(); return ''; }   /* LOG-193: not under a stage - the background music never plays beside one */
+      if (a === 'lang') { leaving = true; switchLang(); return ''; }
+      if (a === 'login') { if (!pool.on()) return U.wish_offline; leaving = true; pool.start(); return '\u2026'; }   /* 追記③ */
+      if ((a === 'desktop' || a === 'pc') && hooks.desktop) { leaving = true; hooks.desktop(); return ''; }
       if (a === 'clear') return '\u0000';
-      var r = results(a); if (r.length) { pick(r[0]); return ''; }
+      var r = results(a); if (r.length) { if (r[0].dis) return U.spot_locked; pick(r[0]); return ''; }
       return U.term_unknown + a;
     }
     // shared UI: one field, a hit list, a message line (used inside the phone app panel and by the desktop overlay)
@@ -8908,7 +9085,7 @@
       var q = $('.spot-q', host), list = $('.spot-list', host), msg = $('.spot-msg', host), sel = 0, hits = [];
       function render() {
         hits = results(q.value); sel = Math.min(sel, Math.max(0, hits.length - 1));
-        list.innerHTML = hits.map(function (r, i) { return '<button class="spot-hit' + (i === sel ? ' on' : '') + '" data-i="' + i + '"><span class="g">' + r.g + '</span><span class="l">' + esc(r.l) + '</span><span class="s">' + esc(r.sub) + '</span></button>'; }).join('');
+        list.innerHTML = hits.map(function (r, i) { return '<button class="spot-hit' + (i === sel ? ' on' : '') + (r.dis ? ' dis" disabled aria-disabled="true' : '') + '" data-i="' + i + '"><span class="g">' + r.g + '</span><span class="l">' + esc(r.l) + '</span><span class="s">' + esc(r.sub) + '</span></button>'; }).join('');
         list.hidden = !hits.length;
       }
       function say(m) { if (m === '\u0000') { msg.textContent = ''; msg.hidden = true; return; } if (!m) { msg.hidden = true; return; } msg.textContent = m; msg.hidden = false; }
@@ -8916,15 +9093,16 @@
       q.addEventListener('keydown', function (e) {
         if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(hits.length - 1, sel + 1); render(); }
         else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(0, sel - 1); render(); }
-        else if (e.key === 'Enter') { e.preventDefault(); var v = q.value.trim(); if (!v) return; if (hits.length && v.charAt(0) !== '-' && !/^(help|clear|restart|play|lang)$/i.test(v)) { pick(hits[sel]); q.value = ''; render(); onDone && onDone(); } else { var m = run(v); q.value = ''; render(); say(m); if (m === '' && onDone) onDone(); } }
+        else if (e.key === 'Enter') { e.preventDefault(); var v = q.value.trim(); if (!v) return; if (hits.length && v.charAt(0) !== '-' && !/^(help|clear|restart|play|lang)$/i.test(v)) { if (hits[sel] && hits[sel].dis) { say(U.spot_locked); return; }   /* LOG-193: a locked row answers and stays put - Enter neither opens it nor closes Find */
+          pick(hits[sel]); q.value = ''; render(); onDone && onDone(); } else { var m = run(v); q.value = ''; render(); say(m); if (m === '' && onDone) onDone(); } }
         else if (e.key === 'Escape') { onDone && onDone(true); }
       });
-      list.addEventListener('click', function (e) { var b = e.target.closest('.spot-hit'); if (!b) return; pick(hits[+b.getAttribute('data-i')]); q.value = ''; render(); onDone && onDone(); });
+      list.addEventListener('click', function (e) { var b = e.target.closest('.spot-hit'); if (!b) return; var r = hits[+b.getAttribute('data-i')]; if (r && r.dis) { say(U.spot_locked); return; } pick(r); q.value = ''; render(); onDone && onDone(); });
       render(); setTimeout(function () { q.focus(); }, 40);
       return { focus: function () { q.focus(); }, reset: function () { q.value = ''; render(); say(''); } };
     }
     function mount(b) { build(b, null); }   /* phone: lives inside the app panel */
-    return { mount: mount, build: build, run: run, hooks: hooks };
+    return { mount: mount, build: build, run: run, hooks: hooks, left: function () { var v = leaving; leaving = false; return v; } };
   })();
   // desktop overlay (Spotlight): opened by the dock / icon or by pressing "/" anywhere; Esc or a click outside closes it
   var spot = (function () {
@@ -8939,13 +9117,66 @@
     function open() { ensureEl(); el.hidden = false; ui.reset(); ui.focus(); }
     function close() { if (el) el.hidden = true; }
     function isOpen() { return !!el && !el.hidden; }
+    /* LOG-193 (the user: / 改成//觸發，僅管理員使用): a single slash no longer opens it - two within SLASH_MS do, the same double the
+       boot screen's command bar takes (bootCmd.tap). The dock's 「尋找」key is unchanged. Escape belongs to escLayer (ESC_FIND):
+       one press closes the overlay ALONE, never the stage under it as well. */
+    var SLASH_MS = 700, slashAt = 0;
     document.addEventListener('keydown', function (e) {
       if (PHONE || !desktop || desktop.hidden) return;
       var tag = (e.target && e.target.tagName) || '';
-      if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && tag !== 'INPUT' && tag !== 'TEXTAREA' && !(e.target && e.target.isContentEditable)) { e.preventDefault(); open(); }
-      else if (e.key === 'Escape' && isOpen()) close();
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
+      e.preventDefault();
+      var now = performance.now(), dbl = now - slashAt < SLASH_MS; slashAt = dbl ? 0 : now;
+      if (dbl && !cmdl.isOpen()) { close(); cmdl.open(); }   /* LOG-197: `//` is the command line now - Find has its own key below */
     });
-    return { open: open, close: close };
+    /* LOG-197 (the user: 尋找框觸發快捷鍵改成與MAC一樣的觸發快捷鍵，這樣也可以區分管理員跟一般用戶): Find = the visitor's door, on the
+       Spotlight chord. The OS keeps Cmd+Space (macOS) / Win+Space for itself and a CJK IME may swallow Ctrl+Space, so Ctrl/Cmd+K opens it too. */
+    document.addEventListener('keydown', function (e) {
+      if (PHONE || !desktop || desktop.hidden || e.altKey || e.shiftKey || !(e.ctrlKey || e.metaKey)) return;
+      if (!(e.code === 'Space' || (e.key || '').toLowerCase() === 'k')) return;
+      e.preventDefault();
+      if (isOpen()) close(); else { cmdl.close(); open(); }
+    });
+    escLayer.add(ESC_FIND, { field: true, isOpen: isOpen, close: close });
+    return { open: open, close: close, isOpen: isOpen };
+  })();
+  /* ===== LOG-197 (the user: 桌面中//則改為在dock下方出現相同輸入概念，也不出現輸入框，看起來像是內崁的代碼輸入，且enter之後若為需不重置的指令，
+     此指令會類似彈幕往上滑動直到最上方邊緣消失): the desktop's command line. A bare `>` and a field with no box, on the dock's left edge
+     under the dock (the dock steps up to make the room: os.css .cmd-on). Enter runs terminal.run(); a command that leaves the page stays
+     where it is with its answer, anything else lets go of the line and drifts straight up at a constant speed until it is past the top edge. */
+  var cmdl = (function () {
+    var el = null, q = null, backT = 0, FLY_PX_S = 120;
+    function place(n) { var d = $('#dock'), r = d ? d.getBoundingClientRect() : null, h = desktop.getBoundingClientRect(); n.style.left = Math.round(r && r.width ? r.left - h.left + 10 : 24) + 'px'; }
+    function ensure() {
+      if (el) return;
+      el = document.createElement('div'); el.className = 'cmdl'; el.hidden = true;
+      el.innerHTML = '<span class="cl-ps">&gt;</span><input class="cl-q" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="' + esc(U.boot_cmd_placeholder) + '">';
+      desktop.appendChild(el); q = $('.cl-q', el);
+      q.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault(); e.stopPropagation();
+        var v = q.value.trim(); if (!v) return;
+        var m = terminal.run(v);
+        if (terminal.left()) { q.value = v + (m && m !== ' ' ? '   ' + m.split('\n')[0] : ''); q.readOnly = true; return; }
+        fly(v, m === ' ' ? '' : m); q.value = '';
+        if (m === '') close();   /* it opened something: hand the keyboard back */
+      });
+    }
+    function fly(cmd, msg) {
+      var n = document.createElement('div'); n.className = 'cmdfly';
+      n.innerHTML = '<span class="c"></span>' + (msg ? '<span class="m"></span>' : '');
+      $('.c', n).textContent = '> ' + cmd; if (msg) $('.m', n).textContent = msg;
+      place(n); desktop.appendChild(n);
+      var dist = n.getBoundingClientRect().bottom - desktop.getBoundingClientRect().top + 8;
+      if (reduced || !n.animate) { setTimeout(function () { n.remove(); }, 1200); return; }
+      var a = n.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(' + (-dist) + 'px)' }], { duration: dist / FLY_PX_S * 1000, easing: 'linear', fill: 'forwards' });
+      a.onfinish = a.oncancel = function () { n.remove(); };
+    }
+    function open() { if (PHONE || !desktop) return; ensure(); place(el); el.hidden = false; q.readOnly = false; q.value = ''; clearTimeout(backT); desktop.classList.remove('cmd-back'); desktop.classList.add('cmd-on'); setTimeout(function () { q.focus(); }, 30); }
+    function close() { if (!el || el.hidden) return; el.hidden = true; q.blur(); desktop.classList.remove('cmd-on'); desktop.classList.add('cmd-back'); clearTimeout(backT); backT = setTimeout(function () { desktop.classList.remove('cmd-back'); }, 320); }
+    function isOpen() { return !!el && !el.hidden; }
+    escLayer.add(ESC_FIND + 5, { field: true, isOpen: isOpen, close: close });
+    return { open: open, close: close, isOpen: isOpen };
   })();
 
   // ============================================================ phone shell (iOS-like)
@@ -8967,18 +9198,9 @@
       b.addEventListener('click', function () { if (a === 'lang') switchLang(); else if (a === 'pc') askDesktop(); else open(a); });   /* lang: in place, no reload (music keeps playing) */
       return b;
     }
-    /* iOS-style alert (custom, never window.confirm): title + message + cancel/confirm; resolves through cb(true|false) */
-    function ask(title, msg, okLabel, cancelLabel, danger, cb) {
-      var ov = document.createElement('div'); ov.className = 'ph-alert-ov';
-      ov.innerHTML = '<div class="ph-alert" role="alertdialog" aria-modal="true"><h3></h3><p></p><div class="ph-alert-btns"><button type="button" class="no"></button><button type="button" class="yes"></button></div></div>';
-      $('h3', ov).textContent = title; $('p', ov).textContent = msg; $('.no', ov).textContent = cancelLabel; $('.yes', ov).textContent = okLabel;
-      if (danger) $('.yes', ov).classList.add('danger');
-      root.appendChild(ov); requestAnimationFrame(function () { ov.classList.add('in'); });
-      var done = function (v) { ov.classList.remove('in'); setTimeout(function () { ov.remove(); }, reduced ? 0 : 200); cb(v); };
-      $('.no', ov).addEventListener('click', function () { done(false); });
-      $('.yes', ov).addEventListener('click', function () { done(true); });
-      ov.addEventListener('click', function (e) { if (e.target === ov) done(false); });   /* tapping the dimmed backdrop = cancel */
-    }
+    /* iOS-style alert (custom, never window.confirm): title + message + cancel/confirm; resolves through cb(true|false).
+       LOG-193: the body moved out to osAsk so the desktop can ask the same way (the stage's 確定要離開舞台); this only names the phone's host. */
+    function ask(title, msg, okLabel, cancelLabel, danger, cb) { return osAsk(title, msg, okLabel, cancelLabel, danger, cb, root); }
     /* the「電腦版」tile: confirm; on a genuinely small screen add the eyesight warning before switching */
     function askDesktop() {
       var big = Math.min(screen.width, screen.height) >= 700;   /* tablet-class (iPad ≥ 768): the desktop shell is perfectly usable there */
