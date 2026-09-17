@@ -882,11 +882,12 @@ body.tr-on #sticky{opacity:0;transform:translate(24px,-40px) rotate(-14deg);poin
 .stage-ui.tut-demo::before{opacity:.42}
 .desktop.tut-demo #np-desktop,.desktop.tut-demo #wave{filter:brightness(.72);transition:filter .8s ease}
 
-.stage-ui .tut-bub{position:absolute;left:0;top:0;width:max-content;max-width:340px;padding:.5rem .75rem;border-radius:10px;background:rgba(20,16,30,.92);border:1px solid rgba(224,176,74,.55);color:var(--fg);font:14px/1.55 var(--font);text-align:left;box-shadow:0 6px 24px rgba(0,0,0,.45);pointer-events:auto;opacity:0;transform:translateY(6px);z-index:3}
+.stage-ui .tut-bub{position:absolute;left:0;top:0;width:max-content;max-width:340px;padding:.5rem .75rem;border-radius:10px;background:rgba(20,16,30,.92);border:1px solid rgba(224,176,74,.55);color:var(--fg);font:14px/1.55 var(--font);text-align:center;box-shadow:0 6px 24px rgba(0,0,0,.45);pointer-events:auto;opacity:0;transform:translateY(6px);z-index:3}
 .stage-ui .tut-bub.in{opacity:1;transform:none}
 .stage-ui .tut-bub::after{content:'';position:absolute;left:var(--ax,24px);border:7px solid transparent}
 .stage-ui .tut-bub.below::after{bottom:100%;border-bottom-color:rgba(224,176,74,.55)}
 .stage-ui .tut-bub.above::after{top:100%;border-top-color:rgba(224,176,74,.55)}
+.stage-ui .tut-bub .tx .rest{font-style:normal;visibility:hidden}.stage-ui .tut-bub .tx.cur.ty::after{content:none}.stage-ui .tut-bub .tx.cur .rest::before{content:'\2590';position:absolute;visibility:visible;margin-left:1px;color:var(--accent);animation:tutcaret 1s steps(1) infinite}   /* LOG-200: centred bubbles - the rest of the line holds its place unseen, the caret floats at its head without taking room */
 .stage-ui .tut-bub .tx.cur::after{content:'\2590';margin-left:1px;color:var(--accent);animation:tutcaret 1s steps(1) infinite}
 @keyframes tutcaret{50%{opacity:0}}
 .stage-ui .tut-ask{position:absolute;left:50%;top:50%;width:min(440px,86vw);padding:1.1rem 1.25rem 1rem;border-radius:16px;background:rgba(20,16,30,.90);border:1px solid rgba(255,255,255,.18);box-shadow:0 12px 40px rgba(0,0,0,.5);color:var(--fg);font:13px/1.6 var(--font);pointer-events:auto;opacity:0;transform:translate(-50%,-50%) translateY(8px);z-index:4;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}

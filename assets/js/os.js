@@ -6495,9 +6495,9 @@
            pulled it straight back up: down and up inside two frames, at every line boundary. Measured with the caret on, that
            cannot happen (nor when `.cur` comes off at the end). The height is pinned with it: placeBox() re-reads offsetHeight
            every frame and anchors an 'above' bubble by its BOTTOM, so one reflowed line used to teleport the whole text 21.7 px. */
-        bub.style.width = ''; bub.style.height = ''; tx.classList.add('cur'); tx.textContent = text;
+        bub.style.width = ''; bub.style.height = ''; tx.classList.remove('ty'); tx.classList.add('cur'); tx.textContent = text;
         var cs = getComputedStyle(bub), pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
-        bub.style.width = (bub.offsetWidth + (cs.boxSizing === 'border-box' ? pad : 0)) + 'px';   /* max-width is a border-box cap, so a genuinely long line still wraps - as it should */
+        bub.style.width = (bub.offsetWidth + 1 + (cs.boxSizing === 'border-box' ? pad : 0)) + 'px';   /* LOG-200 (使用者: 「這就是 branching 技巧」那句明明只有一行泡泡卻有兩行高度): +1 - offsetWidth ROUNDS, and a line whose true width is x.6 px was pinned at x, wrapped its last word under the caret, and the height below was then reserved for two lines */   /* max-width is a border-box cap, so a genuinely long line still wraps - as it should */
         bub.style.height = bub.offsetHeight + 'px';   /* 追記㉛: the final height, reserved before the first character - the box never grows a line mid-typing */
         bubSide = o.side === 'above' ? 'above' : 'below'; bubAlign = o.align === 'right' ? 'right' : 'left'; bubGap = o.gap || 12; bubFree = false;
         bubSrc = target; bubTgt = typeof target === 'function' ? target : rectOf(target); placeBox(bubTgt ? rectOf(bubTgt) : rowBox());   /* 追記②: the bubble simply appears at its new anchor and fades in (the user: 取消龜速位移，快速淡入淡出) - a live anchor (the tick) is followed, an element's box is taken once so the bubble does not bob with the tile */
@@ -7119,6 +7119,7 @@
         var a = E.btn('A'); if (a) { a.classList.remove('tap'); void a.offsetWidth; a.classList.add('tap', 'queued'); }
         phase = 'run'; disarmA(); hide(); unframeAll(); irisOut();   /* 追記④: the shade that left only A lit opens out at the press */
         unlock();            /* ★ 待裁示 a (the user): the hand-over IS the press, so the line unlocks for dragging at exactly that moment */
+        try { E.hint(true); } catch (e) {}   /* LOG-199 (the user: 玩家自己嘗試階段時，前段跟後段的 <> 符號都顯現出來): the two ‹ › pairs the demo showed come back for the whole hands-on stretch - finale() and stop() take them off */
         E.release(true); trail.log('tut', 'press-A');   /* LOG-186: the press may cut straight into A2 (first half of a pass) - the queued mark then comes off at once, on A2's own 'enter' */
       }
       function unlock() { if (!lockedPhase) return; lockedPhase = false; E.lock(false); }
@@ -7293,7 +7294,7 @@
       var KAO_RAGE = ['(#`皿´)', '( ╬ﾟ дﾟ )', '(ﾒ ﾟ皿ﾟ)ﾒ', 'ヽ(#`Д´)ﾉ'];
       var KAO_WALK = '(ﾟ皿ﾟﾒ)';   /* 追記㉛ 使用者: 在原地喘氣後用 (ﾟ皿ﾟﾒ) 像走路一樣往左邊移動消失 */
       var KAO_REW = [{ f: '( ´ﾟДﾟ`)', d: 2.0 }, { f: '(`へ´≠)', d: 4.0, pant: true }, { f: '<(￣ ﹌ ￣)>', d: 2.0 }, { f: '(´･_･`)', d: 2.0 }];   /* 追記㉛ 使用者原話: 顏文字會變成( ´ﾟДﾟ`)兩秒，(`へ´≠)在原地喘4秒，然後<(￣ ﹌ ￣)>2秒，(´･_･`)兩秒 */
-      var RAGE_STEP = 2.0, RAGE_OUT = 0.55, RAGE_PANT = 2.6, RAGE_WALK = 1.5, REW_ODDS = 0, rage = null, aGone = false, rewCtx = null;
+      var RAGE_STEP = 2.0, RAGE_OUT = 0.55, RAGE_PANT = 2.6, RAGE_WALK = 1.5, RAGE_HOPS = 10, RAGE_HOP_H = 11, REW_ODDS = 0, rage = null, aGone = false, rewCtx = null;
       /* ★ 追記㉛ (使用者): ⑴ 抖動小一點點 ⑵ 一開始就站在 A 下面（㉚ 的「跑到 A 下面」那一趟退役）⑶ 丟出去時顏文字站在原地、A 不回來
          ⑷ 兩個結局抽籤：**4/5「A 鍵就直接消失然後直接開始播放，直到最後介紹 V6 構造時自己偷偷顯現回來」**（喘氣→(ﾟ皿ﾟﾒ) 走掉→音樂開始），
          **1/5 rewind**（四張臉演完→整個畫面與音效倒帶→回到「按 A」等使用者自己按）。 */
@@ -7302,7 +7303,7 @@
         if (!rage) return null;
         var p = rage.frozen || rageAt(); if (!p) return null;   /* frozen at the throw: A leaves, the face stays exactly where it stood (使用者: 丟出去時顏文字站在原地) */
         var t = T(), x = p.x, y = p.y;
-        if (rage.walk) { var w = Math.max(0, Math.min(1, (t - rage.walk) / RAGE_WALK)); x = p.x - w * w * (p.x + 160); y = p.y + Math.sin(t * 9) * 2.6; }   /* out past the left edge, bobbing on each step */
+        if (rage.walk) { var w = Math.max(0, Math.min(1, (t - rage.walk) / RAGE_WALK)); x = p.x - w * w * (p.x + 160); y = p.y - Math.abs(Math.sin((t - rage.walk) / RAGE_WALK * Math.PI * RAGE_HOPS)) * RAGE_HOP_H; }   /* out past the left edge in RAGE_HOPS bounding hops (LOG-199 使用者: 彈掉多一點，看起來像是彈跳跑出去一樣) - equal time per hop, so the strides lengthen as it speeds up */
         else if (rage.pant) { x = p.x + Math.sin((t - rage.pant) * 1.2) * 1.4; y = p.y + Math.sin((t - rage.pant) * 3.4) * 3.2; }   /* shoulders going, in place */
         else { var k = Math.max(0, Math.min(1, (t - rage.t0) / (RAGE_STEP * KAO_RAGE.length))), amp = 1.0 + 5.5 * k * k;   /* 使用者: 抖動小一點點 (㉚ 是 1.5 + 9k²) */
                x += Math.sin(t * 47 * 1.7) * amp; y += Math.sin(t * 47 * 2.6) * amp * 0.7; }
@@ -7324,6 +7325,7 @@
       }
       function rageThrow() {
         var a = E.btn('A'); if (!a) return;
+        if (iris) { var ir0 = rectOf(a); if (ir0) { var irF = { left: ir0.left, right: ir0.right, top: ir0.top, bottom: ir0.bottom }; iris.get = function () { return irF; }; } }   /* LOG-201 (使用者: A被丟出去之後聚光燈不要閃爍，就待在原地就好): the spotlight read A's box every frame, so it chased the spinning, shrinking tile up the screen and snapped back when A's transform was cleared - it now keeps the spot where A stood (irisOut() inherits this getter) */
         rage.frozen = rageAt(); rage.thrown = T();   /* the dock is A's own box and A is about to leave - freeze it first */
         var dx = rage.dx = Math.max(220, HOST.clientWidth * 0.26), dy = rage.dy = Math.max(240, HOST.clientHeight * 0.42);
         a.style.transition = 'transform ' + RAGE_OUT + 's cubic-bezier(.35,.06,.7,.5), opacity ' + RAGE_OUT + 's ease-in';
@@ -7535,7 +7537,11 @@
           if (bj.pauseTo != null && t < bj.pauseTo) n = bj.hold;
           else { if (bj.pauseTo != null) { bj.lost += bj.pause; bj.pauseTo = null; } n = Math.max(0, Math.min(bj.text.length, Math.floor((t - bj.t0 - bj.lost) / bj.per))); }
           if (bj.pauseTo == null && bj.marks.length && n >= bj.marks[0].n) { var mk = bj.marks.shift(); n = mk.n; bj.hold = n; bj.pauseTo = t + bj.pause; if (mk.fn) { try { mk.fn(); } catch (e) {} } }
-          if (n !== bj.n) { bj.n = n; tx.textContent = bj.text.slice(0, n); if (n >= bj.text.length && !bj.marks.length && bj.pauseTo == null) { tx.classList.remove('cur'); bubJob = null; } }
+          if (n !== bj.n) {   /* LOG-200 (使用者: 泡泡中的文字全置中): the untyped remainder is laid out too, invisible (.rest), so a centred line is already in its final place and the typed part does not slide sideways with every character; the caret rides the head of .rest and takes no room (os.css) */
+            bj.n = n; tx.textContent = bj.text.slice(0, n);
+            if (n >= bj.text.length && !bj.marks.length && bj.pauseTo == null) { tx.classList.remove('cur', 'ty'); bubJob = null; }
+            else { var rest = document.createElement('i'); rest.className = 'rest'; rest.textContent = bj.text.slice(n); tx.appendChild(rest); tx.classList.add('ty'); }
+          }
         }
         for (i = subs.length - 1; i >= 0; i--) {
           var s = subs[i], el = t - s.t0, typed = s.per * s.len, sn = Math.max(0, Math.min(s.len, Math.floor(el / s.per)));
@@ -7587,7 +7593,7 @@
         /* LOG-188: the updates panel, the sticky note and the dock come back; .tut-back carries their return transition for one beat (the
            base rules have none, so without it they would snap into place) */
         HOST.classList.remove('tut-on'); HOST.classList.add('tut-back'); setTimeout(function () { HOST.classList.remove('tut-back'); }, 900);
-        try { E.surface().classList.remove('tut-away', 'awave', 'frozen', 'bounce', 'tut-down', 'shade'); } catch (e) {}
+        try { E.surface().classList.remove('tut-away', 'awave', 'frozen', 'bounce', 'tut-down', 'shade', 'hint'); } catch (e) {}
         HOST.classList.remove('tut-demo'); if (head) head.classList.remove('tut-demo');   /* 追記⑱-③: the closing show's dim (and a demonstration's, should the lesson end mid-way) lifts with everything else */
         try { E.reveal('all'); } catch (e) {}
         if (onDone) { var f = onDone; onDone = null; try { f(); } catch (e) {} }
