@@ -120,6 +120,7 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .sticky-text{transition:opacity .6s ease}
 #np-desktop .np-lbl{display:inline-block}
 #np-desktop .np-title{will-change:transform}
+.desktop.stage-on .np-title,.desktop.stage-on .np-title *,.phone.onstage .np-title,.phone.onstage .np-title *{pointer-events:none!important;cursor:default!important}   /* LOG-198 (the user: 舞台中曲名改為滑鼠不可互動(不會有互動圖示出現)，省得出現BUG): on a stage the caption is a label - no hand, no hover, no click (os.js already refuses the click: stageOwns) */
 /* LOG-177 追記⑧: the compare stage's caption tint lives in three REGISTERED custom properties on #np-desktop, so the fade back to amber
    survives the player rebuilding the title's spans at the very moment the stage leaves (inline colours on the spans did not: a new span is amber at once) */
 @property --np-c{syntax:'<color>';inherits:true;initial-value:#e0b04a}
