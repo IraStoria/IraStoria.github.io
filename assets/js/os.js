@@ -297,8 +297,10 @@
     TITLES = { works: U.app_works, demos: U.app_demos, player: U.app_player, articles: U.app_articles, about: U.app_about, resume: U.app_resume, terminal: U.app_terminal, updates: U.app_updates, pillar: U.app_pillar, wishpool: U.app_wishpool, contact: U.app_contact };
     if (PHONE && phone) phone.relabel();
     if (typeof well !== 'undefined' && well) well.relabel();   /* LOG-162: the bubble's labels and the status words of the wishes already on screen */
+    if (typeof waveLabels !== 'undefined' && waveLabels) waveLabels.relabel();   /* LOG-204: the help button and its panel */
+    if (nbMark) nbMark();   /* LOG-204: ON / OFF beside the boot switch */
     if (typeof pillar !== 'undefined' && pillar) pillar.relabel();   /* LOG-164: the pillar's box and the roster lines on their way */
-    document.querySelectorAll('.icon[data-app]').forEach(function (b) { var t = b.querySelector('span:last-child'); if (t) t.textContent = TITLES[b.getAttribute('data-app')]; var g = b.querySelector('.glyph'); if (g && ICON[b.getAttribute('data-app')]) g.innerHTML = ICON[b.getAttribute('data-app')]; });
+    document.querySelectorAll('.icon[data-app]').forEach(function (b) { var ap = b.getAttribute('data-app'); var t = b.querySelector('.ilbl') || b.querySelector('span:last-child'); if (t) t.textContent = TITLES[ap]; var sb = b.querySelector('.isub'); if (sb) sb.textContent = U['app_' + ap + '_sub'] || '';   /* LOG-204: the plain-language line under the icon follows the language too */ var g = b.querySelector('.glyph'); if (g && ICON[ap]) g.innerHTML = ICON[ap]; });
     document.querySelectorAll('#dock button[data-app]').forEach(function (b) { var a = b.getAttribute('data-app'); b.innerHTML = '<span>' + (ICON[a] || GLYPH[a]) + '</span>' + esc(TITLES[a]); });
     var hp = document.querySelectorAll('.hero-text p'); if (hp[0]) hp[0].textContent = D.hero_intro; if (hp[1]) hp[1].textContent = '// ' + U.desk_hint;
     var st = $('#sticky .sticky-text'); if (st) st.textContent = U.sticky;
@@ -393,23 +395,38 @@
   })();
 
   var done = false, powered = false, ready = false;
+  /* LOG-204 / ADR-013 beginner mode. Two non-musicians reported giving up before they understood anything ("no idea what MIDI is", "too many features", and plainly: they do not want to have to explore). The flag is the one switch behind every answer to that: icon subtitles, the standing captions' default, and later the guided tour. Unset = ON, because the people it is for are exactly the ones who will never go looking for a switch; once anybody touches it their choice is remembered. */
+  var NB = (function () { try { var v = localStorage.getItem('nb_mode'); return v == null ? true : v === '1'; } catch (e) { return true; } })(), nbMark = null;
+  function nbApply() { document.body.classList.toggle('nb', NB); }
+  nbApply();
   // language picker on the boot screen: switch in place (no animation); the boot text and the desktop then follow that language
   document.querySelectorAll('.boot-lang').forEach(function (bl) {   /* #boot-lang (desktop boot screen) and #ph-lang (phone lock screen) */
     function mark() { bl.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-l') === lang); }); }
     mark();
     bl.addEventListener('click', function (e) { var b = e.target.closest('button[data-l]'); if (!b || b.getAttribute('data-l') === lang || !ALT) return; applyLang(ALT); mark(); });
   });
+  /* LOG-204 追記① (the user: 我的語言鈕不是電源那邊的語言鈕，是跟桌面切換語言的那個鈕一樣): the switch wears the menubar's sliding toggle, not the boot screen's two-word picker */
+  (function () {
+    var nb = $('#boot-nb'); if (!nb) return;
+    function mark() { nb.setAttribute('aria-checked', NB ? 'true' : 'false'); var st = nb.querySelector('.nb-state'); if (st) st.textContent = NB ? (U.nb_on || 'ON') : (U.nb_off || 'OFF'); }
+    mark();
+    nbMark = mark;
+    nb.addEventListener('click', function () { NB = !NB; try { localStorage.setItem('nb_mode', NB ? '1' : '0'); } catch (err) {} nbApply(); mark(); try { pool.hit(NB ? 'nb_on' : 'nb_off'); } catch (err) {} });   /* LOG-204: whether anyone actually uses the switch */
+  })();
   // power button: the click is the user gesture the browser needs → boot sound plays right here, then the terminal starts typing
   function powerOn() {
     if (powered) return; powered = true;
     fx.boot(); fx.prime(); player.unlock();   /* inside the gesture: boot sound now, and Safari lets the music element / click sound play later */
     if (bootBtn) bootBtn.hidden = true;
     var bl = $('#boot-lang'); if (bl) bl.hidden = true;
+    var nbp = $('#boot-nb'); if (nbp) nbp.hidden = true;
+    var nbn = $('#boot-nb-note'); if (nbn) nbn.hidden = true;
     if (bootScreen) bootScreen.classList.remove('off');
     script = bootScript(); runBoot(0);
   }
   function enterDesktop() {
     if (done || !ready) return; done = true;
+    try { pool.hit('boot'); } catch (e) {}   /* LOG-204: one visit */
     try { sessionStorage.setItem('booted', '1'); } catch (e) {}
     fx.click(function () {   // easter egg plays out over the boot screen; only then does the desktop load
     boot.classList.add('out');
@@ -753,12 +770,24 @@
       g2.restore(); return true;
     }
     var st_started = false;
-    return { draw: function (g2, W, H, y, st, nowMs) { st_started = !!st.started; return draw(g2, W, H, y, st, nowMs); }, preroll: preroll, overlay: overlay, lights: lights, hb: function () { return hb && !!data && !(anim && anim.mode === 'out'); } };
+    return { draw: function (g2, W, H, y, st, nowMs) { st_started = !!st.started; return draw(g2, W, H, y, st, nowMs); }, preroll: preroll, overlay: overlay, lights: lights, hb: function () { return hb && !!data && !(anim && anim.mode === 'out'); }, on: function () { return !!data && !(anim && anim.mode === 'out'); } };   /* on (LOG-204): notes are on screen right now - the caption that names them only stands while they do */
   }
   function makeWave(cv, yRatio, withNotes) {
     var wf = withNotes ? makeWaterfall() : null;
     var headPx = -1;
-    var restoreT0 = 0, restoreDur = 1400, gleam = null, dimK = null, dimCv = null;   /* gleam: this frame's travelling flash band; dimK: the tail's in-canvas dim floor (the LINE is spared); dimCv: the reused keep-mask offscreen */   /* LOG-112 追記⑬: after the outro door's hand-back the LINE is already on screen (it lived through the door) - the grey, unplayed part fades back in in place, ADE-style, instead of regrowing from the left */
+    var restoreT0 = 0, restoreDur = 1400, gleam = null, dimK = null, dimCv = null;
+    /* LOG-204 追記⑦ (the user: 將滑鼠放到那個項目的字上時，畫面上便會用陰影模式聚焦正在看的東西): the waterfall and the bars share ONE canvas,
+       so neither can be dimmed with a DOM veil. They can be told apart by draw ORDER instead: the bars go down first, the notes over them.
+       Focusing the notes = lay a black wash over what is already drawn, then draw the notes on top at full strength. Focusing the bars =
+       draw the notes faint. The baseline is painted after both, so it never dims. Fast in, slow out - the user asked for 慢慢淡出. */
+    var focusWhat = null, focusWf = { k: 0, to: 0, from: 0, t0: 0 }, focusSp = { k: 0, to: 0, from: 0, t0: 0 }, focusSt = { k: 0, to: 0, from: 0, t0: 0 }, FOCUS_IN_MS = 450, FOCUS_OUT_MS = 330, FOCUS_DEPTH = 0.78, FOCUS_NOTE_DEPTH = 0.84;   /* DEPTH: the wash over the bars (grey, low-contrast: 22 % left reads as a ghost); NOTE_DEPTH: the notes when the bars are read about (saturated + glowing: 16 % left matches the furniture's .16) */   /* LOG-204 追記⑧ (the user: 需要transition，不然現在瞬間亮暗太快了): IN is a timed walk of FOCUS_IN_MS on the CSS `ease` curve - the same .45 s and curve as body.spot in os.css, so the canvas and the furniture darken as one gesture (the old exponential, tau 55 ms, bit 25 % in its first frame = the cut he saw); OUT stays the exponential tail (time constant: ~90 % gone by 760 ms) he did not mind. One k per layer (focusWf: the wash over the bars; focusSp: the notes drawn faint) so moving from one line to the other crossfades instead of swapping */
+    function focusStep(s, to, now, dtm) {   /* 追記⑧: in = timed ease from wherever it is (a flick across a line goes in a little and comes straight back; a change of target mid-flight restarts from the current k, not from 0); out = exponential from wherever it is */
+      if (to !== s.to) { s.to = to; s.from = s.k; s.t0 = now; }
+      if (to > s.k) { var d = FOCUS_IN_MS * (to - s.from), x = d > 0 ? Math.min(1, (now - s.t0) / d) : 1, t = x;   /* cubic-bezier(.25,.1,.25,1) = CSS ease: x(t) = .75t(1-t) + t^3, solved for t by Newton */
+        for (var i = 0; i < 5; i++) { var dx = 0.75 - 1.5 * t + 3 * t * t; if (dx < 1e-4) break; t -= (0.75 * t * (1 - t) + t * t * t - x) / dx; }
+        t = Math.min(1, Math.max(0, t)); s.k = s.from + (to - s.from) * (0.3 * t * (1 - t) * (1 - t) + 3 * t * t * (1 - t) + t * t * t); }
+      else { s.k += (to - s.k) * (1 - Math.exp(-Math.min(100, Math.max(0, dtm)) / FOCUS_OUT_MS)); if (Math.abs(to - s.k) < 0.004) s.k = to; }
+    }   /* gleam: this frame's travelling flash band; dimK: the tail's in-canvas dim floor (the LINE is spared); dimCv: the reused keep-mask offscreen */   /* LOG-112 追記⑬: after the outro door's hand-back the LINE is already on screen (it lived through the door) - the grey, unplayed part fades back in in place, ADE-style, instead of regrowing from the left */
     var splitCfg = null, SPLIT_COL_L = '108,92,224', SPLIT_COL_R = '184,84,176', SPLIT_LINE_L = '212,212,252', SPLIT_LINE_R = '248,210,236', SPLIT_LINE = '230,224,248', SPLIT_DEEP = '30,16,58';   /* 追記⑨: the two halves in two eclipse hues - the transcription (left) lit blue-violet, the original (right) red-violet; SPLIT_LINE: the neutral centre divider */   /* LOG-173 split mode: {kL, kR} 0..1 loudness per half (left = transcription, right = original); null = the normal single line. 追記②: the ECLIPSE pairing in purple - a deep violet for the bars and the glow (as 255,110,90 is for the four pianos), a pale lavender-white for the line itself (as 255,232,200 is) */
     var tintFrom = ['224,176,74', '224,176,74'], tintTo = ['224,176,74', '224,176,74'], tintT0 = 0, tintDur = 1, tintCur = ['224,176,74', '224,176,74'], TINT_MS = 900, TINT_OUT_MS = 2200, TINT_BLUR = 22, TINT_W = 1.2, TINT_A = 1.0, TINT_CORONA = 32, TINT_CORONA_A = 0.40, tintShadow = '255,110,90';   /* tint = the stage's eclipsed ring: STAGE_RING_W, its brightness, STAGE_ECL_BLUR corona in STAGE_ECL_COL */
     var GDBG_UI = /[?&]ghostdbg/.test(location.search), GDBG = GDBG_UI || TELE, gdbgT = 0, gdbgEl = null;   /* GHOSTDBG (temporary diagnosis, 2026-09-06): on-screen readout + window.__ghostlog ring of the ghost's numbers - REMOVE when the phone case is closed */
@@ -930,7 +959,13 @@
           if (edge > px0) { g2.save(); g2.beginPath(); g2.rect(px0, 0, edge - px0, H); g2.clip(); trace(px0, W, DIMG, 0.7, 0); g2.restore(); }
           g2.restore();
         }
-        if (wf) wf.draw(g2, W, H, y, st, now);   /* waterfall: over the bars, under the line */
+        focusStep(focusWf, focusWhat === 'waterfall' ? 1 : 0, now, dtm); focusStep(focusSp, focusWhat === 'spectrum' ? 1 : 0, now, dtm);   /* 追記⑧: each layer walks to its own target - eased in, exponential out, continuous when the pointer flicks across a line or steps from one line to the other mid-flight */
+        var fk = focusWf.k, fs = focusSp.k;
+        if (fk > 0.002) { g2.save(); g2.shadowBlur = 0; g2.fillStyle = 'rgba(4,5,9,' + (FOCUS_DEPTH * fk).toFixed(3) + ')'; g2.fillRect(0, 0, W, H); g2.restore(); }   /* the bars (and the wallpaper glow) step back; the notes have not been drawn yet */
+        if (wf) {   /* waterfall: over the bars, under the line */
+          if (fs > 0.002) { g2.save(); g2.globalAlpha = 1 - FOCUS_NOTE_DEPTH * fs; wf.draw(g2, W, H, y, st, now); g2.restore(); }
+          else wf.draw(g2, W, H, y, st, now);
+        }
         if (wf) { var ov = wf.overlay(g2, W, H), dark = ov.dark;   /* lighting cues: dim / flash over wallpaper, bars and notes — drawn before the baseline, so the line stays bright */
           if (dark > 0) {   // in the dark the bars keep a faint amber glow (drawn over the veil so they show through it); it throbs on the scene's pulse track
             g2.save(); g2.globalAlpha = Math.min(1, dark * (0.35 + 0.65 * ov.pulse)); g2.shadowColor = 'rgba(' + LC + ',.9)'; g2.shadowBlur = 14 + 16 * ov.pulse; g2.fillStyle = 'rgba(' + LC + ',.55)';
@@ -1008,21 +1043,181 @@
         g2.save(); g2.setTransform(1, 0, 0, 1, 0, 0); g2.globalCompositeOperation = 'destination-in'; g2.drawImage(dimCv, 0, 0); g2.restore();
         if (dimK != null && paintLine) { g2.setTransform(DPR, 0, 0, DPR, 0, 0); paintLine(); }   /* the baseline comes back at FULL strength - redrawn, not spared (追記㉓) */
       }
+      /* LOG-204 追記⑪ (the user: 不要用圈，用陰影): the section stage's ? panel - a line about the row (waveLabels: seg / zones / gate / swap) puts the
+         whole canvas in shadow, bars, notes and line alike (drawn LAST, so nothing is spared), while the tiles it is about stay at full
+         strength above it. The same walk as the desktop's two layers: FOCUS_IN_MS on the ease curve in, the exponential tail out. */
+      focusStep(focusSt, focusWhat === 'stage' ? 1 : 0, now, dtm);
+      if (focusSt.k > 0.002) { g2.save(); g2.setTransform(DPR, 0, 0, DPR, 0, 0); g2.globalCompositeOperation = 'source-over'; g2.shadowBlur = 0; g2.fillStyle = 'rgba(4,5,9,' + (FOCUS_DEPTH * focusSt.k).toFixed(3) + ')'; g2.fillRect(0, 0, W, H); g2.restore(); }
     }
     function start(m) { if (!cv) return; mode = m || 'idle'; if (!raf) draw(); }
     function connect(cb, lead) { if (!cv) { cb(); return; } onConnected = cb; connectT0 = performance.now(); if (wf && lead) wf.preroll(connectT0, lead); start('connect'); }   /* lead: waterfall pre-roll seconds */
     function sweep(bars, fromFrac) { gdbg({ ev: 'sweep', bars: !!bars, from: fromFrac }); clearT0 = performance.now(); clearBars = !!bars; clearFrom = (fromFrac == null) ? 1 : Math.max(0, Math.min(1, fromFrac)); }
     function flush() { for (var fi = 0; fi < levels.length; fi++) levels[fi] = 0; }   /* drop the held bar heights: on an audio-source handover the rising bars must carry the NEW source's sound, not the old one's residue */
     function yAim(t) { t = Math.max(0.05, Math.min(0.95, t)); if (t === yTo) return; ySpan = Math.abs(t - yCur) || 1e-4; yTo = t; }   /* record the distance so the glide lands in Y_MS whatever the journey */
-    return { start: start, connect: connect, sweep: sweep, flush: flush, hb: function () { return !!(wf && wf.hb()); }, squash: function (on) { squashTo = on ? 0 : 1; }, split: function (c) { splitCfg = c || null; }, splitInfo: function () { return splitCfg; }, boost: function (k, dec) { boostK = k || 1; decayK = dec || 1; }, centre: function (on) { yAim(on ? 0.5 : yRatio); }, lineAt: function (r) { yAim(r == null ? yRatio : r); },   /* lineAt: an explicit resting height (null = home). LOG-132 aims it at whatever the phone's button panel leaves free */ head: function () { return headPx; }, tint: function (col, shadow, ms) { tintFrom = tintCur.slice(); tintTo = [col || AMB0, shadow || AMB0]; tintT0 = performance.now(); tintDur = col ? (ms || TINT_MS) : TINT_OUT_MS; },   /* null = back to amber, slowly */
+    return { start: start, connect: connect, sweep: sweep, flush: flush, hb: function () { return !!(wf && wf.hb()); }, notesOn: function () { return !!(wf && wf.on()); }, squash: function (on) { squashTo = on ? 0 : 1; }, split: function (c) { splitCfg = c || null; }, splitInfo: function () { return splitCfg; }, boost: function (k, dec) { boostK = k || 1; decayK = dec || 1; }, centre: function (on) { yAim(on ? 0.5 : yRatio); }, lineAt: function (r) { yAim(r == null ? yRatio : r); },   /* lineAt: an explicit resting height (null = home). LOG-132 aims it at whatever the phone's button panel leaves free */ head: function () { return headPx; }, tint: function (col, shadow, ms) { tintFrom = tintCur.slice(); tintTo = [col || AMB0, shadow || AMB0]; tintT0 = performance.now(); tintDur = col ? (ms || TINT_MS) : TINT_OUT_MS; },   /* null = back to amber, slowly */
              ghost: function (frac) { ghostT0 = performance.now(); ghostFrac = Math.max(0, Math.min(1, frac == null ? 1 : frac)); ghostCol = tintCur[0]; gdbg({ ev: 'ghost', frac: frac, col: ghostCol }); }, tintNow: function () { return tintCur[0]; },   /* snapshot the outgoing fill: it fades out where it stood; tintNow = the line's current eased colour (the caption paints with the same brush) */
              ghostInfo: function () { if (!ghostT0) return null; var gp = (performance.now() - ghostT0) / GHOST_MS; return gp >= 1 ? null : { col: ghostCol, k: 1 - gp };
  },   /* the fading previous colour (k 1->0 on the ghost clock) — the caption's not-yet-repainted part wears it */
              restore: function (ms) { restoreT0 = performance.now(); restoreDur = Math.max(50, ms || 1400); },   /* the grey part fades back in in place (the line itself never left) */
-             farewell: function () { if (!collT0 && !blankW) collT0 = performance.now(); }, reappear: function () { blankW = false; collT0 = 0; if (!regrowT0) regrowT0 = performance.now(); }, reflowCancel: function () { reflowT0 = 0; }, gleamSet: function (g_) { gleam = g_ || null; }, dimSet: function (k_) { dimK = (k_ == null || k_ >= 0.999) ? null : Math.max(0, k_); }, reflow: function (fromFrac, holdMs) { reflowT0 = performance.now(); reflowFrom = Math.max(0, Math.min(1, fromFrac || 0)); reflowHold = Math.max(REFLOW_IN_MS, holdMs || REFLOW_IN_MS); }, baseY: function () { return cv ? cv.clientHeight * yTo : 0; }, markX: function () { var mk = markCur == null ? null : markCur; return (cv && mk != null) ? cv.clientWidth * Math.max(0, Math.min(1, mk)) : null; } };   /* markX (LOG-182 追記⑦): where the decision tick is DRAWN right now - the lesson's bubble points at the tick itself, not at the middle of the line */
+             farewell: function () { if (!collT0 && !blankW) collT0 = performance.now(); }, reappear: function () { blankW = false; collT0 = 0; if (!regrowT0) regrowT0 = performance.now(); }, reflowCancel: function () { reflowT0 = 0; }, gleamSet: function (g_) { gleam = g_ || null; }, focus: function (w) { focusWhat = (w === 'waterfall' || w === 'spectrum' || w === 'stage') ? w : null; }, focusOn: function () { return focusWhat; }, focusK: function () { return { wf: focusWf.k, sp: focusSp.k, st: focusSt.k }; },   /* 'stage' (追記⑪): the whole canvas in shadow, drawn last */   /* LOG-204 追記⑦ */ dimSet: function (k_) { dimK = (k_ == null || k_ >= 0.999) ? null : Math.max(0, k_); }, reflow: function (fromFrac, holdMs) { reflowT0 = performance.now(); reflowFrom = Math.max(0, Math.min(1, fromFrac || 0)); reflowHold = Math.max(REFLOW_IN_MS, holdMs || REFLOW_IN_MS); }, baseY: function () { return cv ? cv.clientHeight * yTo : 0; }, markX: function () { var mk = markCur == null ? null : markCur; return (cv && mk != null) ? cv.clientWidth * Math.max(0, Math.min(1, mk)) : null; } };   /* markX (LOG-182 追記⑦): where the decision tick is DRAWN right now - the lesson's bubble points at the tick itself, not at the middle of the line */
   }
   var DESK_WAVE_Y = 0.58, PH_WAVE_Y = 0.47;   /* where each shell's play line rests. Named because LOG-132 reasons about the phone's from two further places, and three copies of 0.47 would drift apart the first time one of them moved. */
   var wave = makeWave($('#wave'), DESK_WAVE_Y, true), phoneWave = makeWave($('#ph-wave'), PH_WAVE_Y, true);   /* waterfall on both shells */  // phone: slightly above centre
+
+  /* LOG-204 / ADR-013 (the report: 非音樂專業的人因為無法馬上理解，很容易放棄摸索; 看不懂 MIDI). Nothing on the desktop said what the falling bars were. 追記① (the user: 這兩個的位置應該整合成一個，放在右上，到時候的教學模式按鈕旁邊): ONE button in the top right - captions standing next to the things they named walked over the icon column, and the compare stage will want a lesson button in the same corner. The explanation opens on a CLICK, never a hover: a phone has no hover, and hovering to discover something is the exploring the report says beginners will not do. "MIDI" is a file format, not a picture, so it is 音符瀑布 (the user named it). */
+  var waveLabels = (function () {
+    var box = $('#wvl'); if (!box || PHONE) return { relabel: function () {}, sync: function () {} };
+    var btn = null, pan = null, up = false, timer = null, items = [], spotOn = null;
+    function build() {
+      btn = document.createElement('button'); btn.type = 'button'; btn.className = 'wvq'; btn.setAttribute('aria-expanded', 'false');
+      var g = document.createElement('i'); g.textContent = '?'; var t = document.createElement('span');
+      btn.appendChild(g); btn.appendChild(t);
+      pan = document.createElement('div'); pan.className = 'wvp';
+      btn.addEventListener('click', function (e) { e.stopPropagation(); box.classList.toggle('open'); btn.setAttribute('aria-expanded', box.classList.contains('open') ? 'true' : 'false'); if (!box.classList.contains('open')) spot(null); });
+      document.addEventListener('click', function (e) { if (!box.contains(e.target)) { box.classList.remove('open'); if (btn) btn.setAttribute('aria-expanded', 'false'); spot(null); } });
+      box.appendChild(btn); box.appendChild(pan);
+    }
+    function relabel() { if (!btn) return; btn.lastChild.textContent = U.lbl_panel || ''; paint(); }
+    function paint() {
+      if (!pan) return;
+      var key = items.join('|') + '/' + lang; if (pan.dataset.k === key) return;   /* rebuild only when the list or the language actually changed */
+      /* LOG-204 追記⑦: never rebuild the list out from under a pointer. The waterfall comes and goes on its own (WF_CHANCE),
+         and a rebuild mid-hover destroys the element the pointer is on: pointerleave never fires, the spotlight is left
+         stranded and the line under the cursor is a different line. Wait until the reader has moved away. */
+      if (spotOn) { pan.dataset.due = '1'; return; }
+      pan.dataset.due = '';
+      pan.dataset.k = key; pan.innerHTML = '';
+      items.forEach(function (k) {
+        var p = document.createElement('p'), b = document.createElement('b');
+        b.textContent = U['lbl_' + k] || ''; p.appendChild(b); p.appendChild(document.createTextNode(U['lbl_' + k + '_tip'] || ''));
+        /* LOG-204 追記⑦: reading about a thing lights that thing up. tabIndex so a keyboard reaches it too - this is the one place
+           on the page that explains what is on screen, and it may not be mouse-only. */
+        p.tabIndex = 0;
+        p.addEventListener('pointerenter', function () { spot(k); });
+        p.addEventListener('pointerleave', function () { spot(null); });
+        p.addEventListener('focus', function () { spot(k); });
+        p.addEventListener('blur', function () { spot(null); });
+        pan.appendChild(p);
+      });
+    }
+    /* LOG-204 追記⑥ (the user: 舞台中現在就完全找不到那個按鈕了): hiding it on a stage was the wrong read of 追記⑤. The
+       instruction was 「放在右上，到時候的教學模式按鈕旁邊」 - beside the stage's buttons, not instead of them. All three
+       stages carry the same button row (.st-head: the section stage, the compare stage and the four pianos), so the
+       button falls in beside it and rides above the stage layer. Overlapping was the bug; disappearing is not the fix. */
+    function stHead() {
+      var hs = document.querySelectorAll('.st-head');
+      for (var i = 0; i < hs.length; i++) { var r = hs[i].getBoundingClientRect(); if (r.width > 0 && r.height > 0) return { el: hs[i], r: r }; }
+      return null;
+    }
+    /* LOG-204 追記⑦: two halves, one gesture - the canvas tells its own two layers apart (wave.focus), the desktop furniture
+       steps back through one body class. Anything that is NOT what the line being read is about gets out of the way. */
+    var outT = null, SPOT_OUT_MS = 1000;   /* body.spot-out: the slow walk back (os.css) - held a little past its .9 s transition, cleared the moment a line is read again */
+    var CANVAS_ITEM = { waterfall: 1, spectrum: 1 };   /* LOG-204 追記⑨: what the spotlight can point at on the desktop - the canvas's two layers */
+    /* LOG-204 追記⑩/⑪ (the user: 說明面板遮住說明對象 / 滑到某一行時照亮舞台上對應的東西; ⑪: 不要用圈，用陰影): the section stage's six
+       lines have anchors ON THE STAGE, and the answer is the desktop's own shadow language, not a frame - what the line is about
+       stays at full strength, everything else steps back. The row's other parts through .wv-dim (os.css, .45 s in / .9 s out),
+       the canvas - bars, notes, line - through wave.focus('stage') (the same walk), the desktop furniture through body.spot.
+       `tick` has no element to keep, so it wears the lesson's own shade (.tut-iris, the user's step-6 wording 用陰影，唯獨刻度那邊一圈
+       是正常亮度): the whole stage in shadow with one clear circle on the tick, re-aimed every frame as the tick slides. `seam` has
+       no object on screen (a seam is a moment, not a thing), so it lights its row and moves nothing. */
+    var STAGE_ITEM = { seg: 1, tick: 1, zones: 1, gate: 1, swap: 1 }, IRIS_R = 46;   /* IRIS_R: the lesson's radius round the tick (tut irisIn(tickRect, 46)) */
+    var STAGE_PANEL_GAP = 8, STAGE_PANEL_SIDE = 10, STAGE_PANEL_EDGE = 16, STAGE_PANEL_MIN_W = 220, STAGE_PANEL_UNDER_W = 420;   /* GAP: under the button; SIDE: past the row's right edge; EDGE: the viewport margin; MIN_W: less room than this beside the row and the panel steps down under it, UNDER_W wide */
+    var sDimEls = [], sOutT = null, sHint = false, sIris = null, sRaf = 0;
+    function sSurf() { var d = document.querySelector('.dstage'); return d ? d.querySelector('.ds-secs.simple') : null; }
+    function sUi() { var u = document.querySelectorAll('.stage-ui'); for (var i = 0; i < u.length; i++) if (u[i].parentNode === desktop) return u[i]; return null; }
+    function tickBox() { var x = wave.markX(), y = wave.baseY(); if (x == null || !y) return null; return { left: x - 5, right: x + 5, top: y - 16, bottom: y + 10 }; }   /* the tick as the line draws it (makeWave: y-15..y+9, the flag on top) - the same box the lesson's tickRect() uses; desktop px */
+    function anchors(k, s) {   /* -> { dim: [row elements that step back], iris: fn -> the box the shade's clear circle sits on }, or null when there is nothing on screen to point at */
+      var q = function (sel) { return [].slice.call(s.querySelectorAll(sel)); };
+      if (k === 'tick') return tickBox() ? { dim: [], iris: tickBox } : null;   /* the shade covers the row too - no second step-back on top of it */
+      if (k === 'seg') return s.querySelector('.col:not(.hid) .seg.tile') ? { dim: q('.zlab,.zsep') } : null;   /* the tiles stay; labels and | step back */
+      if (k === 'zones') return s.querySelector('.zone') ? { dim: [] } : null;   /* the five bands, labels and tiles together, are the subject: the row stays whole, everything round it steps back */
+      if (k === 'gate') return s.querySelector('.seg.tile[data-g="E"]') ? { dim: q('.zone:not([data-zone="E"]),.zsep') } : null;   /* E's band stays */
+      if (k === 'swap') return s.querySelector('.zone.free') ? { dim: q('.zone.fixed,.zsep') } : null;   /* the two zones that CAN be reordered stay; A, E, I and the | step back */
+      return null;
+    }
+    function irisLay() { if (!sIris) { sRaf = 0; return; } var r = sIris.get(); if (r) { sIris.el.style.setProperty('--x', ((r.left + r.right) / 2).toFixed(1) + 'px'); sIris.el.style.setProperty('--y', ((r.top + r.bottom) / 2).toFixed(1) + 'px'); } sRaf = requestAnimationFrame(irisLay); }   /* the tick slides on a section change (wave MARK_MS) - the circle rides it */
+    function irisIn(ui, get) {
+      var el = document.createElement('div'); el.className = 'tut-iris wvi'; el.setAttribute('aria-hidden', 'true'); el.style.setProperty('--r', IRIS_R + 'px'); ui.appendChild(el);
+      sIris = { el: el, get: get }; if (sRaf) cancelAnimationFrame(sRaf); irisLay();
+      el.getBoundingClientRect();   /* a style flush BEFORE .in, or the shade is born already in and never fades (the lesson's 追記③) */
+      requestAnimationFrame(function () { if (el.isConnected) el.classList.add('in'); });
+    }
+    function irisOut(now) { if (!sIris) return; var f = sIris; sIris = null; if (sRaf) { cancelAnimationFrame(sRaf); sRaf = 0; } if (now) { f.el.remove(); return; } f.el.classList.remove('in'); f.el.classList.add('out'); setTimeout(function () { f.el.remove(); }, SPOT_OUT_MS); }   /* a fading shade stays where it is */
+    function sShow(k) {   /* -> 'tick' (the shade), 'stage' (row + canvas step back), or false when the stage has nothing to point at */
+      var s = sSurf(), ui = sUi(), a = s && ui ? anchors(k, s) : null; if (!a) return false;
+      sHide(false);   /* the previous line's step-back walks out while this one walks in */
+      if (sOutT) { clearTimeout(sOutT); sOutT = null; } s.classList.remove('wv-out');
+      a.dim.forEach(function (e) { e.classList.add('wv-dim'); }); sDimEls = a.dim;
+      if (a.iris) irisIn(ui, a.iris);
+      if (k === 'swap' && !s.classList.contains('hint')) { s.classList.add('hint'); sHint = true; }   /* the ‹ › the lesson shows for the same point - only if they were not already up */
+      return a.iris ? 'tick' : 'stage';
+    }
+    function sHide(now) {
+      var s = sSurf(), had = sDimEls.length || sHint || !!sIris;
+      irisOut(now);
+      sDimEls.forEach(function (e) { e.classList.remove('wv-dim'); }); sDimEls = [];
+      if (sHint) { sHint = false; if (s) s.classList.remove('hint'); }
+      if (s && !now && had) { s.classList.add('wv-out'); if (sOutT) clearTimeout(sOutT); sOutT = setTimeout(function () { sOutT = null; s.classList.remove('wv-out'); }, SPOT_OUT_MS); }
+    }
+    function spot(k) {
+      if (spotOn === k) return; spotOn = k;
+      var canvasK = !!k && !!CANVAS_ITEM[k];
+      var stageK = (!!k && !!STAGE_ITEM[k]) ? sShow(k) : false;   /* false when the stage has nothing to point at yet (no row, no tick) */
+      if (!stageK) sHide(false);
+      try { wave.focus(canvasK ? k : stageK === 'stage' ? 'stage' : null); } catch (e) {}   /* 'tick' is the shade's, not the canvas's */
+      var canSpot = canvasK || !!stageK;
+      document.body.classList.toggle('spot', canSpot);   /* a line with no anchor (seam; a tick not yet drawn): dimming the stage
+         while someone reads about a piece of it would hide the very thing they are reading about. The row still lights. */
+      if (outT) { clearTimeout(outT); outT = null; }
+      document.body.classList.toggle('spot-out', !k);
+      if (!k) outT = setTimeout(function () { outT = null; document.body.classList.remove('spot-out'); }, SPOT_OUT_MS);
+      if (pan) [].forEach.call(pan.children, function (el, i) { el.classList.toggle('lit', !!k && items[i] === k); });
+      if (!k && pan && pan.dataset.due === '1') paint();   /* the rebuild that waited for the pointer to leave */
+      if (!canSpot && pan) [].forEach.call(pan.children, function (el, i) { el.classList.toggle('lit', !!k && items[i] === k); });
+    }
+    function sync() {
+      if (document.hidden) return;
+      var want = NB && !document.querySelector('.desktop.tut-on');   /* the lesson is the one time it stands down: it has its own bubbles and it locks the stage */
+      if (want && !btn) { build(); relabel(); }
+      if (want !== up) { up = want; box.hidden = !want; if (!want) { box.classList.remove('open'); if (btn) btn.setAttribute('aria-expanded', 'false'); spot(null); } }   /* a stage opening under a hovered line must not leave the desktop dimmed */
+      if (!want) return;
+      /* LOG-204 追記⑨ (the user: 互動式段落播放器 上面教學帶過的項目內容放到那個舞台的 ? 裡面): the button travels with the
+         stage, so its contents travel too. On the section stage it carries what the lesson teaches - for a visitor who said
+         「不用，我自己來」, or who watched it once and forgot, this is where that knowledge stays reachable. The wording is the
+         lesson's own points, not new claims. On the plain desktop it goes back to naming what is on the desktop. */
+      var list = document.querySelector('.dstage') ? ['seg', 'tick', 'seam', 'zones', 'gate', 'swap']
+               : (wave.notesOn() ? ['waterfall', 'spectrum'] : ['spectrum']);   /* the waterfall is a 10 % roll (WF_CHANCE): it is only named while it is actually on screen */
+      if (list.join('|') !== items.join('|')) { items = list; paint(); }
+      var h = stHead();   /* on a stage: line up with that stage's own buttons, just to their left */
+      box.classList.toggle('on-stage', !!h);
+      if (h) { box.style.top = Math.round(h.r.top + (h.r.height - 28) / 2) + 'px'; box.style.right = Math.round(Math.max(8, window.innerWidth - h.r.left + 10)) + 'px'; }
+      else if (box.style.top) { box.style.top = ''; box.style.right = ''; }
+      /* LOG-204 追記⑪ (the user: 現在?出現的tab在一個很奇怪的地方; ⑩ before it: 面板蓋住它正在解釋的東西): on the section stage the panel
+         hanging straight under the button lands on the row of letters - the very thing its first line is about - and ⑩'s answer,
+         two columns stepped down under the row, stood in the middle of the screen with nothing to say it was this button's. So it
+         now hangs from the button as ONE column on the clear side of the row: top on the button's bottom edge, left just past the
+         row's right edge, right on the viewport's margin - every edge measured this sync, nothing fixed. It may not reach the tick
+         or the line: past that it gets a max-height and scrolls. The caret (on the box, os.css) stands under the button's centre,
+         kept inside the panel's edges. A viewport with no column beside the row (under STAGE_PANEL_MIN_W) puts it under the row,
+         right-aligned to the button, instead. */
+      var s = h ? sSurf() : null;
+      box.classList.toggle('ds', !!s);
+      if (s && btn && pan) {
+        var br = box.getBoundingClientRect(), qr = btn.getBoundingClientRect(), rr = s.getBoundingClientRect(), hr = desktop.getBoundingClientRect(), vw = window.innerWidth;
+        var edge = vw - STAGE_PANEL_EDGE, left = Math.round(rr.right + STAGE_PANEL_SIDE), top = Math.round(qr.bottom + STAGE_PANEL_GAP);
+        if (edge - left < STAGE_PANEL_MIN_W) { edge = Math.round(qr.right); left = Math.max(STAGE_PANEL_EDGE, edge - Math.min(STAGE_PANEL_UNDER_W, vw - 2 * STAGE_PANEL_EDGE)); top = Math.round(rr.bottom + 26); }   /* 26: room for the ‹ › hints under the tiles */
+        var tb = tickBox(), y = wave.baseY() || 0, floor = tb ? hr.top + tb.top : (y ? hr.top + y - 22 : 0);   /* 22 = the tick's reach above the line (16) and a hair of air */
+        var cx = Math.max(left + 16, Math.min(edge - 16, Math.round((qr.left + qr.right) / 2)));
+        box.style.setProperty('--pt', Math.round(top - br.top) + 'px'); box.style.setProperty('--pr', Math.round(br.right - edge) + 'px'); box.style.setProperty('--pw', (edge - left) + 'px'); box.style.setProperty('--cx', Math.round(br.right - cx) + 'px');
+        pan.style.maxHeight = floor ? Math.max(120, Math.floor(floor - 4 - top)) + 'px' : '';
+      } else if (pan && pan.style.maxHeight) { pan.style.maxHeight = ''; ['--pt', '--pr', '--pw', '--cx'].forEach(function (v) { box.style.removeProperty(v); }); }
+    }
+    if (/[?&]debug/.test(location.search)) window.__wvl = { up: function () { return up; }, head: function () { var h = stHead(); return h ? Math.round(h.r.left) : 0; }, notes: function () { return wave.notesOn(); }, items: function () { return items.slice(); }, open: function () { return box.classList.contains('open'); }, sync: sync, focus: function () { return wave.focusOn(); }, baseY: function () { var c = $('#wave'); return c && c.clientHeight ? wave.baseY() / c.clientHeight : 0.58; },
+      stage: function () { var ir = sIris ? sIris.el : null; return { on: spotOn, dim: sDimEls.length, hint: sHint, tick: tickBox(), wash: wave.focusK ? wave.focusK().st : 0, iris: ir ? { x: parseFloat(ir.style.getPropertyValue('--x')), y: parseFloat(ir.style.getPropertyValue('--y')), r: IRIS_R, 'in': ir.classList.contains('in'), op: +getComputedStyle(ir).opacity } : null, shades: document.querySelectorAll('.stage-ui .tut-iris.wvi').length }; } };   /* LOG-204: the probe asks what the button is offering; 追記⑩: and what the stage rings / dims for the hovered line */
+    timer = setInterval(sync, 400);
+    VIS.on({ hide: function () { clearInterval(timer); timer = null; }, show: function () { if (!timer) timer = setInterval(sync, 400); sync(); } });
+    return { relabel: relabel, sync: sync };
+  })();
 
   // caption: fades in over CONNECT_MS (same as the line), follows the current track
   var caption = (function () {
@@ -1174,7 +1369,10 @@
       return fetch(url + path, { method: method, headers: h, body: body ? JSON.stringify(body) : undefined, mode: 'cors' })
         .then(function (r) { return r.json().then(function (j) { j = j || {}; j.http = r.status; return j; }, function () { return { ok: false, error: 'bad_json', http: r.status }; }); });
     }
-    return { on: function () { return !!url; }, url: function () { return url; }, get: function (p, auth) { return req('GET', p, null, auth); }, post: function (p, b, auth) { return req('POST', p, b, auth); },
+    /* LOG-204 / ADR-013: the visit tally. Fire and forget - a counter may never slow a page down or break one, so every failure is swallowed.
+       Only the named events go (the Worker keeps its own whitelist); nothing about the visitor travels with them, and ?pool=off sends nothing. */
+    function hit(e) { if (!url || !e) return; try { req('POST', '/hit', { e: e }).catch(function () {}); } catch (err) {} }
+    return { on: function () { return !!url; }, url: function () { return url; }, get: function (p, auth) { return req('GET', p, null, auth); }, post: function (p, b, auth) { return req('POST', p, b, auth); }, hit: hit,
              token: token, logout: logout, info: info, who: who, paintOwner: paintOwner, pre: pre, clearPre: clearPre, totp: totp, start: start, arrived: function () { return arrived; }, denied: function () { return denied; }, admin: function () { return !!info() || !!pre() || denied || eeOn('pool'); } };
   })();
 
@@ -1271,6 +1469,8 @@
     (function tick() { var d = new Date(); clock.textContent = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); setTimeout(tick, 15000); })();
     // icons
     document.querySelectorAll('.icon[data-app]').forEach(function (b) { b.addEventListener('click', function () { openApp(b.getAttribute('data-app')); }); });
+    /* LOG-204: which apps people actually open - counted here (the icon and the dock), not inside openApp, so the lesson's own scripted opens are not counted as visits */
+    document.querySelectorAll('.icon[data-app]').forEach(function (b) { b.addEventListener('click', function () { try { pool.hit('app:' + b.getAttribute('data-app')); } catch (e) {} }); });
     // dock
     APPS.forEach(function (a) {
       var b = document.createElement('button'); b.setAttribute('data-app', a); b.innerHTML = '<span>' + (ICON[a] || GLYPH[a]) + '</span>' + esc(TITLES[a]);
@@ -2471,6 +2671,26 @@
     w.classList.remove('minimized');
     focus(w);
     updateDock();
+  }
+  /* LOG-204 追記⑧-② (the user: 設計按下不要彈問題，而是「哪個模式點擊開始時彈，然後出現那個模式的教學」): the offer belongs to a
+     STAGE, not to the app window that lists them - each stage has (or will have) its own lesson, and the visitor should be asked
+     about the one they just chose. 採譜對照 (FUTURE-6) and 四鋼琴 (FUTURE-7) have no lesson written yet, so they are simply not in
+     NB_TUT and start straight away; when those lessons land, adding a key here is the whole wiring.
+     Beginner mode also settles the level on its own (ADR-013 ⑵: always the simple stage) - the old 「你熟悉音樂的段落構造嗎？」asks
+     beginners to grade knowledge they do not have, and 段落構造 is itself one of the words that turns them away. The only thing
+     left worth asking is whether they want to be shown first.
+     Saying YES must clear `tut_seen` (mount() only auto-runs the lesson when it has never been seen - without this the stage
+     opens and quietly does nothing); saying NO must SET it, or the lesson runs anyway on a first-ever visit. */
+  var NB_TUT = { 'demos/interactive-player': 1 };
+  function nbAskFor(id) {
+    if (!NB || PHONE || !NB_TUT[id]) return false;
+    var k = 'nb_tour_asked:' + id;
+    try { if (sessionStorage.getItem(k) === '1') return false; sessionStorage.setItem(k, '1'); } catch (e) {}
+    osAsk(U.nb_ask_t, U.nb_ask_sub, U.nb_ask_yes, U.nb_ask_no, false, function (go) {
+      try { localStorage.setItem('sec_level', 'simple'); if (go) localStorage.removeItem('tut_seen'); else localStorage.setItem('tut_seen', '1'); } catch (e) {}
+      openDemo(id);
+    });
+    return true;
   }
   /* LOG-193 (the user: 將最近更新視窗化置中，update僅在左下角update被手動關閉時使用會跳出視窗化置中update, 置中視窗關閉後他會回歸左下角半透明update開啟直到用戶手動關閉)
      Find's「最近更新」row used to go through openApp -> createWindow, which has no size for an app that never had a window: a TypeError.
@@ -6217,6 +6437,7 @@
          pinned to the corner by design), so the column STEPS ASIDE for as long as a .dstage is on the desktop, on the same
          slide-left the shell already uses when it swaps pages (os.css .swap-out). It comes back on the way out, below. */
       if (!PH) HOST.classList.add('dstage-up');
+      try { pool.hit('stage'); } catch (e) {}   /* LOG-204: how many visits reach a stage at all */
       var e1_ = el, h1_ = head;
       requestAnimationFrame(function () { if (e1_.isConnected) { e1_.classList.add('in'); h1_.classList.add('in'); } });   /* locals, guarded: a stop() racing in before the first frame must not throw on the nulled module vars */
       setTimeout(function () { if (active && el) { var pn = $('.ds-panel', el); if (pn) { pn.style.opacity = '1'; pn.style.transform = 'none'; } if (head) head.style.opacity = '1'; } }, 900);   /* an occluded tab freezes CSS transitions mid-flight — pin the landed state so the panel can never strand half-invisible. LOG-125: .stage-ui was left out of that, and it carries the EXIT BUTTON - come back to a stage whose entrance froze at 8% and the only way off it is invisible. */
@@ -6296,6 +6517,7 @@
         ? function () { if (runTok !== tok || !active) return; var t0 = tut; tut = null; if (t0) t0.end(); trail.log('tut', 'end'); headBtns(); }
         : function () { if (runTok !== tok || !active) return; var to = m === 'simple' ? 'adv' : 'simple'; setLevel(to); trail.log('sec-level', to); remount(to, tok); };
       ag.hidden = !(m === 'simple' && !teaching);
+      if (m === 'simple' && !teaching) { try { eng.hint(true); } catch (e) {} }   /* LOG-205 (the user: 簡易模式自己操作時下面的<>箭頭一樣留著): free simple play keeps the ‹ › the lesson's hands-on stretch shows - after 結束教學 too (the lesson's stop() takes .hint off, then lands here) */
       ag.textContent = U.tut_again;
       ag.onclick = function () { if (runTok !== tok || !active) return; tutAgain = true; trail.log('tut', 'again'); remount('simple', tok); };   /* the opening loop cannot be re-entered mid-song, so the simple stage is rebuilt from its first bar - inside this click, so the context is still born in a gesture */
     }
@@ -7714,6 +7936,7 @@
   function openDemo(id) {
     trail.log('demo', id);
     if (PHONE) return phone.openDemo(id);
+    if (nbAskFor(id)) return;   /* LOG-204 追記⑧-②: the question answers by calling openDemo(id) again */
     var d = D.demos.filter(function (x) { return x.path === id; })[0]; if (!d) return;
     if (d.native === 'stage') { minimize('demos'); return stage.start(d); }   /* shell-native: the desktop itself is the stage, no iframe */   /* LOG-193: whatever else is up is dropped by start() itself (stageStopAll), inside the hold that keeps the music down across the swap - the stops that stood here released it for a beat under the incoming stage */
     if (d.stage_ui) { minimize('demos'); return secStage.start(d); }   /* stage-capable iframe demo: presented on the desktop instead of a window (the phone keeps its panel) */
@@ -7907,7 +8130,7 @@
     }).join('') + '</ul>' : '<p class="note">' + esc(U.pillar_empty) + '</p>';
     var form = '<form class="pform" novalidate><textarea name="text" rows="4" placeholder="' + esc(U.pillar_form_text) + '" maxlength="2000"></textarea><div class="row"><input name="nick" placeholder="' + esc(U.pillar_form_nick) + '" maxlength="24"></div>' +
       (pool.on()
-        ? '<label class="chk"><input type="checkbox" name="trail" checked><span>' + esc(U.pillar_trail_label) + '</span></label><p class="small">' + esc(U.pillar_trail_note) + ' <button type="button" class="tview">' + esc(U.pillar_trail_view) + '</button></p><pre class="trail" hidden></pre><div class="actions"><button class="btn send" type="submit">' + esc(U.pillar_send) + '</button><p class="msg"></p></div>'
+        ? '<label class="chk"><input type="checkbox" name="trail" checked><span>' + esc(U.pillar_trail_label) + '</span></label><p class="small">' + esc(U.pillar_trail_note) + ' <button type="button" class="tview">' + esc(U.pillar_trail_view) + '</button></p><pre class="trail" hidden></pre><p class="small">' + esc(U.src_note) + '</p><div class="actions"><button class="btn send" type="submit">' + esc(U.pillar_send) + '</button><p class="msg"></p></div>'
         : '<p class="small">' + esc(U.pillar_offline) + '</p><div class="actions"><button class="btn sec mail" type="button">' + esc(U.pillar_email_btn) + '</button><p class="msg"></p></div>') + '</form>';
     return '<div class="pillar"><p class="intro">' + esc(U.pillar_intro) + '</p><h2>' + esc(U.pillar_roster) + '</h2>' + roster + '<h2>' + esc(U.pillar_report) + '</h2>' + form + '</div>';
   }
@@ -7930,7 +8153,7 @@
       if (E.trail && E.trail.checked) payload.trail = trail.lines().slice(-200);   /* ADR-007: only now, only if ticked */
       send.disabled = true; msg.className = 'msg'; msg.textContent = U.pillar_sending;
       pool.post('/submit', payload).then(function (r) { if (!r.ok) throw r; msg.className = 'msg ok'; msg.textContent = U.pillar_sent; E.text.value = ''; trail.log('report', 'sent'); })
-        .catch(function () { msg.className = 'msg err'; msg.textContent = U.pillar_fail; }).then(function () { send.disabled = false; });
+        .catch(function (e) { msg.className = 'msg err'; msg.textContent = (e && e.error === 'banned') ? U.pool_banned : U.pillar_fail; }).then(function () { send.disabled = false; });   /* LOG-204: a block says so, and says how to appeal */
     });
   }
 
@@ -8018,7 +8241,7 @@
   }
   function wishFormHTML() {
     if (!pool.on()) return '<p class="note">' + esc(U.wish_offline) + '</p>';
-    return '<form class="pform wform" novalidate><div class="row"><input name="nick" placeholder="' + esc(U.wish_form_nick) + '" maxlength="24"><select name="cat" aria-label="' + esc(U.wish_form_cat) + '">' + WISH_CATS.map(function (c) { return '<option value="' + c + '">' + esc(catLabel(c)) + '</option>'; }).join('') + '</select></div><div class="row"><input name="mail" type="email" placeholder="' + esc(U.wish_form_mail) + '" maxlength="120" autocomplete="email" inputmode="email" spellcheck="false"></div><p class="small">' + esc(U.wish_mail_note) + '</p><textarea name="text" rows="3" placeholder="' + esc(U.wish_form_text) + '" maxlength="600"></textarea><div class="actions"><label class="chk pub"><input type="checkbox" name="pub" checked> ' + esc(U.wish_form_pub) + '</label><button class="btn send" type="submit">' + esc(U.wish_send) + '</button><p class="msg"></p></div></form>';
+    return '<form class="pform wform" novalidate><div class="row"><input name="nick" placeholder="' + esc(U.wish_form_nick) + '" maxlength="24"><select name="cat" aria-label="' + esc(U.wish_form_cat) + '">' + WISH_CATS.map(function (c) { return '<option value="' + c + '">' + esc(catLabel(c)) + '</option>'; }).join('') + '</select></div><div class="row"><input name="mail" type="email" placeholder="' + esc(U.wish_form_mail) + '" maxlength="120" autocomplete="email" inputmode="email" spellcheck="false"></div><p class="small">' + esc(U.wish_mail_note) + '</p><p class="small">' + esc(U.src_note) + '</p><textarea name="text" rows="3" placeholder="' + esc(U.wish_form_text) + '" maxlength="600"></textarea><div class="actions"><label class="chk pub"><input type="checkbox" name="pub" checked> ' + esc(U.wish_form_pub) + '</label><button class="btn send" type="submit">' + esc(U.wish_send) + '</button><p class="msg"></p></div></form>';
   }
   function wireWishForm(body) {
     var f = $('.wform', body); if (!f) return; var E = f.elements, msg = $('.msg', f), send = $('.send', f);
@@ -8034,7 +8257,7 @@
         var mine = mineLoad(); mine.push({ id: r.id || '', ts: Date.now(), lang: lang, nick: nick, cat: cat, text: text, status: 'wishing', pub: pub }); mineSave(mine);   /* V7: the sender sees their own wish at once, marked pending */
         msg.className = 'msg ok'; msg.textContent = U.wish_sent; E.text.value = ''; trail.log('wish', 'sent');
         var wall = $('.wall', body); if (wall) paintWall(wall);
-      }).catch(function () { msg.className = 'msg err'; msg.textContent = U.wish_fail; }).then(function () { send.disabled = false; });
+      }).catch(function (e) { msg.className = 'msg err'; msg.textContent = (e && e.error === 'banned') ? U.pool_banned : U.wish_fail; }).then(function () { send.disabled = false; });   /* LOG-204 */
     });
   }
   /* --- the owner's panel (ADR-009): shown when a pass is in sessionStorage (or the EE flag opened it); GitHub login goes through the Worker,
@@ -8247,7 +8470,7 @@
       else if (step === 2) ctl = glassField('mail', 'mail', { max: 120, ph: U.wish_form_mail });
       else if (step === 3) ctl = glassField('in', 'nick', { max: 24, ph: U.wish_form_nick });
       else ctl = '<div class="well-pub"><p class="note">' + esc(U.well_pub_note) + '</p><div class="well-chips"><button type="button" class="wchip' + (ans.pub ? ' on' : '') + '" data-pub="1">' + esc(U.wish_pub_yes) + '</button><button type="button" class="wchip' + (ans.pub ? '' : ' on') + '" data-pub="0">' + esc(U.wish_pub_no) + '</button></div></div>';   /* LOG-180: public (default) or private, with the why */
-      return '<div class="well-cap"><b>' + esc(title) + '</b><div class="well-done">' + done + '</div></div><p class="well-ask">' + esc(U[ask]) + '</p><div class="well-row">' + ctl + '<p class="msg"></p>' + glassNav(step > 0, step === 4, U.wish_send) + '</div>';
+      return '<div class="well-cap"><b>' + esc(title) + '</b><div class="well-done">' + done + '</div></div><p class="well-ask">' + esc(U[ask]) + '</p><div class="well-row">' + ctl + (step === 4 ? '<p class="small src">' + esc(U.src_note) + '</p>' : '') + '<p class="msg"></p>' + glassNav(step > 0, step === 4, U.wish_send) + '</div>';
     }
     function wire(b, focusIt) {
       chipBub = null; if (!pool.on()) return;
@@ -8552,7 +8775,7 @@
       var done = step > 0 ? '<button type="button" class="wdone" data-step="0">' + cut(ans.text) + '</button>' : '';
       var ctl = step === 0 ? glassField('ta', 'text', { max: 2000, label: U.pillar_form_text })
                            : glassField('in', 'nick', { max: 24, ph: U.pillar_form_nick }) + '<button type="button" class="wchip wtrail' + (ans.trail ? ' on' : '') + '" aria-pressed="' + (ans.trail ? 'true' : 'false') + '">' + esc(U.pillar_trail_label) + '</button>';   /* ADR-007: the trail goes only if this is on */
-      return '<div class="well-cap"><b>' + esc(title) + '</b><div class="well-done">' + done + '</div></div><p class="well-ask">' + esc(U[step === 0 ? 'pillar_ask_text' : 'pillar_ask_nick']) + '</p><div class="well-row">' + ctl + '<p class="msg"></p>' + glassNav(step > 0, step === 1, U.pillar_send) + '</div>';
+      return '<div class="well-cap"><b>' + esc(title) + '</b><div class="well-done">' + done + '</div></div><p class="well-ask">' + esc(U[step === 0 ? 'pillar_ask_text' : 'pillar_ask_nick']) + '</p><div class="well-row">' + ctl + (step === 1 ? '<p class="small src">' + esc(U.src_note) + '</p>' : '') + '<p class="msg"></p>' + glassNav(step > 0, step === 1, U.pillar_send) + '</div>';
     }
     function wire(b, focusIt) {
       if (!pool.on()) return;

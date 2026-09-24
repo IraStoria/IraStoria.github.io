@@ -425,6 +425,84 @@ body[data-lang="zh"] .ls-lbl:last-child,body[data-lang="en"] .ls-lbl:first-child
 .boot-lang button{background:none;border:0;color:var(--dim);font:inherit;cursor:pointer;padding:.2rem .4rem;border-radius:6px}
 .boot-lang button:hover{color:var(--fg)}.boot-lang button.on{color:#28c840}
 .boot-lang[hidden]{display:none}
+/* ---------- LOG-204 / ADR-013 beginner mode: the boot switch (same design as the language picker, one step above it), the icon subtitles it turns on, and the standing captions that name the waterfall and the bars ---------- */
+.nb-switch{position:fixed;left:50%;top:calc(50% + 84px);transform:translateX(-50%);font:var(--boot-font) var(--mono);white-space:nowrap}
+.nb-switch .nb-state{min-width:2.2em;text-align:left}
+body.nb .nb-switch .ls-knob{transform:translateX(18px)}
+body:not(.nb) .nb-switch .ls-knob{transform:translateX(0)}   /* os.css:62 (body[data-lang="zh"] .ls-knob) matches this knob too: without this the switch never moved in zh */
+body:not(.nb) .nb-switch .ls-track{background:rgba(255,255,255,.12);border-color:var(--border)}
+body:not(.nb) .nb-switch .nb-state{color:var(--dim)}
+body.nb .nb-switch .ls-track{background:rgba(40,200,64,.32);border-color:rgba(40,200,64,.5)}
+/* LOG-204 追記④ (the user: 新手模式開啟時 UI 整個新手模式也會亮綠色看起來像是打開一樣): ON lights the WHOLE row - label, state word and track - so the switch reads as lit at a glance, the way the power button does. The label sits a shade under the state word so the row still has a reading order. */
+body.nb .nb-switch .ls-lbl{color:#28c840;opacity:.78}
+body.nb .nb-switch .nb-state{color:#28c840;opacity:1}
+body.nb .nb-switch .ls-track{box-shadow:0 0 16px rgba(40,200,64,.26)}
+body.nb .nb-switch .ls-knob{background:#eafaec}
+.nb-switch:hover .ls-track{background:rgba(255,255,255,.2)}body.nb .nb-switch:hover .ls-track{background:rgba(40,200,64,.5)}
+.nb-switch[hidden]{display:none}
+#boot-lang{top:calc(50% + 150px)}
+.boot-nb-note{position:fixed;left:50%;top:calc(50% + 116px);transform:translateX(-50%);max-width:min(78vw,420px);text-align:center;color:var(--dim);opacity:.55;font:11px/1.5 var(--mono)}
+.boot-nb-note[hidden]{display:none}
+.icon .isub{display:none;font-size:11px;line-height:1.35;opacity:.7;text-align:left}
+/* LOG-204 追記② (the user: 改成跟電腦依樣會跑出個小框框說明這是什麼): the icons keep their quote-mark shape (LOG-167) and the plain-language line becomes a tooltip on hover / keyboard focus. It anchors to the icon's LEFT edge, not its centre - the column sits 16 px from the screen edge and a centred box would hang off it. */
+body.nb .icons .icon{position:relative}
+body.nb .icons .icon:hover,body.nb .icons .icon:focus-within{z-index:9}
+body.nb .icon .isub{display:block;position:absolute;left:4px;top:calc(100% - 4px);white-space:nowrap;max-width:none;padding:4px 9px;border-radius:8px;border:1px solid var(--border);background:rgba(8,10,14,.74);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:var(--fg);opacity:0;pointer-events:none;transition:opacity .16s ease .1s;text-shadow:none}
+body.nb .icons .icon:hover .isub,body.nb .icons .icon:focus-visible .isub{opacity:1}
+body.nb .icons .icon .isub{white-space:nowrap;max-width:none}
+/* LOG-204 追記① (the user: 這兩個的位置應該整合成一個，放在右上，到時候的教學模式按鈕旁邊): one button, top right, room to its left for the lesson button that is coming */
+.wvl{position:absolute;right:16px;top:38px;z-index:7;font:11px/1.6 var(--mono);color:var(--dim);display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.wvl[hidden]{display:none}
+.wvl.on-stage{z-index:21}   /* LOG-204 追記⑥: above .stage-ui (20), so beside the stage buttons instead of under them */
+/* LOG-204 追記⑥ (the user: 為什麼每次都還要我說中文切英文時的 transition 你才要加): the language swap is a choreography - the icon column and the updates panel go left, the dock drops, the tagline flips. Anything new has to be IN it, or it stands still while the rest of the desktop moves. Top right, so it leaves to the right. */
+.desktop.swap-out>.wvl{transform:translateX(140px);opacity:0}
+.desktop.swap-in>.wvl{transform:translateX(140px);opacity:0;transition:none!important}
+.wvl .wvq{display:inline-flex;align-items:center;gap:.4rem;padding:4px 11px;border-radius:999px;border:1px solid var(--border);background:rgba(8,10,14,.42);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);color:var(--dim);font:inherit;cursor:pointer}
+.wvl .wvq:hover,.wvl .wvq[aria-expanded=true]{color:var(--fg);border-color:rgba(255,255,255,.45)}
+.wvl .wvq i{font-style:normal;width:15px;height:15px;line-height:13px;text-align:center;border:1px solid currentColor;border-radius:50%;font-size:10px;flex:none}
+.wvl .wvp{display:none;width:min(34vw,320px);padding:10px 13px;border-radius:12px;border:1px solid var(--border);background:rgba(8,10,14,.62);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);text-align:left}
+.wvl.open .wvp{display:block}
+.wvl .wvp p{margin:0 0 .5em}
+.wvl .wvp p:last-child{margin-bottom:0}
+.wvl .wvp b{display:block;font-weight:400;color:var(--fg);letter-spacing:.04em}
+/* LOG-204 追記⑦ (the user: 其他東西都會變淡或變暗，只有"這是什麼"正在說的東西會亮著…滑鼠移開後慢慢淡出成一般的樣子):
+   the canvas dims its own other layer (os.js wave.focus); everything ELSE on the desktop steps back through one body class.
+   Two classes, two speeds: .spot (pointer on a line) steps back over .45 s on the ease curve (LOG-204 追記⑧, the user: 需要transition，
+   不然現在瞬間亮暗太快了 - .16 s read as a cut; the canvas walks the same curve, os.js FOCUS_IN_MS); .spot-out (os.js keeps it on for ~1 s after the
+   pointer leaves) walks back over .9 s and sets no opacity, so each thing returns to whatever its own rules say. Both carry
+   !important because the desktop's 3 s boot transition (os.css:47, eleven :not() deep) outranks any plain rule - with neither
+   class on, that boot rule is untouched. Specificity is kept at two classes on purpose: a stage's own hide rule
+   (.desktop.stage-on>.icons, three classes) still wins, so a thing a stage has hidden is never brought back to .16.
+   No light cone, no vignette - a flat step back, so the thing being read about is simply the only thing left at full strength. */
+body.spot .icons,body.spot .hero-text,body.spot .sticky,body.spot .updates,body.spot .dock,body.spot .np-cap.show,body.spot .menubar{opacity:.16;transition:opacity .45s ease,transform .6s cubic-bezier(.2,.7,.2,1)!important}
+body.spot-out .icons,body.spot-out .hero-text,body.spot-out .sticky,body.spot-out .updates,body.spot-out .dock,body.spot-out .np-cap,body.spot-out .menubar{transition:opacity .9s ease,transform .6s cubic-bezier(.2,.7,.2,1)!important}
+body.spot .wvl{z-index:22}
+.wvl .wvp p{border-radius:8px;padding:3px 6px;margin-left:-6px;margin-right:-6px;transition:background .18s ease,color .18s ease,opacity .7s ease;outline:none;cursor:default}
+.wvl .wvp p:hover,.wvl .wvp p:focus-visible{background:rgba(255,255,255,.07)}
+.wvl .wvp p.lit{background:rgba(255,255,255,.13);color:rgba(255,255,255,.86)}   /* the line being read: a plain white slab, no glow, no tint */
+body.spot .wvl .wvp p:not(.lit){opacity:.38;transition:background .18s ease,color .18s ease,opacity .45s ease}
+/* LOG-204 追記⑪ (the user: 現在?出現的tab在一個很奇怪的地方 - 追記⑩'s two columns under the row stood in the middle of the screen, far from
+   the button they belong to): on the section stage (.ds, os.js waveLabels.sync) the panel hangs straight down from the button as ONE
+   narrow column on the clear side of the row of letters - its left edge just past the row's right edge, its right edge on the
+   viewport's margin, its top on the button's bottom edge - every edge measured each sync (--pt / --pr / --pw), never a fixed
+   number. It may not cover the row or the tick: its max-height is the tick's top (or the line's), and past that it scrolls. The
+   caret (on the box, not the panel, so a scrolling panel can never clip it) stands under the button's centre, held inside the
+   panel's own edges (--cx). Where the viewport leaves no column beside the row (os.js: under STAGE_PANEL_MIN_W) it steps down
+   under the row instead, right-aligned to the button. Same .45 s drop-in as everything else here; no glow, no tint. */
+.wvl.ds .wvp{position:absolute;right:var(--pr,0);top:var(--pt,52px);width:var(--pw,320px);box-sizing:border-box;overflow:auto;overscroll-behavior:contain;padding:9px 12px;line-height:1.5}   /* a hair tighter than the desktop's 1.6 / 10px, so six lines fit above the tick at 1440x900 without a scrollbar */
+.wvl.ds.open .wvp{display:block;animation:wvdrop .45s ease}
+.wvl.ds .wvp p{margin-bottom:.4em}
+.wvl.ds.open::after{content:"";position:absolute;right:var(--cx,60px);top:calc(var(--pt,52px) - 6px);width:11px;height:11px;transform:translateX(50%) rotate(45deg);border:1px solid var(--border);border-right:0;border-bottom:0;border-radius:2px 0 0 0;background:rgba(8,10,14,.62);pointer-events:none;animation:wvdrop .45s ease}
+@keyframes wvdrop{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+/* the stage answers the hovered line (os.js anchors()) in the desktop's own shadow language (追記⑪, the user: 不要用圈，用陰影): what the
+   line is about keeps its full strength, the parts of the row it is NOT about step back to .3 over the same .45 s ease, and walk
+   back over .9 s (.wv-out, kept on the surface ~1 s after the pointer leaves). :not(.hid) so a part the lesson has not revealed
+   stays at 0. The canvas under the row - bars, notes, line - steps back through wave.focus('stage'), the furniture through
+   body.spot. No frame round anything (追記⑩'s .wvf rings are withdrawn). */
+.ds-secs.simple .wv-dim:not(.hid){opacity:.3;transition:opacity .45s ease}
+.ds-secs.simple.wv-out .zone,.ds-secs.simple.wv-out .zsep,.ds-secs.simple.wv-out .zlab{transition:opacity .9s ease}
+.well-row .small.src{margin:.15rem 0 .35rem;font-size:11px;line-height:1.5;opacity:.55}   /* LOG-204: the one-line notice, on the step that actually sends */
+.well-row .small.src{margin:.15rem 0 .35rem;font-size:11px;line-height:1.5;opacity:.55}   /* LOG-204: the one-line notice on the step that sends */
 
 /* ---------- phone shell, LOG-048: lock screen = power glyph + language picker + update cards; three-stage reveal; in-place language swap; demo panels ---------- */
 .ph-notes{width:min(92vw,360px);margin-top:1rem;display:flex;flex-direction:column;gap:8px}
@@ -749,6 +827,8 @@ body.tr-on #sticky{opacity:0;transform:translate(24px,-40px) rotate(-14deg);poin
 .desktop .stage-ui .tut-frame.glide{transition:opacity .18s ease,transform .18s ease,box-shadow .22s ease,left .34s cubic-bezier(.3,.9,.3,1),top .34s cubic-bezier(.3,.9,.3,1),width .34s cubic-bezier(.3,.9,.3,1),height .34s cubic-bezier(.3,.9,.3,1),border-radius .34s ease}   /* 追記④: box-shadow .22 s so a colour set 0.1 s into the glide is complete on arrival (the rings meet on E already in E's colour) */   /* 追記③ (the user: A 框快速向右、I 框快速向左，在 E 撞在一起後變成 E 的框色): a ring on the move - os.js keeps writing the box every frame, the transition carries it there */
 .desktop .stage-ui .tut-frame.pulse.in{animation:tutbreath 1.8s ease-in-out infinite}   /* the hand-over: A's ring breathes until it is pressed */
 @keyframes tutbreath{0%,100%{opacity:1}50%{opacity:.45}}
+.desktop .stage-ui .tut-iris.wvi{transition:opacity .45s ease}   /* LOG-204 追記⑪: the help panel's shade for 決策刻度 (os.js waveLabels irisIn) - the lesson's own iris (below), at the panel's pace: in on the .45 s ease body.spot and .wv-dim walk, one clear circle on the tick, everything else in shadow */
+.desktop .stage-ui .tut-iris.wvi.out{transition:opacity .9s ease}   /* and out slowly, with them */
 /* ★ 追記② the iris (the user, step 6: 用陰影，唯獨刻度那邊一圈是正常亮度): a shade over the whole stage with one clear circle cut out of it;
    os.js writes the circle's centre and radius every frame (it closes in on the tick, then opens out and takes the shade with it) */
 .desktop .stage-ui .tut-iris{position:absolute;inset:0;z-index:1;pointer-events:none;background:rgba(2,3,6,.66);opacity:0;transition:opacity .35s ease;

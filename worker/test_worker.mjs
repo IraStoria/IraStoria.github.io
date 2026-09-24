@@ -796,5 +796,95 @@ await test('bug show (LOG-169): a report is hidden until the owner switches it o
   eq((await call(env, '/bugs', { method: 'POST', body: {} })).status, 405);
 });
 
+// ---------------------------------------------------------------------------
+// LOG-204 / ADR-013: the visit counter, 30-day source retention, the block list
+// ---------------------------------------------------------------------------
+
+await test('LOG-204 hit: known events count, free text is refused, GET is 405', async () => {
+  const env = makeEnv();
+  eq((await call(env, '/hit', { body: { e: 'boot' } })).status, 200);
+  eq((await call(env, '/hit', { body: { e: 'app:works' } })).status, 200);
+  eq((await call(env, '/hit', { body: { e: 'tour_done' } })).status, 200);
+  eq((await call(env, '/hit', { body: { e: 'app:../../evil' } })).status, 400, 'an event name becomes part of a KV key');
+  eq((await call(env, '/hit', { body: { e: 'whatever' } })).status, 400);
+  eq((await call(env, '/hit', { body: {} })).status, 400);
+  eq((await call(env, '/hit', { method: 'GET' })).status, 405);
+  const st = await call(env, '/admin/stats', { headers: bearer(env) });
+  eq(st.status, 200);
+  const day = Object.keys(st.data.days)[0];
+  eq(st.data.days[day].boot, 1);
+  eq(st.data.days[day]['app:works'], 1);
+});
+
+await test('LOG-204 hit: uniq counts a person once a day, two people twice; browsing stores no address', async () => {
+  const env = makeEnv();
+  await call(env, '/hit', { body: { e: 'boot' }, ip: '203.0.113.9' });
+  await call(env, '/hit', { body: { e: 'stage' }, ip: '203.0.113.9' });
+  await call(env, '/hit', { body: { e: 'boot' }, ip: '198.51.100.4' });
+  const st = await call(env, '/admin/stats', { headers: bearer(env) });
+  const day = Object.keys(st.data.days)[0];
+  eq(st.data.days[day].uniq, 2, 'two addresses, two people; three hits');
+  eq(st.data.days[day].boot, 2);
+  const keys = [...env.POOL._store.keys()];
+  ok(keys.some((k) => k.startsWith('uq:')), 'the daily hash is kept for a day');
+  ok(!keys.some((k) => k.startsWith('ip:')), 'browsing never stores an address');
+  const raw = JSON.stringify([...env.POOL._store.entries()]);
+  ok(!raw.includes('203.0.113.9') && !raw.includes('198.51.100.4'), 'no raw address anywhere after a page view');
+});
+
+await test('LOG-204 retention: a submission keeps its address for the owner only, never in a public or list route', async () => {
+  const env = makeEnv();
+  const r = await call(env, '/submit', { body: { type: 'wish', lang: 'zh', nick: 'a', cat: 'other', text: 'hello' }, ip: '203.0.113.42' });
+  eq(r.status, 200);
+  const id = r.data.id;
+  await call(env, '/admin/update', { headers: bearer(env), body: { id, approved: true } });
+  ok(!JSON.stringify((await call(env, '/wishes')).data).includes('203.0.113.42'), 'GET /wishes never carries it');
+  ok(!JSON.stringify((await call(env, '/admin/list?type=wish', { headers: bearer(env) })).data).includes('203.0.113.42'), 'not even the inbox listing - it is asked for, item by item');
+  const src = await call(env, '/admin/src?id=' + id, { headers: bearer(env) });
+  eq(src.status, 200);
+  eq(src.data.ip, '203.0.113.42');
+  eq(src.data.kept, true);
+  ok(/^[0-9a-f]{16}$/.test(src.data.iph), 'the hash comes back too: that is what a block is made of');
+  eq((await call(env, '/admin/src?id=' + id)).status, 401, 'no pass, no address');
+  await call(env, '/admin/delete', { headers: bearer(env), body: { id } });
+  ok(!env.POOL._store.has('ip:' + id), 'deleting the wish deletes the address with it');
+});
+
+await test('LOG-204 block: keyed by the hash, refuses writes, leaves reading alone, and lifts again', async () => {
+  const env = makeEnv();
+  const r = await call(env, '/submit', { body: { type: 'bug', lang: 'zh', text: 'spam' }, ip: '203.0.113.77' });
+  const id = r.data.id;
+  eq((await call(env, '/admin/ban', { headers: bearer(env), body: { id, days: 90, note: 'flood' } })).data.banned, true);
+  const again = await call(env, '/submit', { body: { type: 'bug', lang: 'zh', text: 'spam 2' }, ip: '203.0.113.77' });
+  eq(again.status, 403);
+  eq(again.data.error, 'banned');
+  eq((await call(env, '/vote', { body: { id: '1-ab' }, ip: '203.0.113.77' })).status, 403);
+  eq((await call(env, '/bugs', { ip: '203.0.113.77' })).status, 200, 'a block is about writing, never about reading');
+  eq((await call(env, '/submit', { body: { type: 'bug', lang: 'zh', text: 'innocent' }, ip: '198.51.100.9' })).status, 200);
+  eq((await call(env, '/admin/ban', { headers: bearer(env), body: { id, off: true } })).data.banned, false);
+  eq((await call(env, '/submit', { body: { type: 'bug', lang: 'zh', text: 'back' }, ip: '203.0.113.77' })).status, 200);
+});
+
+await test('LOG-204 IPv6: one /64 is one source, a different /64 is another', async () => {
+  const env = makeEnv();
+  const a = '2001:db8:abcd:1234:1111:2222:3333:4444';
+  const b = '2001:db8:abcd:1234:9999:8888:7777:6666';
+  const c = '2001:db8:abcd:5678:1111:2222:3333:4444';
+  const r = await call(env, '/submit', { body: { type: 'bug', lang: 'zh', text: 'x' }, ip: a });
+  await call(env, '/admin/ban', { headers: bearer(env), body: { id: r.data.id } });
+  eq((await call(env, '/submit', { body: { type: 'bug', lang: 'zh', text: 'y' }, ip: b })).status, 403, 'rotating inside the /64 does not shake the block off');
+  eq((await call(env, '/submit', { body: { type: 'bug', lang: 'zh', text: 'z' }, ip: c })).status, 200, 'another /64 is another person');
+});
+
+await test('LOG-204 block: the key is the hash, and the length is checked', async () => {
+  const env = makeEnv();
+  const r = await call(env, '/submit', { body: { type: 'bug', lang: 'zh', text: 'x' }, ip: '203.0.113.5' });
+  await call(env, '/admin/ban', { headers: bearer(env), body: { id: r.data.id, days: 1 } });
+  const key = [...env.POOL._store.keys()].find((k) => k.startsWith('ban:'));
+  ok(key && !key.includes('203.0.113.5'), 'blocks are keyed by the hash, not the address');
+  eq((await call(env, '/admin/ban', { headers: bearer(env), body: { id: r.data.id, days: 0 } })).status, 400);
+  eq((await call(env, '/admin/ban', { headers: bearer(env), body: { iph: 'nothex' } })).status, 400);
+});
+
 console.log(`\n${passed}/${passed + failed} passed`);
 process.exit(failed ? 1 : 0);

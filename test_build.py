@@ -1028,7 +1028,7 @@ ok("LOG-191 (使用者: 最小化或失去焦點時再重新打開會有畫面�
        # the closing chart: shuffle writes carry the layout they were made against
        "fin.spread = true; fin.gen = (fin.gen || 0) + 1;",
        "function apply() { if ((fin.gen || 0) !== gen) return;"))
-   and _js182.count("VIS.on(") == 7   # the lesson, the transport, the wave/waterfall loop, the piano stage, the dock panels, the wishing well, the pillar
+   and _js182.count("VIS.on(") == 8   # the lesson, the transport, the wave/waterfall loop, the piano stage, the dock panels, the wishing well, the pillar, and (LOG-204) the play-line captions
    and "q.splice(i, 1); i--; try { fn(); }" not in _js182   # the old insertion-order drain is gone
    and "byeTimer = setTimeout" not in _demo191 and "byeAt = cur.end - 2 * barSec(OUTRO.bpmOut);" in _demo191
    and "if (byeAt !== null && now >= byeAt) { byeAt = null; document.body.classList.add('bye'); }" in _demo191)

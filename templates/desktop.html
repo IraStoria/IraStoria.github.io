@@ -25,12 +25,16 @@
     <div class="base"></div>
   </div>
   <button id="boot-btn" class="boot-btn power" aria-label="power on" title="power on">{{ui_boot_power}}</button>
+  <!-- LOG-204 / ADR-013 (the user: 電源開啟下方，語言上方多一個開關鈕，設計跟中英切換一樣的鈕): beginner mode sits one step above the language picker and wears the same two-button design -->
+  <button type="button" class="lang-switch nb-switch" id="boot-nb" role="switch" aria-checked="true" aria-label="{{ui_nb_label}}"><span class="ls-lbl">{{ui_nb_label}}</span><span class="ls-track"><i class="ls-knob"></i></span><span class="ls-lbl nb-state">{{ui_nb_on}}</span></button>
+  <div class="boot-nb-note" id="boot-nb-note">{{ui_nb_note}}</div>
   <div class="boot-lang" id="boot-lang" role="group" aria-label="language"><button type="button" data-l="zh">中文</button><span>|</span><button type="button" data-l="en">English</button></div>
 </div>
 
 <div id="desktop" class="desktop" hidden>
   <div class="veil" aria-hidden="true"></div>
   <canvas id="wave" class="wave" aria-hidden="true"></canvas>
+  <div class="wvl" id="wvl" hidden></div>   <!-- LOG-204 / ADR-013 (the user: 這兩個的位置應該整合成一個，放在右上，到時候的教學模式按鈕旁邊): one help button top right, with room to its left for the coming lesson button; built by os.js -->
   <header class="menubar">
     <span class="menubar-brand">⌘ {{ui_os_name}}</span>
     <span class="menubar-mid">{{tagline}}</span>
@@ -42,15 +46,15 @@
 
   <div class="icons" id="icons">
     <!-- LOG-167 (the user: 做成上引號形狀): the top row runs right from the corner, the stem runs down from it; DOM order = visual order -->
-    <button class="icon" data-app="works"><span class="glyph"></span><span>{{ui_app_works}}</span></button>
-    <button class="icon" data-app="demos"><span class="glyph"></span><span>{{ui_app_demos}}</span></button>
-    <button class="icon" data-app="player"><span class="glyph"></span><span>{{ui_app_player}}</span></button>
-    <button class="icon" data-app="terminal"><span class="glyph"></span><span>{{ui_app_terminal}}</span></button>
-    <button class="icon" data-app="about"><span class="glyph"></span><span>{{ui_app_about}}</span></button>
-    <button class="icon" data-app="contact"><span class="glyph"></span><span>{{ui_app_contact}}</span></button>
-    <button class="icon" data-app="wishpool"><span class="glyph"></span><span>{{ui_app_wishpool}}</span></button>
-    <button class="icon" data-app="pillar"><span class="glyph"></span><span>{{ui_app_pillar}}</span></button>
-    <button class="icon" data-app="articles"><span class="glyph"></span><span>{{ui_app_articles}}</span></button>
+    <button class="icon" data-app="works"><span class="glyph"></span><span class="ilbl">{{ui_app_works}}</span><span class="isub">{{ui_app_works_sub}}</span></button>
+    <button class="icon" data-app="demos"><span class="glyph"></span><span class="ilbl">{{ui_app_demos}}</span><span class="isub">{{ui_app_demos_sub}}</span></button>
+    <button class="icon" data-app="player"><span class="glyph"></span><span class="ilbl">{{ui_app_player}}</span><span class="isub">{{ui_app_player_sub}}</span></button>
+    <button class="icon" data-app="terminal"><span class="glyph"></span><span class="ilbl">{{ui_app_terminal}}</span><span class="isub">{{ui_app_terminal_sub}}</span></button>
+    <button class="icon" data-app="about"><span class="glyph"></span><span class="ilbl">{{ui_app_about}}</span><span class="isub">{{ui_app_about_sub}}</span></button>
+    <button class="icon" data-app="contact"><span class="glyph"></span><span class="ilbl">{{ui_app_contact}}</span><span class="isub">{{ui_app_contact_sub}}</span></button>
+    <button class="icon" data-app="wishpool"><span class="glyph"></span><span class="ilbl">{{ui_app_wishpool}}</span><span class="isub">{{ui_app_wishpool_sub}}</span></button>
+    <button class="icon" data-app="pillar"><span class="glyph"></span><span class="ilbl">{{ui_app_pillar}}</span><span class="isub">{{ui_app_pillar_sub}}</span></button>
+    <button class="icon" data-app="articles"><span class="glyph"></span><span class="ilbl">{{ui_app_articles}}</span><span class="isub">{{ui_app_articles_sub}}</span></button>
   </div>
 
   <section class="hero-text">

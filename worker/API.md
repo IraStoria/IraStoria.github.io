@@ -25,7 +25,9 @@
 - CORS：`Access-Control-Allow-Origin` 只回 `ALLOWED_ORIGINS` 內符合的那個 Origin；`OPTIONS` 預檢 204。寫入端點（POST）Origin 不在名單 → 403 `origin`。GET 不擋 Origin（V11：不當主防線），但有速率限制。
 - 速率限制（KV key `rl:<route>:<ip>`，TTL 秒）：`submit` 5 次／10 分；`vote` 30 次／10 分；`wishes` 60 次／分；`mine` 30 次／分；`totp`（`POST /auth/totp`）5 次／10 分。超過 → 429 `rate`。
 - 單筆大小：body 上限 32 KB（bug 含軌跡）／wish 8 KB → 413 `size`。
-- IP 只存 SHA-256 前 16 hex（`iph`），不存原 IP、不存 UA 全文以外的識別。
+- **瀏覽**只存雜湊：`iph` ＝ SHA-256 前 16 hex（IPv6 取 /64 前綴後才雜湊·LOG-204），速率限制與 `v:` 用同一個值。
+- **寫入**（`POST /submit`／`POST /vote`）另存**原始位址** 30 天於獨立的 `ip:` key（LOG-204 / ADR-014）：只供濫用處理，**永不**出現在任何公開端點或 `GET /admin/list`，只有 `GET /admin/src?id=` 回得到；刪除該筆即一併刪除；到期自動消失。前端在送出前一行告知（`site.json` `ui.src_note`）。
+- **封鎖**用雜湊（`ban:<iph>`）不是原始位址 ⇒ 位址過期後封鎖照樣有效；預設 90 天到期（共用／浮動位址不可永久擋），`POST /admin/ban {off:true}` 可解除。被擋只影響**寫入**，讀站不受影響（403 `banned`）。
 
 ## 資料形狀（KV value，JSON）
 ```
@@ -38,6 +40,11 @@ pub:wishes        { ts, items:[ 公開欄位版 wish ] }   ← 站主每次管�
 pub:bugs          { ts, items:[ { id, ts, lang, nick, text, status } ] }   ← LOG-169 站主「顯示：開啟」的回報；GET /bugs 直接回這份（永不含 trail／meta／iph）
 rl:<route>:<ip>   計數（TTL）
 v:<id>:<iph>      "1"（TTL 86400）＝這個 IP 今天對這則已 +1
+ip:<id>           { ip, geo, ts }（TTL 30 天·LOG-204）＝該筆投稿的原始來源位址；`ip:vote:<iph>` 則是每個來源一支（非每票一支）
+                  被標記為濫用（`POST /admin/ban` 帶 id）時改存 180 天
+ban:<iph>         { ts, until, note }（TTL＝天數·LOG-204）＝寫入端點的封鎖名單
+cnt:<YYYY-MM-DD>:<event>   整數（TTL 400 天·LOG-204）＝當日事件計數；event ∈ boot｜stage｜tour_start｜tour_done｜tour_skip｜nb_on｜nb_off｜app:<key>｜uniq
+uq:<YYYY-MM-DD>:<dayhash>  "1"（TTL 2 天）＝當日不重複人數用的每日輪替雜湊 HMAC(TOKEN_SECRET, "uq:<day>:<ip>")；隔天輸入就變了，串不起來
 ```
 `cat` ∈ `transcription | design | code | feature | interactive | other`（六類，前端顯示雙語標籤）。
 `link` 存穩定識別：`work:<works.json id>`／`app:<app key>`／`demo:<demos path>`；前端解析不到就只顯示徽章不顯示連結（V13）。
@@ -55,6 +62,9 @@ Body：`{ type:"wish", lang, nick, cat, text, email? }` 或 `{ type:"bug", lang,
 
 ### `GET /bugs`（LOG-169）
 回 `{ ok:true, ts, items:[ { id, ts, lang, nick, text, status } ] }`——只含站主「顯示：開啟」（`approved:true`）的 bug 回報，只有這六個欄位（軌跡、meta、iph 結構上不會出）。`Cache-Control: public, max-age=60`。速率 60 次／分。前端：桌面恥辱柱彈幕與手機名冊把它們排在手編名冊之後。
+
+### `POST /hit`（LOG-204）
+Body `{ e }`。`e` 必須是白名單事件（見上方 `cnt:`）或符合 `^app:[a-z]{2,12}$`，否則 400 `invalid`——**事件名會變成 KV key 的一部分，永遠不可以是自由文字**。累加 `cnt:<今日>:<e>`；另以每日輪替雜湊算不重複人數（`uq:` 存 2 天）累加 `cnt:<今日>:uniq`。不種 cookie、不存原始位址、無任何逐人紀錄。速率 120 次／分。沒有公開的讀取端點（只有 `GET /admin/stats`）。
 
 ### `POST /mine`
 Body `{ ids:[ …最多 10 個 id ] }`（id 為非空字串 ≤ 64 字）。回 `{ ok:true, states:{ <id>: "pending" | "public" | "gone" } }`——`pending`＝存在但未核准、`public`＝已核准（此刻在 `GET /wishes` 裡）、`gone`＝不存在（被刪除、或本來就沒有；bug 的 id 也算 gone）。除這三個字以外不回任何欄位。用途：投稿者的瀏覽器把自己那份「審核中」副本（`localStorage.wish_mine`）拿來核對，被刪的立刻消失、核准的改由公開卡片接手（LOG-161 追記⑥）。速率 30 次／分；形狀不對 → 400 `invalid`。
@@ -89,6 +99,9 @@ Body `{ pre, code }`。
 - `GET /admin/list?type=wish|bug` → `{ ok:true, items:[ 全欄位含未審 ] }`（bug 含 trail）。
 - `POST /submit` (LOG-180) wish 可帶 `public: boolean`（預設 true）；`false`＝不公開：站主收件匣看得到，放行後也**永不進 `GET /wishes`**，`/mine` 對投稿者一直回 `pending`。
 - `POST /admin/update` Body `{ id, approved?, status?, reply?, replyLang?, link?, read? }` → 只改給的欄位（`status` 依 type 驗證：wish 用五個願望狀態，bug 用 `new|open|watch|fixed|declined`，混用 → 400；bug 的 `approved` 就是收件匣的「顯示」開關）；改完若是 wish 重建 `pub:wishes`，是 bug 重建 `pub:bugs`。回 `{ ok:true, item }`。**寄信（LOG-165）**：wish 有 `email`、且這次改動對許願者算新聞——放行（false→true）／`status` 變了／`reply` 新增或改變——且 `MAIL_API_KEY`＋`MAIL_FROM` 都有設 → 背景寄**一封**純文字信（依願望 `lang`；主旨 `許願池：你的願望有新進展`／`Wishing well: news on your wish`，`done` 時加「（已實現）」／「(granted)」；內文＝暱稱、願望前 80 字、變了什麼、站址、退訂連結）。只改 `link`、取消放行、原值重存、bug 的更新一律不寄；寄信失敗不影響回應。
+- `GET /admin/src?id=<id>` (LOG-204) → `{ ok, id, iph, ip, geo, kept, banned, until }`。**全站唯一會回傳原始位址的地方**，且一次只回一筆（收件匣列表不帶）。`kept:false` ＝已過 30 天自動消失。
+- `POST /admin/ban` (LOG-204) Body `{ id? | iph?, days?(預設 90，1–3650), note?, off? }` → `{ ok, iph, banned, until }`。用 `id` 時從該筆取 `iph`；`off:true` 解除。帶 `id` 封鎖時，該筆的 `ip:` 保存期限延長為 180 天。
+- `GET /admin/stats?days=` (LOG-204) → `{ ok, days:{ "YYYY-MM-DD": { <event>: n } } }`，預設 30 天、上限 365。純彙總，無逐人資料。
 - `POST /admin/delete` Body `{ id }` → 刪除；wish 則重建 `pub:wishes`。回 `{ ok:true }`。
 
 ## 健康檢查

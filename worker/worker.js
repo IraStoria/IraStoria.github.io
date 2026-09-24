@@ -2,8 +2,13 @@
 //
 // One Cloudflare Worker + one KV namespace (binding `POOL`) serving both the
 // bug-report wall and the wish pool. Zero dependencies, ES-module syntax.
-// Privacy: raw IPs are never stored or logged; only the first 16 hex of a
-// SHA-256 digest (`iph`) is kept, and rate-limit keys use that digest too.
+// Privacy (LOG-204 / ADR-007 v2): BROWSING is never tracked - GET routes and the
+// visit counter only ever see a salted hash that is thrown away daily. WRITING is
+// different: a wish, a bug report or a vote keeps its raw source address for
+// IP_TTL_S (30 days) under a separate `ip:` key, for abuse handling only. It is
+// never returned by a public route, never in /admin/list, and expires by itself.
+// Blocking does NOT need it: ban keys are keyed by the hash, so a block outlives
+// the address it was made from.
 
 // ---------------------------------------------------------------------------
 // Constants (mirror API.md)
@@ -24,8 +29,18 @@ const LIMIT = {
   link: 200,
   email: 120,       // LOG-165: the wisher's optional address
 };
+// LOG-204: what the visit counter accepts. Anything else is dropped - the event
+// name becomes part of a KV key, so it may never be free text.
+const HIT_EVENTS = ['boot', 'stage', 'tour_start', 'tour_done', 'tour_skip', 'nb_on', 'nb_off'];
+const HIT_APP_RE = /^app:[a-z]{2,12}$/;              // app:works, app:demos, ...
+const CNT_TTL_S = 400 * 86400;                        // a daily tally keeps for a bit over a year
+const IP_TTL_S = 30 * 86400;                          // LOG-204: a submission's raw address, for abuse handling
+const IP_ABUSE_TTL_S = 180 * 86400;                   // ... extended once the owner marks the source as abuse
+const BAN_DEFAULT_DAYS = 90;                          // blocks expire on their own: shared and rotating addresses would otherwise trap innocents
+const BAN_MAX_DAYS = 3650;
 // Rate limits: [max hits, window seconds]
 const RATE = {
+  hit: [120, 60],
   submit: [5, 600],
   vote: [30, 600],
   wishes: [60, 60],
@@ -253,9 +268,40 @@ function originAllowed(request, env) {
 // ---------------------------------------------------------------------------
 // Client identity (hashed) and rate limiting
 // ---------------------------------------------------------------------------
-async function clientHash(request) {
+function clientIp(request) {
   const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || '0.0.0.0';
-  return (await sha256hex(ip.split(',')[0].trim())).slice(0, 16);
+  return ip.split(',')[0].trim();
+}
+// LOG-204: an IPv6 address is hashed on its /64 prefix. A home v6 address changes
+// often, so hashing all 128 bits makes every visit a new stranger - rate limits,
+// one-vote-per-day and blocks all stop working. v4 is hashed whole.
+function ipKeyable(ip) {
+  if (ip.includes(':')) { const g = ip.split(':'); return g.slice(0, 4).join(':') + '::/64'; }
+  return ip;
+}
+async function clientHash(request) {
+  return (await sha256hex(ipKeyable(clientIp(request)))).slice(0, 16);
+}
+// LOG-204: the visit counter's identifier. HMAC(secret, ip + today) - it tells two
+// visitors apart WITHIN one day and nothing more: tomorrow the input changes, so
+// the same person is a different number and no visit can be joined to another.
+async function dayHash(env, request, day) {
+  if (!env.TOKEN_SECRET) return '';
+  return (await hmacB64url(env.TOKEN_SECRET, `uq:${day}:${ipKeyable(clientIp(request))}`)).slice(0, 22);
+}
+const today = () => new Date().toISOString().slice(0, 10);
+// LOG-204: blocks live at ban:<iph>. KV expiry does the un-banning, so nothing has
+// to be swept; `until` is kept in the record only so the owner can read it back.
+async function banCheck(env, iph) {
+  const b = await getJson(env, `ban:${iph}`);
+  return b && (!b.until || b.until > Date.now()) ? b : null;
+}
+// LOG-204: the raw source address of ONE submission, in its own key so that
+// loadAll()/admin list never carry it, and so it expires without touching the item.
+async function keepIp(env, key, request, ttl) {
+  try {
+    await env.POOL.put(`ip:${key}`, JSON.stringify({ ip: clientIp(request), geo: geo(request), ts: Date.now() }), { expirationTtl: ttl });
+  } catch { /* the submission itself must never fail because of this */ }
 }
 // Fixed-window counter in KV: rl:<route>:<iph> -> { n, reset }.
 // Returns true when the caller is over the limit.
@@ -444,6 +490,7 @@ async function handleSubmit(request, env, ctx, iph) {
       approved: false, status: 'wishing', votes: 0, reply: '', replyLang: '', link: '', email, iph, pub,
     };
     await env.POOL.put(`wish:${id}`, JSON.stringify(item));
+    await keepIp(env, id, request, IP_TTL_S);   // LOG-204: abuse handling only; separate key, 30 days, never public
     notifySubmit(env, ctx, '許願池 · 新願望', nick, text);
     return json(200, { ok: true, id });
   }
@@ -465,9 +512,40 @@ async function handleSubmit(request, env, ctx, iph) {
   const meta = { shell: str(m.shell, 32), ua: str(m.ua, 400), vw: num(m.vw), vh: num(m.vh), ver: str(m.ver, 64), page: str(m.page, 300) };
   const item = { id, type: 'bug', ts, lang: data.lang, nick, text, trail, meta, read: false, status: 'new', approved: false, iph };   // approved (LOG-169): the owner's 顯示 switch - off until turned on
   await env.POOL.put(`bug:${id}`, JSON.stringify(item));
+  await keepIp(env, id, request, IP_TTL_S);   // LOG-204: abuse handling only; separate key, 30 days, never public
   notifySubmit(env, ctx, '恥辱柱 · 新回報', nick, text);
   return json(200, { ok: true, id });
 }
+// POST /hit — the visit counter (LOG-204 / ADR-013). Two tallies a day and nothing
+// else: cnt:<day>:<event> counts the events, cnt:<day>:uniq counts how many
+// different people were here (uq: keys hold the daily hash for two days, then go).
+// No cookie, no raw address, no per-visitor record. The numbers are the owner's:
+// there is no public route that reads them back.
+async function handleHit(request, env, iph) {
+  if (await rateLimited(env, 'hit', iph)) return fail(429, 'rate');
+  const r = await readJson(request, 1024);
+  if (r.err) return r.err;
+  const e = r.data.e;
+  if (!isStr(e) || !(HIT_EVENTS.includes(e) || HIT_APP_RE.test(e))) return fail(400, 'invalid');
+  const day = today();
+  await bump(env, `cnt:${day}:${e}`);
+  const uq = await dayHash(env, request, day);
+  if (uq) {
+    const ukey = `uq:${day}:${uq}`;
+    if (!(await env.POOL.get(ukey))) {
+      await env.POOL.put(ukey, '1', { expirationTtl: 2 * 86400 });
+      await bump(env, `cnt:${day}:uniq`);
+    }
+  }
+  return json(200, { ok: true });
+}
+// Read-modify-write on a KV integer. Two hits in the same instant can lose one;
+// for a personal site's tally that is cheaper than any counter that would not.
+async function bump(env, key) {
+  const n = parseInt((await env.POOL.get(key)) || '0', 10) || 0;
+  await env.POOL.put(key, String(n + 1), { expirationTtl: CNT_TTL_S });
+}
+
 // Bark on accepted submissions unless BARK_ON_SUBMIT is "0".
 function notifySubmit(env, ctx, title, nick, text) {
   if (String(env.BARK_ON_SUBMIT ?? '') === '0') return;
@@ -510,6 +588,7 @@ async function handleMine(request, env, iph) {
 // POST /vote — +1 on an approved wish, once per IP per day.
 async function handleVote(request, env, iph) {
   if (await rateLimited(env, 'vote', iph)) return fail(429, 'rate');
+  await keepIp(env, `vote:${iph}`, request, IP_TTL_S);   // LOG-204: ONE key per source (not per vote) - enough to answer "who stuffed this", cheap to hold
   const r = await readJson(request, LIMIT.wishBody);
   if (r.err) return r.err;
   const id = r.data.id;
@@ -659,6 +738,63 @@ async function handleUnsub(url, env, iph) {
   return page(found.item.lang !== 'en', true);
 }
 
+// GET /admin/src?id= — the one place a raw address is ever handed out, and only to
+// the owner, only for the item asked about (LOG-204). Gone by itself after 30 days;
+// `iph` comes back too, because that - not the address - is what a block is made of.
+async function handleAdminSrc(url, env) {
+  const id = url.searchParams.get('id') || '';
+  if (!/^[0-9]+-[0-9a-f]+$/.test(id)) return fail(400, 'invalid');
+  const found = await findById(env, id, ['wish', 'bug']);
+  if (!found) return fail(404, 'notfound');
+  const rec = await getJson(env, `ip:${id}`);
+  const iph = found.item.iph || '';
+  const ban = iph ? await banCheck(env, iph) : null;
+  return json(200, { ok: true, id, iph, ip: rec ? rec.ip : '', geo: rec ? rec.geo : '', kept: !!rec, banned: !!ban, until: ban ? ban.until : 0 });
+}
+
+// POST /admin/ban — block or unblock a source. Keyed by the HASH, so it keeps working
+// after the raw address has expired. Blocks expire (BAN_DEFAULT_DAYS): mobile networks
+// and CGNAT share addresses, and a permanent block would take strangers with it.
+async function handleAdminBan(request, env) {
+  const r = await readJson(request, LIMIT.wishBody);
+  if (r.err) return r.err;
+  const d = r.data;
+  let iph = isStr(d.iph) ? d.iph.trim() : '';
+  if (!iph && isStr(d.id)) {
+    const found = await findById(env, d.id, ['wish', 'bug']);
+    if (!found) return fail(404, 'notfound');
+    iph = found.item.iph || '';
+  }
+  if (!/^[0-9a-f]{16}$/.test(iph)) return fail(400, 'invalid');
+  if (d.off === true) { await env.POOL.delete(`ban:${iph}`); return json(200, { ok: true, iph, banned: false }); }
+  const days = d.days === undefined ? BAN_DEFAULT_DAYS : d.days;
+  if (typeof days !== 'number' || !Number.isFinite(days) || days < 1 || days > BAN_MAX_DAYS) return fail(400, 'invalid');
+  const note = isStr(d.note) ? d.note.slice(0, 200) : '';
+  const until = Date.now() + days * 86400 * 1000;
+  await env.POOL.put(`ban:${iph}`, JSON.stringify({ ts: Date.now(), until, note }), { expirationTtl: Math.max(60, days * 86400) });
+  if (isStr(d.id) && /^[0-9]+-[0-9a-f]+$/.test(d.id)) {   // marked as abuse: hold that one address longer
+    const rec = await getJson(env, `ip:${d.id}`);
+    if (rec) await env.POOL.put(`ip:${d.id}`, JSON.stringify(rec), { expirationTtl: IP_ABUSE_TTL_S });
+  }
+  return json(200, { ok: true, iph, banned: true, until });
+}
+
+// GET /admin/stats?days= — the tally, owner only. Nothing here is per-person.
+async function handleAdminStats(url, env) {
+  const n = Math.min(365, Math.max(1, parseInt(url.searchParams.get('days') || '30', 10) || 30));
+  const names = await listAll(env, 'cnt:');
+  const cut = new Date(Date.now() - (n - 1) * 86400000).toISOString().slice(0, 10);
+  const days = {};
+  for (const key of names) {
+    const rest = key.slice(4);
+    const day = rest.slice(0, 10), e = rest.slice(11);
+    if (!day || day < cut || !e) continue;
+    const v = parseInt((await env.POOL.get(key)) || '0', 10) || 0;
+    (days[day] = days[day] || {})[e] = v;
+  }
+  return json(200, { ok: true, days });
+}
+
 // POST /admin/delete — remove an item; rebuild pub if wish.
 async function handleAdminDelete(request, env) {
   const r = await readJson(request, LIMIT.wishBody);
@@ -667,6 +803,7 @@ async function handleAdminDelete(request, env) {
   const found = await findById(env, r.data.id, ['wish', 'bug']);
   if (!found) return fail(404, 'notfound');
   await env.POOL.delete(found.key);
+  try { await env.POOL.delete(`ip:${r.data.id}`); } catch { /* nothing kept, or already expired */ }   // LOG-204: deleting the item deletes its source address with it
   if (found.item.type === 'wish') await rebuildPub(env); else await rebuildPubBugs(env);
   return json(200, { ok: true });
 }
@@ -694,7 +831,7 @@ export default {
       // Health — no rate limit.
       if (path === '/' || path === '/health') {
         if (method !== 'GET') return withCors(fail(405, 'method'));
-        return withCors(json(200, { ok: true, service: 'pool', ver: 'LOG-180', ts: Date.now() }));   // ver: which paste is live (LOG-180 = the public/private wish flag)
+        return withCors(json(200, { ok: true, service: 'pool', ver: 'LOG-204', ts: Date.now() }));   // ver: which paste is live (LOG-204 = the visit counter, 30-day source retention and the block list)
       }
 
       // Every POST must come from an allowed Origin.
@@ -703,7 +840,15 @@ export default {
 
       const iph = await clientHash(request);
 
+      // LOG-204: a blocked source is turned away before any write route runs. Reading
+      // the site is never blocked - the block is about what someone writes here.
+      if (method === 'POST' && (path === '/submit' || path === '/vote')) {
+        const b = await banCheck(env, iph);
+        if (b) return withCors(fail(403, 'banned'));
+      }
+
       // Public routes
+      if (path === '/hit') return withCors(method === 'POST' ? await handleHit(request, env, iph) : fail(405, 'method'));   // LOG-204: the visit counter
       if (path === '/submit') return withCors(method === 'POST' ? await handleSubmit(request, env, ctx, iph) : fail(405, 'method'));
       if (path === '/wishes') return withCors(method === 'GET' ? await handleWishes(env, iph) : fail(405, 'method'));
       if (path === '/bugs') return withCors(method === 'GET' ? await handleBugs(env, iph) : fail(405, 'method'));
@@ -723,6 +868,9 @@ export default {
         if (path === '/admin/list') return withCors(method === 'GET' ? await handleAdminList(url, env) : fail(405, 'method'));
         if (path === '/admin/update') return withCors(method === 'POST' ? await handleAdminUpdate(request, env, ctx) : fail(405, 'method'));
         if (path === '/admin/delete') return withCors(method === 'POST' ? await handleAdminDelete(request, env) : fail(405, 'method'));
+        if (path === '/admin/src') return withCors(method === 'GET' ? await handleAdminSrc(url, env) : fail(405, 'method'));       // LOG-204
+        if (path === '/admin/ban') return withCors(method === 'POST' ? await handleAdminBan(request, env) : fail(405, 'method'));  // LOG-204
+        if (path === '/admin/stats') return withCors(method === 'GET' ? await handleAdminStats(url, env) : fail(405, 'method'));   // LOG-204
       }
 
       return withCors(fail(404, 'notfound'));

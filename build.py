@@ -712,7 +712,10 @@ def build_pages(site, works, demos, articles):
                     "meta_desc": esc(site["hero_intro"][lang]), "author": esc(site["author"][lang]), "hero_intro": esc(site["hero_intro"][lang]),
                     "lang_switch": L("lang_switch"), "sticky": L("sticky"), "site_data": site_json}
         home_ctx.update(asset_versions())
-        for k in ("boot_power", "boot_continue", "os_name", "app_works", "app_demos", "app_articles", "app_about", "app_player", "app_terminal", "app_pillar", "app_wishpool", "app_contact", "desk_hint", "ph_unlock", "ph_lock_line", "player_now", "app_updates", "updates_hide"):
+        for k in ("boot_power", "boot_continue", "os_name", "app_works", "app_demos", "app_articles", "app_about", "app_player", "app_terminal", "app_pillar", "app_wishpool", "app_contact", "desk_hint", "ph_unlock", "ph_lock_line", "player_now", "app_updates", "updates_hide",
+                  # LOG-204 / ADR-013: the boot screen's beginner-mode switch and the plain-language subtitle under every desktop icon
+                  "nb_label", "nb_on", "nb_off", "nb_note",
+                  "app_works_sub", "app_demos_sub", "app_player_sub", "app_terminal_sub", "app_about_sub", "app_contact_sub", "app_wishpool_sub", "app_pillar_sub", "app_articles_sub"):
             home_ctx["ui_" + k] = L(k)
         out[f"{lang}/index.html"] = render(tpl("desktop"), home_ctx)
 

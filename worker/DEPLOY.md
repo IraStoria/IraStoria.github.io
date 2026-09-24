@@ -108,8 +108,10 @@ Claude 會把它填進 `site.json` 的 `backend.url`。**不要貼任何 Secret�
 - **Workers 免費方案：每日 100,000 次請求。**
 - **workers.dev 網址是公開的**，任何人都打得到，所以 Worker 內建了速率限制（投稿 5 次／10 分鐘、投票 30 次／10 分鐘、讀清單 60 次／分鐘）；即使有人亂打，最多也只是把自己鎖住。
 - **Secret 永不進 repo。** `GITHUB_CLIENT_SECRET`、`TOKEN_SECRET`、`TOTP_SECRET`、`BARK_KEY`、`MAIL_API_KEY` 只存在 Cloudflare；`worker.js` 裡沒有任何金鑰，可以放心放在公開 repo。
-- Worker 不記錄、不儲存原始 IP，只存 SHA-256 前 16 碼；投稿人的暱稱與內容只有站主審核通過（`approved`）後才會公開；許願者留的 email 永遠不公開，只用來寄進展通知，每封信都有退訂連結。
+- **IP（LOG-204 / ADR-014 起）**：**逛網站不留任何位址**——計數只累加當日次數，不重複人數用每日輪替的雜湊（隔天就串不起來）。**送出**許願／回報／附議才會留原始位址 **30 天**（獨立 key、到期自動消失、只有你用 `GET /admin/src?id=` 一次一筆看得到、刪除該筆即一併刪除），純供濫用處理，表單上有一行告知。封鎖用雜湊（`ban:<iph>`，預設 90 天自動解除），只擋送出、不擋瀏覽。
+- 投稿人的暱稱與內容只有站主審核通過（`approved`）後才會公開；許願者留的 email 永遠不公開，只用來寄進展通知，每封信都有退訂連結。
 - 之後若改了 `worker.js`，重做 (a) 的第 4～6 步（Quick edit 貼上→Deploy）即可，變數與 KV 綁定都會保留。
+- **貼完怎麼確認貼的是新版**：打開 `https://<worker 網址>/health`，回應裡的 `ver` 就是這份程式碼的版次（目前應為 `LOG-204`）。舊版會顯示舊的版次字串。
 
 ## 本機測試
 
@@ -122,4 +124,4 @@ https://irastoria.github.io,http://127.0.0.1:8766
 
 （逗號分隔，不要空格也可以）→ **Deploy**。測試完可以留著，本機位址對外沒有意義。
 
-另外 `worker/test_worker.mjs` 是不需要 Cloudflare 的離線自測：在 repo 根目錄執行 `node worker/test_worker.mjs`，最後一行顯示 `36/36 passed` 即代表 Worker 邏輯正常（含 TOTP 的 RFC 6238 標準向量與 Bark 推播的離線模擬）。
+另外 `worker/test_worker.mjs` 是不需要 Cloudflare 的離線自測：在 repo 根目錄執行 `node worker/test_worker.mjs`，最後一行顯示 `45/45 passed` 即代表 Worker 邏輯正常（含 TOTP 的 RFC 6238 標準向量、Bark 推播的離線模擬，以及 LOG-204 的計數／30 天留存／封鎖六條）。

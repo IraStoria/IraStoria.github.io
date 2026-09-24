@@ -512,6 +512,158 @@
       "zh": "⏻",
       "en": "⏻"
     },
+    "nb_label": {
+      "zh": "新手模式",
+      "en": "Beginner mode"
+    },
+    "nb_on": {
+      "zh": "ON",
+      "en": "ON"
+    },
+    "nb_off": {
+      "zh": "OFF",
+      "en": "OFF"
+    },
+    "nb_note": {
+      "zh": "開著會標出畫面上的東西，並帶你走一遍",
+      "en": "Leaves the labels on and shows you around"
+    },
+    "lbl_waterfall": {
+      "zh": "音符瀑布",
+      "en": "Note waterfall"
+    },
+    "lbl_waterfall_tip": {
+      "zh": "畫面中間往下掉的彩色長條，排列就跟鋼琴一樣：左邊低音、右邊高音。每一條告訴你：哪個瞬間、按哪個位置的哪個音、按了多久。落到底線的那一刻就是按下去的瞬間，條越長代表按越久。",
+      "en": "The coloured bars falling down the middle, laid out just like a piano: low notes on the left, high on the right. Each bar tells you when a note is played, where it sits, which note it is and how long it is held. It reaches the line the moment the key goes down, and the longer the bar the longer it is held."
+    },
+    "lbl_spectrum": {
+      "zh": "音量起伏",
+      "en": "Loudness"
+    },
+    "lbl_spectrum_tip": {
+      "zh": "播放線周圍那排跳動的灰色條子。越高的地方，代表那個音域現在越大聲。",
+      "en": "The grey bars around the play line. The taller the bar, the louder that part of the range is right now."
+    },
+    "src_note": {
+      "zh": "送出時會記下來源位址 30 天，只用來處理濫用，之後自動刪除。",
+      "en": "Sending keeps your source address for 30 days, for abuse handling only; after that it deletes itself."
+    },
+    "pool_banned": {
+      "zh": "這個來源目前無法送出。如果是誤擋，請用 Email 告訴我。",
+      "en": "This source cannot submit right now. If that is a mistake, please email me."
+    },
+    "nb_ask_t": {
+      "zh": "要不要我先示範一次？",
+      "en": "Shall I show you first?"
+    },
+    "nb_ask_sub": {
+      "zh": "這個展示是可以親手玩的。要的話我先用一首曲子帶你走一遍，也可以你自己直接開始。",
+      "en": "This one is meant to be played with. I can walk you through it once with a piece of music, or you can just start."
+    },
+    "nb_ask_yes": {
+      "zh": "好，先示範一次",
+      "en": "Yes, show me first"
+    },
+    "nb_ask_no": {
+      "zh": "不用，我自己來",
+      "en": "No thanks, I will try it"
+    },
+    "lbl_seg": {
+      "zh": "字母方塊",
+      "en": "Letter blocks"
+    },
+    "lbl_seg_tip": {
+      "zh": "一塊＝一個段落。音樂從左往右，一塊接一塊，一路播到 I 結束。",
+      "en": "One block is one section. The music runs left to right, block after block, down to I at the end."
+    },
+    "lbl_tick": {
+      "zh": "決策刻度",
+      "en": "Decision mark"
+    },
+    "lbl_tick_tip": {
+      "zh": "進度線上那個白色小刻度。音樂走到那裡，就決定下一塊接誰。",
+      "en": "The small white mark on the progress line. When the music reaches it, the next block is locked in."
+    },
+    "lbl_seam": {
+      "zh": "接縫",
+      "en": "The joins"
+    },
+    "lbl_seam_tip": {
+      "zh": "每個接縫都落在小節線上，所以你聽不出來音樂換過段落。",
+      "en": "Every join lands on a bar line, which is why you never hear the music change section."
+    },
+    "lbl_zones": {
+      "zh": "五個區",
+      "en": "Five zones"
+    },
+    "lbl_zones_tip": {
+      "zh": "開頭 A｜前段三塊｜中繼 E｜後段三塊｜結尾 I。A、E、I 是固定的，能換順序的只有中間那六塊。",
+      "en": "Opening A | three blocks | the gate E | three blocks | ending I. A, E and I are fixed; only the six in between can be reordered."
+    },
+    "lbl_gate": {
+      "zh": "中繼點 E",
+      "en": "The gate, E"
+    },
+    "lbl_gate_tip": {
+      "zh": "整首循環的轉折。速度在這裡加快，所以過了 E 就回不去前段了。",
+      "en": "Where the whole loop turns. The tempo picks up here, so once you are past E there is no going back."
+    },
+    "lbl_swap": {
+      "zh": "換順序",
+      "en": "Reordering"
+    },
+    "lbl_swap_tip": {
+      "zh": "把還沒播到的字母拖一拖就能換位置，但只能在自己的區裡換；接不起來的順序會彈回去。",
+      "en": "Drag a letter that has not played yet to move it, but only within its own zone; an order the music cannot join springs back."
+    },
+    "lbl_panel": {
+      "zh": "畫面上這些是什麼",
+      "en": "What you are looking at"
+    },
+    "lbl_what": {
+      "zh": "這是什麼？",
+      "en": "What's this?"
+    },
+    "lbl_close": {
+      "zh": "收起",
+      "en": "Close"
+    },
+    "app_works_sub": {
+      "zh": "把聽到的音樂寫成譜",
+      "en": "Written out by ear"
+    },
+    "app_demos_sub": {
+      "zh": "可以親手玩的展示",
+      "en": "Hands-on demos"
+    },
+    "app_player_sub": {
+      "zh": "聽我寫的曲子",
+      "en": "My tracks"
+    },
+    "app_terminal_sub": {
+      "zh": "搜尋這個網站",
+      "en": "Search this site"
+    },
+    "app_about_sub": {
+      "zh": "我是誰",
+      "en": "Who I am"
+    },
+    "app_contact_sub": {
+      "zh": "找我合作",
+      "en": "Work with me"
+    },
+    "app_wishpool_sub": {
+      "zh": "想在這裡看到什麼？",
+      "en": "Something you want to see here?"
+    },
+    "app_pillar_sub": {
+      "zh": "壞掉的東西釘在這",
+      "en": "Bugs, pinned up"
+    },
+    "app_articles_sub": {
+      "zh": "筆記與文章",
+      "en": "Notes and writing"
+    },
     "boot_continue": {
       "zh": "點選任意按鍵繼續 _",
       "en": "Press any key to continue _"
