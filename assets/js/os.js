@@ -775,12 +775,12 @@
   function makeWave(cv, yRatio, withNotes) {
     var wf = withNotes ? makeWaterfall() : null;
     var headPx = -1;
-    var restoreT0 = 0, restoreDur = 1400, gleam = null, dimK = null, dimCv = null;
+    var restoreT0 = 0, restoreDur = 1400, gleam = null, dimK = null, dimCv = null, plCv = null;
     /* LOG-204 追記⑦ (the user: 將滑鼠放到那個項目的字上時，畫面上便會用陰影模式聚焦正在看的東西): the waterfall and the bars share ONE canvas,
        so neither can be dimmed with a DOM veil. They can be told apart by draw ORDER instead: the bars go down first, the notes over them.
        Focusing the notes = lay a black wash over what is already drawn, then draw the notes on top at full strength. Focusing the bars =
        draw the notes faint. The baseline is painted after both, so it never dims. Fast in, slow out - the user asked for 慢慢淡出. */
-    var focusWhat = null, focusWf = { k: 0, to: 0, from: 0, t0: 0 }, focusSp = { k: 0, to: 0, from: 0, t0: 0 }, focusSt = { k: 0, to: 0, from: 0, t0: 0 }, FOCUS_IN_MS = 450, FOCUS_OUT_MS = 330, FOCUS_DEPTH = 0.78, FOCUS_NOTE_DEPTH = 0.84;   /* DEPTH: the wash over the bars (grey, low-contrast: 22 % left reads as a ghost); NOTE_DEPTH: the notes when the bars are read about (saturated + glowing: 16 % left matches the furniture's .16) */   /* LOG-204 追記⑧ (the user: 需要transition，不然現在瞬間亮暗太快了): IN is a timed walk of FOCUS_IN_MS on the CSS `ease` curve - the same .45 s and curve as body.spot in os.css, so the canvas and the furniture darken as one gesture (the old exponential, tau 55 ms, bit 25 % in its first frame = the cut he saw); OUT stays the exponential tail (time constant: ~90 % gone by 760 ms) he did not mind. One k per layer (focusWf: the wash over the bars; focusSp: the notes drawn faint) so moving from one line to the other crossfades instead of swapping */
+    var focusWhat = null, focusWf = { k: 0, to: 0, from: 0, t0: 0 }, focusSp = { k: 0, to: 0, from: 0, t0: 0 }, focusSt = { k: 0, to: 0, from: 0, t0: 0 }, focusPl = { k: 0, to: 0, from: 0, t0: 0 }, focusPL = { k: 0, to: 0, from: 0, t0: 0 }, focusPR = { k: 0, to: 0, from: 0, t0: 0 }, FOCUS_IN_MS = 450, FOCUS_OUT_MS = 330, FOCUS_DEPTH = 0.78, FOCUS_NOTE_DEPTH = 0.84, PL_PAD = 6, PL_BLUR = 18;   /* 追記⑨: the played-bars hole reaches PL_PAD px past each bar, its edge a PL_BLUR shadow fall-off (the bars' glow is TINT_BLUR 22) */   /* DEPTH: the wash over the bars (grey, low-contrast: 22 % left reads as a ghost); NOTE_DEPTH: the notes when the bars are read about (saturated + glowing: 16 % left matches the furniture's .16) */   /* LOG-204 追記⑧ (the user: 需要transition，不然現在瞬間亮暗太快了): IN is a timed walk of FOCUS_IN_MS on the CSS `ease` curve - the same .45 s and curve as body.spot in os.css, so the canvas and the furniture darken as one gesture (the old exponential, tau 55 ms, bit 25 % in its first frame = the cut he saw); OUT stays the exponential tail (time constant: ~90 % gone by 760 ms) he did not mind. One k per layer (focusWf: the wash over the bars; focusSp: the notes drawn faint) so moving from one line to the other crossfades instead of swapping */
     function focusStep(s, to, now, dtm) {   /* 追記⑧: in = timed ease from wherever it is (a flick across a line goes in a little and comes straight back; a change of target mid-flight restarts from the current k, not from 0); out = exponential from wherever it is */
       if (to !== s.to) { s.to = to; s.from = s.k; s.t0 = now; }
       if (to > s.k) { var d = FOCUS_IN_MS * (to - s.from), x = d > 0 ? Math.min(1, (now - s.t0) / d) : 1, t = x;   /* cubic-bezier(.25,.1,.25,1) = CSS ease: x(t) = .75t(1-t) + t^3, solved for t by Newton */
@@ -961,6 +961,28 @@
         }
         focusStep(focusWf, focusWhat === 'waterfall' ? 1 : 0, now, dtm); focusStep(focusSp, focusWhat === 'spectrum' ? 1 : 0, now, dtm);   /* 追記⑧: each layer walks to its own target - eased in, exponential out, continuous when the pointer flicks across a line or steps from one line to the other mid-flight */
         var fk = focusWf.k, fs = focusSp.k;
+        var pw = focusWhat === 'played' || focusWhat === 'playedL' || focusWhat === 'playedR';   /* LOG-206 追記⑦ (the user: 說分成兩半時所有東西都暗下來，唯一亮著的地方是目前音量條已經進度條過去發亮的地方): only the PLAYED bars stay lit - the grey unplayed part goes under the wash (focusPl), and on playedL / playedR the other half's played bars too (focusPR / focusPL). Three regions that never overlap, each on its own eased k, so whole -> left -> right crossfades and nothing is shaded twice */
+        focusStep(focusPl, pw ? 1 : 0, now, dtm); focusStep(focusPL, focusWhat === 'playedR' ? 1 : 0, now, dtm); focusStep(focusPR, focusWhat === 'playedL' ? 1 : 0, now, dtm);
+        if (focusPl.k > 0.002) {   /* the wash is a keep-mask (dimK's way, the ★ RULE below): the floor everywhere, and a hole punched at each PLAYED bar's own rectangle (tip to reflection) - so only the bars themselves stay lit, no bright column over the wallpaper above them. A half's holes close at that half's k (playedL: the right's, playedR: the left's), so whole -> left -> right crossfades in place and nothing is shaded twice */
+          if (!plCv) plCv = document.createElement('canvas');
+          if (plCv.width !== cv.width || plCv.height !== cv.height) { plCv.width = cv.width; plCv.height = cv.height; }
+          var pg = plCv.getContext('2d'); pg.setTransform(DPR, 0, 0, DPR, 0, 0); pg.globalCompositeOperation = 'source-over'; pg.globalAlpha = 1; pg.clearRect(0, 0, W, H);   /* the context keeps last frame's destination-out otherwise - the floor would erase itself */
+          pg.fillStyle = 'rgba(4,5,9,' + FOCUS_DEPTH.toFixed(3) + ')'; pg.fillRect(0, 0, W, H);
+          pg.globalCompositeOperation = 'destination-out';
+          var hL = 1 - focusPL.k, hR = 1 - focusPR.k, pathL = new Path2D(), pathR = new Path2D(), anyL = false, anyR = false;   /* 追記⑨ (the user: 焦點的地方不夠清楚): the holes are one path per half, PL_PAD px wider than the bars and erased WITH a shadowBlur - so the bars' own soft glow stays lit and the hole's edge is a fall-off, never a frame or a block */
+          for (var pi = 0; pi < n; pi++) {
+            var ph_ = levels[pi] * squash * maxH * (1 - hbAt(pi * bw + bw / 2)), px_ = pi * bw + 1, pw_ = bw - 2; if (ph_ <= 0.5) continue;
+            var pxc = px_ + pw_ / 2, pisL = sp ? pxc < scx : true, plo = sp ? (pisL ? sxl : scx) : edge, phi = sp ? (pisL ? scx : sxr) : lpx, pa0 = Math.max(px_, plo), pa1 = Math.min(px_ + pw_, phi);   /* the played slice of the bar, as the bar loop cuts it */
+            if (pa1 <= pa0 + 0.2) continue;
+            (pisL ? pathL : pathR).rect(pa0 - PL_PAD, y - ph_ - PL_PAD, pa1 - pa0 + 2 * PL_PAD, ph_ + ph_ * 0.45 + 2 * PL_PAD); if (pisL) anyL = true; else anyR = true;
+          }
+          pg.fillStyle = '#000'; pg.shadowColor = '#000'; pg.shadowBlur = PL_BLUR;
+          if (anyL && hL > 0.002) { pg.globalAlpha = hL; pg.fill(pathL); }
+          if (anyR && hR > 0.002) { pg.globalAlpha = hR; pg.fill(pathR); }
+          pg.shadowBlur = 0; pg.globalAlpha = 1;
+          g2.save(); g2.globalCompositeOperation = 'source-over'; g2.shadowBlur = 0; g2.globalAlpha = focusPl.k; g2.drawImage(plCv, 0, 0, plCv.width, plCv.height, 0, 0, W, H); g2.restore();
+          fs = Math.max(fs, focusPl.k);
+        }
         if (fk > 0.002) { g2.save(); g2.shadowBlur = 0; g2.fillStyle = 'rgba(4,5,9,' + (FOCUS_DEPTH * fk).toFixed(3) + ')'; g2.fillRect(0, 0, W, H); g2.restore(); }   /* the bars (and the wallpaper glow) step back; the notes have not been drawn yet */
         if (wf) {   /* waterfall: over the bars, under the line */
           if (fs > 0.002) { g2.save(); g2.globalAlpha = 1 - FOCUS_NOTE_DEPTH * fs; wf.draw(g2, W, H, y, st, now); g2.restore(); }
@@ -1059,7 +1081,7 @@
              ghostInfo: function () { if (!ghostT0) return null; var gp = (performance.now() - ghostT0) / GHOST_MS; return gp >= 1 ? null : { col: ghostCol, k: 1 - gp };
  },   /* the fading previous colour (k 1->0 on the ghost clock) — the caption's not-yet-repainted part wears it */
              restore: function (ms) { restoreT0 = performance.now(); restoreDur = Math.max(50, ms || 1400); },   /* the grey part fades back in in place (the line itself never left) */
-             farewell: function () { if (!collT0 && !blankW) collT0 = performance.now(); }, reappear: function () { blankW = false; collT0 = 0; if (!regrowT0) regrowT0 = performance.now(); }, reflowCancel: function () { reflowT0 = 0; }, gleamSet: function (g_) { gleam = g_ || null; }, focus: function (w) { focusWhat = (w === 'waterfall' || w === 'spectrum' || w === 'stage') ? w : null; }, focusOn: function () { return focusWhat; }, focusK: function () { return { wf: focusWf.k, sp: focusSp.k, st: focusSt.k }; },   /* 'stage' (追記⑪): the whole canvas in shadow, drawn last */   /* LOG-204 追記⑦ */ dimSet: function (k_) { dimK = (k_ == null || k_ >= 0.999) ? null : Math.max(0, k_); }, reflow: function (fromFrac, holdMs) { reflowT0 = performance.now(); reflowFrom = Math.max(0, Math.min(1, fromFrac || 0)); reflowHold = Math.max(REFLOW_IN_MS, holdMs || REFLOW_IN_MS); }, baseY: function () { return cv ? cv.clientHeight * yTo : 0; }, markX: function () { var mk = markCur == null ? null : markCur; return (cv && mk != null) ? cv.clientWidth * Math.max(0, Math.min(1, mk)) : null; } };   /* markX (LOG-182 追記⑦): where the decision tick is DRAWN right now - the lesson's bubble points at the tick itself, not at the middle of the line */
+             farewell: function () { if (!collT0 && !blankW) collT0 = performance.now(); }, reappear: function () { blankW = false; collT0 = 0; if (!regrowT0) regrowT0 = performance.now(); }, reflowCancel: function () { reflowT0 = 0; }, gleamSet: function (g_) { gleam = g_ || null; }, focus: function (w) { focusWhat = (w === 'waterfall' || w === 'spectrum' || w === 'stage' || w === 'played' || w === 'playedL' || w === 'playedR') ? w : null; }, focusOn: function () { return focusWhat; }, focusK: function () { return { wf: focusWf.k, sp: focusSp.k, st: focusSt.k }; },   /* 'stage' (追記⑪): the whole canvas in shadow, drawn last */   /* LOG-204 追記⑦ */ dimSet: function (k_) { dimK = (k_ == null || k_ >= 0.999) ? null : Math.max(0, k_); }, reflow: function (fromFrac, holdMs) { reflowT0 = performance.now(); reflowFrom = Math.max(0, Math.min(1, fromFrac || 0)); reflowHold = Math.max(REFLOW_IN_MS, holdMs || REFLOW_IN_MS); }, baseY: function () { return cv ? cv.clientHeight * yTo : 0; }, markX: function () { var mk = markCur == null ? null : markCur; return (cv && mk != null) ? cv.clientWidth * Math.max(0, Math.min(1, mk)) : null; } };   /* markX (LOG-182 追記⑦): where the decision tick is DRAWN right now - the lesson's bubble points at the tick itself, not at the middle of the line */
   }
   var DESK_WAVE_Y = 0.58, PH_WAVE_Y = 0.47;   /* where each shell's play line rests. Named because LOG-132 reasons about the phone's from two further places, and three copies of 0.47 would drift apart the first time one of them moved. */
   var wave = makeWave($('#wave'), DESK_WAVE_Y, true), phoneWave = makeWave($('#ph-wave'), PH_WAVE_Y, true);   /* waterfall on both shells */  // phone: slightly above centre
@@ -1112,7 +1134,14 @@
     /* LOG-204 追記⑦: two halves, one gesture - the canvas tells its own two layers apart (wave.focus), the desktop furniture
        steps back through one body class. Anything that is NOT what the line being read is about gets out of the way. */
     var outT = null, SPOT_OUT_MS = 1000;   /* body.spot-out: the slow walk back (os.css) - held a little past its .9 s transition, cleared the moment a line is read again */
-    var CANVAS_ITEM = { waterfall: 1, spectrum: 1 };   /* LOG-204 追記⑨: what the spotlight can point at on the desktop - the canvas's two layers */
+    var CANVAS_ITEM = { waterfall: 1, spectrum: 1 };
+    var CANVAS_AS = { tr_notes: 'waterfall', tr_sides: 'played' };   /* LOG-206: the compare stage's lines about the canvas light the same layers as the lesson (追記⑦: 左右兩色 = only the PLAYED bars, both halves) */
+    /* LOG-206 (FUTURE-6 ⑴ the user: 八步…記得收到?裡面): on the compare stage the button carries the lesson's points plus the two it
+       leaves out of the walk (對齊, the cached copy) - each only where the stage actually has it (no video = no video box, no align) */
+    function trItems(u) {
+      var has = function (q) { var e = u.querySelector(q); return !!e && !e.hidden && !e.disabled; }, yt = has('.tr-yt') && !u.querySelector('.tr-yt').classList.contains('off');   /* .off: the cached copy is sounding and the notice covers the box */
+      return ['tr_what', 'tr_sides', 'tr_notes', 'tr_mix'].concat(has('[data-mode="lr"]') ? ['tr_lr'] : [], ['tr_secs'], yt ? ['tr_vid'] : [], has('.tr-align') ? ['tr_align'] : [], has('.tr-src-sw') ? ['tr_cache'] : []);
+    }   /* LOG-204 追記⑨: what the spotlight can point at on the desktop - the canvas's two layers */
     /* LOG-204 追記⑩/⑪ (the user: 說明面板遮住說明對象 / 滑到某一行時照亮舞台上對應的東西; ⑪: 不要用圈，用陰影): the section stage's six
        lines have anchors ON THE STAGE, and the answer is the desktop's own shadow language, not a frame - what the line is about
        stays at full strength, everything else steps back. The row's other parts through .wv-dim (os.css, .45 s in / .9 s out),
@@ -1161,11 +1190,12 @@
     }
     function spot(k) {
       if (spotOn === k) return; spotOn = k;
-      var canvasK = !!k && !!CANVAS_ITEM[k];
+      var canvasK = !!k && !!(CANVAS_ITEM[k] || CANVAS_AS[k]);
       var stageK = (!!k && !!STAGE_ITEM[k]) ? sShow(k) : false;   /* false when the stage has nothing to point at yet (no row, no tick) */
+      var trK = false; try { trK = typeof trStage !== 'undefined' && trStage.active() && trStage.spot(k && /^tr_/.test(k) ? k : null); } catch (e) {}   /* LOG-206 追記①: the compare stage's lines cut the lesson's window round their thing */
       if (!stageK) sHide(false);
-      try { wave.focus(canvasK ? k : stageK === 'stage' ? 'stage' : null); } catch (e) {}   /* 'tick' is the shade's, not the canvas's */
-      var canSpot = canvasK || !!stageK;
+      try { wave.focus(canvasK ? (CANVAS_AS[k] || k) : stageK === 'stage' ? 'stage' : null); } catch (e) {}   /* 'tick' is the shade's, not the canvas's */
+      var canSpot = canvasK || !!stageK || trK;
       document.body.classList.toggle('spot', canSpot);   /* a line with no anchor (seam; a tick not yet drawn): dimming the stage
          while someone reads about a piece of it would hide the very thing they are reading about. The row still lights. */
       if (outT) { clearTimeout(outT); outT = null; }
@@ -1185,7 +1215,9 @@
          stage, so its contents travel too. On the section stage it carries what the lesson teaches - for a visitor who said
          「不用，我自己來」, or who watched it once and forgot, this is where that knowledge stays reachable. The wording is the
          lesson's own points, not new claims. On the plain desktop it goes back to naming what is on the desktop. */
+      var trU = document.querySelector('.tr-ui');
       var list = document.querySelector('.dstage') ? ['seg', 'tick', 'seam', 'zones', 'gate', 'swap']
+               : trU ? trItems(trU)
                : (wave.notesOn() ? ['waterfall', 'spectrum'] : ['spectrum']);   /* the waterfall is a 10 % roll (WF_CHANCE): it is only named while it is actually on screen */
       if (list.join('|') !== items.join('|')) { items = list; paint(); }
       var h = stHead();   /* on a stage: line up with that stage's own buttons, just to their left */
@@ -2276,6 +2308,7 @@
     var mode = 'yt', split = false, mix = 0.5, pref = null, canYT = false, hasFallback = false, cached = false, tipShown = false, tipTimer = 0, lrAck = false;   /* lrAck (追記③): the split-ears warning was acknowledged in this run */   /* cached (追記㉑): the hosted copy sounds while the video runs on, muted, as the clock - switching back is a volume swap, no seek, no reload; mode 'local' is only the real fallback (the video is dead) */   /* pref: the visitor's own source choice; canYT: the work embeds a YouTube original */
     var T0 = 0, pausedAt = 0, playing = false, started = false, dur = 0, pendingT = null, endAt = 0, preT0 = 0;   /* preT0: performance.now() when the stage opened (the pre-roll clock's zero) */   /* local clock: T = ctx.currentTime - T0 while playing, pausedAt otherwise; pendingT: a play(T) waiting for a buffer */
     var yt = null, ytEl = null, ytReady = false, ytFailed = false, ytBuf = false, ytT = 0, ytAt = 0, ytReadyTimer = 0, ytPlayTimer = 0, ytPend = false, ytWarm = 0, resumeTimer = 0;   /* ytWarm: 0 cold, 1 warming (muted pre-roll), 2 warmed and parked at the start */   /* ytT/ytAt: last polled MIDI time and when; ytPend: a play() sent, waiting for PLAYING */
+    var tut = null, hold = false;   /* LOG-206: the lesson (makeTrTut) and its hold on the start - the pre-start half of the walk happens before the music may begin */
     var TR_SKIP_LEAD_S = 0.6, skip = 0;   /* LOG-177 追記② (the user: 新的前面載入時間太長): the MIDI clock starts 0.6 s before the FIRST NOTE (build injects media.first_note_s), not at MIDI 0 - olympia has 3.8 s of nothing before its first note on top of the 4 s pre-roll */
     var palC = null;   /* LOG-177: this work's two stage colours (media.palette {l, r}, hex) and everything derived from them; null = the eclipse purples baked into the CSS / the wave */
     function hexRgb(h) { if (typeof h !== 'string' || !/^#[0-9a-f]{6}$/i.test(h)) return null; return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
@@ -2394,7 +2427,7 @@
     var hintTimer = 0;
     function landed() { if (hint && !hint.classList.contains('gone')) { hint.textContent = U.tr_hint; clearTimeout(hintTimer); hintTimer = setTimeout(function () { if (hint) hint.classList.add('gone'); }, 4000); } if (!raf) raf = requestAnimationFrame(tick); }
     function maybeStart() {
-      if (started || !active) return;
+      if (started || !active || hold) return;   /* LOG-206: hold = the lesson is still talking about the stage before the music */
       var ok = tr && tr.buf && (mode === 'yt' ? ytReady : (!orig || orig.buf));
       if (!ok) return;
       if (mode === 'yt' && ytWarm === 0) {   /* 追記⑭(1): warm the embed first - muted pre-roll until it really plays, then park; play(0) follows after TR_WARM_MS (onYT) */
@@ -2464,7 +2497,7 @@
     function build(w) {
       ui = document.createElement('div'); ui.className = 'stage-ui tr-ui'; ui.setAttribute('aria-label', w.title);
       ui.innerHTML = '<div class="st-hint">' + esc(U.tr_loading) + '</div>' +
-        '<div class="st-head"><button class="st-exit" type="button">' + esc(U.stage_exit) + '</button></div>' +
+        '<div class="st-head"><button class="st-again trt-btn" type="button" hidden></button><button class="st-exit" type="button">' + esc(U.stage_exit) + '</button></div>' +   /* LOG-206: 看教學 / 結束教學 */
         '<div class="tr-vid"><div class="tr-yt"><div class="tr-yt-in"></div></div><i class="tr-shield"></i>' +   /* LOG-175 追記①②: the video box and the notice over it travel together in .tr-vid. The shield lies over the iframe (which would eat the pointer): press anywhere and drag, a quick tap plays/pauses, a release near an edge parks there. The bar must stay OUTSIDE this wrapper (its left:50% would resolve against the 330 px box) */
         '<div class="tr-notice" hidden><b></b><p></p><em></em></div></div>' +   /* 追記⑱: lies OVER the video box whenever the cached copy is the one sounding (the switch, the automatic fallback, or the split in yt mode) */   /* YT.Player REPLACES the element it is given: the inner div goes, the outer keeps the box, the dimming class and the rounded corners */
         '<div class="tr-bar">' +
@@ -2482,6 +2515,7 @@
       paintPalette(ui); paintPalette(veil); paintPalette(veil2);
       HOST.appendChild(ui); document.body.classList.add('tr-on'); barPan = panels.add({ el: ui.querySelector('.tr-bar'), name: 'tr-bar', grp: 'tr', centred: true, base: function () { return 64; }, extra: '.tr-tip,.tr-lrtip' }); barPan.show(); var vid = ui.querySelector('.tr-vid'); ytPan = panels.add({ el: vid, name: 'tr-vid', grp: 'tr', base: function () { return 12; }, vis: function () { return !vid.classList.contains('empty'); }, tapOn: '.tr-shield', tap: function () { toggle(); }, snap: { at: 0.35, x: 14, y: 12 } }); ytPan.show(); requestAnimationFrame(function () { if (ui) ui.classList.add('in'); if (veil) veil.classList.add('in'); if (veil2) veil2.classList.add('in'); });   /* body.tr-on (追記⑭): the sticky note is torn off while the stage runs */
       ui.querySelector('.st-exit').addEventListener('click', function () { stop(false); });
+      ui.querySelector('.trt-btn').addEventListener('click', function () { if (tut) { tut.end(); return; } var id = wid; stop(true); start(id, { tut: true }); });   /* LOG-206: watching it (again) = the stage from the top with the lesson; 結束教學 hands the stage over where it stands */
       var mixEl = ui.querySelector('.tr-mix'); mixEl.addEventListener('input', function () { var v = +mixEl.value; if (Math.abs(v - 500) <= TR_SNAP && v !== 500) { v = 500; mixEl.value = 500; } mix = 1 - v / 1000; applyMix(); });   /* left = transcription (mix 1), right = original (mix 0); 追記⑨(7): the thumb snaps to the centre within TR_SNAP */
       var vt = ui.querySelector('.tr-volt'), vo = ui.querySelector('.tr-volo');
       vt.addEventListener('input', function () { volT = vt.value / 1000; try { localStorage.setItem('tr_volt.' + wid, String(volT)); } catch (e) {} applyMix(); });   /* 追記⑪: the trim is remembered per work */
@@ -2541,7 +2575,8 @@
       var tip = ui.querySelector('.tr-tip'); if (tip) tip.textContent = U.tr_tip;
       ui.querySelector('.tr-lrtip-t').textContent = U.tr_lr_warn; ui.querySelector('.tr-lrtip-em').textContent = U.tr_lr_warn_em; ui.querySelector('.tr-lrtip-by').textContent = U.tr_lr_warn_by; ui.querySelector('.tr-lrtip-ok').textContent = U.tr_lr_ok;   /* 追記③⑤ */
       ui.querySelector('.tr-volt').title = U.tr_vol + ' · ' + U.tr_trans; ui.querySelector('.tr-volo').title = U.tr_vol + ' · ' + U.tr_orig; ui.querySelector('.tr-volt').setAttribute('aria-label', U.tr_vol + ' ' + U.tr_trans); ui.querySelector('.tr-volo').setAttribute('aria-label', U.tr_vol + ' ' + U.tr_orig);
-      ui.querySelector('[data-mode="xf"]').textContent = U.tr_mode_xf; ui.querySelector('[data-mode="lr"]').textContent = U.tr_mode_lr;
+      ui.querySelector('[data-mode="xf"]').textContent = (NB && U.tr_mode_xf_nb) || U.tr_mode_xf; ui.querySelector('[data-mode="lr"]').textContent = (NB && U.tr_mode_lr_nb) || U.tr_mode_lr;   /* LOG-206 ⑶: beginner mode says it in plain words (混著聽 / 左右耳分開聽); off, the terms stay */
+      headBtn();
       secs = w.sections || [];
       ui.querySelector('.tr-cues').innerHTML = secs.map(function (s, i) { return '<b class="tick" data-i="' + i + '"></b><button type="button" data-t="' + s.t + '" class="' + (i % 2 ? 'alt' : '') + '">' + esc(s.label) + '</button>'; }).join('');
       paintSrc();   /* LOG-178: the source row (and the original-video link) follows the language too */ layoutSecs();
@@ -2586,19 +2621,213 @@
         var bar = ui.querySelector('.tr-seek i'); if (bar) bar.style.width = (dur ? Math.min(100, t / dur * 100) : 0) + '%';
         if (D.lang !== langSeen) relabel();
       }
-      if (started && playing && t >= 5 && !tipShown) showTip();   /* 追記㉑(2) */
+      if (tut) tut.frame();
+      if (started && playing && t >= 5 && !tipShown && !tut) showTip();   /* LOG-206: not during the lesson - it comes once the lesson is over */   /* 追記㉑(2) */
       if (player.isPlaying()) { ducked = true; player.duck(true); }   /* 追記㉔ belt and braces: the OS music must never sound under the stage, whatever brought it back */
       if (mode === 'local' && playing && dur && t >= dur + TR_END_PAD_S) { end(); return; }
       raf = requestAnimationFrame(tick);
     }
+    /* ---- LOG-206 (FUTURE-6 · the user: 八步全講、也全收進「?」／有一些開始前說，有一些開始後說): the compare stage's lesson.
+       The section stage's makeTut is married to its engine's clock and its A-I script, so this is its own small module on the same
+       visual language - the lesson's bubble (.tut-bub, typed, '|' = a beat's pause) and a shade over the whole stage with the one
+       thing being talked about left at full strength (the user's 不要用圈，用陰影: a rounded window, .trt-hole, cut by its own
+       box-shadow). BEFORE the music (hold: maybeStart waits): what this page is / the sections and the seek bar / the video box,
+       then 開始 releases it. AFTER it starts: the two halves / the falling notes / the slider (waits for the visitor's own drag) /
+       split ears (only where it works), then 開始聽 hands the stage over. 對齊 and the cached copy are not in the walk - their own
+       tip comes back once the lesson is over, and the ? panel carries both. The walk is clocked on performance.now(), not the
+       audio: half of it happens before there is any audio. */
+    var TRT_PHASE_HOLD = 1.3;   /* 追記③: a line walked in parts (sides) holds this long (s) after each cut while the shade changes over */
+    var TRT_TYPE = 0.03, TRT_TYPE_CAP = 3.0, TRT_PAUSE = 0.5, TRT_PAD = 8, TRT_MOVE = 150, TRT_HEARD_MS = 2600, TRT_AFTER_S = 0.8;   /* TRT_MOVE: a drag counts once the thumb is this far (of 1000) off the middle - the centre snap alone is not a try; TRT_HEARD_MS: after that drag, time to hear the difference before the next line; TRT_AFTER_S: into the music before the first after-start line */
+    /* where things are on the stage (desktop px) - shared by the lesson and the ? panel's spotlight (LOG-206 追記①) */
+    function rectOf(el) { if (!el || !el.getBoundingClientRect) return null; var r = el.getBoundingClientRect(), h = HOST.getBoundingClientRect(); if (!r.width && !r.height) return null; return { left: r.left - h.left, right: r.right - h.left, top: r.top - h.top, bottom: r.bottom - h.top }; }
+    function sel(q) { return function () { return rectOf(ui && ui.querySelector(q)); }; }
+    function centre() { var W = HOST.clientWidth, H = HOST.clientHeight; return { left: W / 2, right: W / 2, top: H * 0.36, bottom: H * 0.36, free: true }; }
+    function lineY() { return (WV.baseY && WV.baseY()) || HOST.clientHeight * DESK_WAVE_Y; }
+    function band() { var y = lineY(); return { left: 12, right: HOST.clientWidth - 12, top: y - 150, bottom: y + 110 }; }   /* the split line with its two coloured halves of bars */
+    function fall() { var m = document.querySelector('.menubar'), mb = m ? m.getBoundingClientRect().bottom - HOST.getBoundingClientRect().top : 30; return { left: 12, right: HOST.clientWidth - 12, top: mb + 8, bottom: lineY() + 2 }; }   /* the notes fall from under the menubar onto the line */
+    /* 追記① (the user: ?的項目名稱上面沒有反饋高亮標記，跟教學一樣的那種): reading a line in the ? panel cuts the lesson's own window
+       round the thing it names. Its own hole (.trt-hole.wvh), re-aimed every frame - the video box can be dragged and the bar reflows. */
+    var SPOT_AT = { tr_mix: sel('.tr-row1'), tr_lr: sel('[data-mode="lr"]'), tr_secs: sel('.tr-secs'), tr_vid: sel('.tr-vid'), tr_align: sel('.tr-align'), tr_cache: sel('.tr-src-sw') };
+    /* 追記⑤ (the user: 所有切換都要transition，"?"之間的陰影淡入淡出呢): ONE window, never two - line to line it fades out, moves
+       while unseen, fades back in (the lesson's 追記③ walk); leaving the panel fades it out. A row-to-row move is a leave and an
+       enter in the same tick, so the fade-out waits SP_GRACE ms for an enter that cancels it. */
+    var SP_FADE = 380, SP_GRACE = 90, spH = null, spWant = null, spShown = null, spRaf = 0, spT = 0, spBusy = false;
+    function spLay() {
+      if (!spH || !spH.isConnected) { spH = null; spShown = null; spRaf = 0; return; }   /* the stage closed under it */
+      var r = spShown && spShown(); if (r) { var p = TRT_PAD; spH.style.left = (r.left - p) + 'px'; spH.style.top = (r.top - p) + 'px'; spH.style.width = (r.right - r.left + 2 * p) + 'px'; spH.style.height = (r.bottom - r.top + 2 * p) + 'px'; }
+      spRaf = requestAnimationFrame(spLay);
+    }
+    function spDrive() {
+      if (spBusy) return;   /* a fade-out is running: it picks up whatever is wanted when it lands */
+      var on = !!spH && spH.classList.contains('in');
+      if (!spWant) { if (on) { spBusy = true; spH.classList.remove('in'); spT = setTimeout(function () { spBusy = false; spShown = null; spDrive(); }, SP_FADE); } return; }
+      if (on && spShown === spWant) return;
+      if (on) { spBusy = true; spH.classList.remove('in'); spT = setTimeout(function () { spBusy = false; spShown = null; spDrive(); }, SP_FADE); return; }   /* out first, then the move happens unseen */
+      if (!spH || !spH.isConnected) { spH = document.createElement('div'); spH.className = 'trt-hole wvh'; spH.setAttribute('aria-hidden', 'true'); ui.appendChild(spH); }
+      spShown = spWant; if (spRaf) cancelAnimationFrame(spRaf); spLay(); spH.getBoundingClientRect();
+      var el = spH; requestAnimationFrame(function () { if (el.isConnected && spShown) el.classList.add('in'); });
+    }
+    function spot(k) {   /* -> true when the stage has the thing to point at */
+      var get = k && SPOT_AT[k], r = get && active && ui && !tut ? get() : null;
+      if (!tut && ui) cvShade(k === 'tr_sides' || k === 'tr_notes');   /* 追記⑥: the ? panel's two canvas lines shade the bar and the video box; waveLabels does the canvas focus and body.spot */
+      clearTimeout(spT && !spBusy ? spT : 0);
+      spWant = r ? get : null;
+      if (r) spDrive(); else { spT = setTimeout(function () { if (!spWant) spDrive(); }, SP_GRACE); }
+      return !!r;
+    }
+    /* 追記⑥ (the user: 音量條亮的時候是一個範圍內都亮，而不是如桌面的"?"只有音量條亮): a line about the canvas cuts no window - the
+       canvas keeps only its own layer lit (WV.focus, the desktop ? panel's language) and everything else steps back on its own:
+       the desktop furniture through body.spot, the bar and the video box under a shade of their own (.trt-cov, same colour as the
+       window's) - an overlay, so their own transitions are left alone. */
+    var CV_OF = ['.tr-bar', '.tr-vid'], cvEls = null, cvRaf = 0, cvOutT = 0;
+    function cvLay() {
+      if (!cvEls || !cvEls[0].isConnected) { cvEls = null; cvRaf = 0; return; }
+      CV_OF.forEach(function (q, n) { var r = sel(q)(), e = cvEls[n]; if (r) { e.style.display = ''; e.style.left = r.left + 'px'; e.style.top = r.top + 'px'; e.style.width = (r.right - r.left) + 'px'; e.style.height = (r.bottom - r.top) + 'px'; } else e.style.display = 'none'; });
+      cvRaf = requestAnimationFrame(cvLay);
+    }
+    function cvShade(on) {   /* the bar and the video box step back (or come back) */
+      if (on && ui && !cvEls) { cvEls = CV_OF.map(function () { var d = document.createElement('div'); d.className = 'trt-cov'; d.setAttribute('aria-hidden', 'true'); ui.appendChild(d); return d; }); cvLay(); cvEls[0].getBoundingClientRect(); }
+      if (cvEls) { var els = cvEls; requestAnimationFrame(function () { els.forEach(function (e) { e.classList.toggle('in', !!on); }); }); }
+    }
+    var cvLast = null;
+    function canvasOnly(v) {   /* the lesson's: v = 'spectrum' | 'waterfall' | 'played' | 'playedL' | 'playedR' | null */
+      v = v || null; if (v === cvLast) return; cvLast = v;
+      try { WV.focus(v); } catch (e) {}
+      cvShade(!!v);
+      var b = document.body, was = b.classList.contains('trt-spot');
+      if (v) { clearTimeout(cvOutT); b.classList.remove('spot-out'); b.classList.add('spot', 'trt-spot'); }
+      else if (was) { b.classList.remove('spot', 'trt-spot'); b.classList.add('spot-out'); clearTimeout(cvOutT); cvOutT = setTimeout(function () { b.classList.remove('spot-out'); }, 1000); }
+    }
+    function makeTrTut() {
+      var alive = true, hole = null, bub = null, tx = null, job = null, cur = null, i = -1, waitStart = false, heardT = 0, langAt = D.lang, lrWas = false;
+      spot(null);
+      var STEPS = [
+        { k: 'trt_1', at: centre, next: 'trt_next' },
+        { k: 'trt_6', at: sel('.tr-secs'), side: 'above', next: 'trt_next' },
+        { k: 'trt_7', at: sel('.tr-vid'), side: 'above', next: 'trt_next', skip: function () { var y = ui && ui.querySelector('.tr-yt'); return !y || y.hidden || y.classList.contains('off'); } },   /* only while the video itself is what the box shows */
+        { k: 'trt_go', at: centre, next: 'trt_start', go: true },
+        { k: 'trt_2', at: band, cv: 'played', sides: [null, 'L', 'R', null], side: 'above', next: 'trt_next' },   /* 追記①: the window walks with the words - both sides / left / right / the bars that glow; cut at the line's own ：，and new line (: , and new line in English) */
+        { k: 'trt_3', at: fall, cv: 'waterfall', side: 'below', next: 'trt_next' },   /* 追記④ (the user: 說到音的時候MIDI音符就是唯一一個亮著的): the bars share the notes' box, so the canvas itself steps the bars back (wave.focus, the ? panel's LOG-204 追記⑦ language) */
+        { k: 'trt_4', at: sel('.tr-row1'), side: 'above', wait: 'mix' },
+        { k: 'trt_5', at: sel('[data-mode="lr"]'), bubAt: sel('.tr-bar'),   /* 追記① (the user: 兩個按鈕都亮): only the split-ears button */ side: 'above', next: 'trt_next', skip: function () { var b = ui && ui.querySelector('[data-mode="lr"]'); return !b || b.disabled; } },
+        { k: function () { return NB ? 'trt_8' : 'trt_8b'; }, at: centre, next: 'trt_done', last: true }   /* the ? panel only exists in beginner mode - do not point at it otherwise */
+      ];
+      function key(s) { return typeof s.k === 'function' ? s.k() : s.k; }
+      HOST.classList.add('tut-on'); ui.classList.add('trt');   /* .tut-on: the dock, the updates and the sticky step aside and the ? panel stands down (os.css LOG-188, waveLabels.sync) */
+      hole = document.createElement('div'); hole.className = 'trt-hole'; hole.setAttribute('aria-hidden', 'true'); ui.appendChild(hole);
+      bub = document.createElement('div'); bub.className = 'tut-bub trt-bub'; bub.setAttribute('role', 'status'); ui.appendChild(bub);
+      bub.addEventListener('click', function (e) { if (e.target.closest('.trt-next')) advance(); });
+      /* 追記②: a click on the bubble or on the shaded stage (not on a control) - mid-line it lays the rest of the line down at once, once the line is all there it moves on */
+      function tap(e) {   /* 追記③ (the user: 點擊隨機地方都可以): anywhere on the page. In the shade a click only moves the lesson on - the dimmed control under it does not fire; inside the lit window the thing still works as well */
+        if (!cur || !bub || !bub.classList.contains('tap')) return;
+        if (e.target.closest('.st-head,.menubar,#wvl,.ph-alert')) return;   /* 結束教學 / 離開舞台, the language switch, a dialog: their own jobs */
+        if (pdDrag || e.target.closest('input[type="range"]')) return;   /* 追記⑧ (the user: 拉動滑桿放開的動作不會觸發點擊，不然每次教學都剛好被拉完放開的判定直接跳過): the click a drag leaves behind on release (the slider's line has already moved on to the next while the hand was still on it) is not a tap - nor is a click on a slider itself */
+        var hr = hole ? hole.getBoundingClientRect() : null, inLit = hr && hr.width > 0 && e.clientX >= hr.left && e.clientX <= hr.right && e.clientY >= hr.top && e.clientY <= hr.bottom;
+        if (!inLit && !bub.contains(e.target)) { e.preventDefault(); e.stopPropagation(); }
+        if (job) { job.t0 = -1e9; typeStep(performance.now()); return; }
+        advance();
+      }
+      var pdX = 0, pdY = 0, pdDrag = false;   /* 追記⑧: was this click the end of a drag? (pointerdown -> moved more than a few px) */
+      function pd(e) { pdX = e.clientX; pdY = e.clientY; pdDrag = false; }
+      function pm(e) { if (!pdDrag && e.buttons && (Math.abs(e.clientX - pdX) > 6 || Math.abs(e.clientY - pdY) > 6)) pdDrag = true; }
+      document.addEventListener('pointerdown', pd, true); document.addEventListener('pointermove', pm, true);
+      document.addEventListener('click', tap, true);
+      requestAnimationFrame(function () { if (hole) hole.classList.add('in'); });
+      function advance() {
+        if (!cur || job) return;   /* the button only exists once the line is all there */
+        if (cur.go) { hold = false; maybeStart(); waitStart = true; hideBub(); return; }
+        if (cur.last) return end();
+        step();
+      }
+      function place() {
+        if (!cur || !bub) return;
+        var r = cur.at(); if (!r) return;
+        var free = !!r.free, W = HOST.clientWidth, H = HOST.clientHeight, p = free ? 0 : TRT_PAD;
+        var lit = r;
+        if (cur.sides && cur.cv) {   /* 追記①③⑥⑦: the words walk both halves / left / right / both - the canvas itself keeps only the PLAYED bars of that half lit (WV.focus 'played' / 'playedL' / 'playedR', each region on its own eased k in makeWave): no overlay, no two shades on one spot */
+          var n = job ? job.n : Infinity, ph = 0; (cur.cuts || []).forEach(function (c) { if (n > c) ph++; }); var sd = cur.sides[Math.min(ph, cur.sides.length - 1)];
+          canvasOnly(cur.cv + (sd || ''));
+        }
+        if (free) { hole.style.left = (W / 2) + 'px'; hole.style.top = (H / 2) + 'px'; hole.style.width = '0px'; hole.style.height = '0px'; }   /* nothing to keep lit: the window closes to a point, the whole stage in shade */
+        else { hole.style.left = (lit.left - p) + 'px'; hole.style.top = (lit.top - p) + 'px'; hole.style.width = (lit.right - lit.left + 2 * p) + 'px'; hole.style.height = (lit.bottom - lit.top + 2 * p) + 'px'; }
+        if (cur.bubAt) { var rb = cur.bubAt(); if (rb) r = { left: r.left, right: r.right, top: Math.min(r.top, rb.top), bottom: Math.max(r.bottom, rb.bottom) }; }   /* bubAt: the bubble clears a bigger box than the lit one (split ears: the whole bar, or it sits on the slider) */
+        var bw = bub.offsetWidth || 280, bh = bub.offsetHeight || 60, cx = (r.left + r.right) / 2, above = cur.side === 'above';
+        var left = free ? cx - bw / 2 : Math.max(10, Math.min(W - bw - 10, cx - bw / 2));
+        var top = free ? r.top - bh / 2 : (above ? r.top - p - 14 - bh : r.bottom + p + 14);
+        top = Math.max(38, Math.min(H - bh - 8, top));
+        bub.style.left = left + 'px'; bub.style.top = top + 'px'; bub.style.setProperty('--ax', Math.max(12, Math.min(bw - 24, cx - left - 7)) + 'px');
+        bub.classList.toggle('free', free); bub.classList.toggle('above', !free && above); bub.classList.toggle('below', !free && !above);
+      }
+      function show(s) {
+        cur = s; var k = key(s), raw = U[k] || '', text = raw.replace(/\|/g, '\n'), br = [];   /* here '|' is a new line as well as a beat's pause (.trt-bub .tx: pre-line) - two sentences run together read as one wall */
+        for (var bi = 0; bi < text.length; bi++) if (text.charAt(bi) === '\n') br.push(bi);
+        if (s.sides) { s.cuts = []; var cre = /[：:，,\n]/g, cm; while ((cm = cre.exec(text)) && s.cuts.length < s.sides.length - 1) s.cuts.push(cm.index); }   /* 追記①: where the window moves on - the line's own punctuation, so both languages cut in the same places */
+        var tapOn = s.next && !s.go && !s.last;   /* 追記② (the user: 取消下一步按鈕，改成直接點擊…右下角有一個ˇ): a plain line moves on with a click; 開始 / 開始聽 keep their buttons - they do something */
+        bub.innerHTML = '<span class="tx cur ty"></span>' + (tapOn ? '<span class="trt-more" aria-hidden="true">ˇ</span>' : s.next ? '<span class="trt-nav"><button type="button" class="trt-next">' + esc(U[s.next] || '') + '</button></span>' : '');
+        bub.classList.toggle('tap', !!tapOn);
+        tx = bub.querySelector('.tx'); tx.innerHTML = '<i class="rest">' + esc(text) + '</i>';
+        bub.style.width = ''; bub.style.height = ''; bub.classList.remove('done');
+        var cs = getComputedStyle(bub), pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+        bub.style.width = (bub.offsetWidth + 1 + (cs.boxSizing === 'border-box' ? pad : 0)) + 'px'; bub.style.height = bub.offsetHeight + 'px';   /* pinned at the full line's size (button included) before the first character (the lesson's 追記㉛ / LOG-200) */
+        job = { t0: performance.now(), per: Math.max(0.012, Math.min(TRT_TYPE, TRT_TYPE_CAP / Math.max(1, text.length))) * 1000, text: text, br: br, cuts: s.cuts || [], n: -1 };
+        heardT = 0; langAt = D.lang;
+        canvasOnly(s.cv || null); if (hole) hole.classList.toggle('in', !s.cv && !lrWas);   /* 追記⑥ */
+        place(); bub.classList.remove('in'); requestAnimationFrame(function () { if (bub && cur === s) bub.classList.add('in'); });
+      }
+      function typeStep(now) {
+        if (!job) return;
+        var el = now - job.t0, n, t = 0;
+        for (n = 0; n < job.text.length; n++) { t += job.per; if (job.br.indexOf(n) >= 0) t += TRT_PAUSE * 1000; if (job.cuts.indexOf(n - 1) >= 0) t += TRT_PHASE_HOLD * 1000; if (t > el) break; }   /* 追記③ (the user: 延長時間): after each cut the words wait while the window changes over */
+        if (n === job.n) return; job.n = n;
+        tx.innerHTML = esc(job.text.slice(0, n)) + '<i class="rest">' + esc(job.text.slice(n)) + '</i>';
+        if (n >= job.text.length) { tx.classList.remove('cur', 'ty'); bub.classList.add('done'); job = null; }   /* the button shows once the line is all there */
+      }
+      function hideBub() { canvasOnly(null); if (hole) hole.classList.add('in'); if (bub) bub.classList.remove('in'); cur = null; job = null; if (hole) { hole.style.width = '0px'; hole.style.height = '0px'; hole.style.left = (HOST.clientWidth / 2) + 'px'; hole.style.top = (HOST.clientHeight / 2) + 'px'; } }
+      function step() {
+        for (i = i + 1; i < STEPS.length; i++) { var s = STEPS[i]; if (s.skip && s.skip()) continue; show(s); return; }
+        end();
+      }
+      function frame() {
+        if (!alive) return;
+        var now = performance.now();
+        if (waitStart) { if (started && T() >= TRT_AFTER_S) { waitStart = false; step(); } return; }
+        if (!cur) return;
+        if (D.lang !== langAt) { show(cur); return; }   /* a language switch mid-line: the same line again, in the new language */
+        typeStep(now); place();
+        var lr = !!(ui && ui.querySelector('.tr-lrtip:not([hidden])'));   /* the split-ears warning hangs over the whole bar and only its own button dismisses it - the lesson steps back until it is gone */
+        if (lr !== lrWas) { lrWas = lr; bub.classList.toggle('in', !lr); hole.classList.toggle('in', !lr && !(cur && cur.cv)); }
+        if (cur.wait === 'mix' && !job) {
+          var m = ui && ui.querySelector('.tr-mix'); if (m && !heardT && Math.abs(+m.value - 500) >= TRT_MOVE) heardT = now;
+          if (heardT && now - heardT >= TRT_HEARD_MS) step();
+        }
+      }
+      function end() {
+        if (!alive) return; alive = false; tut = null; canvasOnly(null);
+        try { localStorage.setItem('tut_seen_tr', '1'); } catch (e) {}
+        if (hold) { hold = false; maybeStart(); }   /* ended before 開始: the music was only waiting for the lesson */
+        var b = bub, h = hole; bub = hole = null;
+        if (b) { b.classList.remove('in'); setTimeout(function () { b.remove(); }, 450); }
+        if (h) { h.classList.remove('in'); setTimeout(function () { h.remove(); }, 450); }
+        if (ui) { ui.classList.remove('trt'); } document.removeEventListener('click', tap, true); document.removeEventListener('pointerdown', pd, true); document.removeEventListener('pointermove', pm, true);
+        HOST.classList.remove('tut-on'); HOST.classList.add('tut-back'); setTimeout(function () { HOST.classList.remove('tut-back'); }, 900);
+        headBtn();
+      }
+      function kill() { if (!alive) return; alive = false; tut = null; hold = false; canvasOnly(null); document.removeEventListener('click', tap, true); document.removeEventListener('pointerdown', pd, true); document.removeEventListener('pointermove', pm, true); if (bub) bub.remove(); if (hole) hole.remove(); bub = hole = null; HOST.classList.remove('tut-on'); }   /* the stage is going away: no walk-out */
+      hold = true; step();
+      return { frame: frame, end: end, kill: kill, next: advance, info: function () { return { step: cur ? key(cur) : null, i: i, waitStart: waitStart, hold: hold, typing: !!job, hole: hole ? { l: parseFloat(hole.style.left), t: parseFloat(hole.style.top), w: parseFloat(hole.style.width), h: parseFloat(hole.style.height) } : null }; } };
+    }
+    function headBtn() {   /* LOG-206: 看教學 beside 離開舞台 - it reads 結束教學 while the lesson runs */
+      if (!ui) return; var b = ui.querySelector('.trt-btn'); if (!b) return;
+      b.hidden = false; b.textContent = tut ? U.tut_end : U.trt_btn;
+    }
     /* ---- open / close */
-    function start(id) {
+    function start(id, opt) {
       var w = D.works.filter(function (x) { return x.id === id && x.type === 'transcription'; })[0]; if (!w || PHONE) return;
       if (active && wid === id) return;   /* LOG-193 (the user: 舞台不可以重複進入): the same comparison again is not a re-entry */
       if (active) stop(true);
       stageStopAll('tr');   /* LOG-193: one stage at a time, and the music stays down across the swap */
       trail.log('tr', id);
-      active = true; runSeq++; wid = id; started = false; preT0 = performance.now(); playing = false; pausedAt = 0; pendingT = null; dur = 0; muted = false; split = false; mix = 0.5;
+      active = true; runSeq++; wid = id; hold = false; started = false; preT0 = performance.now(); playing = false; pausedAt = 0; pendingT = null; dur = 0; muted = false; split = false; mix = 0.5;
       yt = null; ytReady = false; ytFailed = false; ytBuf = false; ytPend = false; ytWarm = 0; ytT = 0; ytAt = performance.now(); cached = false; tipShown = false; lrAck = false;
       var m = w.media, o = m.original || {}, r = m.rendition || {};
       palC = palette(w); skip = Math.max(0, (typeof m.first_note_s === 'number' ? m.first_note_s : 0) - TR_SKIP_LEAD_S);
@@ -2612,6 +2841,7 @@
       orig = hasFallback ? chan(canYT ? o.fallback : o.src, origBase + loLag) : null;   /* the hosted copy is fetched either way: it is the fallback AND the split mode's source */
       build(w);
       if (ui) ui.classList.toggle('local', mode === 'local');
+      if (opt && opt.tut && ui) { tut = makeTrTut(); headBtn(); }   /* headBtn: build()'s relabel ran before the lesson existed and wrote 看教學 */   /* LOG-206: before any fetch lands, so the hold is on before maybeStart can run */
       if (!raf) raf = requestAnimationFrame(tick);   /* the pre-roll: the bar and the clock run from the moment the stage opens */
       fetchInto(tr, function () { dur = Math.max(0, tr.buf.duration - tr.off); layoutSecs(); if (pendingT != null && (mode === 'yt' || !orig || orig.buf)) { var t = pendingT; pendingT = null; play(t); } else maybeStart(); });
       if (orig) fetchInto(orig, function () { if (pendingT != null && mode === 'local' && tr.buf) { var t = pendingT; pendingT = null; play(t); } else maybeStart(); });
@@ -2621,10 +2851,10 @@
       if (player.isPlaying()) { ducked = true; player.duck(true); } else if (carry || player.isDucked()) ducked = true;   /* LOG-193: isDucked - inherited from the stage that just handed over */
       stageChrome();
       if (/[?&]debug/.test(location.search)) window.__trLine = function () { return WV.splitInfo(); };   /* survives stop(): the probe checks the line was handed back */
-      if (/[?&]debug/.test(location.search)) window.__tr = { state: function () { return src.state(); }, mode: function () { return mode; }, setMode: function (m) { setMode(m, false); }, mix: function (v) { if (v != null) { mix = v; if (ui) ui.querySelector('.tr-mix').value = Math.round((1 - v) * 1000); applyMix(); } return mix; }, split: function (v) { if (v != null && mode === 'local') { split = !!v; paintModes(); applyMix(); } return split; }, seek: seek, toggle: toggle, ytFail: function () { ytFail('probe'); }, lag: function (v) { if (v != null) setLag(v); return mode === 'yt' ? ytLag : loLag; }, cached: function (v) { if (v != null) setCached(v); return cached; }, vol: function (side, v) { if (v != null) { if (side === 't') volT = v; else volO = v; if (ui) { ui.querySelector(side === 't' ? '.tr-volt' : '.tr-volo').value = Math.round(v * 1000); } applyMix(); } return side === 't' ? volT : volO; }, debug: debug };
+      if (/[?&]debug/.test(location.search)) window.__tr = { state: function () { return src.state(); }, mode: function () { return mode; }, setMode: function (m) { setMode(m, false); }, mix: function (v) { if (v != null) { mix = v; if (ui) ui.querySelector('.tr-mix').value = Math.round((1 - v) * 1000); applyMix(); } return mix; }, split: function (v) { if (v != null && mode === 'local') { split = !!v; paintModes(); applyMix(); } return split; }, seek: seek, toggle: toggle, ytFail: function () { ytFail('probe'); }, tut: function () { return tut ? tut.info() : null; }, tutNext: function () { if (tut) tut.next(); }, hold: function () { return hold; }, lag: function (v) { if (v != null) setLag(v); return mode === 'yt' ? ytLag : loLag; }, cached: function (v) { if (v != null) setCached(v); return cached; }, vol: function (side, v) { if (v != null) { if (side === 't') volT = v; else volO = v; if (ui) { ui.querySelector(side === 't' ? '.tr-volt' : '.tr-volo').value = Math.round(v * 1000); } applyMix(); } return side === 't' ? volT : volO; }, debug: debug };
     }
     function stop(immediate) {
-      if (!active) return; active = false; stageChrome();   /* LOG-193: Escape comes through escLayer now - no key listener of this stage's own (and no more closing on Escape typed into a field) */
+      if (!active) return; active = false; if (tut) tut.kill(); hold = false; stageChrome();   /* LOG-193: Escape comes through escLayer now - no key listener of this stage's own (and no more closing on Escape typed into a field) */
       clearTimeout(ytReadyTimer); clearTimeout(ytPlayTimer); clearTimeout(toastTimer); clearTimeout(resumeTimer); clearTimeout(tipTimer);
       playing = false; stopCh(orig); stopCh(tr);
       if (yt) { try { yt.destroy(); } catch (e) {} yt = null; } ytReady = false;
@@ -2655,7 +2885,7 @@
     };
     function toggleMute() { muted = !muted; if (mgain && ctx) mgain.gain.setTargetAtTime(muted ? 0.0001 : TR_MASTER, ctx.currentTime, 0.03); if (yt && ytReady) { try { if (muted) yt.mute(); else yt.unMute(); } catch (e) {} } }
     function stepSec(d) { if (!secs.length) return; var t = T(), cur = -1, ref = d < 0 ? t - 1.5 : t + 0.001; for (var i = 0; i < secs.length; i++) if (secs[i].t <= ref) cur = i; var n = d < 0 ? Math.max(0, cur) : Math.min(secs.length - 1, cur + 1); seek(secs[n].t); }   /* prev: back to this section's start when more than 1.5 s into it, else the one before */
-    return { start: start, stop: function (im) { stop(!!im); }, active: function () { return active; }, src: function () { return src; }, toggle: toggle, prev: function () { stepSec(-1); }, next: function () { stepSec(1); }, toggleMute: toggleMute, relabel: relabel, debug: debug };
+    return { start: start, stop: function (im) { stop(!!im); }, active: function () { return active; }, src: function () { return src; }, toggle: toggle, prev: function () { stepSec(-1); }, next: function () { stepSec(1); }, toggleMute: toggleMute, relabel: relabel, debug: debug, spot: spot };
   })();
 
   function openApp(app) {
@@ -2681,7 +2911,7 @@
      left worth asking is whether they want to be shown first.
      Saying YES must clear `tut_seen` (mount() only auto-runs the lesson when it has never been seen - without this the stage
      opens and quietly does nothing); saying NO must SET it, or the lesson runs anyway on a first-ever visit. */
-  var NB_TUT = { 'demos/interactive-player': 1 };
+  var NB_TUT = { 'demos/interactive-player': 1 };   /* LOG-206: the compare stage is not opened through openDemo - its offer is trEnter() below */
   function nbAskFor(id) {
     if (!NB || PHONE || !NB_TUT[id]) return false;
     var k = 'nb_tour_asked:' + id;
@@ -2691,6 +2921,19 @@
       openDemo(id);
     });
     return true;
+  }
+  /* LOG-206 (FUTURE-6 · the user: 兩首共用一份教學，第一次開哪首就在哪首講): the compare stage is opened from a card in 採譜, not
+     through openDemo, so NB_TUT's one-key wiring does not reach it. Beginner mode asks once, the first time either piece is opened;
+     either answer marks the lesson seen (tut_seen_tr - its own key, the section stage's tut_seen is a different lesson), so neither
+     piece asks again. Outside beginner mode nothing is asked; the stage's own 看教學 button is always there. */
+  function trEnter(id) {
+    var seen = false; try { seen = localStorage.getItem('tut_seen_tr') === '1' || sessionStorage.getItem('nb_tour_asked:tr') === '1'; } catch (e) {}
+    if (!NB || PHONE || seen) return trStage.start(id);
+    try { sessionStorage.setItem('nb_tour_asked:tr', '1'); } catch (e) {}
+    osAsk(U.nb_ask_t, U.trt_ask_sub, U.nb_ask_yes, U.nb_ask_no, false, function (go) {
+      try { localStorage.setItem('tut_seen_tr', '1'); } catch (e) {}
+      trStage.start(id, { tut: !!go });
+    });
   }
   /* LOG-193 (the user: 將最近更新視窗化置中，update僅在左下角update被手動關閉時使用會跳出視窗化置中update, 置中視窗關閉後他會回歸左下角半透明update開啟直到用戶手動關閉)
      Find's「最近更新」row used to go through openApp -> createWindow, which has no size for an app that never had a window: a TypeError.
@@ -8950,7 +9193,7 @@
         var f = e.target.closest('[data-f]'); if (f) { body.querySelectorAll('[data-f]').forEach(function (b) { b.classList.toggle('on', b === f); }); body.querySelectorAll('.list li').forEach(function (li) { li.hidden = !(f.dataset.f === 'all' || li.dataset.type === f.dataset.f); }); }
         var p = e.target.closest('[data-play]'); if (p && !stageOwns()) { openApp('player'); player.playId(p.dataset.play); }   /* LOG-193: 聆聽 under a running stage would open a player that cannot sound - it opens nothing instead */
         var b = e.target.closest('[data-demo]'); if (b) openDemo(b.dataset.demo);
-        var tb = e.target.closest('[data-tr]'); if (tb) { minimize('works'); trStage.start(tb.dataset.tr); }   /* LOG-172 */
+        var tb = e.target.closest('[data-tr]'); if (tb) { minimize('works'); trEnter(tb.dataset.tr); }   /* LOG-172; LOG-206: through the lesson's offer */
       });
     },
     demos: function (body) {

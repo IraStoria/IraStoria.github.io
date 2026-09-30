@@ -1707,6 +1707,146 @@
     "tut_s13b": {
       "zh": "把還沒播的字母拖成你要的順序，然後就照順序播到 I。",
       "en": "Drag the letters that have not played yet into the order you want, and it will play through in that order, all the way to I."
+    },
+    "trt_ask_sub": {
+      "zh": "我可以先帶你看一遍畫面上的東西怎麼用，也可以直接開始聽。",
+      "en": "I can walk you through what is on screen first, or you can just start listening."
+    },
+    "trt_btn": {
+      "zh": "看教學",
+      "en": "How it works"
+    },
+    "trt_next": {
+      "zh": "下一步",
+      "en": "Next"
+    },
+    "trt_start": {
+      "zh": "開始",
+      "en": "Start"
+    },
+    "trt_done": {
+      "zh": "開始聽",
+      "en": "Start listening"
+    },
+    "trt_1": {
+      "zh": "採譜，就是把錄音裡的每一個音聽出來、寫下來，最後製作成譜的一個動作。|這邊的對照就是把原曲的聲音檔案與我採譜的最終結果輸出對齊，然後呈現在你的眼前。",
+      "en": "Transcribing means hearing every note in a recording, writing it down, and finally turning it into a score.|Here, the original recording and the final output of my transcription are lined up and put in front of you."
+    },
+    "trt_6": {
+      "zh": "這一排是曲子的段落。點哪一段，兩邊就會一起跳到那個時間點；下面那條是進度，也可以直接拖。",
+      "en": "This row is the sections of the piece. Click one and both sides jump to that point in time; the bar underneath is the progress, and you can drag it too."
+    },
+    "trt_7": {
+      "zh": "這是原曲的影片。可以拖到你順眼的地方，點一下就是暫停／繼續。",
+      "en": "This is the original video. Drag it wherever suits you; click it once to pause or resume."
+    },
+    "trt_go": {
+      "zh": "先講到這裡。按下開始，音樂就會跑起來，剩下的邊聽邊講。",
+      "en": "That is enough for now. Press start and the music begins; I will explain the rest as it plays."
+    },
+    "trt_2": {
+      "zh": "畫面分成左右兩邊：左邊是我的採譜，右邊是原曲。|兩邊的音量比例會反饋在亮度上。",
+      "en": "The screen splits into left and right: my transcription on the left, the original on the right.|The balance of volume between the two shows up as brightness."
+    },
+    "trt_3": {
+      "zh": "掉下來的每一塊，每個都是我採下的一個音。排法跟鋼琴一樣：左邊低、右邊高，越長代表音長越久。",
+      "en": "Every falling block is one note I picked out. They are laid out like a piano: low on the left, high on the right, and the longer the block, the longer the note lasts."
+    },
+    "trt_4": {
+      "zh": "換你了：這個滑桿往左拉就只會聽到我的採譜，往右拉只會聽到原曲，放中間就會平衡兩邊的音量。|拉拉看。",
+      "en": "Your turn: slide this left and you will hear only my transcription, slide it right and you will hear only the original; in the middle, the two are balanced.|Give it a try."
+    },
+    "trt_5": {
+      "zh": "戴耳機的話可以按這顆，它會將兩個樣本分成左耳跟右耳：左耳聽我的、右耳聽原曲，兩邊同時對照比較。",
+      "en": "If you are wearing headphones, try this one: it splits the two into your left and right ears, mine on the left and the original on the right, so you can compare them side by side."
+    },
+    "trt_8": {
+      "zh": "就這些，剩下的交給你的耳朵。忘了哪個東西是什麼，右上角的「?」都有寫。",
+      "en": "That is all; the rest is up to your ears. If you forget what something is, the “?” in the top right has it all."
+    },
+    "trt_8b": {
+      "zh": "就這些，剩下的交給你的耳朵。",
+      "en": "That is all; the rest is up to your ears."
+    },
+    "tr_mode_xf_nb": {
+      "zh": "混著聽",
+      "en": "Blend"
+    },
+    "tr_mode_lr_nb": {
+      "zh": "左右分耳對照",
+      "en": "Split ears"
+    },
+    "lbl_tr_what": {
+      "zh": "這是什麼",
+      "en": "What this is"
+    },
+    "lbl_tr_what_tip": {
+      "zh": "拿我寫的採譜跟原曲放在一起比。採譜＝把錄音裡每個音聽出來寫下，再讓電腦照著彈。",
+      "en": "My transcription played against the original. Transcribing = writing down every note of a recording and having a computer play them back."
+    },
+    "lbl_tr_sides": {
+      "zh": "左右兩色",
+      "en": "The two halves"
+    },
+    "lbl_tr_sides_tip": {
+      "zh": "左半是我的採譜、右半是原曲；哪邊比較大聲，哪邊就比較亮。",
+      "en": "Left half is my transcription, right half the original; the louder side glows brighter."
+    },
+    "lbl_tr_notes": {
+      "zh": "音符瀑布",
+      "en": "Falling notes"
+    },
+    "lbl_tr_notes_tip": {
+      "zh": "每一塊是我寫下的一個音；左低右高，越長代表按越久。",
+      "en": "Each block is one note I wrote down; low on the left, high on the right, longer means held longer."
+    },
+    "lbl_tr_mix": {
+      "zh": "滑桿",
+      "en": "The slider"
+    },
+    "lbl_tr_mix_tip": {
+      "zh": "往左只聽採譜、往右只聽原曲、中間兩個一起。兩端的小滑桿是各自的音量。",
+      "en": "Left = only the transcription, right = only the original, middle = both. The small sliders at either end are each side's volume."
+    },
+    "lbl_tr_lr": {
+      "zh": "左右分耳對照",
+      "en": "Split ears"
+    },
+    "lbl_tr_lr_tip": {
+      "zh": "戴耳機用：左耳採譜、右耳原曲，同時比。",
+      "en": "For headphones: transcription in the left ear, original in the right, both at once."
+    },
+    "lbl_tr_secs": {
+      "zh": "段落與進度",
+      "en": "Sections and progress"
+    },
+    "lbl_tr_secs_tip": {
+      "zh": "點一個段落，兩邊一起跳過去；下面的進度條可以點也可以拖。",
+      "en": "Click a section and both sides jump there; the progress bar underneath can be clicked or dragged."
+    },
+    "lbl_tr_vid": {
+      "zh": "影片框",
+      "en": "The video"
+    },
+    "lbl_tr_vid_tip": {
+      "zh": "可以拖到任何地方，點一下暫停／繼續。",
+      "en": "Drag it anywhere; click once to pause or resume."
+    },
+    "lbl_tr_align": {
+      "zh": "對齊",
+      "en": "Align"
+    },
+    "lbl_tr_align_tip": {
+      "zh": "原曲跟採譜聽起來沒對上時，用 − / + 一次挪 0.01 秒，會記在你的電腦上。",
+      "en": "If the original and the transcription sound out of step, nudge with − / + by 0.01 s at a time; your computer remembers it."
+    },
+    "lbl_tr_cache": {
+      "zh": "暫存音源",
+      "en": "Cached copy"
+    },
+    "lbl_tr_cache_tip": {
+      "zh": "影片播不順時，可以改用站上存的一份原曲來播，畫面照舊。",
+      "en": "If the video stutters, switch to a copy of the original stored on this site; the picture stays."
     }
   },
   "about_body": {
